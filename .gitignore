@@ -1,0 +1,17 @@
+*.suo
+*.user
+*.sln.docstates
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+.vs/
+*.ilk
+*.obj
+*.pdb
+*.nupkg
+*.bak
+Thumbs.db
+$RECYCLE.BIN/
