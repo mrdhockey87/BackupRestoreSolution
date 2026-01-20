@@ -1,0 +1,36 @@
+<Window x:Class="BackupUI.Windows.ScheduleManagementWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Schedule Management"
+        Height="500"
+        Width="800"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Scheduled Backup Jobs" FontSize="20" FontWeight="Bold" Margin="0,0,0,20"/>
+
+        <DataGrid Grid.Row="1" Name="dgJobs" AutoGenerateColumns="False" 
+                  IsReadOnly="True" SelectionMode="Single" Margin="0,0,0,10">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Job Name" Binding="{Binding Name}" Width="*"/>
+                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="100"/>
+                <DataGridTextColumn Header="Target" Binding="{Binding Target}" Width="120"/>
+                <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Schedule.Enabled}" Width="80"/>
+                <DataGridTextColumn Header="Frequency" Binding="{Binding Schedule.Frequency}" Width="100"/>
+                <DataGridTextColumn Header="Next Run" Binding="{Binding Schedule.NextRunTime}" Width="150"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Edit Job" Width="100" Margin="0,0,5,0" Click="EditJob_Click"/>
+            <Button Content="Delete Job" Width="100" Margin="0,0,5,0" Click="DeleteJob_Click"/>
+            <Button Content="Run Now" Width="100" Margin="0,0,5,0" Click="RunNow_Click"/>
+            <Button Content="Close" Width="100" Click="Close_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

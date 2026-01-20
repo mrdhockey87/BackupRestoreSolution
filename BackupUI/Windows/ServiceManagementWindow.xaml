@@ -1,0 +1,52 @@
+<Window x:Class="BackupUI.Windows.ServiceManagementWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Service Management"
+        Height="400"
+        Width="600"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Backup Service Management" FontSize="20" FontWeight="Bold" Margin="0,0,0,20"/>
+
+        <StackPanel Grid.Row="1" Margin="10">
+            <GroupBox Header="Service Status" Margin="0,0,0,20">
+                <StackPanel Margin="10">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBlock Text="Status:" Width="100" FontWeight="Bold"/>
+                        <TextBlock Name="txtStatus" Text="Unknown"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBlock Text="Installed:" Width="100" FontWeight="Bold"/>
+                        <TextBlock Name="txtInstalled" Text="Unknown"/>
+                    </StackPanel>
+                    <Button Content="Refresh Status" Width="120" HorizontalAlignment="Left" Click="RefreshStatus_Click"/>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Service Control">
+                <StackPanel Margin="10">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Button Name="btnStart" Content="Start Service" Width="120" Margin="0,0,5,0" Click="StartService_Click"/>
+                        <Button Name="btnStop" Content="Stop Service" Width="120" Margin="0,0,5,0" Click="StopService_Click"/>
+                        <Button Name="btnRestart" Content="Restart Service" Width="120" Click="RestartService_Click"/>
+                    </StackPanel>
+                    <Separator Margin="0,10"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button Name="btnInstall" Content="Install Service" Width="120" Margin="0,0,5,0" Click="InstallService_Click"/>
+                        <Button Name="btnUninstall" Content="Uninstall Service" Width="120" Click="UninstallService_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Close" Width="100" Click="Close_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

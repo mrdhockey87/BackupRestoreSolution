@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "BackupUI": {
+      "commandName": "Project"
+    },
+    "BackupUI (Elevated)": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}

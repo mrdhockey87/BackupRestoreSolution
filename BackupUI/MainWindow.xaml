@@ -1,47 +1,69 @@
 <Window x:Class="BackupUI.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Backup & Restore" Height="600" Width="900">
-    <DockPanel>
-        <Menu DockPanel.Dock="Top">
-            <MenuItem Header="_File">
-                <MenuItem Header="_Exit" Click="Exit_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Backup">
-                <MenuItem Header="_New Backup..." Click="NewBackup_Click"/>
-                <MenuItem Header="_Restore..." Click="Restore_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Schedules">
-                <MenuItem Header="_Manage Schedules..." Click="ManageSchedules_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Service">
-                <MenuItem Header="_Service Management..." Click="ServiceManagement_Click"/>
-                <Separator/>
-                <MenuItem Header="_Recovery Environment Creator..." Click="RecoveryEnvironmentCreator_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Help">
-                <MenuItem Header="_About..." Click="About_Click"/>
-            </MenuItem>
-        </Menu>
-        <Grid Margin="10">
-            <TabControl>
-                <TabItem Header="Backup">
-                    <TextBlock Text="Use File  New Backup to create a backup" 
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </TabItem>
-                <TabItem Header="Restore">
-                    <TextBlock Text="Use File  Restore to restore from backup" 
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </TabItem>
-                <TabItem Header="Schedules">
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Button Content="Manage Schedules" Width="200" Height="40" 
-                                Click="ManageSchedules_Click" Margin="0,0,0,10"/>
-                        <Button Content="Service Management" Width="200" Height="40" 
-                                Click="ServiceManagement_Click"/>
-                    </StackPanel>
-                </TabItem>
-            </TabControl>
-        </Grid>
-    </DockPanel>
+xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+Title="Backup &amp; Restore"
+Height="600"
+Width="900">
+	<DockPanel>
+		<Menu DockPanel.Dock="Top">
+			<MenuItem Header="_File">
+				<MenuItem Header="_Exit"
+						  Click="Exit_Click" />
+			</MenuItem>
+			<MenuItem Header="_Backup">
+				<MenuItem Header="_New Backup..."
+						  Click="NewBackup_Click" />
+				<MenuItem Header="_Restore..."
+						  Click="Restore_Click" />
+			</MenuItem>
+			<MenuItem Header="_Schedules">
+				<MenuItem Header="_Manage Schedules..."
+						  Click="ManageSchedules_Click" />
+			</MenuItem>
+			<MenuItem Header="_Service">
+				<MenuItem Header="_Service Management..."
+						  Click="ServiceManagement_Click" />
+				<Separator />
+				<MenuItem Header="_Recovery Environment Creator..."
+						  Click="RecoveryEnvironmentCreator_Click" />
+			</MenuItem>
+			<MenuItem Header="_Help">
+				<MenuItem Header="_About..."
+						  Click="About_Click" />
+			</MenuItem>
+		</Menu>
+		<StatusBar DockPanel.Dock="Bottom" Height="25">
+			<StatusBarItem>
+				<TextBlock Name="txtVersion" Text="Version: Loading..." FontSize="11" Foreground="#666"/>
+			</StatusBarItem>
+		</StatusBar>
+		<Grid Margin="10">
+			<TabControl>
+				<TabItem Header="Backup">
+					<TextBlock Text="Use File  New Backup to create a backup"
+							   HorizontalAlignment="Center"
+							   VerticalAlignment="Center" />
+				</TabItem>
+				<TabItem Header="Restore">
+					<TextBlock Text="Use File  Restore to restore from backup"
+							   HorizontalAlignment="Center"
+							   VerticalAlignment="Center" />
+				</TabItem>
+				<TabItem Header="Schedules">
+					<StackPanel HorizontalAlignment="Center"
+								VerticalAlignment="Center">
+						<Button Content="Manage Schedules"
+								Width="200"
+								Height="40"
+								Click="ManageSchedules_Click"
+								Margin="0,0,0,10" />
+						<Button Content="Service Management"
+								Width="200"
+								Height="40"
+								Click="ServiceManagement_Click" />
+					</StackPanel>
+				</TabItem>
+			</TabControl>
+		</Grid>
+	</DockPanel>
 </Window>

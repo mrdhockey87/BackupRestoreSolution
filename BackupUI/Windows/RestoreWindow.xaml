@@ -1,0 +1,94 @@
+<Window x:Class="BackupUI.Windows.RestoreWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Restore from Backup"
+        Height="600"
+        Width="800"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Restore from Backup" FontSize="20" FontWeight="Bold" Margin="0,0,0,20"/>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="10">
+                <TextBlock Text="Backup Source:" Margin="0,0,0,5"/>
+                <Grid Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Name="txtBackupSource" Grid.Column="0" Height="25" Margin="0,0,5,0"/>
+                    <Button Grid.Column="1" Content="Browse..." Width="80" Click="BrowseBackup_Click"/>
+                </Grid>
+
+                <Button Content="Load Backup Contents" Width="150" HorizontalAlignment="Left" 
+                        Margin="0,0,0,15" Click="LoadBackup_Click"/>
+
+                <TextBlock Name="txtBackupInfo" Text="" Margin="0,0,0,10" FontWeight="Bold"/>
+
+                <TextBlock Text="Files in Backup:" Margin="0,0,0,5"/>
+                <TreeView Name="treeBackupContents" Height="200" Margin="0,0,0,15"/>
+
+                <Separator Margin="0,10"/>
+
+                <TextBlock Text="Restore Options:" FontWeight="Bold" Margin="0,10,0,10"/>
+
+                <CheckBox Name="chkRestoreToOriginal" Content="Restore to original location" 
+                          IsChecked="True" Margin="0,0,0,10" Checked="RestoreLocation_Changed" Unchecked="RestoreLocation_Changed"/>
+
+                <StackPanel Name="pnlCustomLocation" Visibility="Collapsed" Margin="0,0,0,15">
+                    <TextBlock Text="Restore Destination:" Margin="0,0,0,5"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Name="txtRestoreDestination" Grid.Column="0" Height="25" Margin="0,0,5,0"/>
+                        <Button Grid.Column="1" Content="Browse..." Width="80" Click="BrowseDestination_Click"/>
+                    </Grid>
+                </StackPanel>
+
+                <CheckBox Name="chkOverwrite" Content="Overwrite existing files" Margin="0,0,0,10"/>
+                <CheckBox Name="chkRestoreSystemState" Content="Restore System State" Margin="0,0,0,10"/>
+                
+                <Separator Margin="0,10"/>
+
+                <TextBlock Text="Advanced Options:" FontWeight="Bold" Margin="0,10,0,10"/>
+                
+                <CheckBox Name="chkRestoreAsHyperV" Content="Restore as Hyper-V Virtual Machine" 
+                          Margin="0,0,0,10" Checked="HyperV_CheckedChanged" Unchecked="HyperV_CheckedChanged"/>
+
+                <StackPanel Name="pnlHyperV" Visibility="Collapsed" Margin="20,0,0,15">
+                    <TextBlock Text="VM Name:" Margin="0,0,0,5"/>
+                    <TextBox Name="txtVMName" Height="25" Margin="0,0,0,10"/>
+
+                    <TextBlock Text="VM Storage Path:" Margin="0,0,0,5"/>
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Name="txtVMStorage" Grid.Column="0" Height="25" Margin="0,0,5,0"/>
+                        <Button Grid.Column="1" Content="Browse..." Width="80" Click="BrowseVMStorage_Click"/>
+                    </Grid>
+
+                    <CheckBox Name="chkStartVM" Content="Start VM after restore" Margin="0,0,0,10"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <ProgressBar Grid.Row="2" Name="progressBar" Height="20" Margin="0,10,0,10" Visibility="Collapsed"/>
+        <TextBlock Grid.Row="2" Name="txtProgress" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Start Restore" Width="100" Margin="0,0,5,0" Click="StartRestore_Click"/>
+            <Button Content="Cancel" Width="100" Click="Cancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

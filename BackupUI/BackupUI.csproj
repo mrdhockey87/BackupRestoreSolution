@@ -8,10 +8,28 @@
     <Platforms>x64</Platforms>
     <OutputPath>$(SolutionDir)bin\$(Configuration)\</OutputPath>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>3.0.0</Version>
+    <AssemblyVersion>3.0.0.0</AssemblyVersion>
+    <FileVersion>3.0.0.0</FileVersion>
+    <InformationalVersion>3.0.0</InformationalVersion>
   </PropertyGroup>
   <ItemGroup>
-    <None Update="$(SolutionDir)bin\$(Configuration)\BackupEngine.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
+  
+  <!-- Copy BackupEngine.dll to output directory after build -->
+  <Target Name="CopyBackupEngine" AfterTargets="Build">
+    <ItemGroup>
+      <BackupEngineDll Include="$(SolutionDir)bin\$(Configuration)\BackupEngine.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(BackupEngineDll)" 
+          DestinationFolder="$(OutDir)" 
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
+    <Message Text="Copied BackupEngine.dll to $(OutDir)" Importance="high" 
+             Condition="Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
+    <Warning Text="BackupEngine.dll not found at $(SolutionDir)bin\$(Configuration)\BackupEngine.dll - Build BackupEngine project first!" 
+             Condition="!Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
+  </Target>
 </Project>

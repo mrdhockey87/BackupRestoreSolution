@@ -8,12 +8,6 @@ namespace BackupUI
         public MainWindow()
         {
             InitializeComponent();
-            LoadVersion();
-        }
-
-        private void LoadVersion()
-        {
-            txtVersion.Text = VersionClass.GetVersion();
         }
         
         private void Exit_Click(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
@@ -24,7 +18,7 @@ namespace BackupUI
         private void RecoveryEnvironmentCreator_Click(object sender, RoutedEventArgs e) => new RecoveryEnvironmentWindow().ShowDialog();
         private void About_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show($"Backup & Restore Solution\n{VersionClass.GetVersion()}\n\nEnterprise backup with scheduling and disaster recovery", 
+            MessageBox.Show("Backup & Restore Solution\nVersion 1.0.0\n\nEnterprise backup with scheduling and disaster recovery", 
                 "About", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
