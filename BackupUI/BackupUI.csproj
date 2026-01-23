@@ -8,10 +8,10 @@
     <Platforms>x64</Platforms>
     <OutputPath>$(SolutionDir)bin\$(Configuration)\</OutputPath>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>3.0.0</Version>
-    <AssemblyVersion>3.0.0.1</AssemblyVersion>
-    <FileVersion>3.0.0.1</FileVersion>
-    <InformationalVersion>3.0.1</InformationalVersion>
+    <Version>4.1.0.1</Version>
+    <AssemblyVersion>4.1.0.1</AssemblyVersion>
+    <FileVersion>4.1.0.1</FileVersion>
+    <InformationalVersion>4.1.0.1</InformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />

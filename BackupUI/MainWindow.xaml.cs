@@ -17,8 +17,19 @@ namespace BackupUI
         }
         
         private void Exit_Click(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
-        private void NewBackup_Click(object sender, RoutedEventArgs e) => new BackupWindow().ShowDialog();
-        private void Restore_Click(object sender, RoutedEventArgs e) => new RestoreWindow().ShowDialog();
+        
+        private void NewBackup_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new BackupWindowNew();
+            window.ShowDialog();
+        }
+        
+        private void Restore_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new RestoreWindowNew();
+            window.ShowDialog();
+        }
+        
         private void ManageSchedules_Click(object sender, RoutedEventArgs e) => new ScheduleManagementWindow().ShowDialog();
         private void ServiceManagement_Click(object sender, RoutedEventArgs e) => new ServiceManagementWindow().ShowDialog();
         private void RecoveryEnvironmentCreator_Click(object sender, RoutedEventArgs e) => new RecoveryEnvironmentWindow().ShowDialog();
