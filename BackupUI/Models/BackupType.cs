@@ -4,6 +4,9 @@ namespace BackupUI.Models
     {
         Full,
         Incremental,
-        Differential
+        Differential,
+        CloneToDisk,
+        CloneToVirtualDisk
     }
 }
+

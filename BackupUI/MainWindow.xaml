@@ -40,9 +40,103 @@ Width="900">
 		<Grid Margin="10">
 			<TabControl>
 				<TabItem Header="Backup">
-					<TextBlock Text="Use File  New Backup to create a backup"
-							   HorizontalAlignment="Center"
-							   VerticalAlignment="Center" />
+					<Grid>
+						<Grid.RowDefinitions>
+							<RowDefinition Height="Auto"/>
+							<RowDefinition Height="*"/>
+						</Grid.RowDefinitions>
+						
+						<!-- Header -->
+						<StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,5" Background="#F0F0F0">
+							<TextBlock Text="Backup Jobs" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="10,10,20,10"/>
+							<Button Content="New Backup..." Click="NewBackup_Click" Width="120" Height="30" Margin="5,5"/>
+							<Button Content="Refresh" Click="RefreshJobs_Click" Width="100" Height="30" Margin="5,5"/>
+						</StackPanel>
+						
+						<!-- Job List -->
+						<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="10">
+							<ItemsControl Name="lstBackupJobs">
+								<ItemsControl.ItemTemplate>
+									<DataTemplate>
+										<Border BorderBrush="#CCC" BorderThickness="1" Margin="0,0,0,10" Background="White" CornerRadius="5">
+											<Grid Margin="15">
+												<Grid.RowDefinitions>
+													<RowDefinition Height="Auto"/>
+													<RowDefinition Height="Auto"/>
+													<RowDefinition Height="Auto"/>
+													<RowDefinition Height="Auto"/>
+													<RowDefinition Height="Auto"/>
+												</Grid.RowDefinitions>
+												<Grid.ColumnDefinitions>
+													<ColumnDefinition Width="150"/>
+													<ColumnDefinition Width="*"/>
+													<ColumnDefinition Width="Auto"/>
+												</Grid.ColumnDefinitions>
+												
+												<!-- Job Name -->
+												<TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" 
+														   Text="{Binding Name}" 
+														   FontSize="16" FontWeight="Bold" 
+														   Margin="0,0,0,10"/>
+												
+												<!-- Type -->
+												<TextBlock Grid.Row="1" Grid.Column="0" Text="Type:" FontWeight="SemiBold" Margin="0,5"/>
+												<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TypeDescription}" Margin="0,5"/>
+												
+												<!-- Source -->
+												<TextBlock Grid.Row="2" Grid.Column="0" Text="Source:" FontWeight="SemiBold" Margin="0,5"/>
+												<TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SourceDescription}" Margin="0,5" TextWrapping="Wrap"/>
+												
+												<!-- Destination -->
+												<TextBlock Grid.Row="3" Grid.Column="0" Text="Destination:" FontWeight="SemiBold" Margin="0,5"/>
+												<TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding DestinationPath}" Margin="0,5" TextWrapping="Wrap"/>
+												
+												<!-- Schedule -->
+												<TextBlock Grid.Row="4" Grid.Column="0" Text="Schedule:" FontWeight="SemiBold" Margin="0,5"/>
+												<TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ScheduleDescription}" Margin="0,5"/>
+												
+												<!-- Buttons -->
+												<StackPanel Grid.Row="0" Grid.RowSpan="5" Grid.Column="2" 
+														    Orientation="Vertical" 
+														    VerticalAlignment="Center" 
+														    Margin="20,0,0,0">
+													<Button Content="Run Now" 
+															Width="100" 
+															Height="35" 
+															Margin="0,5"
+															Tag="{Binding Id}"
+															Click="RunJobNow_Click"/>
+													<Button Content="Edit" 
+															Width="100" 
+															Height="35" 
+															Margin="0,5"
+															Tag="{Binding Id}"
+															Click="EditJob_Click"/>
+													<Button Content="Delete" 
+															Width="100" 
+															Height="35" 
+															Margin="0,5"
+															Background="#FFE0E0"
+															Tag="{Binding Id}"
+															Click="DeleteJob_Click"/>
+												</StackPanel>
+											</Grid>
+										</Border>
+									</DataTemplate>
+								</ItemsControl.ItemTemplate>
+							</ItemsControl>
+						</ScrollViewer>
+						
+						<!-- No Jobs Message -->
+						<TextBlock Name="txtNoJobs"
+								   Grid.Row="1"
+								   Text="No backup jobs found. Click 'New Backup...' to create one."
+								   HorizontalAlignment="Center"
+								   VerticalAlignment="Center"
+								   FontSize="14"
+								   Foreground="#999"
+								   Visibility="Collapsed"/>
+					</Grid>
 				</TabItem>
 				<TabItem Header="Restore">
 					<TextBlock Text="Use File  Restore to restore from backup"

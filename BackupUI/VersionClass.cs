@@ -47,12 +47,12 @@ namespace BackupUI
 				}
 				
 				// Last resort fallback
-				return "4.1.0.1";
+				return "4.6.1.13";
 			}
 			catch
 			{
 				// Fallback version if assembly version fails
-				return "4.1.0.1";
+				return "4.6.1.13";
 			}
 		}
 	}
@@ -60,6 +60,19 @@ namespace BackupUI
 
 /*
  * 
+ *  Version 4.6.1.13 Finally got the AI to get the bootable Linux USB iso with BackRestore app PowerShell script working. mdail 1/27/2026
+ *  Version 4.6.1.10 Spent all day trying to get the AI to fix the ability to make a bootable Linux USB drive with the BackRestore app
+ *					 on it so user can have a way to restore their system if Windows will not boot.  The AI was unable to do this yet. mdail 1/25/2026
+ *  Version 4.6.0.0 RESTORE COMPLETE: Implemented RestoreFiles, RestoreHyperVVM fully functional, all C++ restore backend complete
+ *  Version 4.5.0.0 FEATURE COMPLETE: WinPE bootable USB, restore with date selection for incremental/differential,
+ *                  restore destination mapping, all restore operations, clone to VHDX, backup metadata system
+ *  Version 4.4.0.0 MAJOR UPDATE: Fully implemented Hyper-V VM backup/clone, actual backup execution with progress callbacks,
+ *                  support for all backup types (Full/Incremental/Differential), disk/volume/file backups now functional
+ *  Version 4.3.0.2 CRITICAL FIX: Volume paths now include trailing backslash (E:\ instead of E:) for proper folder enumeration
+ *  Version 4.3.0.1 Fixed job refresh - JobManager now reloads from file on every GetAllJobs() call
+ *  Version 4.3.0.0 CRITICAL FIX: Ensures C:\ProgramData\BackupRestoreService directory is created, enhanced error handling,
+ *                  added Clone to Disk and Clone to Virtual Disk (Hyper-V) options
+ *  Version 4.2.0.0 MAJOR UPDATE: Added backup job list to main window with Run/Edit/Delete, changed type labels to "Full then Incremental/Differential"
  *  Version 4.1.0.1 See Note 1 below for details on changes made to get to this version. mdail 1/23/2026
  *  Version 3.1.0.1 Fixed checkbox three-state behavior - now toggles between checked/unchecked on click, indeterminate only for mixed children
  *  Version 3.1.0.0 MAJOR UPDATE: Fixed disk ordering (uses Index property), shows volumes without drive letters (EFI/Recovery),

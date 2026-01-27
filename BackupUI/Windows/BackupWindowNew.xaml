@@ -80,13 +80,14 @@
                         <TextBlock Text="Backup Type:" Margin="0,0,0,5"/>
                         <ComboBox Name="cmbBackupType" Margin="0,0,0,15" Height="25">
                             <ComboBoxItem Content="Full Backup" IsSelected="True"/>
-                            <ComboBoxItem Content="Incremental Backup"/>
-                            <ComboBoxItem Content="Differential Backup"/>
-                            <ComboBoxItem Content="Clone Backup"/>
+                            <ComboBoxItem Content="Full then Incremental"/>
+                            <ComboBoxItem Content="Full then Differential"/>
+                            <ComboBoxItem Content="Clone to Disk"/>
+                            <ComboBoxItem Content="Clone to Virtual Disk (Hyper-V)"/>
                         </ComboBox>
 
                         <StackPanel Name="pnlCloneOptions" Visibility="Collapsed" Margin="0,0,0,15">
-                            <TextBlock Text="Clone Destination:" Margin="0,0,0,5"/>
+                            <TextBlock Name="txtCloneDestinationLabel" Text="Clone Destination:" Margin="0,0,0,5"/>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>

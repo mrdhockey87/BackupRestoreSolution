@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
@@ -8,10 +8,10 @@
     <Platforms>x64</Platforms>
     <OutputPath>$(SolutionDir)bin\$(Configuration)\</OutputPath>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>4.1.0.1</Version>
-    <AssemblyVersion>4.1.0.1</AssemblyVersion>
-    <FileVersion>4.1.0.1</FileVersion>
-    <InformationalVersion>4.1.0.1</InformationalVersion>
+    <Version>4.6.1.13</Version>
+    <AssemblyVersion>4.6.1.13</AssemblyVersion>
+    <FileVersion>4.6.1.13</FileVersion>
+    <InformationalVersion>4.6.1.13</InformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />

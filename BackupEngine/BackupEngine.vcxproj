@@ -47,6 +47,7 @@
     <ClCompile Include="BackupFiles_Implementation.cpp" />
     <ClCompile Include="BackupInfo_Implementation.cpp" />
     <ClCompile Include="BackupManager_Advanced.cpp" />
+    <ClCompile Include="HyperVBackup_Implementation.cpp" />
     <ClCompile Include="HyperVManager.cpp" />
     <ClCompile Include="HyperV_Enumeration.cpp" />
     <ClCompile Include="RecoveryEnvironment.cpp" />

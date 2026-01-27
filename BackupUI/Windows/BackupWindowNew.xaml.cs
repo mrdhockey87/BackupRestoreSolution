@@ -17,8 +17,22 @@ namespace BackupUI.Windows
     public partial class BackupWindowNew : Window
     {
         private ObservableCollection<DriveTreeItem> driveItems = new();
+        private readonly JobManager jobManager = new();
+        private BackupJob? existingJob = null;
 
         public BackupWindowNew()
+        {
+            InitializeWindow();
+        }
+
+        public BackupWindowNew(BackupJob job)
+        {
+            existingJob = job;
+            InitializeWindow();
+            LoadJobData(job);
+        }
+
+        private void InitializeWindow()
         {
             try
             {
@@ -36,6 +50,53 @@ namespace BackupUI.Windows
                     "Initialization Error",
                     MessageBoxButton.OK, 
                     MessageBoxImage.Error);
+            }
+        }
+
+        private void LoadJobData(BackupJob job)
+        {
+            // Set window title
+            this.Title = $"Edit Backup - {job.Name}";
+
+            // Load basic info
+            txtBackupName.Text = job.Name;
+            txtDestination.Text = job.DestinationPath;
+
+            // Set backup type
+            cmbBackupType.SelectedIndex = (int)job.Type;
+
+            // Set options
+            chkCompress.IsChecked = job.CompressData;
+            chkVerify.IsChecked = job.VerifyAfterBackup;
+
+            if (job.Target == BackupTarget.Disk || job.Target == BackupTarget.Volume)
+            {
+                // TODO: Pre-select drives/volumes in tree
+                // This will require matching SourcePaths to tree items after LoadDrives completes
+            }
+
+            // Load schedule
+            if (job.Schedule != null)
+            {
+                chkEnableSchedule.IsChecked = job.Schedule.Enabled;
+                cmbFrequency.SelectedIndex = (int)job.Schedule.Frequency;
+                cmbHour.SelectedItem = job.Schedule.Time.Hours.ToString("D2");
+                cmbMinute.SelectedItem = job.Schedule.Time.Minutes.ToString("D2");
+
+                if (job.Schedule.Frequency == ScheduleFrequency.Monthly)
+                {
+                    cmbDayOfMonth.SelectedItem = job.Schedule.DayOfMonth;
+                }
+                else if (job.Schedule.Frequency == ScheduleFrequency.Weekly)
+                {
+                    chkMonday.IsChecked = job.Schedule.DaysOfWeek.Contains(DayOfWeek.Monday);
+                    chkTuesday.IsChecked = job.Schedule.DaysOfWeek.Contains(DayOfWeek.Tuesday);
+                    chkWednesday.IsChecked = job.Schedule.DaysOfWeek.Contains(DayOfWeek.Wednesday);
+                    chkThursday.IsChecked = job.Schedule.DaysOfWeek.Contains(DayOfWeek.Thursday);
+                    chkFriday.IsChecked = job.Schedule.DaysOfWeek.Contains(DayOfWeek.Friday);
+                    chkSaturday.IsChecked = job.Schedule.DaysOfWeek.Contains(DayOfWeek.Saturday);
+                    chkSunday.IsChecked = job.Schedule.DaysOfWeek.Contains(DayOfWeek.Sunday);
+                }
             }
         }
 
@@ -63,6 +124,10 @@ namespace BackupUI.Windows
                 
                 var rootPath = volumeItem.FullPath;
                 
+                System.Diagnostics.Debug.WriteLine($"=== LoadFoldersForVolume ===");
+                System.Diagnostics.Debug.WriteLine($"Volume: {volumeItem.Name}");
+                System.Diagnostics.Debug.WriteLine($"Path: '{rootPath}'");
+                
                 // Check if this is a system partition without drive letter
                 if (rootPath.StartsWith("\\\\?\\Volume{"))
                 {
@@ -77,6 +142,7 @@ namespace BackupUI.Windows
                 
                 if (!Directory.Exists(rootPath))
                 {
+                    System.Diagnostics.Debug.WriteLine($"ERROR: Directory does not exist: '{rootPath}'");
                     volumeItem.Children.Add(new DriveTreeItem
                     {
                         Name = "(Volume not accessible)",
@@ -86,13 +152,14 @@ namespace BackupUI.Windows
                     return;
                 }
 
-                System.Diagnostics.Debug.WriteLine($"Loading folders for volume: {rootPath}");
+                System.Diagnostics.Debug.WriteLine($"Directory exists, enumerating folders...");
 
                 // Add top-level folders
                 var foldersAdded = 0;
                 try
                 {
                     var directories = Directory.GetDirectories(rootPath);
+                    System.Diagnostics.Debug.WriteLine($"Found {directories.Length} directories");
                     
                     foreach (var directory in directories)
                     {
@@ -140,27 +207,32 @@ namespace BackupUI.Windows
 
                             volumeItem.Children.Add(folderItem);
                             foldersAdded++;
+                            
+                            System.Diagnostics.Debug.WriteLine($"  Added: {folderName}");
                         }
-                        catch (UnauthorizedAccessException)
+                        catch (UnauthorizedAccessException ex)
                         {
                             // Add a marker for inaccessible folders
+                            var folderName = $"{Path.GetFileName(directory)} [Access Denied]";
                             volumeItem.Children.Add(new DriveTreeItem
                             {
-                                Name = $"{Path.GetFileName(directory)} [Access Denied]",
+                                Name = folderName,
                                 FullPath = directory,
                                 ItemType = DriveTreeItemType.Folder,
                                 Parent = volumeItem
                             });
                             foldersAdded++;
+                            System.Diagnostics.Debug.WriteLine($"  Access denied: {Path.GetFileName(directory)}");
                         }
-                        catch
+                        catch (Exception ex)
                         {
-                            // Skip other errors silently
+                            System.Diagnostics.Debug.WriteLine($"  Error processing folder {directory}: {ex.Message}");
                         }
                     }
                 }
                 catch (UnauthorizedAccessException)
                 {
+                    System.Diagnostics.Debug.WriteLine("ERROR: Access denied to volume root");
                     volumeItem.Children.Add(new DriveTreeItem
                     {
                         Name = "(Access Denied - Run as Administrator)",
@@ -170,7 +242,7 @@ namespace BackupUI.Windows
                     return;
                 }
                 
-                System.Diagnostics.Debug.WriteLine($"Added {foldersAdded} folders to volume {volumeItem.Name}");
+                System.Diagnostics.Debug.WriteLine($"Total folders added: {foldersAdded}");
                 
                 // If no folders were accessible, show a message
                 if (foldersAdded == 0)
@@ -185,7 +257,7 @@ namespace BackupUI.Windows
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error loading folders for volume {volumeItem.Name}: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"CRITICAL ERROR in LoadFoldersForVolume: {ex.Message}\nStack: {ex.StackTrace}");
                 volumeItem.Children.Clear();
                 volumeItem.Children.Add(new DriveTreeItem
                 {
@@ -675,10 +747,13 @@ namespace BackupUI.Windows
                     ? "Local Disk" 
                     : driveInfo.VolumeLabel;
 
+                // Ensure the FullPath has a trailing backslash for directory enumeration
+                var volumePath = driveLetter.TrimEnd('\\') + "\\";
+
                 var volumeItem = new DriveTreeItem
                 {
                     Name = $"{driveLetter} ({volumeLabel})",
-                    FullPath = driveLetter,
+                    FullPath = volumePath,  // Changed: Now includes trailing backslash (e.g., "E:\")
                     ItemType = DriveTreeItemType.Volume,
                     Size = driveInfo.TotalSize,
                     Parent = diskItem,
@@ -694,7 +769,7 @@ namespace BackupUI.Windows
                 });
 
                 diskItem.Children.Add(volumeItem);
-                System.Diagnostics.Debug.WriteLine($"      Added {driveLetter} to tree");
+                System.Diagnostics.Debug.WriteLine($"      Added {driveLetter} to tree (path: {volumePath})");
                 return true;
             }
             catch (Exception ex)
@@ -725,10 +800,14 @@ namespace BackupUI.Windows
                                 ? "Local Disk" 
                                 : drive.VolumeLabel;
 
+                            // Ensure trailing backslash for directory enumeration
+                            var volumePath = drive.Name.TrimEnd('\\') + "\\";
+                            var displayName = drive.Name.TrimEnd('\\');
+
                             var volumeItem = new DriveTreeItem
                             {
-                                Name = $"{drive.Name.TrimEnd('\\')} ({volumeLabel})",
-                                FullPath = drive.Name.TrimEnd('\\'),
+                                Name = $"{displayName} ({volumeLabel})",
+                                FullPath = volumePath,  // Changed: Now includes trailing backslash
                                 ItemType = DriveTreeItemType.Volume,
                                 Size = drive.TotalSize,
                                 Parent = diskItem,
@@ -745,7 +824,7 @@ namespace BackupUI.Windows
                             });
 
                             diskItem.Children.Add(volumeItem);
-                            System.Diagnostics.Debug.WriteLine($"Fallback: Added {drive.Name} to disk {diskNum}");
+                            System.Diagnostics.Debug.WriteLine($"Fallback: Added {drive.Name} to disk {diskNum} (path: {volumePath})");
                         }
                         catch (Exception ex)
                         {
@@ -877,9 +956,19 @@ namespace BackupUI.Windows
             if (pnlCloneOptions == null) 
                 return;
 
-            if (cmbBackupType.SelectedIndex == 3) // Clone Backup
+            // Show clone options for both clone types (index 3 = Clone to Disk, index 4 = Clone to Virtual Disk)
+            if (cmbBackupType.SelectedIndex == 3 || cmbBackupType.SelectedIndex == 4)
             {
                 pnlCloneOptions.Visibility = Visibility.Visible;
+                
+                // Update label based on clone type
+                if (txtCloneDestinationLabel != null)
+                {
+                    if (cmbBackupType.SelectedIndex == 3)
+                        txtCloneDestinationLabel.Text = "Clone to Physical Disk:";
+                    else
+                        txtCloneDestinationLabel.Text = "Clone to Virtual Disk (.vhdx):";
+                }
             }
             else
             {
@@ -942,8 +1031,9 @@ namespace BackupUI.Windows
                 txtProgress.Visibility = Visibility.Visible;
                 progressBar.Value = 0;
 
-                // TODO: Implement actual backup logic
-                await RunBackup();
+                var job = CreateJobFromInput();
+
+                await ExecuteBackupJob(job);
 
                 MessageBox.Show("Backup completed successfully!", "Success",
                     MessageBoxButton.OK, MessageBoxImage.Information);
@@ -963,21 +1053,190 @@ namespace BackupUI.Windows
             }
         }
 
-        private async Task RunBackup()
+        private async Task ExecuteBackupJob(BackupJob job)
         {
             await Task.Run(() =>
             {
-                // Placeholder for actual backup implementation
-                for (int i = 0; i <= 100; i += 10)
+                try
                 {
+                    // Create progress callback
+                    BackupEngineInterop.ProgressCallback progressCallback = (percentage, message) =>
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            progressBar.Value = percentage;
+                            txtProgress.Text = message ?? $"Progress: {percentage}%";
+                        });
+                    };
+
+                    int result = -1;
+
+                    // Execute based on job type
+                    if (job.IsHyperVBackup && job.HyperVMachines.Count > 0)
+                    {
+                        // Hyper-V VM backup
+                        foreach (var vmName in job.HyperVMachines)
+                        {
+                            var vmDestPath = Path.Combine(job.DestinationPath, vmName);
+                            
+                            Dispatcher.Invoke(() =>
+                            {
+                                txtProgress.Text = $"Backing up Hyper-V VM: {vmName}...";
+                            });
+
+                            result = BackupEngineInterop.BackupHyperVVM(
+                                vmName,
+                                vmDestPath,
+                                progressCallback);
+
+                            if (result != 0)
+                            {
+                                var errorBuffer = new StringBuilder(4096);
+                                BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                                throw new Exception($"Hyper-V backup failed: {errorBuffer}");
+                            }
+                        }
+                    }
+                    else if (job.Target == BackupTarget.Disk)
+                    {
+                        // Disk backup
+                        foreach (var diskPath in job.SourcePaths)
+                        {
+                            // Extract disk number from path (e.g., "\\.\PHYSICALDRIVE0" -> 0)
+                            var diskNumStr = diskPath.Replace("\\\\?\\PHYSICALDRIVE", "").Replace("\\\\.\\PHYSICALDRIVE", "");
+                            if (int.TryParse(diskNumStr, out int diskNum))
+                            {
+                                var diskDestPath = Path.Combine(job.DestinationPath, $"Disk{diskNum}");
+                                
+                                result = BackupEngineInterop.BackupDisk(
+                                    diskNum,
+                                    diskDestPath,
+                                    job.IncludeSystemState,
+                                    job.CompressData,
+                                    progressCallback);
+
+                                if (result != 0)
+                                {
+                                    var errorBuffer = new StringBuilder(4096);
+                                    BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                                    throw new Exception($"Disk backup failed: {errorBuffer}");
+                                }
+                            }
+                        }
+                    }
+                    else if (job.Target == BackupTarget.Volume)
+                    {
+                        // Volume backup
+                        foreach (var volumePath in job.SourcePaths)
+                        {
+                            var volumeName = volumePath.TrimEnd('\\').Replace(":", "");
+                            var volumeDestPath = Path.Combine(job.DestinationPath, volumeName);
+                            
+                            result = BackupEngineInterop.BackupVolume(
+                                volumePath,
+                                volumeDestPath,
+                                job.IncludeSystemState,
+                                job.CompressData,
+                                progressCallback);
+
+                            if (result != 0)
+                            {
+                                var errorBuffer = new StringBuilder(4096);
+                                BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                                throw new Exception($"Volume backup failed: {errorBuffer}");
+                            }
+                        }
+                    }
+                    else if (job.Target == BackupTarget.FilesAndFolders)
+                    {
+                        // Files/Folders backup
+                        switch (job.Type)
+                        {
+                            case BackupType.Full:
+                                foreach (var sourcePath in job.SourcePaths)
+                                {
+                                    result = BackupEngineInterop.BackupFiles(
+                                        sourcePath,
+                                        job.DestinationPath,
+                                        progressCallback);
+
+                                    if (result != 0)
+                                    {
+                                        var errorBuffer = new StringBuilder(4096);
+                                        BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                                        throw new Exception($"File backup failed: {errorBuffer}");
+                                    }
+                                }
+                                break;
+
+                            case BackupType.Incremental:
+                                // TODO: Find last backup in destination
+                                var lastBackup = FindLastBackup(job.DestinationPath);
+                                
+                                foreach (var sourcePath in job.SourcePaths)
+                                {
+                                    result = BackupEngineInterop.CreateIncrementalBackup(
+                                        sourcePath,
+                                        job.DestinationPath,
+                                        lastBackup ?? job.DestinationPath,
+                                        progressCallback);
+
+                                    if (result != 0)
+                                    {
+                                        var errorBuffer = new StringBuilder(4096);
+                                        BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                                        throw new Exception($"Incremental backup failed: {errorBuffer}");
+                                    }
+                                }
+                                break;
+
+                            case BackupType.Differential:
+                                var fullBackup = FindFullBackup(job.DestinationPath);
+                                
+                                foreach (var sourcePath in job.SourcePaths)
+                                {
+                                    result = BackupEngineInterop.CreateDifferentialBackup(
+                                        sourcePath,
+                                        job.DestinationPath,
+                                        fullBackup ?? job.DestinationPath,
+                                        progressCallback);
+
+                                    if (result != 0)
+                                    {
+                                        var errorBuffer = new StringBuilder(4096);
+                                        BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                                        throw new Exception($"Differential backup failed: {errorBuffer}");
+                                    }
+                                }
+                                break;
+                        }
+                    }
+
                     Dispatcher.Invoke(() =>
                     {
-                        progressBar.Value = i;
-                        txtProgress.Text = $"Backing up... {i}%";
+                        progressBar.Value = 100;
+                        txtProgress.Text = "Backup completed!";
                     });
-                    System.Threading.Thread.Sleep(500);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Backup execution failed: {ex.Message}", ex);
                 }
             });
+        }
+
+        private string? FindLastBackup(string destPath)
+        {
+            // TODO: Implement logic to find the most recent backup in destination
+            // For now, return null to trigger full backup
+            return null;
+        }
+
+        private string? FindFullBackup(string destPath)
+        {
+            // TODO: Implement logic to find the base full backup in destination
+            // For now, return null to trigger full backup
+            return null;
         }
 
         private void SaveJob_Click(object sender, RoutedEventArgs e)
@@ -985,11 +1244,158 @@ namespace BackupUI.Windows
             if (!ValidateInputs())
                 return;
 
-            MessageBox.Show("Backup job saved successfully!", "Success",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            try
+            {
+                var job = CreateJobFromInput();
 
-            DialogResult = true;
-            Close();
+                // If editing, preserve the ID
+                if (existingJob != null)
+                {
+                    job.Id = existingJob.Id;
+                    jobManager.UpdateJob(job);
+                    MessageBox.Show($"Backup job '{job.Name}' updated successfully!\n\nJob saved to:\nC:\\ProgramData\\BackupRestoreService\\jobs.json", 
+                        "Success",
+                        MessageBoxButton.OK, 
+                        MessageBoxImage.Information);
+                }
+                else
+                {
+                    jobManager.AddJob(job);
+                    MessageBox.Show($"Backup job '{job.Name}' created successfully!\n\nJob saved to:\nC:\\ProgramData\\BackupRestoreService\\jobs.json", 
+                        "Success",
+                        MessageBoxButton.OK, 
+                        MessageBoxImage.Information);
+                }
+
+                DialogResult = true;
+                Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"ERROR: Failed to save backup job!\n\n{ex.Message}\n\nPlease check:\n" +
+                    "1. You have administrator rights\n" +
+                    "2. C:\\ProgramData folder is accessible\n" +
+                    "3. Antivirus is not blocking the save\n\n" +
+                    $"Technical details:\n{ex.InnerException?.Message}", 
+                    "Save Failed",
+                    MessageBoxButton.OK, 
+                    MessageBoxImage.Error);
+                
+                System.Diagnostics.Debug.WriteLine($"SaveJob failed: {ex.Message}\n{ex.StackTrace}");
+            }
+        }
+
+        private BackupJob CreateJobFromInput()
+        {
+            var job = new BackupJob
+            {
+                Id = Guid.NewGuid(),
+                Name = txtBackupName.Text,
+                Type = (BackupType)cmbBackupType.SelectedIndex,
+                DestinationPath = txtDestination.Text,
+                CompressData = chkCompress.IsChecked == true,
+                VerifyAfterBackup = chkVerify.IsChecked == true
+            };
+
+            // Collect selected items from tree
+            CollectSelectedItems(job);
+
+            // Schedule
+            if (chkEnableSchedule.IsChecked == true)
+            {
+                job.Schedule = new BackupSchedule
+                {
+                    JobId = job.Id,
+                    Enabled = true,
+                    Frequency = (ScheduleFrequency)cmbFrequency.SelectedIndex,
+                    Time = new TimeSpan(
+                        int.Parse(cmbHour.SelectedItem?.ToString() ?? "2"),
+                        int.Parse(cmbMinute.SelectedItem?.ToString() ?? "0"),
+                        0)
+                };
+
+                if (job.Schedule.Frequency == ScheduleFrequency.Weekly)
+                {
+                    if (chkMonday.IsChecked == true) job.Schedule.DaysOfWeek.Add(DayOfWeek.Monday);
+                    if (chkTuesday.IsChecked == true) job.Schedule.DaysOfWeek.Add(DayOfWeek.Tuesday);
+                    if (chkWednesday.IsChecked == true) job.Schedule.DaysOfWeek.Add(DayOfWeek.Wednesday);
+                    if (chkThursday.IsChecked == true) job.Schedule.DaysOfWeek.Add(DayOfWeek.Thursday);
+                    if (chkFriday.IsChecked == true) job.Schedule.DaysOfWeek.Add(DayOfWeek.Friday);
+                    if (chkSaturday.IsChecked == true) job.Schedule.DaysOfWeek.Add(DayOfWeek.Saturday);
+                    if (chkSunday.IsChecked == true) job.Schedule.DaysOfWeek.Add(DayOfWeek.Sunday);
+                }
+                else if (job.Schedule.Frequency == ScheduleFrequency.Monthly)
+                {
+                    job.Schedule.DayOfMonth = int.Parse(cmbDayOfMonth.SelectedItem?.ToString() ?? "1");
+                }
+            }
+
+            return job;
+        }
+
+        private void CollectSelectedItems(BackupJob job)
+        {
+            foreach (var drive in driveItems)
+            {
+                if (drive.IsChecked == true)
+                {
+                    // Whole disk selected
+                    if (drive.ItemType == DriveTreeItemType.Disk)
+                    {
+                        job.Target = BackupTarget.Disk;
+                        job.SourcePaths.Add(drive.FullPath);
+                    }
+                    else if (drive.ItemType == DriveTreeItemType.HyperVSystem)
+                    {
+                        job.IsHyperVBackup = true;
+                        job.HyperVMachines.Add(drive.FullPath);
+                    }
+                }
+                else if (drive.IsChecked == null && drive.Children.Count > 0)
+                {
+                    // Partial selection - check children
+                    CollectSelectedChildren(drive, job);
+                }
+            }
+
+            // Determine target type if not already set
+            if (job.Target == 0 && job.SourcePaths.Count > 0)
+            {
+                // Check if all sources are drive letters (volumes) or paths (files/folders)
+                var firstPath = job.SourcePaths[0];
+                if (firstPath.Length <= 3 && firstPath.EndsWith(":"))
+                {
+                    job.Target = BackupTarget.Volume;
+                }
+                else
+                {
+                    job.Target = BackupTarget.FilesAndFolders;
+                }
+            }
+        }
+
+        private void CollectSelectedChildren(DriveTreeItem parent, BackupJob job)
+        {
+            foreach (var child in parent.Children)
+            {
+                if (child.IsChecked == true)
+                {
+                    if (child.ItemType == DriveTreeItemType.Volume)
+                    {
+                        if (job.Target == 0) job.Target = BackupTarget.Volume;
+                        job.SourcePaths.Add(child.FullPath);
+                    }
+                    else if (child.ItemType == DriveTreeItemType.Folder)
+                    {
+                        job.Target = BackupTarget.FilesAndFolders;
+                        job.SourcePaths.Add(child.FullPath);
+                    }
+                }
+                else if (child.IsChecked == null && child.Children.Count > 0)
+                {
+                    CollectSelectedChildren(child, job);
+                }
+            }
         }
 
         private bool ValidateInputs()
@@ -1017,9 +1423,11 @@ namespace BackupUI.Windows
                 return false;
             }
 
-            if (cmbBackupType.SelectedIndex == 3 && string.IsNullOrWhiteSpace(txtCloneDestination.Text))
+            if ((cmbBackupType.SelectedIndex == 3 || cmbBackupType.SelectedIndex == 4) && 
+                string.IsNullOrWhiteSpace(txtCloneDestination.Text))
             {
-                MessageBox.Show("Please select a clone destination.", "Validation Error",
+                var cloneType = cmbBackupType.SelectedIndex == 3 ? "physical disk" : "virtual disk";
+                MessageBox.Show($"Please select a {cloneType} destination.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
