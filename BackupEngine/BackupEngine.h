@@ -187,4 +187,27 @@ extern "C" {
         int* major,
         int* minor,
         int* build);
+
+    // ====================
+    // Enhanced Restore Functions (Version 4.7.0.0)
+    // ====================
+
+    // Enumerate backup dates/snapshots in a backup folder
+    // Returns: Date|Type|Size|Path separated by newlines
+    // Example: 2026-01-30 14:30:00|Full|2.5 GB|D:\Backups\Full_20260130_143000
+    BACKUPENGINE_API int EnumerateBackupDates(
+        const wchar_t* backupPath,
+        wchar_t* buffer,
+        int bufferSize);
+
+    // Restore selected items from backup using a manifest
+    // Manifest format: One path per line (drives, volumes, folders, or files)
+    BACKUPENGINE_API int RestoreWithManifest(
+        const wchar_t* backupPath,
+        const wchar_t* destPath,
+        const wchar_t* manifest,
+        bool overwriteExisting,
+        bool restoreSystemState,
+        bool preservePermissions,
+        ProgressCallback callback);
 }

@@ -39,8 +39,6 @@ namespace BackupUI.Windows
                 InitializeComponent();
                 InitializeScheduleControls();
                 
-                cmbBackupType.SelectionChanged += BackupType_SelectionChanged;
-                
                 // Load drives after window is fully loaded
                 Loaded += BackupWindowNew_Loaded;
             }
@@ -63,7 +61,27 @@ namespace BackupUI.Windows
             txtDestination.Text = job.DestinationPath;
 
             // Set backup type
-            cmbBackupType.SelectedIndex = (int)job.Type;
+            switch (job.Type)
+            {
+                case BackupType.Full:
+                    rbFullBackup.IsChecked = true;
+                    break;
+                case BackupType.Incremental:
+                    rbIncremental.IsChecked = true;
+                    break;
+                case BackupType.Differential:
+                    rbDifferential.IsChecked = true;
+                    break;
+                case BackupType.CloneToDisk:
+                    rbCloneDisk.IsChecked = true;
+                    break;
+                case BackupType.CloneToVirtualDisk:
+                    rbCloneVirtual.IsChecked = true;
+                    break;
+                case BackupType.CloneHyperVSystem:
+                    rbCloneHyperV.IsChecked = true;
+                    break;
+            }
 
             // Set options
             chkCompress.IsChecked = job.CompressData;
@@ -80,8 +98,36 @@ namespace BackupUI.Windows
             {
                 chkEnableSchedule.IsChecked = job.Schedule.Enabled;
                 cmbFrequency.SelectedIndex = (int)job.Schedule.Frequency;
-                cmbHour.SelectedItem = job.Schedule.Time.Hours.ToString("D2");
+                
+                // Convert 24-hour to 12-hour format with AM/PM
+                int hour24 = job.Schedule.Time.Hours;
+                int hour12;
+                string ampm;
+                
+                if (hour24 == 0)
+                {
+                    hour12 = 12;
+                    ampm = "AM";
+                }
+                else if (hour24 < 12)
+                {
+                    hour12 = hour24;
+                    ampm = "AM";
+                }
+                else if (hour24 == 12)
+                {
+                    hour12 = 12;
+                    ampm = "PM";
+                }
+                else
+                {
+                    hour12 = hour24 - 12;
+                    ampm = "PM";
+                }
+                
+                cmbHour.SelectedItem = hour12.ToString();
                 cmbMinute.SelectedItem = job.Schedule.Time.Minutes.ToString("D2");
+                cmbAmPm.SelectedIndex = ampm == "AM" ? 0 : 1;
 
                 if (job.Schedule.Frequency == ScheduleFrequency.Monthly)
                 {
@@ -210,7 +256,7 @@ namespace BackupUI.Windows
                             
                             System.Diagnostics.Debug.WriteLine($"  Added: {folderName}");
                         }
-                        catch (UnauthorizedAccessException ex)
+                        catch (UnauthorizedAccessException)
                         {
                             // Add a marker for inaccessible folders
                             var folderName = $"{Path.GetFileName(directory)} [Access Denied]";
@@ -270,12 +316,12 @@ namespace BackupUI.Windows
 
         private void InitializeScheduleControls()
         {
-            // Populate hours (0-23)
-            for (int i = 0; i < 24; i++)
+            // Populate hours (1-12) for 12-hour format
+            for (int i = 1; i <= 12; i++)
             {
-                cmbHour.Items.Add(i.ToString("D2"));
+                cmbHour.Items.Add(i.ToString());
             }
-            cmbHour.SelectedIndex = 2; // 2 AM default
+            cmbHour.SelectedIndex = 1; // 2 (default)
 
             // Populate minutes
             for (int i = 0; i < 60; i += 15)
@@ -283,6 +329,9 @@ namespace BackupUI.Windows
                 cmbMinute.Items.Add(i.ToString("D2"));
             }
             cmbMinute.SelectedIndex = 0;
+
+            // Set default AM/PM (AM)
+            cmbAmPm.SelectedIndex = 0; // AM
 
             // Populate days of month
             for (int i = 1; i <= 31; i++)
@@ -677,12 +726,12 @@ namespace BackupUI.Windows
                                 {
                                     var volumeType = "Unknown";
                                     if (volumeName.Contains("EFI", StringComparison.OrdinalIgnoreCase) || 
-                                        volumeDeviceId.Contains("EFI", StringComparison.OrdinalIgnoreCase))
+                                        volumeDeviceId?.Contains("EFI", StringComparison.OrdinalIgnoreCase) == true)
                                     {
                                         volumeType = "EFI System Partition";
                                     }
                                     else if (volumeName.Contains("Recovery", StringComparison.OrdinalIgnoreCase) ||
-                                             volumeDeviceId.Contains("Recovery", StringComparison.OrdinalIgnoreCase))
+                                             volumeDeviceId?.Contains("Recovery", StringComparison.OrdinalIgnoreCase) == true)
                                     {
                                         volumeType = "Recovery Partition";
                                     }
@@ -951,28 +1000,35 @@ namespace BackupUI.Windows
             }
         }
 
-        private void BackupType_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void BackupType_Changed(object sender, RoutedEventArgs e)
         {
-            if (pnlCloneOptions == null) 
+            if (pnlCloneOptions == null || pnlBackupDestination == null) 
                 return;
 
-            // Show clone options for both clone types (index 3 = Clone to Disk, index 4 = Clone to Virtual Disk)
-            if (cmbBackupType.SelectedIndex == 3 || cmbBackupType.SelectedIndex == 4)
+            // Clone to Disk: Show ONLY Clone to Physical Disk field
+            if (rbCloneDisk?.IsChecked == true)
             {
                 pnlCloneOptions.Visibility = Visibility.Visible;
-                
-                // Update label based on clone type
-                if (txtCloneDestinationLabel != null)
-                {
-                    if (cmbBackupType.SelectedIndex == 3)
-                        txtCloneDestinationLabel.Text = "Clone to Physical Disk:";
-                    else
-                        txtCloneDestinationLabel.Text = "Clone to Virtual Disk (.vhdx):";
-                }
+                pnlBackupDestination.Visibility = Visibility.Collapsed;
+                txtCloneDestinationLabel.Text = "Clone to Physical Disk:";
             }
+            // Clone to Virtual Disk (Hyper-V): Show ONLY Backup Destination field
+            else if (rbCloneVirtual?.IsChecked == true)
+            {
+                pnlCloneOptions.Visibility = Visibility.Collapsed;
+                pnlBackupDestination.Visibility = Visibility.Visible;
+            }
+            // Clone Hyper-V System: Show ONLY Backup Destination field (will create HVconfig and HVDisks subdirectories)
+            else if (rbCloneHyperV?.IsChecked == true)
+            {
+                pnlCloneOptions.Visibility = Visibility.Collapsed;
+                pnlBackupDestination.Visibility = Visibility.Visible;
+            }
+            // All other backup types: Show ONLY Backup Destination field
             else
             {
                 pnlCloneOptions.Visibility = Visibility.Collapsed;
+                pnlBackupDestination.Visibility = Visibility.Visible;
             }
         }
 
@@ -1287,29 +1343,57 @@ namespace BackupUI.Windows
 
         private BackupJob CreateJobFromInput()
         {
+            var backupType = GetSelectedBackupType();
+            
             var job = new BackupJob
             {
                 Id = Guid.NewGuid(),
                 Name = txtBackupName.Text,
-                Type = (BackupType)cmbBackupType.SelectedIndex,
-                DestinationPath = txtDestination.Text,
+                Type = backupType,
+                // For Clone to Disk, use Clone destination; for all others, use Backup destination
+                DestinationPath = rbCloneDisk?.IsChecked == true ? txtCloneDestination.Text : txtDestination.Text,
                 CompressData = chkCompress.IsChecked == true,
                 VerifyAfterBackup = chkVerify.IsChecked == true
             };
 
-            // Collect selected items from tree
-            CollectSelectedItems(job);
+            // For Clone Hyper-V System, create subdirectories
+            if (backupType == BackupType.CloneHyperVSystem)
+            {
+                job.IsHyperVBackup = true;
+                // The subdirectories HVconfig and HVDisks will be created during backup execution
+                // Collect selected Hyper-V VMs from tree
+                CollectSelectedHyperVMachines(job);
+            }
+            else
+            {
+                // Collect selected items from tree for normal backups
+                CollectSelectedItems(job);
+            }
 
             // Schedule
             if (chkEnableSchedule.IsChecked == true)
             {
+                // Convert 12-hour time with AM/PM to 24-hour format
+                int hour12 = int.Parse(cmbHour.SelectedItem?.ToString() ?? "2");
+                string ampm = ((ComboBoxItem)cmbAmPm.SelectedItem)?.Content?.ToString() ?? "AM";
+                int hour24;
+                
+                if (ampm == "AM")
+                {
+                    hour24 = hour12 == 12 ? 0 : hour12;
+                }
+                else // PM
+                {
+                    hour24 = hour12 == 12 ? 12 : hour12 + 12;
+                }
+                
                 job.Schedule = new BackupSchedule
                 {
                     JobId = job.Id,
                     Enabled = true,
                     Frequency = (ScheduleFrequency)cmbFrequency.SelectedIndex,
                     Time = new TimeSpan(
-                        int.Parse(cmbHour.SelectedItem?.ToString() ?? "2"),
+                        hour24,
                         int.Parse(cmbMinute.SelectedItem?.ToString() ?? "0"),
                         0)
                 };
@@ -1331,6 +1415,29 @@ namespace BackupUI.Windows
             }
 
             return job;
+        }
+
+        private void CollectSelectedHyperVMachines(BackupJob job)
+        {
+            foreach (var drive in driveItems)
+            {
+                if (drive.ItemType == DriveTreeItemType.HyperVSystem && drive.IsChecked == true)
+                {
+                    job.HyperVMachines.Add(drive.FullPath);
+                }
+            }
+        }
+
+        private BackupType GetSelectedBackupType()
+        {
+            if (rbFullBackup.IsChecked == true) return BackupType.Full;
+            if (rbIncremental.IsChecked == true) return BackupType.Incremental;
+            if (rbDifferential.IsChecked == true) return BackupType.Differential;
+            if (rbCloneDisk.IsChecked == true) return BackupType.CloneToDisk;
+            if (rbCloneVirtual.IsChecked == true) return BackupType.CloneToVirtualDisk;
+            if (rbCloneHyperV.IsChecked == true) return BackupType.CloneHyperVSystem;
+            
+            return BackupType.Full; // Default
         }
 
         private void CollectSelectedItems(BackupJob job)
@@ -1407,32 +1514,82 @@ namespace BackupUI.Windows
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(txtDestination.Text))
+            // For Clone to Disk, check Clone to Physical Disk field
+            if (rbCloneDisk?.IsChecked == true)
             {
-                MessageBox.Show("Please select a backup destination.", "Validation Error",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
+                if (string.IsNullOrWhiteSpace(txtCloneDestination.Text))
+                {
+                    MessageBox.Show("Please select a physical disk destination.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+            }
+            // For all other types, check Backup Destination field
+            else
+            {
+                if (string.IsNullOrWhiteSpace(txtDestination.Text))
+                {
+                    MessageBox.Show("Please select a backup destination.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
             }
 
-            // Check if at least one item is selected
-            var anySelected = driveItems.Any(d => d.IsChecked == true || d.Children.Any(c => c.IsChecked == true));
-            if (!anySelected)
+            // Validate selections based on backup type
+            if (rbCloneHyperV?.IsChecked == true)
             {
-                MessageBox.Show("Please select at least one drive or volume to backup.", "Validation Error",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
+                // Clone Hyper-V System: Must have at least one Hyper-V system selected, and ONLY Hyper-V systems
+                var selectedHyperV = driveItems.Where(d => d.ItemType == DriveTreeItemType.HyperVSystem && d.IsChecked == true).ToList();
+                var selectedOther = driveItems.Where(d => d.ItemType != DriveTreeItemType.HyperVSystem && d.IsChecked == true).ToList();
+                
+                if (selectedHyperV.Count == 0)
+                {
+                    MessageBox.Show("Please select at least one Hyper-V system to clone.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+                
+                if (selectedOther.Count > 0)
+                {
+                    MessageBox.Show("Clone Hyper-V System can only clone Hyper-V systems.\n\nPlease unselect disks, volumes, and folders.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
             }
-
-            if ((cmbBackupType.SelectedIndex == 3 || cmbBackupType.SelectedIndex == 4) && 
-                string.IsNullOrWhiteSpace(txtCloneDestination.Text))
+            else
             {
-                var cloneType = cmbBackupType.SelectedIndex == 3 ? "physical disk" : "virtual disk";
-                MessageBox.Show($"Please select a {cloneType} destination.", "Validation Error",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
+                // All other backup types: Must NOT have Hyper-V systems selected
+                var selectedHyperV = driveItems.Where(d => d.ItemType == DriveTreeItemType.HyperVSystem && d.IsChecked == true).ToList();
+                
+                if (selectedHyperV.Count > 0)
+                {
+                    var backupTypeName = GetBackupTypeName();
+                    MessageBox.Show($"{backupTypeName} cannot include Hyper-V systems.\n\nPlease use 'Clone Hyper-V System' for Hyper-V backups, or unselect Hyper-V systems.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+                
+                // Must have at least one disk/volume/folder selected
+                var anySelected = driveItems.Any(d => d.IsChecked == true || d.Children.Any(c => c.IsChecked == true));
+                if (!anySelected)
+                {
+                    MessageBox.Show("Please select at least one drive, volume, or folder to backup.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
             }
 
             return true;
+        }
+
+        private string GetBackupTypeName()
+        {
+            if (rbFullBackup.IsChecked == true) return "Full Backup";
+            if (rbIncremental.IsChecked == true) return "Incremental Backup";
+            if (rbDifferential.IsChecked == true) return "Differential Backup";
+            if (rbCloneDisk.IsChecked == true) return "Clone to Disk";
+            if (rbCloneVirtual.IsChecked == true) return "Clone to Virtual Disk";
+            return "This backup type";
         }
 
         private void Cancel_Click(object sender, RoutedEventArgs e)

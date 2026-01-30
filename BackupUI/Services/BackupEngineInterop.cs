@@ -124,5 +124,22 @@ namespace BackupUI.Services
             string usbDriveLetter,
             string programPath,
             ProgressCallback? callback);
+
+        // New methods for enhanced restore functionality
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int EnumerateBackupDates(
+            string backupPath,
+            StringBuilder buffer,
+            int bufferSize);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int RestoreWithManifest(
+            string backupPath,
+            string destPath,
+            string manifest,
+            bool overwriteExisting,
+            bool restoreSystemState,
+            bool preservePermissions,
+            ProgressCallback? callback);
     }
 }

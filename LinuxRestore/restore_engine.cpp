@@ -8,6 +8,8 @@
 #include <fstream>
 #include <cstring>
 #include <ctime>
+#include <algorithm>
+#include <functional>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -242,6 +244,238 @@ public:
         }
 
         return backups;
+    }
+
+    // NEW: Enumerate backup dates in a folder
+    struct BackupDate {
+        std::string date;
+        std::string type;
+        std::string size;
+        std::string path;
+    };
+
+    std::vector<BackupDate> EnumerateBackupDates(const std::string& backupPath) {
+        std::vector<BackupDate> dates;
+
+        try {
+            if (!fs::exists(backupPath) || !fs::is_directory(backupPath)) {
+                SetError("Backup path does not exist or is not a directory");
+                return dates;
+            }
+
+            for (const auto& entry : fs::directory_iterator(backupPath)) {
+                if (entry.is_directory()) {
+                    std::string folderName = entry.path().filename().string();
+                    
+                    // Check if it looks like a backup folder
+                    std::string type = "Full";
+                    if (folderName.find("Full") != std::string::npos) {
+                        type = "Full";
+                    } else if (folderName.find("Incremental") != std::string::npos) {
+                        type = "Incremental";
+                    } else if (folderName.find("Differential") != std::string::npos) {
+                        type = "Differential";
+                    } else {
+                        continue; // Not a backup folder
+                    }
+
+                    // Get folder size
+                    uintmax_t totalSize = 0;
+                    try {
+                        for (const auto& file : fs::recursive_directory_iterator(entry.path())) {
+                            if (fs::is_regular_file(file)) {
+                                totalSize += fs::file_size(file);
+                            }
+                        }
+                    } catch (...) {}
+
+                    // Format size
+                    std::string sizeStr;
+                    if (totalSize < 1024) {
+                        sizeStr = std::to_string(totalSize) + " B";
+                    } else if (totalSize < 1024 * 1024) {
+                        sizeStr = std::to_string(totalSize / 1024) + " KB";
+                    } else if (totalSize < 1024 * 1024 * 1024) {
+                        sizeStr = std::to_string(totalSize / (1024 * 1024)) + " MB";
+                    } else {
+                        double gb = static_cast<double>(totalSize) / (1024.0 * 1024.0 * 1024.0);
+                        char buf[32];
+                        snprintf(buf, sizeof(buf), "%.2f GB", gb);
+                        sizeStr = buf;
+                    }
+
+                    // Get modification time
+                    auto ftime = fs::last_write_time(entry.path());
+                    auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                        ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
+                    time_t cftime = std::chrono::system_clock::to_time_t(sctp);
+                    struct tm timeinfo;
+                    localtime_r(&cftime, &timeinfo);
+
+                    char dateStr[128];
+                    strftime(dateStr, sizeof(dateStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
+
+                    BackupDate date;
+                    date.date = dateStr;
+                    date.type = type;
+                    date.size = sizeStr;
+                    date.path = entry.path().string();
+                    dates.push_back(date);
+                }
+            }
+
+            // Sort by date (newest first)
+            std::sort(dates.begin(), dates.end(), 
+                [](const BackupDate& a, const BackupDate& b) {
+                    return a.date > b.date;
+                });
+
+        } catch (const std::exception& e) {
+            SetError(std::string("Failed to enumerate backup dates: ") + e.what());
+        }
+
+        return dates;
+    }
+
+    // NEW: Build hierarchical tree of backup contents
+    struct RestoreItem {
+        std::string name;
+        std::string path;
+        std::string type;
+        bool checked;
+        std::vector<RestoreItem> children;
+
+        RestoreItem() : checked(false) {}
+    };
+
+    std::vector<RestoreItem> BuildRestoreTree(const std::string& backupPath) {
+        std::vector<RestoreItem> tree;
+
+        try {
+            if (!fs::exists(backupPath)) {
+                SetError("Backup path does not exist");
+                return tree;
+            }
+
+            // Build tree from backup contents
+            // For simplicity, we'll create a flat list of drives/volumes
+            // In production, this would parse the backup metadata
+
+            if (fs::is_directory(backupPath)) {
+                for (const auto& entry : fs::directory_iterator(backupPath)) {
+                    RestoreItem item;
+                    item.name = entry.path().filename().string();
+                    item.path = entry.path().string();
+                    item.type = entry.is_directory() ? "Folder" : "File";
+                    item.checked = false;
+
+                    // Add children if directory
+                    if (entry.is_directory()) {
+                        item.children = BuildTreeRecursive(entry.path().string(), 1);
+                    }
+
+                    tree.push_back(item);
+                }
+            }
+
+        } catch (const std::exception& e) {
+            SetError(std::string("Failed to build restore tree: ") + e.what());
+        }
+
+        return tree;
+    }
+
+private:
+    std::vector<RestoreItem> BuildTreeRecursive(const std::string& path, int depth) {
+        std::vector<RestoreItem> items;
+        
+        // Limit recursion depth to avoid performance issues
+        if (depth > 3) return items;
+
+        try {
+            for (const auto& entry : fs::directory_iterator(path)) {
+                RestoreItem item;
+                item.name = entry.path().filename().string();
+                item.path = entry.path().string();
+                item.type = entry.is_directory() ? "Folder" : "File";
+                item.checked = false;
+
+                if (entry.is_directory()) {
+                    item.children = BuildTreeRecursive(entry.path().string(), depth + 1);
+                }
+
+                items.push_back(item);
+            }
+        } catch (...) {
+            // Ignore errors (access denied, etc.)
+        }
+
+        return items;
+    }
+
+public:
+    // NEW: Restore selected items from manifest
+    bool RestoreWithManifest(
+        const std::string& backupPath,
+        const std::string& destPath,
+        const std::vector<std::string>& items,
+        bool overwrite,
+        std::function<void(int, const std::string&)> callback) {
+        
+        try {
+            int totalItems = items.size();
+            int currentItem = 0;
+
+            for (const auto& item : items) {
+                if (callback) {
+                    int percentage = (currentItem * 100) / totalItems;
+                    callback(percentage, "Restoring: " + item);
+                }
+
+                // Determine if item is relative to backup or absolute
+                std::string sourcePath;
+                if (item[0] == '/') {
+                    // Absolute path - find in backup
+                    sourcePath = backupPath + item;
+                } else {
+                    sourcePath = backupPath + "/" + item;
+                }
+
+                // Determine destination
+                std::string targetPath;
+                if (destPath.empty()) {
+                    // Restore to original location
+                    targetPath = item;
+                } else {
+                    // Restore to new location
+                    targetPath = destPath + "/" + item;
+                }
+
+                // Restore the item
+                if (fs::exists(sourcePath)) {
+                    if (fs::is_directory(sourcePath)) {
+                        RestoreFiles(sourcePath, targetPath, overwrite);
+                    } else {
+                        // Create parent directory
+                        fs::create_directories(fs::path(targetPath).parent_path());
+                        fs::copy_file(sourcePath, targetPath, 
+                            overwrite ? fs::copy_options::overwrite_existing : fs::copy_options::none);
+                    }
+                }
+
+                currentItem++;
+            }
+
+            if (callback) {
+                callback(100, "Restore completed");
+            }
+
+            return true;
+
+        } catch (const std::exception& e) {
+            SetError(std::string("Restore failed: ") + e.what());
+            return false;
+        }
     }
 };
 

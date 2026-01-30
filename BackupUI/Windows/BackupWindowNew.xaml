@@ -23,25 +23,29 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- Header -->
         <TextBlock Grid.Row="0" Text="Create Backup" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
 
-        <TabControl Grid.Row="1">
-            <!-- Source Selection Tab -->
-            <TabItem Header="What to Backup">
-                <Grid Margin="10">
+        <!-- Main Content: Two Columns -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT COLUMN: What to Backup -->
+            <GroupBox Grid.Column="0" Header="What to Backup" Margin="0,0,10,0">
+                <Grid Margin="5">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Margin="0,0,0,10">
-                        <TextBlock Text="Select what to backup:" FontWeight="Bold" Margin="0,0,0,5"/>
-                        <TextBlock TextWrapping="Wrap" Foreground="#666" FontSize="11">
-                            Check drives or volumes to backup. Files and folders are shown when volumes are unchecked. 
-                            Boot volumes will automatically include system state backup.
-                        </TextBlock>
-                    </StackPanel>
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="#666" FontSize="11" Margin="0,0,0,10">
+                        Check drives or volumes to backup. Files and folders are shown when volumes are unchecked. 
+                        Boot volumes will automatically include system state backup.
+                    </TextBlock>
 
                     <Grid Grid.Row="1">
                         <TreeView Name="treeViewDrives" BorderBrush="#CCC" BorderThickness="1">
@@ -63,31 +67,44 @@
                     </Grid>
 
                     <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
-                        <Button Content="Refresh" Width="100" Margin="0,0,5,0" Click="RefreshDrives_Click"/>
-                        <Button Content="Expand All" Width="100" Margin="0,0,5,0" Click="ExpandAll_Click"/>
-                        <Button Content="Collapse All" Width="100" Click="CollapseAll_Click"/>
+                        <Button Content="Refresh" Width="80" Margin="0,0,5,0" Click="RefreshDrives_Click"/>
+                        <Button Content="Expand All" Width="80" Margin="0,0,5,0" Click="ExpandAll_Click"/>
+                        <Button Content="Collapse All" Width="80" Click="CollapseAll_Click"/>
                     </StackPanel>
                 </Grid>
-            </TabItem>
+            </GroupBox>
 
-            <!-- General Settings Tab -->
-            <TabItem Header="Settings">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="10">
+            <!-- RIGHT COLUMN: Settings and Schedule -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Settings Section -->
+                <GroupBox Grid.Row="0" Header="Settings" Margin="0,0,0,10">
+                    <StackPanel Margin="5">
                         <TextBlock Text="Backup Name:" Margin="0,0,0,5"/>
                         <TextBox Name="txtBackupName" Margin="0,0,0,15" Height="25"/>
 
                         <TextBlock Text="Backup Type:" Margin="0,0,0,5"/>
-                        <ComboBox Name="cmbBackupType" Margin="0,0,0,15" Height="25">
-                            <ComboBoxItem Content="Full Backup" IsSelected="True"/>
-                            <ComboBoxItem Content="Full then Incremental"/>
-                            <ComboBoxItem Content="Full then Differential"/>
-                            <ComboBoxItem Content="Clone to Disk"/>
-                            <ComboBoxItem Content="Clone to Virtual Disk (Hyper-V)"/>
-                        </ComboBox>
+                        <StackPanel Margin="0,0,0,15">
+                            <!-- First row -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                                <RadioButton Name="rbFullBackup" Content="Full Backup" GroupName="BackupType" IsChecked="True" Margin="0,0,20,0" Checked="BackupType_Changed"/>
+                                <RadioButton Name="rbIncremental" Content="Full then Incremental" GroupName="BackupType" Margin="0,0,20,0" Checked="BackupType_Changed"/>
+                                <RadioButton Name="rbDifferential" Content="Full then Differential" GroupName="BackupType" Checked="BackupType_Changed"/>
+                            </StackPanel>
+                            <!-- Second row -->
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Name="rbCloneDisk" Content="Clone to Disk" GroupName="BackupType" Margin="0,0,20,0" Checked="BackupType_Changed"/>
+                                <RadioButton Name="rbCloneVirtual" Content="Clone to Virtual Disk (Hyper-V)" GroupName="BackupType" Margin="0,0,20,0" Checked="BackupType_Changed"/>
+                                <RadioButton Name="rbCloneHyperV" Content="Clone Hyper-V System" GroupName="BackupType" Checked="BackupType_Changed"/>
+                            </StackPanel>
+                        </StackPanel>
 
                         <StackPanel Name="pnlCloneOptions" Visibility="Collapsed" Margin="0,0,0,15">
-                            <TextBlock Name="txtCloneDestinationLabel" Text="Clone Destination:" Margin="0,0,0,5"/>
+                            <TextBlock Name="txtCloneDestinationLabel" Text="Clone to Physical Disk:" Margin="0,0,0,5"/>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -98,73 +115,83 @@
                             </Grid>
                         </StackPanel>
 
-                        <TextBlock Text="Backup Destination:" Margin="0,0,0,5"/>
-                        <Grid Margin="0,0,0,15">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Name="txtDestination" Grid.Column="0" Height="25" Margin="0,0,5,0"/>
-                            <Button Grid.Column="1" Content="Browse..." Width="80" Click="BrowseDestination_Click"/>
-                        </Grid>
+                        <StackPanel Name="pnlBackupDestination" Visibility="Visible">
+                            <TextBlock Text="Backup Destination:" Margin="0,0,0,5"/>
+                            <Grid Margin="0,0,0,15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Name="txtDestination" Grid.Column="0" Height="25" Margin="0,0,5,0"/>
+                                <Button Grid.Column="1" Content="Browse..." Width="80" Click="BrowseDestination_Click"/>
+                            </Grid>
+                        </StackPanel>
 
                         <CheckBox Name="chkAutoSystemState" Content="Auto-include system state for boot volumes" 
                                   IsChecked="True" Margin="0,0,0,10"/>
                         <CheckBox Name="chkCompress" Content="Compress backup data" IsChecked="True" Margin="0,0,0,10"/>
                         <CheckBox Name="chkSplitFiles" Content="Split into 4.7GB files (DVD size)" 
                                   IsChecked="True" Margin="0,0,0,10"/>
-                        <CheckBox Name="chkVerify" Content="Verify backup after completion" IsChecked="True" Margin="0,0,0,10"/>
+                        <CheckBox Name="chkVerify" Content="Verify backup after completion" IsChecked="True"/>
                     </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                </GroupBox>
 
-            <!-- Schedule Tab -->
-            <TabItem Header="Schedule">
-                <StackPanel Margin="10">
-                    <CheckBox Name="chkEnableSchedule" Content="Enable Scheduled Backup" Margin="0,0,0,15" 
-                              Checked="Schedule_CheckedChanged" Unchecked="Schedule_CheckedChanged"/>
+                <!-- Schedule Section -->
+                <GroupBox Grid.Row="1" Header="Schedule">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="5">
+                            <CheckBox Name="chkEnableSchedule" Content="Enable Scheduled Backup" Margin="0,0,0,15" 
+                                      Checked="Schedule_CheckedChanged" Unchecked="Schedule_CheckedChanged"/>
 
-                    <StackPanel Name="pnlSchedule" IsEnabled="False">
-                        <TextBlock Text="Frequency:" Margin="0,0,0,5"/>
-                        <ComboBox Name="cmbFrequency" Margin="0,0,0,15" Height="25" SelectionChanged="Frequency_SelectionChanged">
-                            <ComboBoxItem Content="Daily" IsSelected="True"/>
-                            <ComboBoxItem Content="Weekly"/>
-                            <ComboBoxItem Content="Monthly"/>
-                            <ComboBoxItem Content="Once"/>
-                        </ComboBox>
+                            <StackPanel Name="pnlSchedule" IsEnabled="False">
+                                <TextBlock Text="Frequency:" Margin="0,0,0,5"/>
+                                <ComboBox Name="cmbFrequency" Margin="0,0,0,15" Height="25" SelectionChanged="Frequency_SelectionChanged">
+                                    <ComboBoxItem Content="Daily" IsSelected="True"/>
+                                    <ComboBoxItem Content="Weekly"/>
+                                    <ComboBoxItem Content="Monthly"/>
+                                    <ComboBoxItem Content="Once"/>
+                                </ComboBox>
 
-                        <TextBlock Text="Time:" Margin="0,0,0,5"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
-                            <ComboBox Name="cmbHour" Width="60" Margin="0,0,5,0"/>
-                            <TextBlock Text=":" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                            <ComboBox Name="cmbMinute" Width="60"/>
-                        </StackPanel>
+                                <TextBlock Text="Time:" Margin="0,0,0,5"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
+                                    <ComboBox Name="cmbHour" Width="60" Margin="0,0,5,0"/>
+                                    <TextBlock Text=":" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <ComboBox Name="cmbMinute" Width="60" Margin="0,0,10,0"/>
+                                    <ComboBox Name="cmbAmPm" Width="60">
+                                        <ComboBoxItem Content="AM"/>
+                                        <ComboBoxItem Content="PM"/>
+                                    </ComboBox>
+                                </StackPanel>
 
-                        <StackPanel Name="pnlWeekly" Visibility="Collapsed" Margin="0,0,0,15">
-                            <TextBlock Text="Days of Week:" Margin="0,0,0,5"/>
-                            <StackPanel>
-                                <CheckBox Name="chkMonday" Content="Monday"/>
-                                <CheckBox Name="chkTuesday" Content="Tuesday"/>
-                                <CheckBox Name="chkWednesday" Content="Wednesday"/>
-                                <CheckBox Name="chkThursday" Content="Thursday"/>
-                                <CheckBox Name="chkFriday" Content="Friday"/>
-                                <CheckBox Name="chkSaturday" Content="Saturday"/>
-                                <CheckBox Name="chkSunday" Content="Sunday"/>
+                                <StackPanel Name="pnlWeekly" Visibility="Collapsed" Margin="0,0,0,15">
+                                    <TextBlock Text="Days of Week:" Margin="0,0,0,5"/>
+                                    <StackPanel>
+                                        <CheckBox Name="chkMonday" Content="Monday"/>
+                                        <CheckBox Name="chkTuesday" Content="Tuesday"/>
+                                        <CheckBox Name="chkWednesday" Content="Wednesday"/>
+                                        <CheckBox Name="chkThursday" Content="Thursday"/>
+                                        <CheckBox Name="chkFriday" Content="Friday"/>
+                                        <CheckBox Name="chkSaturday" Content="Saturday"/>
+                                        <CheckBox Name="chkSunday" Content="Sunday"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Name="pnlMonthly" Visibility="Collapsed" Margin="0,0,0,15">
+                                    <TextBlock Text="Day of Month:" Margin="0,0,0,5"/>
+                                    <ComboBox Name="cmbDayOfMonth" Width="60" HorizontalAlignment="Left"/>
+                                </StackPanel>
                             </StackPanel>
                         </StackPanel>
+                    </ScrollViewer>
+                </GroupBox>
+            </Grid>
+        </Grid>
 
-                        <StackPanel Name="pnlMonthly" Visibility="Collapsed" Margin="0,0,0,15">
-                            <TextBlock Text="Day of Month:" Margin="0,0,0,5"/>
-                            <ComboBox Name="cmbDayOfMonth" Width="60" HorizontalAlignment="Left"/>
-                        </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </TabItem>
-        </TabControl>
-
+        <!-- Progress Bar -->
         <ProgressBar Grid.Row="2" Name="progressBar" Height="20" Margin="0,10,0,10" Visibility="Collapsed"/>
         <TextBlock Grid.Row="2" Name="txtProgress" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
 
+        <!-- Action Buttons -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="Start Backup" Width="100" Margin="0,0,5,0" Click="StartBackup_Click"/>
             <Button Content="Save Job" Width="100" Margin="0,0,5,0" Click="SaveJob_Click"/>

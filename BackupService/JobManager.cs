@@ -38,7 +38,10 @@ namespace BackupService
     {
         Full,
         Incremental,
-        Differential
+        Differential,
+        CloneToDisk,
+        CloneToVirtualDisk,
+        CloneHyperVSystem
     }
 
     public enum BackupTarget

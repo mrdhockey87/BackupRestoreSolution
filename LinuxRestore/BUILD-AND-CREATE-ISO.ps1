@@ -1,9 +1,9 @@
-# BUILD-AND-CREATE-ISO.ps1 - Final working version
-# This actually works!
+# BUILD-AND-CREATE-ISO.ps1 - Version 4.7.1.0
+# Builds updated Linux restore applications and creates bootable recovery ISO
+# Updated: Includes new 3-step wizard restore tools
 
-Write-Host "=========================================
-" -ForegroundColor Cyan
-Write-Host "Building Bootable Linux ISO" -ForegroundColor Cyan
+Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host "Building Bootable Linux ISO v4.7.1.0" -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -29,11 +29,23 @@ Write-Host "Part 1: Building..." -ForegroundColor Cyan
 wsl bash -c "cd '$wslPath' && sudo apt-get install -y build-essential cmake libncurses-dev rsync genisoimage 2>&1 | grep -v Reading"
 wsl bash -c "cd '$wslPath' && rm -rf build && mkdir build && cd build && cmake .. && make -j4"
 
+# Check if build succeeded
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "" -ForegroundColor Red
+    Write-Host "? BUILD FAILED!" -ForegroundColor Red
+    Write-Host "Check compilation errors above." -ForegroundColor Yellow
+    Write-Host "" -ForegroundColor Red
+    exit 1
+}
+
 New-Item -ItemType Directory -Path "dist" -Force | Out-Null
-wsl bash -c "cd '$wslPath/build' && cp restore_* ../dist/"
+wsl bash -c "cd '$wslPath/build' && cp restore_* ../dist/ 2>/dev/null"
 
 if (-not (Test-Path "dist\restore_tui")) {
-    Write-Host "? Build failed!" -ForegroundColor Red
+    Write-Host "" -ForegroundColor Red
+    Write-Host "? Build failed - restore_tui not found!" -ForegroundColor Red
+    Write-Host "Compilation succeeded but binaries not created." -ForegroundColor Yellow
+    Write-Host "" -ForegroundColor Red
     exit 1
 }
 Write-Host "? Build complete" -ForegroundColor Green

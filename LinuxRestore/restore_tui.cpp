@@ -1,25 +1,31 @@
 // LinuxRestore/restore_tui.cpp
-// Terminal UI for Linux restore (using ncurses)
+// Terminal UI for Linux restore (using ncurses) - Version 4.7.1.0
+// Enhanced with backup date selection, tree view, and destination mapping
 
 #include <ncurses.h>
 #include <menu.h>
 #include <string>
 #include <vector>
 #include <memory>
+#include <algorithm>
 #include "restore_engine.cpp"
+
+// Use types from RestoreEngine
+using BackupDate = RestoreEngine::BackupDate;
+using RestoreItem = RestoreEngine::RestoreItem;
 
 class RestoreTUI {
 private:
     WINDOW* mainWin;
-    WINDOW* menuWin;
     WINDOW* statusWin;
     std::unique_ptr<RestoreEngine> engine;
     
-    std::vector<std::string> disks;
-    std::vector<std::string> backups;
-    std::string selectedDisk;
-    std::string selectedBackup;
-    std::string mountPoint = "/mnt/restore";
+    std::vector<BackupDate> backupDates;
+    std::vector<RestoreItem> restoreTree;
+    std::string selectedBackupPath;
+    std::string restoreDestination;
+    bool restoreToOriginal = true;
+    int currentStep = 1; // 1=Select Date, 2=Select Items, 3=Select Destination
 
     void InitializeUI() {
         initscr();
@@ -32,10 +38,11 @@ private:
         if (has_colors()) {
             start_color();
             init_pair(1, COLOR_WHITE, COLOR_BLUE);    // Title
-            init_pair(2, COLOR_BLACK, COLOR_CYAN);    // Menu
+            init_pair(2, COLOR_BLACK, COLOR_CYAN);    // Menu selected
             init_pair(3, COLOR_YELLOW, COLOR_BLACK);  // Status
             init_pair(4, COLOR_GREEN, COLOR_BLACK);   // Success
             init_pair(5, COLOR_RED, COLOR_BLACK);     // Error
+            init_pair(6, COLOR_CYAN, COLOR_BLACK);    // Info
         }
 
         int height, width;
@@ -58,9 +65,19 @@ private:
     void ShowTitle() {
         int width = getmaxx(mainWin);
         wattron(mainWin, COLOR_PAIR(1) | A_BOLD);
-        mvwprintw(mainWin, 1, (width - 40) / 2, "  BACKUP & RESTORE - Linux Recovery  ");
+        mvwprintw(mainWin, 1, (width - 45) / 2, " BACKUP & RESTORE - Linux Recovery v4.7.1 ");
         wattroff(mainWin, COLOR_PAIR(1) | A_BOLD);
-        mvwprintw(mainWin, 2, (width - 40) / 2, "  Version 4.6.0 - Bootable USB Mode   ");
+        
+        // Show current step
+        wattron(mainWin, COLOR_PAIR(6));
+        const char* stepName = "";
+        switch(currentStep) {
+            case 1: stepName = "Step 1: Select Backup & Date"; break;
+            case 2: stepName = "Step 2: Select Items to Restore"; break;
+            case 3: stepName = "Step 3: Select Destination"; break;
+        }
+        mvwprintw(mainWin, 2, (width - strlen(stepName)) / 2, "%s", stepName);
+        wattroff(mainWin, COLOR_PAIR(6));
         wrefresh(mainWin);
     }
 
@@ -104,43 +121,67 @@ private:
         wrefresh(statusWin);
     }
 
-    int ShowMenu(const std::vector<std::string>& items, const std::string& title) {
+    // Step 1: Load and select backup date
+    bool LoadBackupDates(const std::string& backupPath) {
+        UpdateStatus("Scanning backup folder for dates...");
+        
+        backupDates = engine->EnumerateBackupDates(backupPath);
+        
+        if (backupDates.empty()) {
+            UpdateStatus("No valid backups found in folder", true);
+            return false;
+        }
+        
+        UpdateStatus("Found " + std::to_string(backupDates.size()) + " backup point(s)");
+        return true;
+    }
+
+    int SelectBackupDate() {
         wclear(mainWin);
         box(mainWin, 0, 0);
         ShowTitle();
 
         int startY = 4;
-        mvwprintw(mainWin, startY, 2, "%s", title.c_str());
-        startY += 2;
+        mvwprintw(mainWin, startY, 2, "Available Backup Dates:");
+        mvwprintw(mainWin, startY + 1, 2, "Date                  Type          Size");
+        mvwprintw(mainWin, startY + 2, 2, "----------------------------------------------------");
+        startY += 3;
 
-        int selected = 0;
+        int selected = backupDates.size() - 1; // Default to most recent
         int ch;
 
         while (true) {
-            for (size_t i = 0; i < items.size(); i++) {
+            for (size_t i = 0; i < backupDates.size(); i++) {
                 if (i == selected) {
                     wattron(mainWin, COLOR_PAIR(2) | A_REVERSE);
-                    mvwprintw(mainWin, startY + i, 4, "  %s", items[i].c_str());
+                }
+                
+                mvwprintw(mainWin, startY + i, 2, "%-20s %-12s %s",
+                    backupDates[i].date.c_str(),
+                    backupDates[i].type.c_str(),
+                    backupDates[i].size.c_str());
+                
+                if (i == selected) {
                     wattroff(mainWin, COLOR_PAIR(2) | A_REVERSE);
-                } else {
-                    mvwprintw(mainWin, startY + i, 4, "  %s", items[i].c_str());
                 }
             }
 
-            mvwprintw(mainWin, startY + items.size() + 2, 4, "Use UP/DOWN arrows to select, ENTER to confirm, Q to quit");
+            int helpY = startY + backupDates.size() + 2;
+            mvwprintw(mainWin, helpY, 2, "UP/DOWN: Navigate | ENTER: Select | Q: Quit");
             wrefresh(mainWin);
 
             ch = getch();
 
             switch (ch) {
                 case KEY_UP:
-                    selected = (selected > 0) ? selected - 1 : items.size() - 1;
+                    selected = (selected > 0) ? selected - 1 : backupDates.size() - 1;
                     break;
                 case KEY_DOWN:
-                    selected = (selected < items.size() - 1) ? selected + 1 : 0;
+                    selected = (selected < backupDates.size() - 1) ? selected + 1 : 0;
                     break;
                 case 10: // Enter
                 case KEY_ENTER:
+                    selectedBackupPath = backupDates[selected].path;
                     return selected;
                 case 'q':
                 case 'Q':
@@ -149,148 +190,311 @@ private:
         }
     }
 
-    void ScanDisks() {
-        UpdateStatus("Scanning for disks and partitions...");
-        disks = engine->ListDisks();
+    // Step 2: Build and select from restore tree
+    void LoadBackupContents() {
+        UpdateStatus("Loading backup contents...");
+        restoreTree = engine->BuildRestoreTree(selectedBackupPath);
         
-        if (disks.empty()) {
-            UpdateStatus("No disks found!", true);
+        if (restoreTree.empty()) {
+            UpdateStatus("Failed to load backup contents", true);
         } else {
-            UpdateStatus("Found " + std::to_string(disks.size()) + " disk(s)");
+            UpdateStatus("Backup contents loaded successfully");
         }
     }
 
-    void SelectDisk() {
-        if (disks.empty()) {
-            ScanDisks();
-        }
-
-        if (disks.empty()) {
-            UpdateStatus("No disks available", true);
-            getch();
-            return;
-        }
-
-        int selected = ShowMenu(disks, "Select target disk/partition:");
-        
-        if (selected >= 0 && selected < disks.size()) {
-            selectedDisk = disks[selected];
-            // Extract device name (e.g., /dev/sda1)
-            size_t pos = selectedDisk.find(' ');
-            if (pos != std::string::npos) {
-                selectedDisk = "/dev/" + selectedDisk.substr(0, pos);
+    void DrawTree(const std::vector<RestoreItem>& items, int& currentY, int indent, int& selected, int& currentIndex) {
+        for (const auto& item : items) {
+            if (currentY >= getmaxy(mainWin) - 4) break; // Don't overflow window
+            
+            bool isCurrent = (currentIndex == selected);
+            
+            if (isCurrent) {
+                wattron(mainWin, COLOR_PAIR(2) | A_REVERSE);
             }
-            UpdateStatus("Selected: " + selectedDisk);
+            
+            // Draw checkbox and item
+            std::string prefix(indent * 2, ' ');
+            char checkbox = item.checked ? 'X' : ' ';
+            mvwprintw(mainWin, currentY, 2, "%s[%c] %s", 
+                prefix.c_str(), checkbox, item.name.c_str());
+            
+            if (isCurrent) {
+                wattroff(mainWin, COLOR_PAIR(2) | A_REVERSE);
+            }
+            
+            currentY++;
+            currentIndex++;
+            
+            // Draw children if not empty
+            if (!item.children.empty()) {
+                DrawTree(item.children, currentY, indent + 1, selected, currentIndex);
+            }
         }
     }
 
-    void ScanBackups() {
-        UpdateStatus("Scanning for backup files...");
+    int CountTreeItems(const std::vector<RestoreItem>& items) {
+        int count = items.size();
+        for (const auto& item : items) {
+            count += CountTreeItems(item.children);
+        }
+        return count;
+    }
+
+    void ToggleItem(std::vector<RestoreItem>& items, int targetIndex, int& currentIndex) {
+        for (auto& item : items) {
+            if (currentIndex == targetIndex) {
+                item.checked = !item.checked;
+                // Toggle all children
+                SetAllChildren(item.children, item.checked);
+                return;
+            }
+            currentIndex++;
+            
+            if (!item.children.empty()) {
+                ToggleItem(item.children, targetIndex, currentIndex);
+            }
+        }
+    }
+
+    void SetAllChildren(std::vector<RestoreItem>& items, bool checked) {
+        for (auto& item : items) {
+            item.checked = checked;
+            if (!item.children.empty()) {
+                SetAllChildren(item.children, checked);
+            }
+        }
+    }
+
+    bool SelectRestoreItems() {
+        int selected = 0;
+        int totalItems = CountTreeItems(restoreTree);
         
-        // Scan common locations
-        std::vector<std::string> searchPaths = {
-            "/media",
-            "/mnt",
-            "/run/media"
-        };
+        while (true) {
+            wclear(mainWin);
+            box(mainWin, 0, 0);
+            ShowTitle();
 
-        backups.clear();
-        for (const auto& path : searchPaths) {
-            auto found = engine->ScanForBackups(path);
-            backups.insert(backups.end(), found.begin(), found.end());
-        }
+            int startY = 4;
+            mvwprintw(mainWin, startY, 2, "Select items to restore (SPACE to toggle):");
+            startY += 2;
 
-        if (backups.empty()) {
-            UpdateStatus("No backups found. Please mount backup media first.", true);
-        } else {
-            UpdateStatus("Found " + std::to_string(backups.size()) + " backup(s)");
+            int currentY = startY;
+            int currentIndex = 0;
+            DrawTree(restoreTree, currentY, 0, selected, currentIndex);
+
+            int helpY = getmaxy(mainWin) - 4;
+            mvwprintw(mainWin, helpY, 2, "UP/DOWN: Navigate | SPACE: Toggle | N: Next | B: Back | Q: Quit");
+            wrefresh(mainWin);
+
+            int ch = getch();
+
+            switch (ch) {
+                case KEY_UP:
+                    selected = (selected > 0) ? selected - 1 : totalItems - 1;
+                    break;
+                case KEY_DOWN:
+                    selected = (selected < totalItems - 1) ? selected + 1 : 0;
+                    break;
+                case ' ': // Space - toggle
+                    {
+                        int idx = 0;
+                        ToggleItem(restoreTree, selected, idx);
+                    }
+                    break;
+                case 'n':
+                case 'N':
+                    // Check if at least one item is checked
+                    if (HasCheckedItem(restoreTree)) {
+                        return true;
+                    } else {
+                        UpdateStatus("Please select at least one item to restore", true);
+                        getch();
+                    }
+                    break;
+                case 'b':
+                case 'B':
+                    currentStep = 1;
+                    return false;
+                case 'q':
+                case 'Q':
+                    return false;
+            }
         }
     }
 
-    void SelectBackup() {
-        if (backups.empty()) {
-            ScanBackups();
+    bool HasCheckedItem(const std::vector<RestoreItem>& items) {
+        for (const auto& item : items) {
+            if (item.checked) return true;
+            if (HasCheckedItem(item.children)) return true;
         }
-
-        if (backups.empty()) {
-            getch();
-            return;
-        }
-
-        // Show simplified paths
-        std::vector<std::string> displayPaths;
-        for (const auto& backup : backups) {
-            displayPaths.push_back(backup);
-        }
-
-        int selected = ShowMenu(displayPaths, "Select backup to restore:");
-        
-        if (selected >= 0 && selected < backups.size()) {
-            selectedBackup = backups[selected];
-            UpdateStatus("Selected: " + selectedBackup);
-        }
+        return false;
     }
 
-    void PerformRestore() {
-        if (selectedDisk.empty()) {
-            UpdateStatus("Please select a target disk first", true);
-            getch();
-            return;
-        }
-
-        if (selectedBackup.empty()) {
-            UpdateStatus("Please select a backup first", true);
-            getch();
-            return;
-        }
-
-        // Confirm
+    // Step 3: Select destination
+    bool SelectDestination() {
         wclear(mainWin);
         box(mainWin, 0, 0);
         ShowTitle();
 
-        mvwprintw(mainWin, 5, 4, "Ready to restore:");
-        mvwprintw(mainWin, 7, 6, "From: %s", selectedBackup.c_str());
-        mvwprintw(mainWin, 8, 6, "To:   %s", selectedDisk.c_str());
-        mvwprintw(mainWin, 10, 4, "WARNING: This will OVERWRITE data on the target disk!");
-        mvwprintw(mainWin, 12, 4, "Press Y to continue, any other key to cancel...");
+        int startY = 4;
+        int selected = 0;
+        
+        std::vector<std::string> options = {
+            "Restore to original location",
+            "Restore to new location"
+        };
+
+        while (true) {
+            mvwprintw(mainWin, startY, 2, "Restore Destination:");
+            startY += 2;
+
+            for (size_t i = 0; i < options.size(); i++) {
+                if (i == selected) {
+                    wattron(mainWin, COLOR_PAIR(2) | A_REVERSE);
+                }
+                
+                char bullet = (i == (restoreToOriginal ? 0 : 1)) ? '*' : ' ';
+                mvwprintw(mainWin, startY + i, 4, " %c %s", bullet, options[i].c_str());
+                
+                if (i == selected) {
+                    wattroff(mainWin, COLOR_PAIR(2) | A_REVERSE);
+                }
+            }
+
+            if (!restoreToOriginal) {
+                mvwprintw(mainWin, startY + 4, 4, "Destination path: %s", 
+                    restoreDestination.empty() ? "(not set)" : restoreDestination.c_str());
+                mvwprintw(mainWin, startY + 5, 4, "Press 'P' to set path");
+            }
+
+            int helpY = getmaxy(mainWin) - 4;
+            mvwprintw(mainWin, helpY, 2, "UP/DOWN: Navigate | ENTER: Select | R: Start Restore | B: Back | Q: Quit");
+            wrefresh(mainWin);
+
+            int ch = getch();
+
+            switch (ch) {
+                case KEY_UP:
+                    selected = (selected > 0) ? selected - 1 : options.size() - 1;
+                    break;
+                case KEY_DOWN:
+                    selected = (selected < options.size() - 1) ? selected + 1 : 0;
+                    break;
+                case 10: // Enter
+                case KEY_ENTER:
+                    restoreToOriginal = (selected == 0);
+                    break;
+                case 'p':
+                case 'P':
+                    if (!restoreToOriginal) {
+                        restoreDestination = PromptForPath("Enter restore destination path:");
+                    }
+                    break;
+                case 'r':
+                case 'R':
+                    if (restoreToOriginal || !restoreDestination.empty()) {
+                        return ConfirmRestore();
+                    } else {
+                        UpdateStatus("Please set destination path", true);
+                        getch();
+                    }
+                    break;
+                case 'b':
+                case 'B':
+                    currentStep = 2;
+                    return false;
+                case 'q':
+                case 'Q':
+                    return false;
+            }
+        }
+    }
+
+    std::string PromptForPath(const std::string& prompt) {
+        echo();
+        curs_set(1);
+        
+        wclear(mainWin);
+        box(mainWin, 0, 0);
+        ShowTitle();
+        
+        mvwprintw(mainWin, 4, 2, "%s", prompt.c_str());
+        mvwprintw(mainWin, 6, 2, "Path: ");
+        wrefresh(mainWin);
+        
+        char path[256];
+        wgetnstr(mainWin, path, sizeof(path) - 1);
+        
+        noecho();
+        curs_set(0);
+        
+        return std::string(path);
+    }
+
+    bool ConfirmRestore() {
+        wclear(mainWin);
+        box(mainWin, 0, 0);
+        ShowTitle();
+
+        wattron(mainWin, COLOR_PAIR(5) | A_BOLD);
+        mvwprintw(mainWin, 5, 4, "WARNING: This will restore the selected items");
+        wattroff(mainWin, COLOR_PAIR(5) | A_BOLD);
+        
+        mvwprintw(mainWin, 7, 4, "Backup:      %s", selectedBackupPath.c_str());
+        mvwprintw(mainWin, 8, 4, "Destination: %s", 
+            restoreToOriginal ? "Original locations" : restoreDestination.c_str());
+        
+        mvwprintw(mainWin, 10, 4, "Continue? (Y/N): ");
         wrefresh(mainWin);
 
         int ch = getch();
-        if (ch != 'y' && ch != 'Y') {
-            UpdateStatus("Restore cancelled");
-            return;
-        }
+        return (ch == 'y' || ch == 'Y');
+    }
 
-        // Mount NTFS partition
-        UpdateStatus("Mounting target partition...");
-        if (engine->MountNTFSPartition(selectedDisk, mountPoint) != 0) {
-            UpdateStatus("Failed to mount partition: " + engine->GetLastError(), true);
+    void CollectSelectedPaths(const std::vector<RestoreItem>& items, std::vector<std::string>& paths) {
+        for (const auto& item : items) {
+            if (item.checked) {
+                paths.push_back(item.path);
+            } else if (!item.children.empty()) {
+                CollectSelectedPaths(item.children, paths);
+            }
+        }
+    }
+
+    void PerformRestore() {
+        // Collect selected paths
+        std::vector<std::string> selectedPaths;
+        CollectSelectedPaths(restoreTree, selectedPaths);
+        
+        if (selectedPaths.empty()) {
+            UpdateStatus("No items selected for restore", true);
             getch();
             return;
         }
 
-        // Perform restore
-        UpdateStatus("Starting restore...");
-        sleep(1);
-
-        // Set progress callback
-        auto progressCallback = [](int percentage, const char* message) {
-            // This will be called from the engine
-            // We'll handle it in the main loop
+        // Execute restore
+        std::string dest = restoreToOriginal ? "" : restoreDestination;
+        
+        auto progressCallback = [this](int percent, const std::string& msg) {
+            ShowProgress(percent, msg);
         };
 
-        int result = engine->RestoreFiles(selectedBackup, mountPoint, true);
+        bool success = engine->RestoreWithManifest(
+            selectedBackupPath,
+            dest,
+            selectedPaths,
+            true, // overwrite
+            progressCallback
+        );
 
-        if (result == 0) {
-            ShowProgress(100, "Restore completed successfully!");
+        if (success) {
+            UpdateStatus("Restore completed successfully!", false);
         } else {
             UpdateStatus("Restore failed: " + engine->GetLastError(), true);
         }
-
-        // Unmount
-        engine->UnmountPartition(mountPoint);
-
+        
+        mvwprintw(mainWin, getmaxy(mainWin) - 2, 2, "Press any key to continue...");
+        wrefresh(mainWin);
         getch();
     }
 
@@ -301,61 +505,75 @@ public:
 
     ~RestoreTUI() {
         if (mainWin) delwin(mainWin);
-        if (menuWin) delwin(menuWin);
         if (statusWin) delwin(statusWin);
         endwin();
     }
 
     void Run() {
-        std::vector<std::string> mainMenu = {
-            "1. Scan for disks and partitions",
-            "2. Select target disk/partition",
-            "3. Scan for backups",
-            "4. Select backup to restore",
-            "5. Perform restore",
-            "6. Exit"
-        };
-
         while (true) {
-            int choice = ShowMenu(mainMenu, "Main Menu - Select an option:");
-
-            switch (choice) {
-                case 0:
-                    ScanDisks();
-                    getch();
+            switch (currentStep) {
+                case 1: {
+                    // Step 1: Select backup and date
+                    std::string backupPath = PromptForPath("Enter backup folder path:");
+                    if (backupPath.empty()) {
+                        return;
+                    }
+                    
+                    if (LoadBackupDates(backupPath)) {
+                        int selected = SelectBackupDate();
+                        if (selected >= 0) {
+                            currentStep = 2;
+                        } else {
+                            return; // User quit
+                        }
+                    } else {
+                        getch();
+                    }
                     break;
-                case 1:
-                    SelectDisk();
-                    getch();
+                }
+                
+                case 2: {
+                    // Step 2: Select items to restore
+                    LoadBackupContents();
+                    if (SelectRestoreItems()) {
+                        currentStep = 3;
+                    } else if (currentStep == 1) {
+                        // User went back
+                        continue;
+                    } else {
+                        return; // User quit
+                    }
                     break;
-                case 2:
-                    ScanBackups();
-                    getch();
+                }
+                
+                case 3: {
+                    // Step 3: Select destination and confirm
+                    bool confirmed = SelectDestination();
+                    if (confirmed) {
+                        PerformRestore();
+                        return; // Exit after restore
+                    } else if (currentStep == 2) {
+                        // User went back
+                        continue;
+                    } else {
+                        return; // User quit
+                    }
                     break;
-                case 3:
-                    SelectBackup();
-                    getch();
-                    break;
-                case 4:
-                    PerformRestore();
-                    break;
-                case 5:
-                case -1:
-                    return;
+                }
             }
         }
     }
 };
 
-int main(int argc, char* argv[]) {
-    // Check if running as root
-    if (geteuid() != 0) {
-        std::cerr << "This program must be run as root (use sudo)" << std::endl;
+int main() {
+    try {
+        RestoreTUI tui;
+        tui.Run();
+        return 0;
+    }
+    catch (const std::exception& e) {
+        endwin();
+        fprintf(stderr, "Error: %s\n", e.what());
         return 1;
     }
-
-    RestoreTUI tui;
-    tui.Run();
-
-    return 0;
 }

@@ -6,7 +6,8 @@ namespace BackupUI.Models
         Incremental,
         Differential,
         CloneToDisk,
-        CloneToVirtualDisk
+        CloneToVirtualDisk,
+        CloneHyperVSystem
     }
 }
 

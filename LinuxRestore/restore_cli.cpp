@@ -1,29 +1,124 @@
 // LinuxRestore/restore_cli.cpp
-// Simple command-line interface for Linux restore
+// Command-line interface for Linux restore - Version 4.7.1.0
+// Enhanced with backup date selection, item selection, and destination mapping
 
 #include <iostream>
 #include <string>
 #include <vector>
+#include <sstream>
 #include "restore_engine.cpp"
 
 void printHeader() {
     std::cout << "\n";
     std::cout << "========================================\n";
     std::cout << " Backup & Restore - Linux Recovery CLI\n";
-    std::cout << " Version 4.6.0\n";
+    std::cout << " Version 4.7.1.0\n";
     std::cout << "========================================\n";
     std::cout << "\n";
 }
 
-void printMenu() {
-    std::cout << "\nMain Menu:\n";
-    std::cout << "1. List available disks/partitions\n";
-    std::cout << "2. Mount NTFS partition\n";
-    std::cout << "3. Scan for backups\n";
-    std::cout << "4. Restore backup\n";
-    std::cout << "5. Unmount partition\n";
-    std::cout << "6. Exit\n";
-    std::cout << "\nSelect option: ";
+void printUsage() {
+    std::cout << "Usage:\n";
+    std::cout << "  restore_cli [options]\n\n";
+    std::cout << "Options:\n";
+    std::cout << "  --list-dates <path>           List available backup dates\n";
+    std::cout << "  --show-contents <backup>      Show contents of specific backup\n";
+    std::cout << "  --restore <backup>            Start restore from backup\n";
+    std::cout << "    --items <paths>             Comma-separated list of items\n";
+    std::cout << "    --dest <path>               Destination (omit for original)\n";
+    std::cout << "    --overwrite                 Overwrite existing files\n";
+    std::cout << "  --interactive                 Interactive mode with menus\n";
+    std::cout << "  --list-disks                  List available disks\n";
+    std::cout << "  --mount <device> <path>       Mount NTFS partition\n";
+    std::cout << "  --unmount <path>              Unmount partition\n";
+    std::cout << "  --help                        Show this help message\n";
+    std::cout << "\nExamples:\n";
+    std::cout << "  restore_cli --list-dates /media/backup\n";
+    std::cout << "  restore_cli --show-contents /media/backup/Full_20260130\n";
+    std::cout << "  restore_cli --restore /media/backup/Full_20260130 --items \"/dev/sda1,/home\" --dest /mnt/restore\n";
+    std::cout << "  restore_cli --interactive\n\n";
+}
+
+void printTree(const std::vector<RestoreEngine::RestoreItem>& items, int indent) {
+    for (const auto& item : items) {
+        std::string prefix(indent * 2, ' ');
+        std::cout << prefix << "- " << item.name << " (" << item.type << ")\n";
+        if (!item.children.empty()) {
+            printTree(item.children, indent + 1);
+        }
+    }
+}
+
+void listBackupDates(RestoreEngine& engine, const std::string& backupPath) {
+    std::cout << "\nScanning for backup dates in: " << backupPath << "\n";
+    
+    auto dates = engine.EnumerateBackupDates(backupPath);
+    
+    if (dates.empty()) {
+        std::cout << "No backups found.\n";
+        return;
+    }
+
+    std::cout << "\nDate                  Type          Size\n";
+    std::cout << "----------------------------------------------------\n";
+    for (const auto& date : dates) {
+        printf("%-20s %-12s %s\n", date.date.c_str(), 
+               date.type.c_str(), date.size.c_str());
+    }
+    std::cout << "\nTotal: " << dates.size() << " backup(s) found\n";
+}
+
+void showBackupContents(RestoreEngine& engine, const std::string& backupPath) {
+    std::cout << "\nLoading backup contents from: " << backupPath << "\n\n";
+    
+    auto tree = engine.BuildRestoreTree(backupPath);
+    
+    if (tree.empty()) {
+        std::cout << "No contents found or backup is empty.\n";
+        return;
+    }
+
+    std::cout << "Backup Contents:\n";
+    std::cout << "================\n";
+    printTree(tree, 0);
+}
+
+std::vector<std::string> split(const std::string& str, char delimiter) {
+    std::vector<std::string> tokens;
+    std::stringstream ss(str);
+    std::string token;
+    
+    while (std::getline(ss, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    
+    return tokens;
+}
+
+void performRestore(RestoreEngine& engine, const std::string& backupPath, 
+                    const std::vector<std::string>& items,
+                    const std::string& dest, bool overwrite) {
+    
+    std::cout << "\nStarting restore...\n";
+    std::cout << "Backup:      " << backupPath << "\n";
+    std::cout << "Destination: " << (dest.empty() ? "Original locations" : dest) << "\n";
+    std::cout << "Items:       " << items.size() << " item(s)\n";
+    std::cout << "Overwrite:   " << (overwrite ? "Yes" : "No") << "\n\n";
+
+    auto callback = [](int percent, const std::string& msg) {
+        printf("\r[%3d%%] %-60s", percent, msg.c_str());
+        fflush(stdout);
+    };
+    
+    bool success = engine.RestoreWithManifest(backupPath, dest, items, overwrite, callback);
+    
+    std::cout << "\n\n";
+    
+    if (success) {
+        std::cout << "? Restore completed successfully!\n";
+    } else {
+        std::cerr << "? Restore failed: " << engine.GetLastError() << "\n";
+    }
 }
 
 void listDisks(RestoreEngine& engine) {
@@ -40,24 +135,11 @@ void listDisks(RestoreEngine& engine) {
     for (const auto& disk : disks) {
         std::cout << disk;
     }
-    std::cout << "\nTip: Use 'fdisk -l' or 'lsblk' for more details\n";
+    std::cout << "\nTip: Use 'lsblk -f' for more details\n";
 }
 
-void mountPartition(RestoreEngine& engine) {
-    std::string device, mountPoint;
-    
-    std::cout << "\nMount NTFS Partition\n";
-    std::cout << "====================\n";
-    std::cout << "Enter device (e.g., /dev/sda1): ";
-    std::getline(std::cin, device);
-    
-    std::cout << "Enter mount point (default: /mnt/restore): ";
-    std::getline(std::cin, mountPoint);
-    
-    if (mountPoint.empty()) {
-        mountPoint = "/mnt/restore";
-    }
-
+void mountPartition(RestoreEngine& engine, const std::string& device, 
+                    const std::string& mountPoint) {
     std::cout << "\nMounting " << device << " to " << mountPoint << "...\n";
     
     int result = engine.MountNTFSPartition(device, mountPoint);
@@ -67,173 +149,219 @@ void mountPartition(RestoreEngine& engine) {
         std::cout << "You can now access files at: " << mountPoint << "\n";
     } else {
         std::cout << "? Mount failed: " << engine.GetLastError() << "\n";
-        std::cout << "\nTroubleshooting:\n";
-        std::cout << "  - Make sure ntfs-3g is installed: apk add ntfs-3g\n";
-        std::cout << "  - Check device name is correct: lsblk\n";
-        std::cout << "  - Run as root: sudo " << "\n";
     }
 }
 
-void scanBackups(RestoreEngine& engine) {
-    std::cout << "\nScanning for backups...\n";
-    std::cout << "Searching in: /media, /mnt, /run/media\n\n";
-    
-    std::vector<std::string> searchPaths = {"/media", "/mnt", "/run/media"};
-    std::vector<std::string> allBackups;
-    
-    for (const auto& path : searchPaths) {
-        auto backups = engine.ScanForBackups(path);
-        allBackups.insert(allBackups.end(), backups.begin(), backups.end());
-    }
-    
-    if (allBackups.empty()) {
-        std::cout << "No backups found.\n";
-        std::cout << "\nTips:\n";
-        std::cout << "  - Mount your backup media first\n";
-        std::cout << "  - Backup files should contain 'backup' or '.bak' in the name\n";
-        return;
-    }
-    
-    std::cout << "Found " << allBackups.size() << " backup(s):\n";
-    std::cout << "==============================\n";
-    for (size_t i = 0; i < allBackups.size(); i++) {
-        std::cout << (i + 1) << ". " << allBackups[i] << "\n";
-    }
-}
-
-void restoreBackup(RestoreEngine& engine) {
-    std::string backupPath, destPath;
-    char overwrite;
-    
-    std::cout << "\nRestore Backup\n";
-    std::cout << "==============\n";
-    std::cout << "Enter backup path: ";
-    std::getline(std::cin, backupPath);
-    
-    std::cout << "Enter destination path: ";
-    std::getline(std::cin, destPath);
-    
-    std::cout << "Overwrite existing files? (y/n): ";
-    std::cin >> overwrite;
-    std::cin.ignore();
-    
-    std::cout << "\nRestore Summary:\n";
-    std::cout << "  From: " << backupPath << "\n";
-    std::cout << "  To:   " << destPath << "\n";
-    std::cout << "  Overwrite: " << (overwrite == 'y' ? "Yes" : "No") << "\n";
-    std::cout << "\nWARNING: This will modify files on the destination!\n";
-    std::cout << "Continue? (yes/no): ";
-    
-    std::string confirm;
-    std::getline(std::cin, confirm);
-    
-    if (confirm != "yes") {
-        std::cout << "Restore cancelled.\n";
-        return;
-    }
-    
-    std::cout << "\nStarting restore...\n";
-    
-    int result = engine.RestoreFiles(backupPath, destPath, overwrite == 'y');
-    
-    if (result == 0) {
-        std::cout << "\n? Restore completed successfully!\n";
-    } else {
-        std::cout << "\n? Restore failed: " << engine.GetLastError() << "\n";
-    }
-}
-
-void unmountPartition(RestoreEngine& engine) {
-    std::string mountPoint;
-    
-    std::cout << "\nUnmount Partition\n";
-    std::cout << "=================\n";
-    std::cout << "Enter mount point to unmount: ";
-    std::getline(std::cin, mountPoint);
-    
-    std::cout << "Unmounting " << mountPoint << "...\n";
+void unmountPartition(RestoreEngine& engine, const std::string& mountPoint) {
+    std::cout << "\nUnmounting " << mountPoint << "...\n";
     
     int result = engine.UnmountPartition(mountPoint);
     
     if (result == 0) {
         std::cout << "? Unmounted successfully!\n";
     } else {
-        std::cout << "? Unmount failed\n";
-        std::cout << "Try: sudo umount " << mountPoint << "\n";
+        std::cout << "? Unmount failed: " << engine.GetLastError() << "\n";
+    }
+}
+
+// Interactive mode - 3-step wizard
+void runInteractive(RestoreEngine& engine) {
+    printHeader();
+    
+    std::string backupFolder;
+    std::string selectedBackupPath;
+    std::vector<std::string> selectedItems;
+    std::string destination;
+    bool overwrite = true;
+
+    // Step 1: Select backup and date
+    std::cout << "Step 1: Select Backup and Date\n";
+    std::cout << "===============================\n";
+    std::cout << "Enter backup folder path: ";
+    std::getline(std::cin, backupFolder);
+    
+    auto dates = engine.EnumerateBackupDates(backupFolder);
+    
+    if (dates.empty()) {
+        std::cout << "No backups found. Exiting.\n";
+        return;
+    }
+
+    std::cout << "\nAvailable backup dates:\n";
+    for (size_t i = 0; i < dates.size(); i++) {
+        std::cout << (i + 1) << ". " << dates[i].date << " - " 
+                  << dates[i].type << " (" << dates[i].size << ")\n";
+    }
+
+    int selection = 0;
+    std::cout << "\nSelect backup (1-" << dates.size() << "): ";
+    std::cin >> selection;
+    std::cin.ignore();
+
+    if (selection < 1 || selection > dates.size()) {
+        std::cout << "Invalid selection. Exiting.\n";
+        return;
+    }
+
+    selectedBackupPath = dates[selection - 1].path;
+    std::cout << "Selected: " << selectedBackupPath << "\n\n";
+
+    // Step 2: Select items to restore
+    std::cout << "Step 2: Select Items to Restore\n";
+    std::cout << "================================\n";
+    
+    auto tree = engine.BuildRestoreTree(selectedBackupPath);
+    
+    std::cout << "Backup contents:\n";
+    printTree(tree, 0);
+    
+    std::cout << "\nEnter items to restore (comma-separated paths), or 'all' for everything:\n";
+    std::string itemsInput;
+    std::getline(std::cin, itemsInput);
+    
+    if (itemsInput == "all") {
+        // Collect all items
+        std::function<void(const std::vector<RestoreEngine::RestoreItem>&)> collectAll;
+        collectAll = [&](const std::vector<RestoreEngine::RestoreItem>& items) {
+            for (const auto& item : items) {
+                selectedItems.push_back(item.path);
+                if (!item.children.empty()) {
+                    collectAll(item.children);
+                }
+            }
+        };
+        collectAll(tree);
+    } else {
+        selectedItems = split(itemsInput, ',');
+        // Trim whitespace
+        for (auto& item : selectedItems) {
+            item.erase(0, item.find_first_not_of(" \t"));
+            item.erase(item.find_last_not_of(" \t") + 1);
+        }
+    }
+
+    std::cout << "Selected " << selectedItems.size() << " item(s) to restore.\n\n";
+
+    // Step 3: Select destination
+    std::cout << "Step 3: Select Restore Destination\n";
+    std::cout << "===================================\n";
+    std::cout << "1. Restore to original location\n";
+    std::cout << "2. Restore to new location\n";
+    std::cout << "Select option (1-2): ";
+    
+    int destChoice = 0;
+    std::cin >> destChoice;
+    std::cin.ignore();
+
+    if (destChoice == 2) {
+        std::cout << "Enter destination path: ";
+        std::getline(std::cin, destination);
+    }
+
+    std::cout << "\nReady to restore. Continue? (y/n): ";
+    char confirm;
+    std::cin >> confirm;
+
+    if (confirm == 'y' || confirm == 'Y') {
+        performRestore(engine, selectedBackupPath, selectedItems, destination, overwrite);
+    } else {
+        std::cout << "Restore cancelled.\n";
     }
 }
 
 int main(int argc, char* argv[]) {
-    // Check if running as root
-    if (geteuid() != 0) {
-        std::cerr << "ERROR: This program must be run as root\n";
-        std::cerr << "Use: sudo " << argv[0] << "\n";
-        return 1;
+    RestoreEngine engine;
+
+    // No arguments - show usage
+    if (argc == 1) {
+        printHeader();
+        printUsage();
+        return 0;
     }
 
-    printHeader();
-    
-    RestoreEngine engine;
-    
-    // Command-line mode
-    if (argc > 1) {
-        if (std::string(argv[1]) == "--restore" && argc >= 4) {
-            std::string backupPath = argv[2];
-            std::string destPath = argv[3];
-            bool overwrite = (argc > 4 && std::string(argv[4]) == "--overwrite");
-            
-            std::cout << "Restoring from: " << backupPath << "\n";
-            std::cout << "            to: " << destPath << "\n\n";
-            
-            int result = engine.RestoreFiles(backupPath, destPath, overwrite);
-            
-            return (result == 0) ? 0 : 1;
-        } else if (std::string(argv[1]) == "--help") {
-            std::cout << "Usage:\n";
-            std::cout << "  Interactive mode: sudo " << argv[0] << "\n";
-            std::cout << "  Direct restore:   sudo " << argv[0] << " --restore <backup> <dest> [--overwrite]\n";
-            std::cout << "\n";
-            std::cout << "Examples:\n";
-            std::cout << "  sudo " << argv[0] << " --restore /media/usb/backup /mnt/restore\n";
-            std::cout << "  sudo " << argv[0] << " --restore /mnt/backup /mnt/c --overwrite\n";
-            return 0;
-        }
+    std::string command = argv[1];
+
+    // Help
+    if (command == "--help" || command == "-h") {
+        printHeader();
+        printUsage();
+        return 0;
     }
-    
+
     // Interactive mode
-    while (true) {
-        printMenu();
-        
-        int choice;
-        std::cin >> choice;
-        std::cin.ignore();
-        
-        switch (choice) {
-            case 1:
-                listDisks(engine);
-                break;
-            case 2:
-                mountPartition(engine);
-                break;
-            case 3:
-                scanBackups(engine);
-                break;
-            case 4:
-                restoreBackup(engine);
-                break;
-            case 5:
-                unmountPartition(engine);
-                break;
-            case 6:
-                std::cout << "\nGoodbye!\n";
-                return 0;
-            default:
-                std::cout << "Invalid option. Please try again.\n";
-        }
-        
-        std::cout << "\nPress Enter to continue...";
-        std::cin.ignore();
+    if (command == "--interactive" || command == "-i") {
+        runInteractive(engine);
+        return 0;
     }
-    
-    return 0;
+
+    // List backup dates
+    if (command == "--list-dates" && argc >= 3) {
+        printHeader();
+        listBackupDates(engine, argv[2]);
+        return 0;
+    }
+
+    // Show backup contents
+    if (command == "--show-contents" && argc >= 3) {
+        printHeader();
+        showBackupContents(engine, argv[2]);
+        return 0;
+    }
+
+    // List disks
+    if (command == "--list-disks") {
+        printHeader();
+        listDisks(engine);
+        return 0;
+    }
+
+    // Mount partition
+    if (command == "--mount" && argc >= 4) {
+        printHeader();
+        mountPartition(engine, argv[2], argv[3]);
+        return 0;
+    }
+
+    // Unmount partition
+    if (command == "--unmount" && argc >= 3) {
+        printHeader();
+        unmountPartition(engine, argv[2]);
+        return 0;
+    }
+
+    // Restore
+    if (command == "--restore" && argc >= 3) {
+        printHeader();
+        
+        std::string backupPath = argv[2];
+        std::vector<std::string> items;
+        std::string dest;
+        bool overwrite = false;
+
+        // Parse additional arguments
+        for (int i = 3; i < argc; i++) {
+            std::string arg = argv[i];
+            
+            if (arg == "--items" && i + 1 < argc) {
+                items = split(argv[++i], ',');
+            } else if (arg == "--dest" && i + 1 < argc) {
+                dest = argv[++i];
+            } else if (arg == "--overwrite") {
+                overwrite = true;
+            }
+        }
+
+        if (items.empty()) {
+            std::cerr << "Error: No items specified. Use --items <paths>\n";
+            return 1;
+        }
+
+        performRestore(engine, backupPath, items, dest, overwrite);
+        return 0;
+    }
+
+    // Unknown command
+    std::cerr << "Unknown command: " << command << "\n";
+    std::cout << "Use --help for usage information\n";
+    return 1;
 }

@@ -1,7 +1,8 @@
 # CMakeLists.txt for Linux Restore Application
+# Version 4.7.1.0 - Updated with 3-step wizard restore tools
 
 cmake_minimum_required(VERSION 3.10)
-project(BackupRestoreLinux VERSION 4.6.0)
+project(BackupRestoreLinux VERSION 4.7.1)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

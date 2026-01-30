@@ -47,19 +47,37 @@ namespace BackupUI
 				}
 				
 				// Last resort fallback
-				return "4.6.1.13";
+				return "4.8.0.0";
 			}
 			catch
 			{
 				// Fallback version if assembly version fails
-				return "4.6.1.13";
+				return "4.8.0.0";
 			}
 		}
 	}
 }
 
 /*
- * 
+*  Version 4.8.0.0 MAJOR UPDATE: Added enterprise-level activity logging and backup validation. New Activity tab shows all backup
+*                  operations with filtering by level. Automatic validation after backup completion. Failed validations trigger
+*                  auto-recovery: failed backups renamed with V1 suffix and new full backup scheduled. Comprehensive audit trail
+*                  for compliance and monitoring. mdail 1/30/2026
+*  Version 4.7.1.4 Fix the BUILD-AND-CREATE-ISO.ps1 to add the updates to the LinuxRestore and also add error checking to make sure
+*				   CMakeFIles builds correctly before trying to make the ISO. mdail 1/30/2026
+*  Version 4.7.1.0 MAJOR UPDATE: Updated Linux restore applications (restore_tui, restore_cli, restore_gui) to match Windows restore
+*                  workflow - added backup date selection, tree view for selective restore, and destination mapping. Ensures disaster 
+*                  recovery tools stay in sync with Windows features. mdail 1/30/2026
+*  Version 4.7.0.0 MAJOR UPDATE: Complete restore interface redesign - added backup date selection for incremental/differential,
+*                  explorer-style tree view for selective restore of drives/volumes/files/folders, restore destination mapping
+*                  with options for original or new location. Restore workflow now matches backup selection experience. mdail 1/30/2026
+*  Version 4.6.2.19 Changed schedule time selector from 24-hour format to 12-hour AM/PM format for better usability. mdail 1/30/2026
+*  Version 4.6.2.18 Fixed the validation for the backup page to make sure the destination is valid for the backup type selected. mdail 1/30/2026
+ *  Version 4.6.2.17 Added Clone Hyper-V System option, fixed clone destination visibility (Clone to Disk shows only physical disk field,
+ *                   Clone to Virtual Disk shows backup destination), Hyper-V clone creates HVconfig and HVDisks subdirectories. mdail 1/30/2026
+ *  Version 4.6.1.16 Fix the radio buttons to be 2 rows instead of 1 so they can all be read. mdail 1/30/2026
+ *  Version 4.6.1.15 Change the new backup page the have the backup type as radio buttons instead of a dropdown selection. mdail 1/30/2026
+ *  Version 4.6.1.14 Change the new backup page to put it all on one page instead of multiple tabs on the page. mdail 1/30/2026
  *  Version 4.6.1.13 Finally got the AI to get the bootable Linux USB iso with BackRestore app PowerShell script working. mdail 1/27/2026
  *  Version 4.6.1.10 Spent all day trying to get the AI to fix the ability to make a bootable Linux USB drive with the BackRestore app
  *					 on it so user can have a way to restore their system if Windows will not boot.  The AI was unable to do this yet. mdail 1/25/2026

@@ -52,6 +52,7 @@
     <ClCompile Include="HyperV_Enumeration.cpp" />
     <ClCompile Include="RecoveryEnvironment.cpp" />
     <ClCompile Include="RestoreEngine_Advanced.cpp" />
+    <ClCompile Include="RestoreEnhanced.cpp" />
     <ClCompile Include="VolumeEnumeration.cpp" />
     <ClCompile Include="VSSManager.cpp" />
     <ClCompile Include="HyperVRestore.cpp" />

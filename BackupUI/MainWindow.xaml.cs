@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using BackupUI.Models;
 using BackupUI.Services;
 using BackupUI.Windows;
@@ -17,6 +18,7 @@ namespace BackupUI
             InitializeComponent();
             LoadVersion();
             LoadBackupJobs();
+            // Don't load activity yet - will load when tab is selected
         }
 
         private void LoadVersion()
@@ -151,6 +153,96 @@ namespace BackupUI
         {
             MessageBox.Show($"Backup & Restore Solution\n{VersionClass.GetVersion()}\n\nEnterprise backup with scheduling and disaster recovery", 
                 "About", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        // Activity Tab Methods
+        private void LoadActivity()
+        {
+            // Null check - control might not be initialized yet
+            if (dgActivityLog == null)
+                return;
+
+            var logs = BackupLogger.GetRecentLogs(500);
+            dgActivityLog.ItemsSource = logs;
+
+            if (logs.Count == 0)
+            {
+                if (txtNoLogs != null)
+                    txtNoLogs.Visibility = Visibility.Visible;
+                dgActivityLog.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                if (txtNoLogs != null)
+                    txtNoLogs.Visibility = Visibility.Collapsed;
+                dgActivityLog.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void RefreshActivity_Click(object sender, RoutedEventArgs e)
+        {
+            LoadActivity();
+        }
+
+        private void ClearOldLogs_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "This will delete activity logs older than 30 days. Continue?",
+                "Clear Old Logs",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                BackupLogger.ClearOldLogs(30);
+                LoadActivity();
+                MessageBox.Show("Old logs have been cleared.", "Success", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        private void FilterLevel_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            // Null check
+            if (dgActivityLog == null || cmbFilterLevel == null)
+                return;
+
+            if (cmbFilterLevel.SelectedItem is ComboBoxItem item)
+            {
+                var filter = item.Content.ToString();
+                var allLogs = BackupLogger.GetRecentLogs(500);
+
+                switch (filter)
+                {
+                    case "Info":
+                        dgActivityLog.ItemsSource = allLogs.Where(l => l.Level == BackupLogLevel.Info).ToList();
+                        break;
+                    case "Success":
+                        dgActivityLog.ItemsSource = allLogs.Where(l => l.Level == BackupLogLevel.Success).ToList();
+                        break;
+                    case "Warning":
+                        dgActivityLog.ItemsSource = allLogs.Where(l => l.Level == BackupLogLevel.Warning).ToList();
+                        break;
+                    case "Error":
+                        dgActivityLog.ItemsSource = allLogs.Where(l => l.Level == BackupLogLevel.Error).ToList();
+                        break;
+                    case "Failed Validations":
+                        dgActivityLog.ItemsSource = BackupLogger.GetFailedValidations();
+                        break;
+                    default:
+                        dgActivityLog.ItemsSource = allLogs;
+                        break;
+                }
+            }
+        }
+
+        // Tab selection handler - load activity when tab is selected
+        private void TabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is TabControl tabControl && tabControl.SelectedIndex == 1) // Activity tab is index 1
+            {
+                LoadActivity();
+            }
         }
     }
 
