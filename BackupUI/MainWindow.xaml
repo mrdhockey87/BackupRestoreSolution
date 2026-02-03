@@ -42,7 +42,7 @@ Width="900">
 			</StatusBarItem>
 		</StatusBar>
 		<Grid Margin="10">
-			<TabControl SelectionChanged="TabControl_SelectionChanged">
+			<TabControl Name="mainTabControl" SelectionChanged="TabControl_SelectionChanged">
 				<TabItem Header="Backup">
 					<Grid>
 						<Grid.RowDefinitions>
@@ -144,7 +144,7 @@ Width="900">
 				</TabItem>
 				
 				<!-- Activity/Logs Tab -->
-				<TabItem Header="Activity">
+				<TabItem Name="tabActivity" Header="Activity">
 					<Grid>
 						<Grid.RowDefinitions>
 							<RowDefinition Height="Auto"/>

@@ -23,6 +23,7 @@ namespace BackupUI.Services
         public string Details { get; set; } = "";
         public bool ValidationPassed { get; set; } = true;
         public string BackupPath { get; set; } = "";
+        public bool IsRead { get; set; } = false;  // NEW: Track if user has seen this error
     }
 
     public class BackupLogger
@@ -124,12 +125,38 @@ namespace BackupUI.Services
 
                     SaveLogs(logs);
                 }
+                catch (UnauthorizedAccessException accessEx)
+                {
+                    // Access denied - write to fallback file
+                    WriteFallbackLog($"ACCESS DENIED: {DateTime.Now}: {entry.Level} - {entry.JobName}: {entry.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Log access denied: {accessEx.Message}");
+                }
+                catch (IOException ioEx)
+                {
+                    // I/O error - write to fallback file
+                    WriteFallbackLog($"IO ERROR: {DateTime.Now}: {entry.Level} - {entry.JobName}: {entry.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Log I/O error: {ioEx.Message}");
+                }
                 catch (Exception ex)
                 {
-                    // Fallback to text file if JSON fails
-                    File.AppendAllText(Path.Combine(LogDirectory, "backup_errors.txt"),
-                        $"{DateTime.Now}: Failed to write log - {ex.Message}\n");
+                    // Generic error - write to fallback file
+                    WriteFallbackLog($"ERROR ({ex.GetType().Name}): {DateTime.Now}: {entry.Level} - {entry.JobName}: {entry.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Log error: {ex.Message}");
                 }
+            }
+        }
+
+        private static void WriteFallbackLog(string message)
+        {
+            try
+            {
+                var fallbackFile = Path.Combine(LogDirectory, "backup_errors.txt");
+                File.AppendAllText(fallbackFile, message + "\n");
+            }
+            catch
+            {
+                // Last resort - just debug output
+                System.Diagnostics.Debug.WriteLine($"CRITICAL: Cannot write to any log file: {message}");
             }
         }
 
@@ -143,10 +170,29 @@ namespace BackupUI.Services
                         return new List<BackupLogEntry>();
 
                     var json = File.ReadAllText(LogFile);
-                    return JsonSerializer.Deserialize<List<BackupLogEntry>>(json) ?? new List<BackupLogEntry>();
+                    
+                    if (string.IsNullOrWhiteSpace(json))
+                        return new List<BackupLogEntry>();
+
+                    var logs = JsonSerializer.Deserialize<List<BackupLogEntry>>(json);
+                    return logs ?? new List<BackupLogEntry>();
                 }
-                catch
+                catch (JsonException)
                 {
+                    // Corrupted JSON file - backup and start fresh
+                    try
+                    {
+                        var backupFile = Path.Combine(LogDirectory, $"backup_activity_corrupted_{DateTime.Now:yyyyMMddHHmmss}.json");
+                        File.Copy(LogFile, backupFile, true);
+                        System.Diagnostics.Debug.WriteLine($"Corrupted log file backed up to: {backupFile}");
+                    }
+                    catch { }
+
+                    return new List<BackupLogEntry>();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error loading logs: {ex.Message}");
                     return new List<BackupLogEntry>();
                 }
             }
@@ -154,11 +200,19 @@ namespace BackupUI.Services
 
         private static void SaveLogs(List<BackupLogEntry> logs)
         {
-            var json = JsonSerializer.Serialize(logs, new JsonSerializerOptions
+            try
             {
-                WriteIndented = true
-            });
-            File.WriteAllText(LogFile, json);
+                var json = JsonSerializer.Serialize(logs, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+                File.WriteAllText(LogFile, json);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error saving logs: {ex.Message}");
+                throw; // Let caller handle via fallback
+            }
         }
 
         public static List<BackupLogEntry> GetRecentLogs(int count = 100)
@@ -195,6 +249,43 @@ namespace BackupUI.Services
                     .ToList();
                 SaveLogs(logs);
             }
+        }
+
+        // NEW: Get count of unread errors and warnings
+        public static int GetUnreadErrorCount()
+        {
+            return LoadLogs()
+                .Count(l => !l.IsRead && (l.Level == BackupLogLevel.Error || l.Level == BackupLogLevel.Warning));
+        }
+
+        // NEW: Mark all errors as read
+        public static void MarkAllErrorsAsRead()
+        {
+            lock (lockObject)
+            {
+                var logs = LoadLogs();
+                bool changed = false;
+
+                foreach (var log in logs)
+                {
+                    if (!log.IsRead && (log.Level == BackupLogLevel.Error || log.Level == BackupLogLevel.Warning))
+                    {
+                        log.IsRead = true;
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    SaveLogs(logs);
+                }
+            }
+        }
+
+        // NEW: Check if there are unread errors
+        public static bool HasUnreadErrors()
+        {
+            return GetUnreadErrorCount() > 0;
         }
     }
 }

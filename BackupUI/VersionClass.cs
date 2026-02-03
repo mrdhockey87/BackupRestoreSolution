@@ -25,12 +25,19 @@ namespace BackupUI
 			{
 				Assembly assembly = Assembly.GetExecutingAssembly();
 				
-				// Try to get the informational version first (this reads from the .csproj <Version> or <InformationalVersion>)
-				var infoVersionAttr = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
-				if (infoVersionAttr != null && !string.IsNullOrEmpty(infoVersionAttr.InformationalVersion))
+			// Try to get the informational version first (this reads from the .csproj <Version> or <InformationalVersion>)
+			var infoVersionAttr = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+			if (infoVersionAttr != null && !string.IsNullOrEmpty(infoVersionAttr.InformationalVersion))
+			{
+				// Strip Git commit hash if present (format: "4.8.3.2+e3d3b4c3af621b4af79aacab33b4f9ce955417c2")
+				string versionString = infoVersionAttr.InformationalVersion;
+				int plusIndex = versionString.IndexOf('+');
+				if (plusIndex > 0)
 				{
-					return infoVersionAttr.InformationalVersion;
+					versionString = versionString.Substring(0, plusIndex);
 				}
+				return versionString;
+			}
 				
 				// Fall back to file version
 				var fileVersionAttr = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>();
@@ -47,18 +54,39 @@ namespace BackupUI
 				}
 				
 				// Last resort fallback
-				return "4.8.0.0";
+				return "4.8.3.3";
 			}
 			catch
 			{
 				// Fallback version if assembly version fails
-				return "4.8.0.0";
+				return "4.8.3.3";
 			}
 		}
 	}
 }
 
 /*
+*  Version 4.8.3.3 Fix the infoVersionAttr.InformationalVersion returning too much information and strip off the git hash info after the
+*				  '+' and return only the version number itself. mdail 2/2/2026
+*  Version 4.8.3.2 Fix versioning conflict and a variable that was defined but never used. Also fixed date errors in some of the updates
+*				   to versions in this file. mdail 2/2/2026
+*  Version 4.8.3.1 ENHANCEMENT: Smart job deletion - checks if backup files exist before showing delete options. Jobs never run show simple
+*                  confirmation. Jobs with backups show two-option dialog. Handles empty backup directories gracefully. Different messages
+*                  based on whether files were deleted. Prevents confusion when deleting never-run jobs. mdail 2/2/2026
+*  Version 4.8.3.0 CRITICAL: Bulletproof error handling - validation skipped if backup fails, comprehensive exception catching throughout
+*                  backup and validation process, detailed error logging with exception types, fallback logging if main log fails, corrupted
+*                  log file recovery, specific handling for access denied/IO errors. Application NEVER crashes - all errors caught and logged.
+*                  Production-ready reliability for unattended backup operations. mdail 2/2/2026
+*  Version 4.8.2.0 ENHANCEMENT: Enhanced job deletion with user choice - delete job only (preserve backups) or delete job AND backups
+*                  (moved to recycle bin for safety). Custom dialog with clear options, comprehensive activity logging, backup file
+*                  count tracking. Recycle bin integration ensures deleted backups can be recovered if needed. Data safety first! mdail 2/2/2026
+*  Version 4.8.1.0 MAJOR UPDATE: Added comprehensive notification system - Windows toast notifications for backup failures/success, visual
+*                  warning indicator (⚠️) in Activity tab when unread errors exist, automatic clearing when user views errors, periodic
+*                  check for new errors every 30 seconds, yellow/orange styling for warnings. Users immediately alerted to issues and
+*                  can click notification to view Activity tab. Full integration with Windows Action Center. mdail 2/2/2026
+*  Version 4.8.0.1 ENHANCEMENT: Improved auto-recovery versioning - failed backups now use incremental version suffixes (_V1, _V2, _V3...)
+*                  instead of single V1. System automatically finds highest existing version and increments. Prevents overwriting previous
+*                  failed backups, allowing forensic analysis of multiple failures. Underscore prefix added for better filename clarity. mdail 2/2/2026
 *  Version 4.8.0.0 MAJOR UPDATE: Added enterprise-level activity logging and backup validation. New Activity tab shows all backup
 *                  operations with filtering by level. Automatic validation after backup completion. Failed validations trigger
 *                  auto-recovery: failed backups renamed with V1 suffix and new full backup scheduled. Comprehensive audit trail

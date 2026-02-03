@@ -8,14 +8,17 @@
     <Platforms>x64</Platforms>
     <OutputPath>$(SolutionDir)bin\$(Configuration)\</OutputPath>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>5.7.1.4</Version>
-    <AssemblyVersion>5.7.1.4</AssemblyVersion>
-    <FileVersion>5.7.1.4</FileVersion>
-    <InformationalVersion>5.7.1.4</InformationalVersion>
+    <Version>4.8.3.3</Version>
+    <AssemblyVersion>4.8.3.3</AssemblyVersion>
+    <FileVersion>4.8.3.3</FileVersion>
+    <InformationalVersion>4.8.3.3</InformationalVersion>
+    <!-- Disable automatic Git commit hash appending to InformationalVersion -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="Microsoft.VisualBasic" Version="10.3.0" />
   </ItemGroup>
   
   <!-- Copy BackupEngine.dll to output directory after build -->
