@@ -54,18 +54,46 @@ namespace BackupUI
 				}
 				
 				// Last resort fallback
-				return "4.8.3.3";
+				return "5.11.0.1";
 			}
 			catch
 			{
 				// Fallback version if assembly version fails
-				return "4.8.3.3";
+				return "5.11.0.1";
 			}
 		}
 	}
 }
 
 /*
+ * 
+ * 
+*  Version 5.11.0.1 I fixed the issue of wimgapi.h not being found when building the project by setting the Additional include path in the 
+*					project	properties in C++ part and adding a path in the Link Additional Library Directories and a PropertyGroup for 
+*					WimLibArch in the BackupEngine project file, unfortuatly now it can't open zlib.lib when building the app a 1 
+*					project fails to build. mdail 2/5/2026
+*  Version 5.11.0.0 Finish the VSS implementation to support backing up open files and system state backups. Change the backup extension
+*                   from .wim to .brs and add compression to the files to give the impression it is proprietary to this app, also support 
+*                   reading .wim for mounting and restoring to support old backups made by the user with windows server backup as an 
+*                   added feature of this backup application.  mdail 2/3/2026
+*  Version 4.10.1.0 Update the backup mounting to mount Wim backups as read-only drives instead of VHDX files. This allows for better
+*					compatibility and doesn'r require admin rights or power shell to mount. Also unmonting does a direct call to the
+*					dll to unmount instead of using PowerShell. mdail 2/2/2026
+*  Version 4.10.0.0 MAJOR FEATURE: Backup Mount System - mount backups as read-only virtual drives with custom icons and Explorer
+*                  integration. New "Mount Backups" tab with dual-pane interface (available/mounted), PowerShell-based VHDX mounting,
+*                  backup point selection for incremental/differential backups, custom drive icons for visual distinction, Explorer
+*                  context menu integration for easy unmounting, comprehensive activity logging, multi-drive support. Users can browse
+*                  backup contents in Explorer, copy individual files/folders without full restore. Complete file-level recovery! mdail 2/2/2026
+*  Version 4.9.1.0 ENHANCEMENT: Extended volume resizing to clone operations - added interactive volume resize control to "Clone to Disk" and
+*                  "Clone to Virtual Disk" workflows, automatically detects selected volumes and target disk sizes, allows users to adjust
+*                  volume proportions when cloning to different-sized drives, intelligent minimum size enforcement based on actual data,
+*                  real-time validation, supports both physical and virtual disk cloning with same intuitive interface. Complete feature
+*                  parity between restore and clone operations for flexible disaster recovery! mdail 2/2/2026
+*  Version 4.9.0.0 MAJOR FEATURE: Interactive volume resizing for restore operations - visual drag-and-drop interface with two horizontal
+*                  bars (source backup and target disk), draggable arrow handles between volumes, intelligent constraints (minimum size based
+*                  on actual data + 10% overhead), auto-fit proportional scaling, support for resizing to smaller/larger disks, prevents
+*                  data loss by enforcing minimum sizes, shows free space visualization, validates configurations before restore. Includes
+*                  complete documentation for Linux Qt GUI and ncurses TUI implementations. Allows disaster recovery to different-sized drives! mdail 2/2/2026
 *  Version 4.8.3.3 Fix the infoVersionAttr.InformationalVersion returning too much information and strip off the git hash info after the
 *				  '+' and return only the version number itself. mdail 2/2/2026
 *  Version 4.8.3.2 Fix versioning conflict and a variable that was defined but never used. Also fixed date errors in some of the updates

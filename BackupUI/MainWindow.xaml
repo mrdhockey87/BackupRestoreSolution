@@ -50,12 +50,13 @@ Width="900">
 							<RowDefinition Height="*"/>
 						</Grid.RowDefinitions>
 						
-						<!-- Header -->
-						<StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,5" Background="#F0F0F0">
-							<TextBlock Text="Backup Jobs" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="10,10,20,10"/>
-							<Button Content="New Backup..." Click="NewBackup_Click" Width="120" Height="30" Margin="5,5"/>
-							<Button Content="Refresh" Click="RefreshJobs_Click" Width="100" Height="30" Margin="5,5"/>
-						</StackPanel>
+					<!-- Header -->
+					<StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,5" Background="#F0F0F0">
+						<TextBlock Text="Backup Jobs" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="10,10,20,10"/>
+						<Button Content="New Backup..." Click="NewBackup_Click" Width="120" Height="30" Margin="5,5"/>
+						<Button Content="Import Backup..." Click="ImportBackup_Click" Width="130" Height="30" Margin="5,5"/>
+						<Button Content="Refresh" Click="RefreshJobs_Click" Width="100" Height="30" Margin="5,5"/>
+					</StackPanel>
 						
 						<!-- Job List -->
 						<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="10">
@@ -255,6 +256,84 @@ Width="900">
 								   FontSize="14"
 								   Foreground="#999"
 								   Visibility="Collapsed"/>
+					</Grid>
+				</TabItem>
+				
+				<!-- Mount Backups Tab -->
+				<TabItem Header="Mount Backups">
+					<Grid>
+						<Grid.RowDefinitions>
+							<RowDefinition Height="Auto"/>
+							<RowDefinition Height="*"/>
+							<RowDefinition Height="200"/>
+						</Grid.RowDefinitions>
+						
+						<!-- Header -->
+						<StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,5" Background="#F0F0F0">
+							<TextBlock Text="Mount Backups as Virtual Drives" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="10,10,20,10"/>
+							<Button Content="Refresh" Click="RefreshMounts_Click" Width="100" Height="30" Margin="5,5"/>
+							<Button Content="Unmount All" Click="UnmountAll_Click" Width="120" Height="30" Margin="5,5" Background="#FFE0E0"/>
+						</StackPanel>
+						
+						<!-- Available Backups -->
+						<GroupBox Grid.Row="1" Header="Available Backups" Margin="10">
+							<Grid>
+								<Grid.RowDefinitions>
+									<RowDefinition Height="*"/>
+									<RowDefinition Height="Auto"/>
+								</Grid.RowDefinitions>
+								
+								<DataGrid Grid.Row="0" Name="dgAvailableBackups" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" GridLinesVisibility="Horizontal" AlternatingRowBackground="#F9F9F9" SelectionChanged="AvailableBackups_SelectionChanged">
+									<DataGrid.Columns>
+										<DataGridTextColumn Header="Backup Name" Binding="{Binding BackupName}" Width="200"/>
+										<DataGridTextColumn Header="Type" Binding="{Binding BackupType}" Width="100"/>
+										<DataGridTextColumn Header="Date" Binding="{Binding BackupDate, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="140"/>
+										<DataGridTextColumn Header="Path" Binding="{Binding BackupPath}" Width="*"/>
+										<DataGridTemplateColumn Header="Action" Width="100">
+											<DataGridTemplateColumn.CellTemplate>
+												<DataTemplate>
+													<Button Content="Mount" Width="80" Height="25" Click="MountBackup_Click" Tag="{Binding}"/>
+												</DataTemplate>
+											</DataGridTemplateColumn.CellTemplate>
+										</DataGridTemplateColumn>
+									</DataGrid.Columns>
+								</DataGrid>
+								
+								<StackPanel Grid.Row="1" Name="pnlBackupPoints" Visibility="Collapsed" Margin="10">
+									<TextBlock Text="Select Backup Point:" FontWeight="SemiBold" Margin="0,0,0,5"/>
+									<ComboBox Name="cmbBackupPoints" Height="30"/>
+								</StackPanel>
+							</Grid>
+						</GroupBox>
+						
+						<!-- Mounted Backups -->
+						<GroupBox Grid.Row="2" Header="Mounted Backups" Margin="10">
+							<DataGrid Name="dgMountedBackups" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" GridLinesVisibility="Horizontal" AlternatingRowBackground="#F9F9F9">
+								<DataGrid.Columns>
+									<DataGridTextColumn Header="Drive" Binding="{Binding DriveLetter}" Width="60"/>
+									<DataGridTextColumn Header="Backup Name" Binding="{Binding BackupName}" Width="200"/>
+									<DataGridTextColumn Header="Type" Binding="{Binding BackupType}" Width="100"/>
+									<DataGridTextColumn Header="Date" Binding="{Binding BackupDate, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="140"/>
+									<DataGridTextColumn Header="Mounted At" Binding="{Binding MountTime, StringFormat='{}{0:HH:mm:ss}'}" Width="100"/>
+									<DataGridTemplateColumn Header="Status" Width="80">
+										<DataGridTemplateColumn.CellTemplate>
+											<DataTemplate>
+												<TextBlock Text="Read-Only" Foreground="Green" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+											</DataTemplate>
+										</DataGridTemplateColumn.CellTemplate>
+									</DataGridTemplateColumn>
+									<DataGridTemplateColumn Header="Action" Width="100">
+										<DataGridTemplateColumn.CellTemplate>
+											<DataTemplate>
+												<Button Content="Unmount" Width="80" Height="25" Background="#FFE0E0" Click="UnmountBackup_Click" Tag="{Binding DriveLetter}"/>
+											</DataTemplate>
+										</DataGridTemplateColumn.CellTemplate>
+									</DataGridTemplateColumn>
+								</DataGrid.Columns>
+							</DataGrid>
+						</GroupBox>
+						
+						<TextBlock Name="txtNoBackups" Grid.Row="1" Text="No backups available to mount." HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14" Foreground="#999" Visibility="Collapsed"/>
 					</Grid>
 				</TabItem>
 				

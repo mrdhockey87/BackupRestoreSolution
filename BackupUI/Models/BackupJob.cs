@@ -18,5 +18,9 @@ namespace BackupUI.Models
         public BackupSchedule? Schedule { get; set; }
         public bool IsHyperVBackup { get; set; }
         public List<string> HyperVMachines { get; set; } = new();
+        
+        // Import support
+        public bool IsImported { get; set; } = false; // True if imported from external backup
+        public bool UseCompression { get; set; } = true; // True to create .brs (compressed), false for .wim
     }
 }

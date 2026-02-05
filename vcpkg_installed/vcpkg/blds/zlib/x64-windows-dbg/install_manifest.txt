@@ -1,0 +1,2 @@
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/vcpkg_installed/vcpkg/pkgs/zlib_x64-windows/debug/lib/zlibd.lib
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/vcpkg_installed/vcpkg/pkgs/zlib_x64-windows/debug/bin/zlibd1.dll

@@ -8,17 +8,18 @@
     <Platforms>x64</Platforms>
     <OutputPath>$(SolutionDir)bin\$(Configuration)\</OutputPath>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>4.8.3.3</Version>
-    <AssemblyVersion>4.8.3.3</AssemblyVersion>
-    <FileVersion>4.8.3.3</FileVersion>
-    <InformationalVersion>4.8.3.3</InformationalVersion>
+    <Version>5.11.0.1</Version>
+    <AssemblyVersion>5.11.0.1</AssemblyVersion>
+    <FileVersion>5.11.0.1</FileVersion>
+    <InformationalVersion>5.11.0.1</InformationalVersion>
     <!-- Disable automatic Git commit hash appending to InformationalVersion -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
-    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.2" />
+    <PackageReference Include="System.Management" Version="10.0.2" />
     <PackageReference Include="Microsoft.VisualBasic" Version="10.3.0" />
+    <PackageReference Include="zlib-msvc-x64" Version="1.2.11.8900" />
   </ItemGroup>
   
   <!-- Copy BackupEngine.dll to output directory after build -->
@@ -26,13 +27,8 @@
     <ItemGroup>
       <BackupEngineDll Include="$(SolutionDir)bin\$(Configuration)\BackupEngine.dll" />
     </ItemGroup>
-    <Copy SourceFiles="@(BackupEngineDll)" 
-          DestinationFolder="$(OutDir)" 
-          SkipUnchangedFiles="true"
-          Condition="Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
-    <Message Text="Copied BackupEngine.dll to $(OutDir)" Importance="high" 
-             Condition="Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
-    <Warning Text="BackupEngine.dll not found at $(SolutionDir)bin\$(Configuration)\BackupEngine.dll - Build BackupEngine project first!" 
-             Condition="!Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
+    <Copy SourceFiles="@(BackupEngineDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
+    <Message Text="Copied BackupEngine.dll to $(OutDir)" Importance="high" Condition="Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
+    <Warning Text="BackupEngine.dll not found at $(SolutionDir)bin\$(Configuration)\BackupEngine.dll - Build BackupEngine project first!" Condition="!Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
   </Target>
 </Project>

@@ -400,6 +400,15 @@ namespace BackupUI
             }
         }
         
+        private void ImportBackup_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new ImportBackupWindow();
+            if (window.ShowDialog() == true)
+            {
+                LoadBackupJobs();
+            }
+        }
+        
         private void Restore_Click(object sender, RoutedEventArgs e)
         {
             var window = new RestoreWindowNew();
@@ -536,6 +545,270 @@ namespace BackupUI
             if (tabControl != null)
             {
                 tabControl.SelectedIndex = 1; // Switch to Activity tab
+            }
+        }
+
+        // Mount Backups Tab Methods
+        private void RefreshMounts_Click(object sender, RoutedEventArgs e)
+        {
+            LoadAvailableBackups();
+            LoadMountedBackups();
+        }
+
+        private void MountBackup_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button btn && btn.Tag is AvailableBackupInfo backup)
+            {
+                try
+                {
+                    // Get selected backup point if Inc/Diff
+                    string vhdxPath = GetBackupPointPath(backup);
+
+                    if (string.IsNullOrEmpty(vhdxPath))
+                    {
+                        MessageBox.Show("Please select a backup point to mount.",
+                                      "No Backup Point Selected",
+                                      MessageBoxButton.OK,
+                                      MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    var (success, driveLetter, error) = BackupMountManager.MountBackup(
+                        vhdxPath,
+                        backup.BackupName,
+                        backup.BackupType,
+                        backup.BackupDate);
+
+                    if (success)
+                    {
+                        MessageBox.Show($"Backup mounted as {driveLetter}:\n\n" +
+                                      $"You can now browse the backup in Windows Explorer.\n" +
+                                      $"Drive is READ-ONLY to prevent modifications.",
+                                      "Backup Mounted",
+                                      MessageBoxButton.OK,
+                                      MessageBoxImage.Information);
+
+                        LoadMountedBackups();
+                        OpenExplorer(driveLetter);
+                    }
+                    else
+                    {
+                        MessageBox.Show($"Failed to mount backup:\n{error}",
+                                      "Mount Error",
+                                      MessageBoxButton.OK,
+                                      MessageBoxImage.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error mounting backup:\n{ex.Message}",
+                                  "Error",
+                                  MessageBoxButton.OK,
+                                  MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void UnmountBackup_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button btn && btn.Tag is string driveLetter)
+            {
+                var result = MessageBox.Show(
+                    $"Unmount backup drive {driveLetter}?",
+                    "Unmount Backup",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    var (success, error) = BackupMountManager.UnmountBackup(driveLetter);
+
+                    if (success)
+                    {
+                        LoadMountedBackups();
+                        MessageBox.Show($"Drive {driveLetter} unmounted successfully.",
+                                      "Success",
+                                      MessageBoxButton.OK,
+                                      MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show($"Failed to unmount:\n{error}",
+                                      "Unmount Error",
+                                      MessageBoxButton.OK,
+                                      MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
+
+        private void UnmountAll_Click(object sender, RoutedEventArgs e)
+        {
+            var mounted = BackupMountManager.GetMountedBackups();
+
+            if (mounted.Count == 0)
+            {
+                MessageBox.Show("No mounted backups to unmount.",
+                              "No Mounted Backups",
+                              MessageBoxButton.OK,
+                              MessageBoxImage.Information);
+                return;
+            }
+
+            var result = MessageBox.Show(
+                $"Unmount all {mounted.Count} mounted backup drive(s)?",
+                "Unmount All",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                BackupMountManager.UnmountAll();
+                LoadMountedBackups();
+                MessageBox.Show("All backups unmounted successfully.",
+                              "Success",
+                              MessageBoxButton.OK,
+                              MessageBoxImage.Information);
+            }
+        }
+
+        private void AvailableBackups_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (dgAvailableBackups == null || pnlBackupPoints == null)
+                return;
+
+            if (dgAvailableBackups.SelectedItem is AvailableBackupInfo backup)
+            {
+                if (backup.BackupType == "Incremental" || backup.BackupType == "Differential")
+                {
+                    LoadBackupPoints(backup);
+                    pnlBackupPoints.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    pnlBackupPoints.Visibility = Visibility.Collapsed;
+                }
+            }
+        }
+
+        private void LoadAvailableBackups()
+        {
+            if (dgAvailableBackups == null)
+                return;
+
+            var backups = new System.Collections.Generic.List<AvailableBackupInfo>();
+
+            try
+            {
+                // Scan backup directories for VHDX files
+                var jobs = jobManager.GetAllJobs();
+
+                foreach (var job in jobs)
+                {
+                    string destPath = job.DestinationPath;
+
+                    if (System.IO.Directory.Exists(destPath))
+                    {
+                        // Find VHDX files
+                        var vhdxFiles = System.IO.Directory.GetFiles(destPath, "*.vhdx", System.IO.SearchOption.AllDirectories);
+
+                        foreach (var vhdx in vhdxFiles)
+                        {
+                            var fileInfo = new System.IO.FileInfo(vhdx);
+
+                            backups.Add(new AvailableBackupInfo
+                            {
+                                BackupName = job.Name,
+                                BackupType = GetBackupTypeFromPath(vhdx),
+                                BackupDate = fileInfo.LastWriteTime,
+                                BackupPath = vhdx
+                            });
+                        }
+                    }
+                }
+
+                dgAvailableBackups.ItemsSource = backups;
+
+                if (txtNoBackups != null)
+                    txtNoBackups.Visibility = backups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading available backups: {ex.Message}");
+            }
+        }
+
+        private void LoadMountedBackups()
+        {
+            if (dgMountedBackups == null)
+                return;
+
+            var mounted = BackupMountManager.GetMountedBackups();
+            dgMountedBackups.ItemsSource = mounted;
+        }
+
+        private void LoadBackupPoints(AvailableBackupInfo backup)
+        {
+            if (cmbBackupPoints == null)
+                return;
+
+            // For now, just show the main backup
+            // In a full implementation, scan for incremental/differential points
+            var points = new System.Collections.Generic.List<BackupPoint>
+            {
+                new BackupPoint
+                {
+                    PointDate = backup.BackupDate,
+                    PointType = backup.BackupType,
+                    VhdxPath = backup.BackupPath
+                }
+            };
+
+            cmbBackupPoints.ItemsSource = points;
+            cmbBackupPoints.DisplayMemberPath = "DisplayName";
+            if (points.Count > 0)
+                cmbBackupPoints.SelectedIndex = 0;
+        }
+
+        private string GetBackupPointPath(AvailableBackupInfo backup)
+        {
+            if (backup.BackupType == "Incremental" || backup.BackupType == "Differential")
+            {
+                if (cmbBackupPoints?.SelectedItem is BackupPoint point)
+                {
+                    return point.VhdxPath;
+                }
+                return "";
+            }
+            else
+            {
+                return backup.BackupPath;
+            }
+        }
+
+        private string GetBackupTypeFromPath(string path)
+        {
+            string filename = System.IO.Path.GetFileName(path).ToLower();
+
+            if (filename.Contains("full"))
+                return "Full";
+            else if (filename.Contains("incr"))
+                return "Incremental";
+            else if (filename.Contains("diff"))
+                return "Differential";
+            else
+                return "Full"; // Default
+        }
+
+        private void OpenExplorer(string driveLetter)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start("explorer.exe", driveLetter);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to open Explorer: {ex.Message}");
             }
         }
     }

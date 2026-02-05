@@ -1005,30 +1005,52 @@ namespace BackupUI.Windows
             if (pnlCloneOptions == null || pnlBackupDestination == null) 
                 return;
 
-            // Clone to Disk: Show ONLY Clone to Physical Disk field
+            // Clone to Disk: Show ONLY Clone to Physical Disk field + Volume Resize Control
             if (rbCloneDisk?.IsChecked == true)
             {
                 pnlCloneOptions.Visibility = Visibility.Visible;
                 pnlBackupDestination.Visibility = Visibility.Collapsed;
                 txtCloneDestinationLabel.Text = "Clone to Physical Disk:";
+                
+                // Show volume resize control for disk cloning
+                if (grpVolumeResize != null)
+                {
+                    grpVolumeResize.Visibility = Visibility.Visible;
+                    UpdateVolumeResizeControl();
+                }
             }
-            // Clone to Virtual Disk (Hyper-V): Show ONLY Backup Destination field
+            // Clone to Virtual Disk (Hyper-V): Show ONLY Backup Destination field + Volume Resize Control
             else if (rbCloneVirtual?.IsChecked == true)
             {
                 pnlCloneOptions.Visibility = Visibility.Collapsed;
                 pnlBackupDestination.Visibility = Visibility.Visible;
+                
+                // Show volume resize control for virtual disk cloning
+                if (grpVolumeResize != null)
+                {
+                    grpVolumeResize.Visibility = Visibility.Visible;
+                    UpdateVolumeResizeControl();
+                }
             }
-            // Clone Hyper-V System: Show ONLY Backup Destination field (will create HVconfig and HVDisks subdirectories)
+            // Clone Hyper-V System: Show ONLY Backup Destination field (NO volume resize)
             else if (rbCloneHyperV?.IsChecked == true)
             {
                 pnlCloneOptions.Visibility = Visibility.Collapsed;
                 pnlBackupDestination.Visibility = Visibility.Visible;
+                
+                // Hide volume resize for Hyper-V system clone
+                if (grpVolumeResize != null)
+                    grpVolumeResize.Visibility = Visibility.Collapsed;
             }
-            // All other backup types: Show ONLY Backup Destination field
+            // All other backup types: Show ONLY Backup Destination field (NO volume resize)
             else
             {
                 pnlCloneOptions.Visibility = Visibility.Collapsed;
                 pnlBackupDestination.Visibility = Visibility.Visible;
+                
+                // Hide volume resize for non-clone operations
+                if (grpVolumeResize != null)
+                    grpVolumeResize.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -1059,6 +1081,164 @@ namespace BackupUI.Windows
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                 txtCloneDestination.Text = dialog.SelectedPath;
+                
+                // Update volume resize control when destination changes
+                UpdateVolumeResizeControl();
+            }
+        }
+
+        /// <summary>
+        /// Updates the volume resize control based on selected source volumes and target destination
+        /// </summary>
+        private void UpdateVolumeResizeControl()
+        {
+            try
+            {
+                if (volumeResizeControl == null || grpVolumeResize == null)
+                    return;
+
+                // Only for clone operations
+                bool isCloneToDisk = rbCloneDisk?.IsChecked == true;
+                bool isCloneToVirtual = rbCloneVirtual?.IsChecked == true;
+                
+                if (!isCloneToDisk && !isCloneToVirtual)
+                    return;
+
+                // Get selected volumes from tree
+                var selectedVolumes = GetSelectedVolumesForClone();
+                
+                if (selectedVolumes.Count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("No volumes selected for clone");
+                    return;
+                }
+
+                // Get target disk size
+                long targetDiskSize = GetTargetDiskSize();
+                
+                if (targetDiskSize <= 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("No valid target disk size");
+                    return;
+                }
+
+                // Create volume resize information
+                var volumeResizeInfos = new System.Collections.Generic.List<VolumeResizeInfo>();
+                int index = 0;
+
+                foreach (var vol in selectedVolumes)
+                {
+                    volumeResizeInfos.Add(new VolumeResizeInfo
+                    {
+                        Label = vol.Label,
+                        OriginalSize = vol.TotalSize,
+                        DataSize = vol.UsedSpace,
+                        Index = index++
+                    });
+                }
+
+                // Initialize the resize control
+                volumeResizeControl.Initialize(volumeResizeInfos, targetDiskSize);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error updating volume resize control: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Gets the list of selected volumes for cloning with their sizes
+        /// </summary>
+        private System.Collections.Generic.List<(string Label, long TotalSize, long UsedSpace)> GetSelectedVolumesForClone()
+        {
+            var volumes = new System.Collections.Generic.List<(string Label, long TotalSize, long UsedSpace)>();
+
+            try
+            {
+                var driveItems = treeViewDrives.Items.OfType<DriveTreeItem>();
+
+                foreach (var drive in driveItems)
+                {
+                    // Get volumes from this drive
+                    var selectedVolumes = drive.Children
+                        .Where(c => c.ItemType == DriveTreeItemType.Volume && c.IsChecked == true)
+                        .ToList();
+
+                    foreach (var volume in selectedVolumes)
+                    {
+                        // Get volume info from WMI or filesystem
+                        var (totalSize, usedSpace) = GetVolumeSize(volume.FullPath);
+                        volumes.Add((volume.Name, totalSize, usedSpace));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting selected volumes: {ex.Message}");
+            }
+
+            return volumes;
+        }
+
+        /// <summary>
+        /// Gets the size information for a volume
+        /// </summary>
+        private (long TotalSize, long UsedSpace) GetVolumeSize(string volumePath)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(volumePath))
+                    return (0, 0);
+
+                var driveInfo = new System.IO.DriveInfo(volumePath);
+                long totalSize = driveInfo.TotalSize;
+                long usedSpace = totalSize - driveInfo.AvailableFreeSpace;
+
+                return (totalSize, usedSpace);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting volume size for {volumePath}: {ex.Message}");
+                return (100L * 1024 * 1024 * 1024, 50L * 1024 * 1024 * 1024); // Default: 100GB total, 50GB used
+            }
+        }
+
+        /// <summary>
+        /// Gets the target disk size from the clone destination
+        /// </summary>
+        private long GetTargetDiskSize()
+        {
+            try
+            {
+                bool isCloneToDisk = rbCloneDisk?.IsChecked == true;
+                bool isCloneToVirtual = rbCloneVirtual?.IsChecked == true;
+
+                if (isCloneToDisk)
+                {
+                    // For physical disk clones, get the target disk size
+                    string destinationPath = txtCloneDestination.Text;
+                    
+                    if (string.IsNullOrWhiteSpace(destinationPath))
+                        return 500L * 1024 * 1024 * 1024; // Default: 500GB
+
+                    // Try to get actual disk size if it's a disk device
+                    // For now, use drive info
+                    var driveInfo = new System.IO.DriveInfo(System.IO.Path.GetPathRoot(destinationPath));
+                    return driveInfo.TotalSize;
+                }
+                else if (isCloneToVirtual)
+                {
+                    // For virtual disk clones, default to 500GB (user can adjust)
+                    // In a full implementation, you'd allow the user to specify VHDX size
+                    return 500L * 1024 * 1024 * 1024; // Default: 500GB
+                }
+
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting target disk size: {ex.Message}");
+                return 500L * 1024 * 1024 * 1024; // Default: 500GB
             }
         }
 

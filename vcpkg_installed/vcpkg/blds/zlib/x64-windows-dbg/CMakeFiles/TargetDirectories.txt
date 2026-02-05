@@ -1,0 +1,7 @@
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/vcpkg_installed/vcpkg/blds/zlib/x64-windows-dbg/CMakeFiles/zlib.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/vcpkg_installed/vcpkg/blds/zlib/x64-windows-dbg/CMakeFiles/test.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/vcpkg_installed/vcpkg/blds/zlib/x64-windows-dbg/CMakeFiles/edit_cache.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/vcpkg_installed/vcpkg/blds/zlib/x64-windows-dbg/CMakeFiles/rebuild_cache.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/vcpkg_installed/vcpkg/blds/zlib/x64-windows-dbg/CMakeFiles/list_install_components.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/vcpkg_installed/vcpkg/blds/zlib/x64-windows-dbg/CMakeFiles/install.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/vcpkg_installed/vcpkg/blds/zlib/x64-windows-dbg/CMakeFiles/install/local.dir

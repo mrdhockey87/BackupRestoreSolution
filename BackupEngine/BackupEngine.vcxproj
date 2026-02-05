@@ -27,19 +27,38 @@
     <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Configuration)\$(ProjectName)\</IntDir>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);</ExcludePath>
+  </PropertyGroup>
+  <PropertyGroup>
+	<WimLibArch Condition="'$(Platform)'=='Win32'">x86</WimLibArch>
+	<WimLibArch Condition="'$(Platform)'=='x64'">amd64</WimLibArch>
+	<WimLibArch Condition="'$(Platform)'=='ARM'">arm</WimLibArch>
+	<WimLibArch Condition="'$(Platform)'=='ARM64'">arm64</WimLibArch>
+  </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <PreprocessorDefinitions>BACKUPENGINE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <WarningLevel>Level3</WarningLevel>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>VssApi.lib;wbemuuid.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>VssApi.lib;wbemuuid.lib;ole32.lib;oleaut32.lib;wimgapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Lib\$(WimLibArch)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Lib\$(WimLibArch)</AdditionalLibraryDirectories>
+      <ShowProgress Condition="'$(Configuration)|$(Platform)'=='Release|x64'">LinkVerbose</ShowProgress>
+      <ShowProgress Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">LinkVerbose</ShowProgress>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="BackupEngine.h" />
+    <ClInclude Include="BrsFileManager.h" />
+    <ClInclude Include="ShellExtension.h" />
+    <ClInclude Include="VSSSnapshotManager.h" />
+    <ClInclude Include="WimMountManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BackupEngine.cpp" />
@@ -47,17 +66,31 @@
     <ClCompile Include="BackupFiles_Implementation.cpp" />
     <ClCompile Include="BackupInfo_Implementation.cpp" />
     <ClCompile Include="BackupManager_Advanced.cpp" />
+    <ClCompile Include="BrsFileManager.cpp" />
     <ClCompile Include="HyperVBackup_Implementation.cpp" />
     <ClCompile Include="HyperVManager.cpp" />
     <ClCompile Include="HyperV_Enumeration.cpp" />
     <ClCompile Include="RecoveryEnvironment.cpp" />
     <ClCompile Include="RestoreEngine_Advanced.cpp" />
     <ClCompile Include="RestoreEnhanced.cpp" />
+    <ClCompile Include="ShellExtension.cpp" />
     <ClCompile Include="VolumeEnumeration.cpp" />
     <ClCompile Include="VSSManager.cpp" />
     <ClCompile Include="HyperVRestore.cpp" />
     <ClCompile Include="SystemStateRestore.cpp" />
     <ClCompile Include="BackupVerification.cpp" />
+    <ClCompile Include="VSSSnapshotManager.cpp" />
+    <ClCompile Include="WimMountManager.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="..\packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets" Condition="Exists('..\packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets'))" />
+  </Target>
 </Project>
