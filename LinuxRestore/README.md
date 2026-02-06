@@ -1,6 +1,6 @@
 # Backup & Restore - Linux Recovery USB
 
-**Version 4.6.0**
+**Version 5.11.0.7** (Updated with intelligent restore logic)
 
 A lightweight, bootable Linux-based restore solution that works with backups created by the Backup & Restore Windows application.
 
@@ -10,8 +10,23 @@ A lightweight, bootable Linux-based restore solution that works with backups cre
 ? **Small Footprint** - ~500 MB total (vs 2+ GB for WinPE)  
 ? **Fast Boot** - Alpine Linux boots in seconds  
 ? **NTFS Support** - Can restore to Windows partitions  
+? **Intelligent Restore** - Auto-detects disk/volume/file backups (NEW in 5.11.0.7)
 ? **Two Interfaces** - Terminal UI (TUI) or command-line (CLI)  
 ? **Self-Contained** - Everything needed on one USB drive  
+
+---
+
+## What's New in 5.11.0.7
+
+### Intelligent Restore Type Detection
+
+The restore engine now automatically detects backup types:
+- **Disk Images** (.img files) - Warns about manual restore requirement
+- **Volume Backups** (with SystemState) - Restores files, notes system state is Windows-only
+- **Directories** - Standard file restore
+- **Individual Files** - Direct copy with optimizations
+
+This matches the Windows restore functionality for consistent cross-platform recovery.
 
 ---
 

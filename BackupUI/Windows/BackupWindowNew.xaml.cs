@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -19,6 +20,7 @@ namespace BackupUI.Windows
         private ObservableCollection<DriveTreeItem> driveItems = new();
         private readonly JobManager jobManager = new();
         private BackupJob? existingJob = null;
+        private List<string>? _pathsToPreselect = null;  // Paths to pre-select after tree loads
 
         public BackupWindowNew()
         {
@@ -87,10 +89,16 @@ namespace BackupUI.Windows
             chkCompress.IsChecked = job.CompressData;
             chkVerify.IsChecked = job.VerifyAfterBackup;
 
-            if (job.Target == BackupTarget.Disk || job.Target == BackupTarget.Volume)
+            // Store job data for pre-selection after tree loads
+            if (job.Target == BackupTarget.Disk || job.Target == BackupTarget.Volume || job.Target == BackupTarget.FilesAndFolders)
             {
-                // TODO: Pre-select drives/volumes in tree
-                // This will require matching SourcePaths to tree items after LoadDrives completes
+                // Pre-selection will happen in BackupWindowNew_Loaded after drives are loaded
+                // Store the paths to select
+                _pathsToPreselect = new List<string>(job.SourcePaths);
+            }
+            else if (job.IsHyperVBackup)
+            {
+                _pathsToPreselect = new List<string>(job.HyperVMachines);
             }
 
             // Load schedule
@@ -151,6 +159,12 @@ namespace BackupUI.Windows
             try
             {
                 await LoadDrives();
+                
+                // Pre-select items if editing a job
+                if (_pathsToPreselect != null && _pathsToPreselect.Count > 0)
+                {
+                    PreSelectItems(_pathsToPreselect);
+                }
             }
             catch (Exception ex)
             {
@@ -159,6 +173,48 @@ namespace BackupUI.Windows
                     MessageBoxButton.OK, 
                     MessageBoxImage.Error);
             }
+        }
+
+        /// <summary>
+        /// Pre-selects items in the tree based on saved paths
+        /// </summary>
+        private void PreSelectItems(List<string> pathsToSelect)
+        {
+            foreach (var path in pathsToSelect)
+            {
+                PreSelectItemRecursive(driveItems, path);
+            }
+        }
+
+        /// <summary>
+        /// Recursively searches tree and selects matching items
+        /// </summary>
+        private bool PreSelectItemRecursive(IEnumerable<DriveTreeItem> items, string pathToSelect)
+        {
+            foreach (var item in items)
+            {
+                // Normalize paths for comparison
+                var itemPath = item.FullPath?.TrimEnd('\\');
+                var targetPath = pathToSelect?.TrimEnd('\\');
+                
+                if (string.Equals(itemPath, targetPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    item.IsChecked = true;
+                    return true;
+                }
+                
+                // Check children
+                if (item.Children.Count > 0)
+                {
+                    if (PreSelectItemRecursive(item.Children, pathToSelect))
+                    {
+                        // Parent should be partially checked if child is selected
+                        return true;
+                    }
+                }
+            }
+            
+            return false;
         }
 
         private void LoadFoldersForVolume(DriveTreeItem volumeItem)
@@ -1406,7 +1462,7 @@ namespace BackupUI.Windows
                                 break;
 
                             case BackupType.Incremental:
-                                // TODO: Find last backup in destination
+                                // Find last backup in destination
                                 var lastBackup = FindLastBackup(job.DestinationPath);
                                 
                                 foreach (var sourcePath in job.SourcePaths)
@@ -1463,15 +1519,96 @@ namespace BackupUI.Windows
 
         private string? FindLastBackup(string destPath)
         {
-            // TODO: Implement logic to find the most recent backup in destination
-            // For now, return null to trigger full backup
+            try
+            {
+                if (!Directory.Exists(destPath))
+                    return null;
+
+                // Look for backup folders with date pattern: Full_YYYYMMDD_HHMMSS, Incremental_YYYYMMDD_HHMMSS, etc.
+                var backupFolders = Directory.GetDirectories(destPath)
+                    .Where(dir =>
+                    {
+                        var folderName = Path.GetFileName(dir);
+                        return folderName.StartsWith("Full_") ||
+                               folderName.StartsWith("Incremental_") ||
+                               folderName.StartsWith("Differential_");
+                    })
+                    .OrderByDescending(dir => Directory.GetCreationTime(dir))
+                    .ToList();
+
+                if (backupFolders.Count > 0)
+                {
+                    var lastBackupPath = backupFolders[0];
+                    System.Diagnostics.Debug.WriteLine($"Found last backup: {lastBackupPath}");
+                    return lastBackupPath;
+                }
+
+                // If no dated folders found, check for any subdirectories
+                var allFolders = Directory.GetDirectories(destPath)
+                    .OrderByDescending(dir => Directory.GetCreationTime(dir))
+                    .ToList();
+
+                if (allFolders.Count > 0)
+                {
+                    return allFolders[0];
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error finding last backup: {ex.Message}");
+            }
+
             return null;
         }
 
         private string? FindFullBackup(string destPath)
         {
-            // TODO: Implement logic to find the base full backup in destination
-            // For now, return null to trigger full backup
+            try
+            {
+                if (!Directory.Exists(destPath))
+                    return null;
+
+                // Look specifically for Full backup folders
+                var fullBackupFolders = Directory.GetDirectories(destPath)
+                    .Where(dir =>
+                    {
+                        var folderName = Path.GetFileName(dir);
+                        return folderName.StartsWith("Full_", StringComparison.OrdinalIgnoreCase);
+                    })
+                    .OrderByDescending(dir => Directory.GetCreationTime(dir))
+                    .ToList();
+
+                if (fullBackupFolders.Count > 0)
+                {
+                    var fullBackupPath = fullBackupFolders[0];
+                    System.Diagnostics.Debug.WriteLine($"Found full backup: {fullBackupPath}");
+                    return fullBackupPath;
+                }
+
+                // Fallback: If no "Full_" folders, look for oldest backup (likely the base)
+                var allFolders = Directory.GetDirectories(destPath)
+                    .Where(dir =>
+                    {
+                        var folderName = Path.GetFileName(dir);
+                        return folderName.StartsWith("Full_") ||
+                               folderName.StartsWith("Incremental_") ||
+                               folderName.StartsWith("Differential_");
+                    })
+                    .OrderBy(dir => Directory.GetCreationTime(dir))  // Oldest first
+                    .ToList();
+
+                if (allFolders.Count > 0)
+                {
+                    var oldestBackup = allFolders[0];
+                    System.Diagnostics.Debug.WriteLine($"Using oldest backup as full backup: {oldestBackup}");
+                    return oldestBackup;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error finding full backup: {ex.Message}");
+            }
+
             return null;
         }
 

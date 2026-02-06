@@ -220,24 +220,137 @@ BACKUPENGINE_API int RestoreWithManifest(
 
         // Restore each item
         for (const auto& item : itemsToRestore) {
+            // Calculate progress percentage
+            int percentage = (currentItem * 100) / totalItems;
+            
             if (callback) {
-                int percentage = (currentItem * 100) / totalItems;
                 std::wstring msg = L"Restoring: " + item;
                 callback(percentage, msg.c_str());
             }
 
-            // TODO: Implement actual restore logic here
-            // This should call RestoreFiles, RestoreVolume, or RestoreDisk
-            // based on the item type (file/folder/volume/disk)
-
-            // For now, just call RestoreFiles for everything
+            // Determine item type and call appropriate restore function
             std::wstring sourcePath = std::wstring(backupPath) + L"\\" + item;
             std::wstring targetPath = restoreToOriginal ? item : (destination + L"\\" + item);
 
-            int result = RestoreFiles(sourcePath.c_str(), targetPath.c_str(), overwriteExisting, nullptr);
-            if (result != 0) {
-                // Log error but continue with other items
-                // In production, might want to collect errors and report at end
+            // Check what type of item this is
+            if (fs::exists(sourcePath)) {
+                if (fs::is_directory(sourcePath)) {
+                    // Check if it's a volume backup (contains SystemState, disk images, etc.)
+                    std::wstring systemStatePath = sourcePath + L"\\SystemState";
+                    std::wstring diskImagePath = sourcePath + L"\\disk_";
+                    
+                    bool hasSystemState = fs::exists(systemStatePath);
+                    bool hasDiskImage = false;
+                    
+                    // Check for disk images
+                    try {
+                        for (const auto& entry : fs::directory_iterator(sourcePath)) {
+                            if (entry.path().extension() == L".img") {
+                                hasDiskImage = true;
+                                break;
+                            }
+                        }
+                    }
+                    catch (...) {}
+
+                    if (hasDiskImage) {
+                        // This is a disk backup - extract disk number from target
+                        int diskNumber = 0;
+                        
+                        // Try to extract disk number from target path
+                        size_t diskPos = targetPath.find(L"PhysicalDrive");
+                        if (diskPos != std::wstring::npos) {
+                            try {
+                                diskNumber = std::stoi(targetPath.substr(diskPos + 13));
+                            }
+                            catch (...) {
+                                diskNumber = 0; // Default to disk 0
+                            }
+                        }
+                        
+                        // Restore entire disk
+                        int result = RestoreDisk(
+                            sourcePath.c_str(),
+                            diskNumber,
+                            restoreSystemState,
+                            callback
+                        );
+                        
+                        if (result != 0) {
+                            // Log error but continue
+                            if (callback) {
+                                callback(percentage, L"Warning: Failed to restore disk");
+                            }
+                        }
+                    }
+                    else if (hasSystemState || targetPath.length() <= 3) {
+                        // This is a volume backup (has SystemState or target is a drive letter like C:\)
+                        // Restore entire volume
+                        int result = RestoreVolume(
+                            sourcePath.c_str(),
+                            targetPath.c_str(),
+                            restoreSystemState,
+                            callback
+                        );
+                        
+                        if (result != 0) {
+                            // Log error but continue
+                            if (callback) {
+                                callback(percentage, L"Warning: Failed to restore volume");
+                            }
+                        }
+                    }
+                    else {
+                        // Regular directory - restore files
+                        int result = RestoreFiles(
+                            sourcePath.c_str(),
+                            targetPath.c_str(),
+                            overwriteExisting,
+                            callback
+                        );
+                        
+                        if (result != 0) {
+                            // Log error but continue
+                            if (callback) {
+                                callback(percentage, L"Warning: Failed to restore directory");
+                            }
+                        }
+                    }
+                }
+                else {
+                    // Single file - restore it
+                    // Ensure target directory exists
+                    fs::path targetFilePath(targetPath);
+                    fs::path targetDir = targetFilePath.parent_path();
+                    
+                    try {
+                        fs::create_directories(targetDir);
+                    }
+                    catch (...) {}
+                    
+                    // Copy single file
+                    try {
+                        auto copyOptions = overwriteExisting ?
+                            fs::copy_options::overwrite_existing :
+                            fs::copy_options::skip_existing;
+                        
+                        fs::copy_file(sourcePath, targetPath, copyOptions);
+                    }
+                    catch (const std::exception& ex) {
+                        if (callback) {
+                            std::wstring errMsg = L"Warning: Failed to restore file: " +
+                                std::wstring(ex.what(), ex.what() + strlen(ex.what()));
+                            callback(percentage, errMsg.c_str());
+                        }
+                    }
+                }
+            }
+            else {
+                // Source doesn't exist
+                if (callback) {
+                    std::wstring msg = L"Warning: Source not found: " + item;
+                    callback(percentage, msg.c_str());
+                }
             }
 
             currentItem++;

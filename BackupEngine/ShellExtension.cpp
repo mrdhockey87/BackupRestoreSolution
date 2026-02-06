@@ -1,8 +1,13 @@
 #include "ShellExtension.h"
 #include "WimMountManager.h"
 #include <strsafe.h>
-#include <shlwapi.h>  // ADD THIS LINE
-#pragma comment(lib, "shlwapi.lib")  // ADD THIS LINE
+#include <shlwapi.h>
+#pragma comment(lib, "shlwapi.lib")
+
+// Define the CLSID (must be in exactly one .cpp file)
+#include <initguid.h>
+DEFINE_GUID(CLSID_BackupMountContextMenu,
+    0x12345678, 0x1234, 0x1234, 0x12, 0x34, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC);
 
 namespace BackupEngine {
 

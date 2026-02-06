@@ -1,4 +1,5 @@
 #include "WimMountManager.h"
+#include "BackupEngine.h"
 #include <shlobj.h>
 #include <sstream>
 #include <iomanip>
@@ -260,3 +261,79 @@ namespace BackupEngine {
     }
 
 } // namespace BackupEngine
+
+// C exports for P/Invoke from C#
+extern "C" {
+    using namespace BackupEngine;
+
+    BACKUPENGINE_API bool WimMount_MountWim(
+        const wchar_t* wimPath,
+        const wchar_t* backupName,
+        const wchar_t* backupType,
+        wchar_t* mountPath,
+        int mountPathSize,
+        wchar_t* errorMsg,
+        int errorMsgSize
+    ) {
+        if (!WimMountManager::Initialize()) {
+            swprintf_s(errorMsg, errorMsgSize, L"Failed to initialize WimMountManager");
+            return false;
+        }
+
+        return WimMountManager::MountWim(
+            wimPath, backupName, backupType,
+            mountPath, mountPathSize,
+            errorMsg, errorMsgSize
+        );
+    }
+
+    BACKUPENGINE_API bool WimMount_UnmountWim(
+        const wchar_t* mountPath,
+        wchar_t* errorMsg,
+        int errorMsgSize
+    ) {
+        return WimMountManager::UnmountWim(mountPath, errorMsg, errorMsgSize);
+    }
+
+    BACKUPENGINE_API void WimMount_UnmountAll() {
+        WimMountManager::UnmountAll();
+    }
+
+    BACKUPENGINE_API int WimMount_GetMountedCount() {
+        auto mounts = WimMountManager::GetMountedWims();
+        return static_cast<int>(mounts.size());
+    }
+
+    BACKUPENGINE_API bool WimMount_GetMountedInfo(
+        int index,
+        wchar_t* wimPath,
+        int wimPathSize,
+        wchar_t* mountPath,
+        int mountPathSize,
+        wchar_t* backupName,
+        int backupNameSize,
+        wchar_t* backupType,
+        int backupTypeSize,
+        SYSTEMTIME* mountTime  // ? NEW: Return mount time
+    ) {
+        auto mounts = WimMountManager::GetMountedWims();
+
+        if (index < 0 || index >= static_cast<int>(mounts.size())) {
+            return false;
+        }
+
+        const auto& info = mounts[index];
+
+        wcscpy_s(wimPath, wimPathSize, info.wimPath.c_str());
+        wcscpy_s(mountPath, mountPathSize, info.mountPath.c_str());
+        wcscpy_s(backupName, backupNameSize, info.backupName.c_str());
+        wcscpy_s(backupType, backupTypeSize, info.backupType.c_str());
+
+        // Copy mount time
+        if (mountTime) {
+            *mountTime = info.mountTime;
+        }
+
+        return true;
+    }
+}

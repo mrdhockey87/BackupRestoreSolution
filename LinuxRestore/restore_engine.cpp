@@ -414,7 +414,7 @@ private:
     }
 
 public:
-    // NEW: Restore selected items from manifest
+    // Enhanced: Restore selected items from manifest with intelligent type detection (v5.11.0.7)
     bool RestoreWithManifest(
         const std::string& backupPath,
         const std::string& destPath,
@@ -427,39 +427,102 @@ public:
             int currentItem = 0;
 
             for (const auto& item : items) {
+                // Calculate progress percentage
+                int percentage = (currentItem * 100) / totalItems;
+                
                 if (callback) {
-                    int percentage = (currentItem * 100) / totalItems;
                     callback(percentage, "Restoring: " + item);
                 }
 
-                // Determine if item is relative to backup or absolute
+                // Determine paths
                 std::string sourcePath;
                 if (item[0] == '/') {
-                    // Absolute path - find in backup
                     sourcePath = backupPath + item;
                 } else {
                     sourcePath = backupPath + "/" + item;
                 }
 
-                // Determine destination
                 std::string targetPath;
                 if (destPath.empty()) {
-                    // Restore to original location
                     targetPath = item;
                 } else {
-                    // Restore to new location
                     targetPath = destPath + "/" + item;
                 }
 
-                // Restore the item
+                // Intelligent type detection and restore
                 if (fs::exists(sourcePath)) {
                     if (fs::is_directory(sourcePath)) {
-                        RestoreFiles(sourcePath, targetPath, overwrite);
-                    } else {
-                        // Create parent directory
-                        fs::create_directories(fs::path(targetPath).parent_path());
-                        fs::copy_file(sourcePath, targetPath, 
-                            overwrite ? fs::copy_options::overwrite_existing : fs::copy_options::none);
+                        // Check if it's a disk backup (contains .img files)
+                        bool hasDiskImage = false;
+                        bool hasSystemState = false;
+                        
+                        try {
+                            // Check for disk images
+                            for (const auto& entry : fs::directory_iterator(sourcePath)) {
+                                if (entry.path().extension() == ".img") {
+                                    hasDiskImage = true;
+                                    break;
+                                }
+                            }
+                            
+                            // Check for SystemState directory (Windows backup)
+                            hasSystemState = fs::exists(sourcePath + "/SystemState");
+                        } catch (...) {}
+
+                        if (hasDiskImage) {
+                            // This is a disk backup - needs special handling
+                            if (callback) {
+                                callback(percentage, "Disk image detected: " + item);
+                                callback(percentage, "WARNING: Disk restore requires root privileges and target device");
+                                callback(percentage, "Skipping automatic disk restore - use manual dd or restore tools");
+                            }
+                            
+                            // For Linux, we can't automatically restore disk images without:
+                            // 1. Root privileges
+                            // 2. Target device specification
+                            // 3. Confirmation to overwrite
+                            // So we log a warning and skip, or could implement dd command
+                            
+                            // Optional: implement disk restore for Linux
+                            // This would require: sudo dd if=disk_0.img of=/dev/sdX bs=1M status=progress
+                        }
+                        else if (hasSystemState) {
+                            // This is a Windows system state backup
+                            // Linux can't restore Windows registry/BCD, but can restore files
+                            if (callback) {
+                                callback(percentage, "Windows system backup detected: " + item);
+                                callback(percentage, "Restoring files only (system state requires Windows)");
+                            }
+                            
+                            // Restore files excluding SystemState directory
+                            RestoreFiles(sourcePath, targetPath, overwrite);
+                        }
+                        else {
+                            // Regular directory - restore files
+                            RestoreFiles(sourcePath, targetPath, overwrite);
+                        }
+                    }
+                    else {
+                        // Single file - direct copy
+                        try {
+                            fs::create_directories(fs::path(targetPath).parent_path());
+                            
+                            auto copyOptions = overwrite ?
+                                fs::copy_options::overwrite_existing :
+                                fs::copy_options::skip_existing;
+                            
+                            fs::copy_file(sourcePath, targetPath, copyOptions);
+                        } catch (const std::exception& e) {
+                            if (callback) {
+                                callback(percentage, "Warning: Failed to restore file: " + std::string(e.what()));
+                            }
+                        }
+                    }
+                }
+                else {
+                    // Source doesn't exist
+                    if (callback) {
+                        callback(percentage, "Warning: Source not found: " + item);
                     }
                 }
 

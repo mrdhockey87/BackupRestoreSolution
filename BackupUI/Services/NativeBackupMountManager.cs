@@ -45,8 +45,23 @@ namespace BackupUI.Services
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder backupName,
             int backupNameSize,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder backupType,
-            int backupTypeSize
+            int backupTypeSize,
+            out SYSTEMTIME mountTime  // ? NEW: Get mount time from C++
         );
+
+        // SYSTEMTIME structure for interop
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SYSTEMTIME
+        {
+            public ushort wYear;
+            public ushort wMonth;
+            public ushort wDayOfWeek;
+            public ushort wDay;
+            public ushort wHour;
+            public ushort wMinute;
+            public ushort wSecond;
+            public ushort wMilliseconds;
+        }
 
         /// <summary>
         /// Mounted backup information
@@ -187,17 +202,39 @@ namespace BackupUI.Services
                     var mountPath = new StringBuilder(260);
                     var backupName = new StringBuilder(256);
                     var backupType = new StringBuilder(64);
+                    SYSTEMTIME mountTime;
 
                     if (WimMount_GetMountedInfo(i, wimPath, 260, mountPath, 260,
-                                               backupName, 256, backupType, 64))
+                                               backupName, 256, backupType, 64, out mountTime))
                     {
+                        // Convert SYSTEMTIME to DateTime
+                        DateTime mountDateTime;
+                        try
+                        {
+                            mountDateTime = new DateTime(
+                                mountTime.wYear,
+                                mountTime.wMonth,
+                                mountTime.wDay,
+                                mountTime.wHour,
+                                mountTime.wMinute,
+                                mountTime.wSecond,
+                                mountTime.wMilliseconds,
+                                DateTimeKind.Utc  // SYSTEMTIME from GetSystemTime is UTC
+                            ).ToLocalTime();  // Convert to local time for display
+                        }
+                        catch
+                        {
+                            // If conversion fails, use current time as fallback
+                            mountDateTime = DateTime.Now;
+                        }
+
                         result.Add(new MountedBackup
                         {
                             WimPath = wimPath.ToString(),
                             MountPath = mountPath.ToString(),
                             BackupName = backupName.ToString(),
                             BackupType = backupType.ToString(),
-                            MountTime = DateTime.Now // TODO: Get from C++
+                            MountTime = mountDateTime  // ? Now using actual mount time from C++!
                         });
                     }
                 }

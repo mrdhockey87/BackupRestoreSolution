@@ -5,7 +5,7 @@
 #include <wimgapi.h>
 
 #pragma comment(lib, "wimgapi.lib")
-#pragma comment(lib, "zlib.lib")
+//#pragma comment(lib, "zlib.lib")
 
 namespace BackupEngine {
 

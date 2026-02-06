@@ -5,9 +5,8 @@
 #include <string>
 
 // {12345678-1234-1234-1234-123456789ABC} - Generate unique GUID
-// Use guidgen.exe to create a real one
-DEFINE_GUID(CLSID_BackupMountContextMenu,
-    0x12345678, 0x1234, 0x1234, 0x12, 0x34, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC);
+// Declared here, defined in ShellExtension.cpp
+EXTERN_C const GUID CLSID_BackupMountContextMenu;
 
 namespace BackupEngine {
 
