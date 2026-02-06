@@ -414,6 +414,9 @@ namespace BackupUI.Windows
                 // Load Hyper-V systems
                 await LoadHyperVSystems();
 
+                // Load network locations
+                await LoadNetworkDrives();
+
                 // Manually create TreeViewItems for proper hierarchical display
                 foreach (var drive in driveItems)
                 {
@@ -504,8 +507,24 @@ namespace BackupUI.Windows
                 if (e.Source == treeViewItem)
                 {
                     item.IsExpanded = true;
+                    
+                    // Handle "Add Network Path..." click
+                    if (item.ItemType == DriveTreeItemType.NetworkBrowser)
+                    {
+                        var dialog = new NetworkPathDialog();
+                        if (dialog.ShowDialog() == true)
+                        {
+                            AddNetworkPathToTree(dialog.NetworkPath);
+                        }
+                        e.Handled = true;
+                        return;
+                    }
+                    
                     // Load folders for volumes when expanded
-                    if (item.ItemType == DriveTreeItemType.Volume && !item.ChildrenLoaded)
+                    if ((item.ItemType == DriveTreeItemType.Volume || 
+                         item.ItemType == DriveTreeItemType.NetworkDrive || 
+                         item.ItemType == DriveTreeItemType.NetworkShare) && 
+                        !item.ChildrenLoaded)
                     {
                         LoadFoldersForVolume(item);
                         item.ChildrenLoaded = true;
@@ -1019,6 +1038,172 @@ namespace BackupUI.Windows
                 }
                 catch { }
             });
+        }
+
+        private async Task LoadNetworkDrives()
+        {
+            await Task.Run(() =>
+            {
+                try
+                {
+                    var networkRoot = new DriveTreeItem
+                    {
+                        Name = "Network Locations",
+                        FullPath = "",
+                        ItemType = DriveTreeItemType.NetworkRoot
+                    };
+
+                    // Enumerate mapped network drives
+                    foreach (var drive in DriveInfo.GetDrives())
+                    {
+                        try
+                        {
+                            if (drive.DriveType == DriveType.Network && drive.IsReady)
+                            {
+                                var driveName = drive.Name.TrimEnd('\\');
+                                var volumeLabel = string.IsNullOrEmpty(drive.VolumeLabel)
+                                    ? "Network Drive"
+                                    : drive.VolumeLabel;
+
+                                var networkDrive = new DriveTreeItem
+                                {
+                                    Name = $"{driveName} ({volumeLabel}) - Mapped",
+                                    FullPath = drive.Name,
+                                    ItemType = DriveTreeItemType.NetworkDrive,
+                                    Size = drive.TotalSize,
+                                    Parent = networkRoot
+                                };
+
+                                // Add placeholder for folders
+                                networkDrive.Children.Add(new DriveTreeItem
+                                {
+                                    Name = "Loading...",
+                                    ItemType = DriveTreeItemType.Folder,
+                                    Parent = networkDrive
+                                });
+
+                                networkRoot.Children.Add(networkDrive);
+                            }
+                        }
+                        catch
+                        {
+                            // Skip drives that can't be accessed
+                        }
+                    }
+
+                    // Add "Add Network Path..." option
+                    var addNetworkPath = new DriveTreeItem
+                    {
+                        Name = "?? Add Network Path...",
+                        FullPath = "",
+                        ItemType = DriveTreeItemType.NetworkBrowser,
+                        Parent = networkRoot
+                    };
+
+                    networkRoot.Children.Add(addNetworkPath);
+
+                    // Only add Network Locations if there are mapped drives or the add option
+                    if (networkRoot.Children.Count > 0)
+                    {
+                        Dispatcher.Invoke(() => driveItems.Add(networkRoot));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error loading network drives: {ex.Message}");
+                }
+            });
+        }
+
+        /// <summary>
+        /// Adds a UNC network path to the tree
+        /// </summary>
+        private void AddNetworkPathToTree(string uncPath)
+        {
+            try
+            {
+                // Find the Network Locations root
+                var networkRoot = driveItems.FirstOrDefault(d => d.ItemType == DriveTreeItemType.NetworkRoot);
+                
+                if (networkRoot == null)
+                {
+                    MessageBox.Show("Network Locations node not found.", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                // Check if this path already exists
+                var existing = networkRoot.Children
+                    .FirstOrDefault(c => c.FullPath.Equals(uncPath, StringComparison.OrdinalIgnoreCase));
+
+                if (existing != null)
+                {
+                    MessageBox.Show($"Network path already added:\n{uncPath}", "Duplicate Path",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                // Extract server and share name for display
+                var pathParts = uncPath.TrimEnd('\\').Split(new[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                var displayName = pathParts.Length >= 2
+                    ? $"\\\\{pathParts[0]}\\{pathParts[1]}"
+                    : uncPath;
+
+                // Create network share item
+                var networkShare = new DriveTreeItem
+                {
+                    Name = $"{displayName} - Network Share",
+                    FullPath = uncPath.TrimEnd('\\') + "\\",  // Ensure trailing backslash
+                    ItemType = DriveTreeItemType.NetworkShare,
+                    Parent = networkRoot
+                };
+
+                // Add placeholder for folders
+                networkShare.Children.Add(new DriveTreeItem
+                {
+                    Name = "Loading...",
+                    ItemType = DriveTreeItemType.Folder,
+                    Parent = networkShare
+                });
+
+                // Insert before "Add Network Path..." option
+                var addOption = networkRoot.Children
+                    .FirstOrDefault(c => c.ItemType == DriveTreeItemType.NetworkBrowser);
+
+                if (addOption != null)
+                {
+                    var index = networkRoot.Children.IndexOf(addOption);
+                    networkRoot.Children.Insert(index, networkShare);
+                }
+                else
+                {
+                    networkRoot.Children.Add(networkShare);
+                }
+
+                // Refresh the tree view
+                RefreshTreeView();
+
+                MessageBox.Show($"Network path added successfully:\n{uncPath}", "Success",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error adding network path:\n{ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Refreshes the entire tree view
+        /// </summary>
+        private void RefreshTreeView()
+        {
+            treeViewDrives.Items.Clear();
+            foreach (var drive in driveItems)
+            {
+                var treeItem = CreateTreeViewItem(drive);
+                treeViewDrives.Items.Add(treeItem);
+            }
         }
 
         private async void RefreshDrives_Click(object sender, RoutedEventArgs e)

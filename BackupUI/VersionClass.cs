@@ -54,12 +54,12 @@ namespace BackupUI
 				}
 				
 				// Last resort fallback
-				return "5.11.0.10";
+				return "5.12.0.0";
 			}
 			catch
 			{
 				// Fallback version if assembly version fails
-				return "5.11.0.10";
+				return "5.12.0.0";
 			}
 		}
 	}
@@ -68,6 +68,13 @@ namespace BackupUI
 /*
  * 
  * 
+*  Version 5.12.0.0 MAJOR FEATURE - NETWORK PATH SUPPORT: Added full network path support for Windows backup source selection! New "Network
+*					Locations" node in tree view shows mapped network drives automatically. Users can add custom UNC paths (\\server\share)
+*					via new NetworkPathDialog with validation and accessibility checking. Network drives and UNC shares support folder 
+*					browsing just like local volumes. Added 4 new DriveTreeItemType enums: NetworkRoot, NetworkDrive, NetworkShare, 
+*					NetworkBrowser. LoadNetworkDrives enumerates mapped drives, AddNetworkPathToTree handles manual UNC entry. Network 
+*					paths fully integrated into backup selection - no more mapping drives required! Users can now backup directly from 
+*					network shares. Enterprise-ready network backup capability! mdail 2/5/2026
 *  Version 5.11.0.10 ALL 4 TODOs IN BACKUPWINDOWNEW COMPLETE: 1) Pre-select drives/volumes when editing job - added PreSelectItems and 
 *					PreSelectItemRecursive methods to restore saved selections in tree view. 2) Find last backup for incremental - removed 
 *					TODO comment, now functional. 3) FindLastBackup implementation - searches for most recent backup folder (Full_, 

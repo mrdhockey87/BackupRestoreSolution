@@ -138,6 +138,11 @@ namespace BackupUI.Models
         Folder,
         File,
         HyperVSystem,
-        HyperVVolume
+        HyperVVolume,
+        NetworkRoot,        // Root "Network Locations" node
+        NetworkDrive,       // Mapped network drive (Z:\)
+        NetworkShare,       // UNC path (\\server\share)
+        NetworkBrowser      // "Add Network Path..." option
     }
+
 }
