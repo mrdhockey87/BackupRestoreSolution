@@ -54,12 +54,12 @@ namespace BackupUI
 				}
 				
 				// Last resort fallback
-				return "5.12.1.0";
+				return "5.12.2.0";
 			}
 			catch
 			{
 				// Fallback version if assembly version fails
-				return "5.12.1.0";
+				return "5.12.2.0";
 			}
 		}
 	}
@@ -68,6 +68,13 @@ namespace BackupUI
 /*
  * 
  * 
+*  Version 5.12.2.0 SOLUTION STRUCTURE COMPLETE: Added BackupService project to solution and configured LinuxRestore as solution folder!
+*					BackupService (Windows Service) now properly tracked in Git and solution. Project dependencies enforce build order:
+*					BackupEngine → BackupService → BackupUI. BackupService depends on BackupEngine, BackupUI depends on both. LinuxRestore
+*					added as solution folder (not built with Windows projects) - all files visible in Solution Explorer and tracked in Git,
+*					but not part of automatic Windows build. Created Configure-Solution.ps1 script to automate solution configuration. Build
+*					order enforced via ProjectDependencies in .sln file. LinuxRestore builds separately via BUILD-AND-CREATE-ISO.ps1. Complete
+*					enterprise solution structure with proper dependency management! mdail 2/10/2026
 *  Version 5.12.1.0 RUN JOB NOW COMPLETE: Removed TODO in MainWindow.xaml.cs - backup jobs can now be executed directly from main window!
 *					Implemented ExecuteBackupJobWithProgress method that shows progress window with real-time updates. Executes all backup 
 *					types: Hyper-V VMs, disk backups, volume backups, file/folder backups. Uses BackupEngineInterop to call C++ backend 

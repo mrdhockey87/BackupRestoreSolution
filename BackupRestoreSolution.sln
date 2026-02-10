@@ -1,11 +1,33 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36915.13 d17.14
+VisualStudioVersion = 17.14.36915.13
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BackupEngine", "BackupEngine\BackupEngine.vcxproj", "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BackupService", "BackupService\BackupService.csproj", "{8A2486AA-74A1-4445-8692-3ECDE59C3E90}"
+	ProjectSection(ProjectDependencies) = postProject
+		{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942} = {8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}
+	EndProjectSection
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BackupUI", "BackupUI\BackupUI.csproj", "{B8D0E2F3-5E6C-4F9D-A04B-2C3D4E5F6A7B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942} = {8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}
+		{8A2486AA-74A1-4445-8692-3ECDE59C3E90} = {8A2486AA-74A1-4445-8692-3ECDE59C3E90}
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LinuxRestore", "LinuxRestore", "{F1E2D3C4-B5A6-7980-CDEF-123456789ABC}"
+	ProjectSection(SolutionItems) = preProject
+		LinuxRestore\BUILD-AND-CREATE-ISO.ps1 = LinuxRestore\BUILD-AND-CREATE-ISO.ps1
+		LinuxRestore\CMakeLists.txt = LinuxRestore\CMakeLists.txt
+		LinuxRestore\create_bootable_usb.sh = LinuxRestore\create_bootable_usb.sh
+		LinuxRestore\README.md = LinuxRestore\README.md
+		LinuxRestore\restore_cli.cpp = LinuxRestore\restore_cli.cpp
+		LinuxRestore\restore_engine.cpp = LinuxRestore\restore_engine.cpp
+		LinuxRestore\restore_gui_gtk.cpp = LinuxRestore\restore_gui_gtk.cpp
+		LinuxRestore\restore_tui.cpp = LinuxRestore\restore_tui.cpp
+		LinuxRestore\UPDATE_5.11.0.7.md = LinuxRestore\UPDATE_5.11.0.7.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,6 +39,10 @@ Global
 		{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}.Debug|x64.Build.0 = Debug|x64
 		{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}.Release|x64.ActiveCfg = Release|x64
 		{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}.Release|x64.Build.0 = Release|x64
+		{8A2486AA-74A1-4445-8692-3ECDE59C3E90}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8A2486AA-74A1-4445-8692-3ECDE59C3E90}.Debug|x64.Build.0 = Debug|Any CPU
+		{8A2486AA-74A1-4445-8692-3ECDE59C3E90}.Release|x64.ActiveCfg = Release|Any CPU
+		{8A2486AA-74A1-4445-8692-3ECDE59C3E90}.Release|x64.Build.0 = Release|Any CPU
 		{B8D0E2F3-5E6C-4F9D-A04B-2C3D4E5F6A7B}.Debug|x64.ActiveCfg = Debug|x64
 		{B8D0E2F3-5E6C-4F9D-A04B-2C3D4E5F6A7B}.Debug|x64.Build.0 = Debug|x64
 		{B8D0E2F3-5E6C-4F9D-A04B-2C3D4E5F6A7B}.Release|x64.ActiveCfg = Release|x64
@@ -24,5 +50,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 	EndGlobalSection
 EndGlobal
