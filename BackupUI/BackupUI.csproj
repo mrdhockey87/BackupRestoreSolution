@@ -8,10 +8,10 @@
     <Platforms>x64</Platforms>
     <OutputPath>$(SolutionDir)bin\$(Configuration)\</OutputPath>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>5.12.2.0</Version>
-    <AssemblyVersion>5.12.2.0</AssemblyVersion>
-    <FileVersion>5.12.2.0</FileVersion>
-    <InformationalVersion>5.12.2.0</InformationalVersion>
+    <Version>5.12.2.2</Version>
+    <AssemblyVersion>5.12.2.2</AssemblyVersion>
+    <FileVersion>5.12.2.2</FileVersion>
+    <InformationalVersion>5.12.2.2</InformationalVersion>
     <!-- Disable automatic Git commit hash appending to InformationalVersion -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>

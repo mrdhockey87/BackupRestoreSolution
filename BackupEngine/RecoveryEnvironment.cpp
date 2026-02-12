@@ -55,7 +55,7 @@ extern "C" {
                 fs::create_directories(bootPath);
                 fs::create_directories(sourcesPath);
             }
-            catch (const fs::filesystem_error& e) {
+            catch (const fs::filesystem_error&) {
                 SetLastErrorMessage(L"Failed to create directories");
                 return -3;
             }

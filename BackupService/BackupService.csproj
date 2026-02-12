@@ -10,7 +10,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.0" />
-    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.2" />
+  </ItemGroup>
+
+  <!-- Reference to BackupUI for shared models and services -->
+  <ItemGroup>
+    <ProjectReference Include="..\BackupUI\BackupUI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

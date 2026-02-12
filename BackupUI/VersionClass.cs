@@ -54,12 +54,12 @@ namespace BackupUI
 				}
 				
 				// Last resort fallback
-				return "5.12.2.0";
+				return "5.12.2.2";
 			}
 			catch
 			{
 				// Fallback version if assembly version fails
-				return "5.12.2.0";
+				return "5.12.2.2";
 			}
 		}
 	}
@@ -67,14 +67,22 @@ namespace BackupUI
 
 /*
  * 
- * 
+ * Version 5.12.2.2 Removed the unused exception variable e from the catch block at line 58. Changed catch (const fs::filesystem_error& e)
+ *					to catch (const fs::filesystem_error&) to eliminate the C4101 warning about unreferenced local variable. mdail 2/12/2026
+*  Version 5.12.2.1 CONFIGURATION ERROR FIX: Identified and documented solution platform configuration mismatch causing "open configuration
+*					manager" error on solution load. BackupService was configured for Any CPU instead of x64, creating conflict with solution's
+*					x64-only platform. Created Fix-SolutionConfiguration.ps1 script to automatically correct platform mappings in .sln file.
+*					Created SOLUTION_CONFIG_ERROR_FIX.md with three fix options: PowerShell script, Configuration Manager GUI, or manual .sln
+*					edit. Also documented BackupService build issue - duplicate class definitions conflicting with BackupUI references. Created
+*					BACKUPSERVICE_BUILD_FIX.md detailing need to remove duplicate BackupJob/BackupSchedule classes and use BackupUI.Models instead.
+*					All configuration issues identified and documented for resolution! mdail 2/12/2026
 *  Version 5.12.2.0 SOLUTION STRUCTURE COMPLETE: Added BackupService project to solution and configured LinuxRestore as solution folder!
 *					BackupService (Windows Service) now properly tracked in Git and solution. Project dependencies enforce build order:
 *					BackupEngine → BackupService → BackupUI. BackupService depends on BackupEngine, BackupUI depends on both. LinuxRestore
 *					added as solution folder (not built with Windows projects) - all files visible in Solution Explorer and tracked in Git,
 *					but not part of automatic Windows build. Created Configure-Solution.ps1 script to automate solution configuration. Build
 *					order enforced via ProjectDependencies in .sln file. LinuxRestore builds separately via BUILD-AND-CREATE-ISO.ps1. Complete
-*					enterprise solution structure with proper dependency management! mdail 2/10/2026
+*					enterprise solution structure with proper dependency management! mdail 2/12/2026
 *  Version 5.12.1.0 RUN JOB NOW COMPLETE: Removed TODO in MainWindow.xaml.cs - backup jobs can now be executed directly from main window!
 *					Implemented ExecuteBackupJobWithProgress method that shows progress window with real-time updates. Executes all backup 
 *					types: Hyper-V VMs, disk backups, volume backups, file/folder backups. Uses BackupEngineInterop to call C++ backend 
