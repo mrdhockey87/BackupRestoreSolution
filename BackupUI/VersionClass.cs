@@ -54,21 +54,54 @@ namespace BackupUI
 				}
 				
 				// Last resort fallback
-				return "5.12.2.2";
+				return "5.13.2.4";
 			}
 			catch
 			{
 				// Fallback version if assembly version fails
-				return "5.12.2.2";
+				return "5.13.2.4";
 			}
 		}
 	}
 }
 
 /*
- * 
- * Version 5.12.2.2 Removed the unused exception variable e from the catch block at line 58. Changed catch (const fs::filesystem_error& e)
+* Version 5.13.2.4 I used Microsoft Copilot to ask some questions the CENTRALIZED BUILD OUTPUT and Directory.Build.targets seemingly
+*				   getting ignored and I still need to work through some of the issues with that. mdail 2/12/2026
+* Version 5.13.2.3 CENTRALIZED BUILD OUTPUT: Implemented Directory.Build.props solution-wide build configuration! Created root
+*					Directory.Build.props for .NET projects and BackupEngine\Directory.Build.props for C++ project. All builds now output
+*					to unified artifacts\bin\<Configuration>\ directory with intermediate files in artifacts\obj\<Configuration>\<ProjectName>\.
+*					Removed all custom OutputPath settings from individual project files. BackupEngine.dll copy path updated to use new
+*					artifacts location. Consistent build structure across all projects - no more scattered output directories! Enterprise-grade
+*					build organization with proper MSBuild conventions. Clean separation of binaries and intermediate files! mdail 2/12/2026
+* Version 5.12.2.2 Removed the unused exception variable e from the catch block at line 58. Changed catch (const fs::filesystem_error& e)
  *					to catch (const fs::filesystem_error&) to eliminate the C4101 warning about unreferenced local variable. mdail 2/12/2026
+* Version 5.13.0.1 BUILD OUTPUT FIX: Fixed incorrect OutputPath configuration in BackupUI.csproj and BackupService.csproj!
+*					Projects were outputting directly to bin\Debug\ instead of proper .NET structure bin\Debug\net8.0-windows\. 
+*					Removed custom OutputPath property to use default .NET SDK paths. Fixed BackupEngine.dll copy to use correct
+*					source path (BackupEngine\x64\Configuration\) instead of old bin\Configuration\. Build output now properly
+*					organized in standard .NET 8 structure. Clean builds, no duplicate files in wrong locations! mdail 2/12/2026
+* Version 5.13.0.0 MAJOR UPDATE - SERVICE-BASED BACKUP EXECUTION: Completely refactored "Run Now" functionality to delegate to BackupService!
+*					Backups now run in BackupService (Windows Service) instead of UI process - continue running even if UI is closed. Created
+*					BackupServiceCommunication for Named Pipe IPC between service and UI. Created BackupServiceClient for UI-side communication.
+*					Created BackupProgressTracker to track running jobs with progress, cancellation tokens, and completion status. Enhanced
+*					BackupExecutor with ExecuteBackupJobWithProgress supporting progress callbacks, cancellation, and real-time updates. Created
+*					non-modal BackupProgressWindow that shows real-time progress from service, can reconnect after closing, allows user to continue
+*					using UI while backup runs. Added abort backup functionality with confirmation dialog and graceful cancellation. Service logs
+*					directly to BackupLogger for Activity tab integration. Service sends toast notifications on completion. Progress window polls
+*					service every second for updates. Multiple backups can run simultaneously. Removed old blocking ExecuteBackupJobWithProgress
+*					from MainWindow and ScheduleManagementWindow. ENTERPRISE-READY: Backups survive UI crashes/closures, proper separation of
+*					concerns, scalable architecture! mdail 2/12/2026
+* Version 5.12.2.3 SCHEDULE MANAGEMENT WINDOW COMPLETE: Implemented Edit and Run Now functionality in ScheduleManagementWindow!
+*					Edit button now opens BackupWindowNew with the selected job for editing, reloads jobs list after changes.
+*					Run Now button executes backup jobs with full progress window, confirmation dialog, and real-time status updates.
+*					Added ExecuteBackupJobWithProgress method supporting all backup types: Hyper-V VMs, disk backups, volume backups,
+*					and file/folder backups. Integrates with BackupEngineInterop for C++ backend execution. Shows progress percentage,
+*					status messages, and completion notifications. Comprehensive error handling and logging via BackupLogger. Sends
+*					toast notifications for success/failure via NotificationService. Schedule Management window now has complete feature
+*					parity with MainWindow - users can edit and run jobs from either location! mdail 2/12/2026
+* Version 5.12.2.2 Removed the unused exception variable e from the catch block at line 58. Changed catch (const fs::filesystem_error& e)
+*					to catch (const fs::filesystem_error&) to eliminate the C4101 warning about unreferenced local variable. mdail 2/12/2026
 *  Version 5.12.2.1 CONFIGURATION ERROR FIX: Identified and documented solution platform configuration mismatch causing "open configuration
 *					manager" error on solution load. BackupService was configured for Any CPU instead of x64, creating conflict with solution's
 *					x64-only platform. Created Fix-SolutionConfiguration.ps1 script to automatically correct platform mappings in .sln file.

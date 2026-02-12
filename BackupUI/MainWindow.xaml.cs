@@ -78,15 +78,33 @@ namespace BackupUI
                 if (job != null)
                 {
                     var result = MessageBox.Show(
-                        $"Run backup job '{job.Name}' now?",
+                        $"Run backup job '{job.Name}' now?\n\nThe backup will run in the background service and continue even if you close this window.",
                         "Run Backup",
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Question);
 
                     if (result == MessageBoxResult.Yes)
                     {
-                        // Execute backup job with progress window
-                        await ExecuteBackupJobWithProgress(job);
+                        // Send job to service and show progress window
+                        var serviceClient = new Services.BackupServiceClient();
+                        var success = await serviceClient.RunBackupNowAsync(jobId);
+
+                        if (success)
+                        {
+                            BackupLogger.LogInfo(job.Name, "Manual backup started via service");
+                            
+                            // Show non-modal progress window
+                            var progressWindow = new Windows.BackupProgressWindow(jobId, job.Name);
+                            progressWindow.Show();
+                        }
+                        else
+                        {
+                            MessageBox.Show(
+                                "Failed to start backup. Please ensure the BackupRestoreService is running.",
+                                "Service Error",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
+                        }
                     }
                 }
             }
@@ -384,214 +402,6 @@ namespace BackupUI
             catch (Exception ex)
             {
                 throw new Exception($"Failed to move to recycle bin: {ex.Message}", ex);
-            }
-        }
-        
-        /// <summary>
-        /// Execute backup job with progress window
-        /// </summary>
-        private async Task ExecuteBackupJobWithProgress(BackupJob job)
-        {
-            var progressWindow = new Window
-            {
-                Title = $"Running Backup: {job.Name}",
-                Width = 500,
-                Height = 200,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = this,
-                ResizeMode = ResizeMode.NoResize
-            };
-
-            var stackPanel = new StackPanel { Margin = new Thickness(20) };
-            
-            var txtProgress = new TextBlock
-            {
-                Text = "Initializing backup...",
-                FontSize = 14,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-
-            var progressBar = new System.Windows.Controls.ProgressBar
-            {
-                Height = 25,
-                Minimum = 0,
-                Maximum = 100,
-                Value = 0
-            };
-
-            var txtPercentage = new TextBlock
-            {
-                Text = "0%",
-                FontSize = 12,
-                Margin = new Thickness(0, 10, 0, 0),
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
-
-            stackPanel.Children.Add(txtProgress);
-            stackPanel.Children.Add(progressBar);
-            stackPanel.Children.Add(txtPercentage);
-            progressWindow.Content = stackPanel;
-
-            // Show progress window
-            progressWindow.Show();
-
-            bool success = false;
-            string errorMessage = "";
-
-            try
-            {
-                await Task.Run(() =>
-                {
-                    try
-                    {
-                        BackupLogger.LogInfo(job.Name, "Starting backup job execution");
-
-                        // Create progress callback
-                        BackupEngineInterop.ProgressCallback progressCallback = (percentage, message) =>
-                        {
-                            Dispatcher.Invoke(() =>
-                            {
-                                progressBar.Value = percentage;
-                                txtProgress.Text = message ?? $"Progress: {percentage}%";
-                                txtPercentage.Text = $"{percentage}%";
-                            });
-                        };
-
-                        int result = -1;
-
-                        // Execute based on job type
-                        if (job.IsHyperVBackup && job.HyperVMachines.Count > 0)
-                        {
-                            // Hyper-V VM backup
-                            foreach (var vmName in job.HyperVMachines)
-                            {
-                                var vmDestPath = System.IO.Path.Combine(job.DestinationPath, vmName);
-                                
-                                Dispatcher.Invoke(() =>
-                                {
-                                    txtProgress.Text = $"Backing up Hyper-V VM: {vmName}...";
-                                });
-
-                                result = BackupEngineInterop.BackupHyperVVM(vmName, vmDestPath, progressCallback);
-
-                                if (result != 0)
-                                {
-                                    var errorBuffer = new StringBuilder(4096);
-                                    BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
-                                    throw new Exception($"Hyper-V backup failed: {errorBuffer}");
-                                }
-                            }
-                        }
-                        else if (job.Target == BackupTarget.Disk)
-                        {
-                            // Disk backup
-                            foreach (var diskPath in job.SourcePaths)
-                            {
-                                var diskNumStr = diskPath.Replace("\\\\?\\PHYSICALDRIVE", "").Replace("\\\\.\\PHYSICALDRIVE", "");
-                                if (int.TryParse(diskNumStr, out int diskNum))
-                                {
-                                    var diskDestPath = System.IO.Path.Combine(job.DestinationPath, $"Disk{diskNum}");
-                                    
-                                    result = BackupEngineInterop.BackupDisk(
-                                        diskNum, diskDestPath, job.IncludeSystemState, 
-                                        job.CompressData, progressCallback);
-
-                                    if (result != 0)
-                                    {
-                                        var errorBuffer = new StringBuilder(4096);
-                                        BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
-                                        throw new Exception($"Disk backup failed: {errorBuffer}");
-                                    }
-                                }
-                            }
-                        }
-                        else if (job.Target == BackupTarget.Volume)
-                        {
-                            // Volume backup
-                            foreach (var volumePath in job.SourcePaths)
-                            {
-                                var volumeName = volumePath.TrimEnd('\\').Replace(":", "");
-                                var volumeDestPath = System.IO.Path.Combine(job.DestinationPath, volumeName);
-                                
-                                result = BackupEngineInterop.BackupVolume(
-                                    volumePath, volumeDestPath, job.IncludeSystemState,
-                                    job.CompressData, progressCallback);
-
-                                if (result != 0)
-                                {
-                                    var errorBuffer = new StringBuilder(4096);
-                                    BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
-                                    throw new Exception($"Volume backup failed: {errorBuffer}");
-                                }
-                            }
-                        }
-                        else if (job.Target == BackupTarget.FilesAndFolders)
-                        {
-                            // Files/Folders backup
-                            foreach (var sourcePath in job.SourcePaths)
-                            {
-                                result = BackupEngineInterop.BackupFiles(
-                                    sourcePath, job.DestinationPath, progressCallback);
-
-                                if (result != 0)
-                                {
-                                    var errorBuffer = new StringBuilder(4096);
-                                    BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
-                                    throw new Exception($"File backup failed: {errorBuffer}");
-                                }
-                            }
-                        }
-
-                        Dispatcher.Invoke(() =>
-                        {
-                            progressBar.Value = 100;
-                            txtProgress.Text = "Backup completed successfully!";
-                            txtPercentage.Text = "100%";
-                        });
-
-                        BackupLogger.LogSuccess(job.Name, "Backup completed successfully", job.DestinationPath);
-                        success = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        errorMessage = ex.Message;
-                        BackupLogger.LogError(job.Name, "Backup failed", ex.Message);
-                        success = false;
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                errorMessage = ex.Message;
-                success = false;
-            }
-            finally
-            {
-                progressWindow.Close();
-            }
-
-            // Show result
-            if (success)
-            {
-                MessageBox.Show(
-                    $"Backup job '{job.Name}' completed successfully!\n\nFiles saved to:\n{job.DestinationPath}",
-                    "Backup Complete",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-
-                // Send success notification
-                NotificationService.ShowBackupSuccessNotification(job.Name);
-            }
-            else
-            {
-                MessageBox.Show(
-                    $"Backup job '{job.Name}' failed!\n\nError: {errorMessage}\n\nCheck Activity log for details.",
-                    "Backup Failed",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-
-                // Send failure notification
-                NotificationService.ShowBackupFailureNotification(job.Name, errorMessage);
             }
         }
         

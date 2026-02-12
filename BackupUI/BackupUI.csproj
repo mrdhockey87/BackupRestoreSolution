@@ -6,12 +6,11 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Platforms>x64</Platforms>
-    <OutputPath>$(SolutionDir)bin\$(Configuration)\</OutputPath>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>5.12.2.2</Version>
-    <AssemblyVersion>5.12.2.2</AssemblyVersion>
-    <FileVersion>5.12.2.2</FileVersion>
-    <InformationalVersion>5.12.2.2</InformationalVersion>
+    <Version>5.13.2.4</Version>
+    <AssemblyVersion>5.13.2.4</AssemblyVersion>
+    <FileVersion>5.13.2.4</FileVersion>
+    <InformationalVersion>5.13.2.4</InformationalVersion>
     <!-- Disable automatic Git commit hash appending to InformationalVersion -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
@@ -22,13 +21,13 @@
     <PackageReference Include="zlib-msvc-x64" Version="1.2.11.8900" />
   </ItemGroup>
   
-  <!-- Copy BackupEngine.dll to output directory after build -->
+  <!-- Copy BackupEngine.dll to centralized output directory after C++ build -->
   <Target Name="CopyBackupEngine" AfterTargets="Build">
     <ItemGroup>
-      <BackupEngineDll Include="$(SolutionDir)bin\$(Configuration)\BackupEngine.dll" />
+      <BackupEngineDll Include="$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll" />
     </ItemGroup>
-    <Copy SourceFiles="@(BackupEngineDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
-    <Message Text="Copied BackupEngine.dll to $(OutDir)" Importance="high" Condition="Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
-    <Warning Text="BackupEngine.dll not found at $(SolutionDir)bin\$(Configuration)\BackupEngine.dll - Build BackupEngine project first!" Condition="!Exists('$(SolutionDir)bin\$(Configuration)\BackupEngine.dll')" />
+    <Copy SourceFiles="@(BackupEngineDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
+    <Message Text="Copied BackupEngine.dll to centralized output: $(OutDir)" Importance="high" Condition="Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
+    <Warning Text="BackupEngine.dll not found - Build BackupEngine C++ project first!" Condition="!Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
   </Target>
 </Project>

@@ -24,17 +24,17 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
-    <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)obj\$(Configuration)\$(ProjectName)\</IntDir>
+    <OutDir>$(ArtifactsBin)$(Configuration)\</OutDir>
+    <IntDir>$(ArtifactsObj)$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);</ExcludePath>
   </PropertyGroup>
   <PropertyGroup>
-	<WimLibArch Condition="'$(Platform)'=='Win32'">x86</WimLibArch>
-	<WimLibArch Condition="'$(Platform)'=='x64'">amd64</WimLibArch>
-	<WimLibArch Condition="'$(Platform)'=='ARM'">arm</WimLibArch>
-	<WimLibArch Condition="'$(Platform)'=='ARM64'">arm64</WimLibArch>
+    <WimLibArch Condition="'$(Platform)'=='Win32'">x86</WimLibArch>
+    <WimLibArch Condition="'$(Platform)'=='x64'">amd64</WimLibArch>
+    <WimLibArch Condition="'$(Platform)'=='ARM'">arm</WimLibArch>
+    <WimLibArch Condition="'$(Platform)'=='ARM64'">arm64</WimLibArch>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -83,6 +83,7 @@
     <ClCompile Include="WimMountManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Directory.Build.props" />
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

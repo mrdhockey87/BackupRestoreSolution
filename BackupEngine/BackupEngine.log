@@ -1,0 +1,3308 @@
+﻿  BackupEngine.cpp
+  BackupEngine_Exports.cpp
+  BackupFiles_Implementation.cpp
+  BackupInfo_Implementation.cpp
+  BackupManager_Advanced.cpp
+  BrsFileManager.cpp
+  HyperVBackup_Implementation.cpp
+  HyperVManager.cpp
+  HyperV_Enumeration.cpp
+  RecoveryEnvironment.cpp
+  RestoreEngine_Advanced.cpp
+  RestoreEnhanced.cpp
+  ShellExtension.cpp
+  VolumeEnumeration.cpp
+  VSSManager.cpp
+  HyperVRestore.cpp
+  SystemStateRestore.cpp
+  BackupVerification.cpp
+  VSSSnapshotManager.cpp
+  WimMountManager.cpp
+  Generating Code...
+  Starting pass 1
+  Processed /DEFAULTLIB:uuid.lib
+  Processed /DEFAULTLIB:msvcprt
+  Processed /DEFAULTLIB:MSVCRT
+  Processed /DEFAULTLIB:OLDNAMES
+  Processed /DEFAULTLIB:VssApi.lib
+  Processed /DEFAULTLIB:ole32.lib
+  Processed /DEFAULTLIB:wimgapi.lib
+  Processed /DEFAULTLIB:comsuppw.lib
+  Processed /DEFAULTLIB:user32.lib
+  Processed /DEFAULTLIB:oleaut32.lib
+  Processed /DEFAULTLIB:atls.lib
+  Processed /DEFAULTLIB:kernel32.lib
+  Processed /DEFAULTLIB:advapi32.lib
+  Processed /DEFAULTLIB:shell32.lib
+  Processed /DEFAULTLIB:shlwapi.lib
+  Processed /DEFAULTLIB:wbemuuid.lib
+  Searching libraries
+      Searching E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\packages\zlib-msvc-x64.1.2.11.8900\build\native\..\..\\build\native\lib_debug\zlibstaticd.lib:
+        Found gzread
+          Referenced in BrsFileManager.obj
+          Loaded zlibstaticd.lib(gzread.obj)
+  Processed /DEFAULTLIB:MSVCRTD
+        Found gzwrite
+          Referenced in BrsFileManager.obj
+          Loaded zlibstaticd.lib(gzwrite.obj)
+        Found gzclose
+          Referenced in BrsFileManager.obj
+          Loaded zlibstaticd.lib(gzclose.obj)
+        Found gzopen_w
+          Referenced in BrsFileManager.obj
+          Loaded zlibstaticd.lib(gzlib.obj)
+        Found inflate
+          Referenced in zlibstaticd.lib(gzread.obj)
+          Loaded zlibstaticd.lib(inflate.obj)
+        Found deflate
+          Referenced in zlibstaticd.lib(gzwrite.obj)
+          Loaded zlibstaticd.lib(deflate.obj)
+        Found adler32
+          Referenced in zlibstaticd.lib(inflate.obj)
+          Referenced in zlibstaticd.lib(deflate.obj)
+          Loaded zlibstaticd.lib(adler32.obj)
+        Found crc32
+          Referenced in zlibstaticd.lib(inflate.obj)
+          Referenced in zlibstaticd.lib(deflate.obj)
+          Loaded zlibstaticd.lib(crc32.obj)
+        Found zcalloc
+          Referenced in zlibstaticd.lib(inflate.obj)
+          Referenced in zlibstaticd.lib(deflate.obj)
+          Loaded zlibstaticd.lib(zutil.obj)
+        Found inflate_table
+          Referenced in zlibstaticd.lib(inflate.obj)
+          Loaded zlibstaticd.lib(inftrees.obj)
+        Found inflate_fast
+          Referenced in zlibstaticd.lib(inflate.obj)
+          Loaded zlibstaticd.lib(inffast.obj)
+        Found _length_code
+          Referenced in zlibstaticd.lib(deflate.obj)
+          Loaded zlibstaticd.lib(trees.obj)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\VssApi.lib:
+        Found CreateVssBackupComponentsInternal
+          Referenced in VSSSnapshotManager.obj
+          Loaded VssApi.lib(VSSAPI.DLL)
+        Found VssFreeSnapshotPropertiesInternal
+          Referenced in VSSSnapshotManager.obj
+          Loaded VssApi.lib(VSSAPI.DLL)
+        Found __IMPORT_DESCRIPTOR_VSSAPI
+          Referenced in VssApi.lib(VSSAPI.DLL)
+          Referenced in VssApi.lib(VSSAPI.DLL)
+          Loaded VssApi.lib(VSSAPI.DLL)
+        Found __NULL_IMPORT_DESCRIPTOR
+          Referenced in VssApi.lib(VSSAPI.DLL)
+          Loaded VssApi.lib(VSSAPI.DLL)
+        Found VSSAPI_NULL_THUNK_DATA
+          Referenced in VssApi.lib(VSSAPI.DLL)
+          Loaded VssApi.lib(VSSAPI.DLL)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wbemuuid.lib:
+        Found IID_IWbemLocator
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in HyperVRestore.obj
+          Loaded wbemuuid.lib(wbemcli_i.obj)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+        Found __imp_CoUninitialize
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in VSSSnapshotManager.obj
+          Loaded ole32.lib(ole32.dll)
+        Found __imp_CoInitializeEx
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in VSSSnapshotManager.obj
+          Loaded ole32.lib(ole32.dll)
+        Found __imp_CoSetProxyBlanket
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in HyperVRestore.obj
+          Loaded ole32.lib(ole32.dll)
+        Found __imp_CoCreateInstance
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in HyperVRestore.obj
+          Loaded ole32.lib(ole32.dll)
+        Found __imp_StringFromGUID2
+          Referenced in ShellExtension.obj
+          Loaded ole32.lib(ole32.dll)
+        Found __imp_ReleaseStgMedium
+          Referenced in ShellExtension.obj
+          Loaded ole32.lib(ole32.dll)
+        Found __imp_CoInitializeSecurity
+          Referenced in VSSSnapshotManager.obj
+          Loaded ole32.lib(ole32.dll)
+        Found __IMPORT_DESCRIPTOR_ole32
+          Referenced in ole32.lib(ole32.dll)
+          Referenced in ole32.lib(ole32.dll)
+          Referenced in ole32.lib(ole32.dll)
+          Referenced in ole32.lib(ole32.dll)
+          Referenced in ole32.lib(ole32.dll)
+          Referenced in ole32.lib(ole32.dll)
+          Referenced in ole32.lib(ole32.dll)
+          Loaded ole32.lib(ole32.dll)
+        Found ole32_NULL_THUNK_DATA
+          Referenced in ole32.lib(ole32.dll)
+          Loaded ole32.lib(ole32.dll)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+        Found __imp_SysAllocString
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in HyperVRestore.obj
+          Loaded oleaut32.lib(OLEAUT32.dll)
+        Found __imp_SysFreeString
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in HyperVRestore.obj
+          Loaded oleaut32.lib(OLEAUT32.dll)
+        Found __imp_VariantInit
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded oleaut32.lib(OLEAUT32.dll)
+        Found __imp_VariantClear
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in HyperVRestore.obj
+          Loaded oleaut32.lib(OLEAUT32.dll)
+        Found __IMPORT_DESCRIPTOR_OLEAUT32
+          Referenced in oleaut32.lib(OLEAUT32.dll)
+          Referenced in oleaut32.lib(OLEAUT32.dll)
+          Referenced in oleaut32.lib(OLEAUT32.dll)
+          Referenced in oleaut32.lib(OLEAUT32.dll)
+          Loaded oleaut32.lib(OLEAUT32.dll)
+        Found OLEAUT32_NULL_THUNK_DATA
+          Referenced in oleaut32.lib(OLEAUT32.dll)
+          Loaded oleaut32.lib(OLEAUT32.dll)
+      Searching C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Lib\amd64\wimgapi.lib:
+        Found WIMCreateFile
+          Referenced in BrsFileManager.obj
+          Referenced in WimMountManager.obj
+          Loaded wimgapi.lib(WIMGAPI.DLL)
+        Found WIMCloseHandle
+          Referenced in BrsFileManager.obj
+          Referenced in WimMountManager.obj
+          Loaded wimgapi.lib(WIMGAPI.DLL)
+        Found WIMGetImageCount
+          Referenced in WimMountManager.obj
+          Loaded wimgapi.lib(WIMGAPI.DLL)
+        Found WIMLoadImage
+          Referenced in WimMountManager.obj
+          Loaded wimgapi.lib(WIMGAPI.DLL)
+        Found WIMMountImage
+          Referenced in WimMountManager.obj
+          Loaded wimgapi.lib(WIMGAPI.DLL)
+        Found WIMUnmountImage
+          Referenced in WimMountManager.obj
+          Loaded wimgapi.lib(WIMGAPI.DLL)
+        Found __IMPORT_DESCRIPTOR_WIMGAPI
+          Referenced in wimgapi.lib(WIMGAPI.DLL)
+          Referenced in wimgapi.lib(WIMGAPI.DLL)
+          Referenced in wimgapi.lib(WIMGAPI.DLL)
+          Referenced in wimgapi.lib(WIMGAPI.DLL)
+          Referenced in wimgapi.lib(WIMGAPI.DLL)
+          Referenced in wimgapi.lib(WIMGAPI.DLL)
+          Loaded wimgapi.lib(WIMGAPI.DLL)
+        Found WIMGAPI_NULL_THUNK_DATA
+          Referenced in wimgapi.lib(WIMGAPI.DLL)
+          Loaded wimgapi.lib(WIMGAPI.DLL)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+        Found __imp_GetFileAttributesW
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_SetFileAttributesW
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetLastError
+          Referenced in ShellExtension.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CopyFileExW
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetModuleHandleA
+          Referenced in BackupEngine_Exports.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetProcAddress
+          Referenced in BackupEngine_Exports.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CreateFileW
+          Referenced in BackupVerification.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetFileTime
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_SetFileTime
+          Referenced in BackupFiles_Implementation.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CloseHandle
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CompareFileTime
+          Referenced in BackupManager_Advanced.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_ReadFile
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in SystemStateRestore.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_WriteFile
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_DeviceIoControl
+          Referenced in BackupManager_Advanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetLocalTime
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_DeleteFileW
+          Referenced in BrsFileManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetFileAttributesExW
+          Referenced in BrsFileManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetSystemTime
+          Referenced in BrsFileManager.obj
+          Referenced in WimMountManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_DecodePointer
+          Referenced in HyperVBackup_Implementation.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_InitializeCriticalSectionEx
+          Referenced in HyperVBackup_Implementation.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_DeleteCriticalSection
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in WimMountManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_Sleep
+          Referenced in HyperVBackup_Implementation.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetDriveTypeW
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetFileSizeEx
+          Referenced in RestoreEngine_Advanced.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_DisableThreadLibraryCalls
+          Referenced in ShellExtension.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetModuleFileNameW
+          Referenced in ShellExtension.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GlobalUnlock
+          Referenced in ShellExtension.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GlobalLock
+          Referenced in ShellExtension.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_FindFirstVolumeW
+          Referenced in VolumeEnumeration.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_FindNextVolumeW
+          Referenced in VolumeEnumeration.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_FindVolumeClose
+          Referenced in VolumeEnumeration.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetDiskFreeSpaceExW
+          Referenced in VolumeEnumeration.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetVolumeInformationW
+          Referenced in VolumeEnumeration.obj
+          Referenced in VSSSnapshotManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetVolumePathNamesForVolumeNameW
+          Referenced in VolumeEnumeration.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CreatePipe
+          Referenced in SystemStateRestore.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_WaitForSingleObject
+          Referenced in SystemStateRestore.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetExitCodeProcess
+          Referenced in SystemStateRestore.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CreateProcessW
+          Referenced in SystemStateRestore.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetVolumePathNameW
+          Referenced in VSSSnapshotManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CreateDirectoryW
+          Referenced in WimMountManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_RemoveDirectoryW
+          Referenced in WimMountManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetTempPathW
+          Referenced in WimMountManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_InitializeCriticalSection
+          Referenced in WimMountManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_EnterCriticalSection
+          Referenced in WimMountManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_LeaveCriticalSection
+          Referenced in WimMountManager.obj
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __IMPORT_DESCRIPTOR_KERNEL32
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found KERNEL32_NULL_THUNK_DATA
+          Referenced in kernel32.lib(KERNEL32.dll)
+          Loaded kernel32.lib(KERNEL32.dll)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+        Found __imp_UnregisterClassW
+          Referenced in HyperVBackup_Implementation.obj
+          Loaded user32.lib(USER32.dll)
+        Found __imp_InsertMenuItemW
+          Referenced in ShellExtension.obj
+          Loaded user32.lib(USER32.dll)
+        Found __imp_MessageBoxW
+          Referenced in ShellExtension.obj
+          Loaded user32.lib(USER32.dll)
+        Found __IMPORT_DESCRIPTOR_USER32
+          Referenced in user32.lib(USER32.dll)
+          Referenced in user32.lib(USER32.dll)
+          Referenced in user32.lib(USER32.dll)
+          Loaded user32.lib(USER32.dll)
+        Found USER32_NULL_THUNK_DATA
+          Referenced in user32.lib(USER32.dll)
+          Loaded user32.lib(USER32.dll)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+        Found __imp_RegCloseKey
+          Referenced in ShellExtension.obj
+          Loaded advapi32.lib(ADVAPI32.dll)
+        Found __imp_RegCreateKeyExW
+          Referenced in ShellExtension.obj
+          Loaded advapi32.lib(ADVAPI32.dll)
+        Found __imp_RegDeleteValueW
+          Referenced in ShellExtension.obj
+          Loaded advapi32.lib(ADVAPI32.dll)
+        Found __imp_RegOpenKeyExW
+          Referenced in ShellExtension.obj
+          Loaded advapi32.lib(ADVAPI32.dll)
+        Found __imp_RegSetValueExW
+          Referenced in ShellExtension.obj
+          Loaded advapi32.lib(ADVAPI32.dll)
+        Found __imp_RegDeleteTreeW
+          Referenced in ShellExtension.obj
+          Loaded advapi32.lib(ADVAPI32.dll)
+        Found __IMPORT_DESCRIPTOR_ADVAPI32
+          Referenced in advapi32.lib(ADVAPI32.dll)
+          Referenced in advapi32.lib(ADVAPI32.dll)
+          Referenced in advapi32.lib(ADVAPI32.dll)
+          Referenced in advapi32.lib(ADVAPI32.dll)
+          Referenced in advapi32.lib(ADVAPI32.dll)
+          Referenced in advapi32.lib(ADVAPI32.dll)
+          Loaded advapi32.lib(ADVAPI32.dll)
+        Found ADVAPI32_NULL_THUNK_DATA
+          Referenced in advapi32.lib(ADVAPI32.dll)
+          Loaded advapi32.lib(ADVAPI32.dll)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+        Found __imp_DragQueryFileW
+          Referenced in ShellExtension.obj
+          Loaded shell32.lib(SHELL32.dll)
+        Found __imp_SHChangeNotify
+          Referenced in ShellExtension.obj
+          Loaded shell32.lib(SHELL32.dll)
+        Found __IMPORT_DESCRIPTOR_SHELL32
+          Referenced in shell32.lib(SHELL32.dll)
+          Referenced in shell32.lib(SHELL32.dll)
+          Loaded shell32.lib(SHELL32.dll)
+        Found SHELL32_NULL_THUNK_DATA
+          Referenced in shell32.lib(SHELL32.dll)
+          Loaded shell32.lib(SHELL32.dll)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+        Found IID_IUnknown
+          Referenced in ShellExtension.obj
+          Loaded uuid.lib(unknwn_i.obj)
+        Found GUID_NULL
+          Referenced in VSSSnapshotManager.obj
+          Loaded uuid.lib(cguid_i.obj)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbc32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbccp32.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\msvcprt.lib:
+        Found "void __cdecl std::_Xbad_alloc(void)" (?_Xbad_alloc@std@@YAXXZ)
+          Referenced in BackupVerification.obj
+          Referenced in WimMountManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "void __cdecl std::_Xlength_error(char const *)" (?_Xlength_error@std@@YAXPEBD@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "void __cdecl std::_Xout_of_range(char const *)" (?_Xout_of_range@std@@YAXPEBD@Z)
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in BrsFileManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found __std_system_error_allocate_message
+          Referenced in BackupVerification.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded msvcprt.lib(syserror_import_lib.obj)
+        Found "char const * __cdecl std::_Syserror_map(int)" (?_Syserror_map@std@@YAPEBDH@Z)
+          Referenced in BackupVerification.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "int __cdecl std::_Winerror_map(int)" (?_Winerror_map@std@@YAHH@Z)
+          Referenced in BackupVerification.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found __std_fs_open_handle
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded msvcprt.lib(filesystem.obj)
+        Found "__declspec(dllimport) public: struct _Cvtvec __cdecl std::_Locinfo::_Getcvt(void)const " (__imp_?_Getcvt@_Locinfo@std@@QEBA?AU_Cvtvec@@XZ)
+          Referenced in BackupVerification.obj
+          Referenced in WimMountManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: unsigned short const * __cdecl std::_Locinfo::_W_Getdays(void)const " (__imp_?_W_Getdays@_Locinfo@std@@QEBAPEBGXZ)
+          Referenced in BackupVerification.obj
+          Referenced in WimMountManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: unsigned short const * __cdecl std::_Locinfo::_W_Getmonths(void)const " (__imp_?_W_Getmonths@_Locinfo@std@@QEBAPEBGXZ)
+          Referenced in BackupVerification.obj
+          Referenced in WimMountManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __cdecl std::_Lockit::_Lockit(int)" (__imp_??0_Lockit@std@@QEAA@H@Z)
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __cdecl std::_Lockit::~_Lockit(void)" (__imp_??1_Lockit@std@@QEAA@XZ)
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "bool __cdecl std::uncaught_exception(void)" (?uncaught_exception@std@@YA_NXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "void __cdecl std::_Facet_Register(class std::_Facet_base *)" (?_Facet_Register@std@@YAXPEAV_Facet_base@1@@Z)
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(locale0_implib.obj)
+        Found "private: static class std::locale::_Locimp * __cdecl std::locale::_Getgloballocale(void)" (?_Getgloballocale@locale@std@@CAPEAV_Locimp@12@XZ)
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: bool __cdecl std::codecvt_base::always_noconv(void)const " (__imp_?always_noconv@codecvt_base@std@@QEBA_NXZ)
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: int __cdecl std::codecvt<wchar_t,char,struct _Mbstatet>::in(struct _Mbstatet &,char const *,char const *,char const * &,wchar_t *,wchar_t *,wchar_t * &)const " (__imp_?in@?$codecvt@_WDU_Mbstatet@@@std@@QEBAHAEAU_Mbstatet@@PEBD1AEAPEBDPEA_W3AEAPEA_W@Z)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: int __cdecl std::codecvt<wchar_t,char,struct _Mbstatet>::out(struct _Mbstatet &,wchar_t const *,wchar_t const *,wchar_t const * &,char *,char *,char * &)const " (__imp_?out@?$codecvt@_WDU_Mbstatet@@@std@@QEBAHAEAU_Mbstatet@@PEB_W1AEAPEB_WPEAD3AEAPEAD@Z)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: int __cdecl std::codecvt<wchar_t,char,struct _Mbstatet>::unshift(struct _Mbstatet &,char *,char *,char * &)const " (__imp_?unshift@?$codecvt@_WDU_Mbstatet@@@std@@QEBAHAEAU_Mbstatet@@PEAD1AEAPEAD@Z)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: static unsigned __int64 __cdecl std::codecvt<wchar_t,char,struct _Mbstatet>::_Getcat(class std::locale::facet const * *,class std::locale const *)" (__imp_?_Getcat@?$codecvt@_WDU_Mbstatet@@@std@@SA_KPEAPEBVfacet@locale@2@PEBV42@@Z)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: wchar_t __cdecl std::ctype<wchar_t>::widen(char)const " (__imp_?widen@?$ctype@_W@std@@QEBA_WD@Z)
+          Referenced in BackupFiles_Implementation.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: static unsigned __int64 __cdecl std::ctype<wchar_t>::_Getcat(class std::locale::facet const * *,class std::locale const *)" (__imp_?_Getcat@?$ctype@_W@std@@SA_KPEAPEBVfacet@locale@2@PEBV42@@Z)
+          Referenced in BackupFiles_Implementation.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: bool __cdecl std::ios_base::good(void)const " (__imp_?good@ios_base@std@@QEBA_NXZ)
+          Referenced in VolumeEnumeration.obj
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: int __cdecl std::ios_base::flags(void)const " (__imp_?flags@ios_base@std@@QEBAHXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __int64 __cdecl std::ios_base::width(void)const " (__imp_?width@ios_base@std@@QEBA_JXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __int64 __cdecl std::ios_base::width(__int64)" (__imp_?width@ios_base@std@@QEAA_J_J@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::locale __cdecl std::ios_base::getloc(void)const " (__imp_?getloc@ios_base@std@@QEBA?AVlocale@2@XZ)
+          Referenced in BackupFiles_Implementation.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >(void)" (__imp_??0?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEAA@XZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: virtual __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::~basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >(void)" (__imp_??1?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@UEAA@XZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::locale __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::getloc(void)const " (__imp_?getloc@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@QEBA?AVlocale@2@XZ)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: unsigned short __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::sputc(wchar_t)" (__imp_?sputc@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@QEAAG_W@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __int64 __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::sputn(wchar_t const *,__int64)" (__imp_?sputn@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@QEAA_JPEB_W_J@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: wchar_t * __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::eback(void)const " (__imp_?eback@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEBAPEA_WXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: wchar_t * __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::gptr(void)const " (__imp_?gptr@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEBAPEA_WXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: wchar_t * __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::pptr(void)const " (__imp_?pptr@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEBAPEA_WXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: wchar_t * __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::egptr(void)const " (__imp_?egptr@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEBAPEA_WXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: void __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::setg(wchar_t *,wchar_t *,wchar_t *)" (__imp_?setg@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEAAXPEA_W00@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: wchar_t * __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::epptr(void)const " (__imp_?epptr@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEBAPEA_WXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: wchar_t * __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::_Gndec(void)" (__imp_?_Gndec@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEAAPEA_WXZ)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: wchar_t * __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::_Gninc(void)" (__imp_?_Gninc@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEAAPEA_WXZ)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: wchar_t * __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::_Pninc(void)" (__imp_?_Pninc@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEAAPEA_WXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: void __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::_Init(void)" (__imp_?_Init@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEAAXXZ)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: virtual __int64 __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::xsgetn(wchar_t *,__int64)" (__imp_?xsgetn@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAA_JPEA_W_J@Z)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: virtual __int64 __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::xsputn(wchar_t const *,__int64)" (__imp_?xsputn@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAA_JPEB_W_J@Z)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: virtual __cdecl std::basic_ios<wchar_t,struct std::char_traits<wchar_t> >::~basic_ios<wchar_t,struct std::char_traits<wchar_t> >(void)" (__imp_??1?$basic_ios@_WU?$char_traits@_W@std@@@std@@UEAA@XZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: void __cdecl std::basic_ios<wchar_t,struct std::char_traits<wchar_t> >::setstate(int,bool)" (__imp_?setstate@?$basic_ios@_WU?$char_traits@_W@std@@@std@@QEAAXH_N@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > * __cdecl std::basic_ios<wchar_t,struct std::char_traits<wchar_t> >::tie(void)const " (__imp_?tie@?$basic_ios@_WU?$char_traits@_W@std@@@std@@QEBAPEAV?$basic_ostream@_WU?$char_traits@_W@std@@@2@XZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> > * __cdecl std::basic_ios<wchar_t,struct std::char_traits<wchar_t> >::rdbuf(void)const " (__imp_?rdbuf@?$basic_ios@_WU?$char_traits@_W@std@@@std@@QEBAPEAV?$basic_streambuf@_WU?$char_traits@_W@std@@@2@XZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: wchar_t __cdecl std::basic_ios<wchar_t,struct std::char_traits<wchar_t> >::fill(void)const " (__imp_?fill@?$basic_ios@_WU?$char_traits@_W@std@@@std@@QEBA_WXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: __cdecl std::basic_ios<wchar_t,struct std::char_traits<wchar_t> >::basic_ios<wchar_t,struct std::char_traits<wchar_t> >(void)" (__imp_??0?$basic_ios@_WU?$char_traits@_W@std@@@std@@IEAA@XZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >(class std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> > *,bool)" (__imp_??0?$basic_ostream@_WU?$char_traits@_W@std@@@std@@QEAA@PEAV?$basic_streambuf@_WU?$char_traits@_W@std@@@1@_N@Z)
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: virtual __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::~basic_ostream<wchar_t,struct std::char_traits<wchar_t> >(void)" (__imp_??1?$basic_ostream@_WU?$char_traits@_W@std@@@std@@UEAA@XZ)
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: void __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::_Osfx(void)" (__imp_?_Osfx@?$basic_ostream@_WU?$char_traits@_W@std@@@std@@QEAAXXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > & __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::operator<<(unsigned long)" (__imp_??6?$basic_ostream@_WU?$char_traits@_W@std@@@std@@QEAAAEAV01@K@Z)
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > & __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::operator<<(unsigned __int64)" (__imp_??6?$basic_ostream@_WU?$char_traits@_W@std@@@std@@QEAAAEAV01@_K@Z)
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > & __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::flush(void)" (__imp_?flush@?$basic_ostream@_WU?$char_traits@_W@std@@@std@@QEAAAEAV12@XZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "struct _iobuf * __cdecl std::_Fiopen(wchar_t const *,int,int)" (?_Fiopen@std@@YAPEAU_iobuf@@PEB_WHH@Z)
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "protected: virtual __int64 __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::showmanyc(void)" (?showmanyc@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAA_JXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in HyperV_Enumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) private: static int std::locale::id::_Id_cnt" (__imp_?_Id_cnt@id@locale@std@@0HA)
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: static class std::locale::id std::codecvt<wchar_t,char,struct _Mbstatet>::id" (__imp_?id@?$codecvt@_WDU_Mbstatet@@@std@@2V0locale@2@A)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: static class std::locale::id std::ctype<wchar_t>::id" (__imp_?id@?$ctype@_W@std@@2V0locale@2@A)
+          Referenced in BackupFiles_Implementation.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __cdecl std::ios_base::operator bool(void)const " (__imp_??Bios_base@std@@QEBA_NXZ)
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: unsigned short __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::sbumpc(void)" (__imp_?sbumpc@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@QEAAGXZ)
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: unsigned short __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::sgetc(void)" (__imp_?sgetc@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@QEAAGXZ)
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: unsigned short __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::snextc(void)" (__imp_?snextc@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@QEAAGXZ)
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: wchar_t * __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::pbase(void)const " (__imp_?pbase@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEBAPEA_WXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: void __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::gbump(int)" (__imp_?gbump@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEAAXH@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: void __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::setp(wchar_t *,wchar_t *)" (__imp_?setp@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEAAXPEA_W0@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: void __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::setp(wchar_t *,wchar_t *,wchar_t *)" (__imp_?setp@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@IEAAXPEA_W00@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: wchar_t __cdecl std::basic_ios<wchar_t,struct std::char_traits<wchar_t> >::widen(char)const " (__imp_?widen@?$basic_ios@_WU?$char_traits@_W@std@@@std@@QEBA_WD@Z)
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __cdecl std::basic_istream<wchar_t,struct std::char_traits<wchar_t> >::basic_istream<wchar_t,struct std::char_traits<wchar_t> >(class std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> > *,bool)" (__imp_??0?$basic_istream@_WU?$char_traits@_W@std@@@std@@QEAA@PEAV?$basic_streambuf@_WU?$char_traits@_W@std@@@1@_N@Z)
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: virtual __cdecl std::basic_istream<wchar_t,struct std::char_traits<wchar_t> >::~basic_istream<wchar_t,struct std::char_traits<wchar_t> >(void)" (__imp_??1?$basic_istream@_WU?$char_traits@_W@std@@@std@@UEAA@XZ)
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: bool __cdecl std::basic_istream<wchar_t,struct std::char_traits<wchar_t> >::_Ipfx(bool)" (__imp_?_Ipfx@?$basic_istream@_WU?$char_traits@_W@std@@@std@@QEAA_N_N@Z)
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "protected: virtual void __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::imbue(class std::locale const &)" (?imbue@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAAXAEBVlocale@2@@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "protected: virtual int __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::sync(void)" (?sync@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAAHXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "protected: virtual class std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> > * __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::setbuf(wchar_t *,__int64)" (?setbuf@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAAPEAV12@PEA_W_J@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "protected: virtual unsigned short __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::uflow(void)" (?uflow@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAAGXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "public: virtual void __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::_Unlock(void)" (?_Unlock@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@UEAAXXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "public: virtual void __cdecl std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> >::_Lock(void)" (?_Lock@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@UEAAXXZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found __std_find_trivial_2
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(vector_algorithms.obj)
+        Found "void __cdecl std::_Xinvalid_argument(char const *)" (?_Xinvalid_argument@std@@YAXPEBD@Z)
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > & __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::operator<<(class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > & (__cdecl*)(class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > &))" (__imp_??6?$basic_ostream@_WU?$char_traits@_W@std@@@std@@QEAAAEAV01@P6AAEAV01@AEAV01@@Z@Z)
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > & __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::operator<<(unsigned short)" (__imp_??6?$basic_ostream@_WU?$char_traits@_W@std@@@std@@QEAAAEAV01@G@Z)
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in WimMountManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > & __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::put(wchar_t)" (__imp_?put@?$basic_ostream@_WU?$char_traits@_W@std@@@std@@QEAAAEAV12@_W@Z)
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: int __cdecl std::codecvt<char,char,struct _Mbstatet>::in(struct _Mbstatet &,char const *,char const *,char const * &,char *,char *,char * &)const " (__imp_?in@?$codecvt@DDU_Mbstatet@@@std@@QEBAHAEAU_Mbstatet@@PEBD1AEAPEBDPEAD3AEAPEAD@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: int __cdecl std::codecvt<char,char,struct _Mbstatet>::out(struct _Mbstatet &,char const *,char const *,char const * &,char *,char *,char * &)const " (__imp_?out@?$codecvt@DDU_Mbstatet@@@std@@QEBAHAEAU_Mbstatet@@PEBD1AEAPEBDPEAD3AEAPEAD@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: int __cdecl std::codecvt<char,char,struct _Mbstatet>::unshift(struct _Mbstatet &,char *,char *,char * &)const " (__imp_?unshift@?$codecvt@DDU_Mbstatet@@@std@@QEBAHAEAU_Mbstatet@@PEAD1AEAPEAD@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: static unsigned __int64 __cdecl std::codecvt<char,char,struct _Mbstatet>::_Getcat(class std::locale::facet const * *,class std::locale const *)" (__imp_?_Getcat@?$codecvt@DDU_Mbstatet@@@std@@SA_KPEAPEBVfacet@locale@2@PEBV42@@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: bool __cdecl std::ios_base::operator!(void)const " (__imp_??7ios_base@std@@QEBA_NXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::basic_streambuf<char,struct std::char_traits<char> >(void)" (__imp_??0?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAA@XZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: virtual __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::~basic_streambuf<char,struct std::char_traits<char> >(void)" (__imp_??1?$basic_streambuf@DU?$char_traits@D@std@@@std@@UEAA@XZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::locale __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::getloc(void)const " (__imp_?getloc@?$basic_streambuf@DU?$char_traits@D@std@@@std@@QEBA?AVlocale@2@XZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: char * __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::eback(void)const " (__imp_?eback@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEBAPEADXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: char * __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::gptr(void)const " (__imp_?gptr@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEBAPEADXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: char * __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::pptr(void)const " (__imp_?pptr@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEBAPEADXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: char * __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::egptr(void)const " (__imp_?egptr@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEBAPEADXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: void __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::gbump(int)" (__imp_?gbump@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAAXH@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: void __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::setg(char *,char *,char *)" (__imp_?setg@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAAXPEAD00@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: char * __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::epptr(void)const " (__imp_?epptr@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEBAPEADXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: char * __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::_Gndec(void)" (__imp_?_Gndec@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAAPEADXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: char * __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::_Gninc(void)" (__imp_?_Gninc@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAAPEADXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: __int64 __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::_Gnavail(void)const " (__imp_?_Gnavail@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEBA_JXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: void __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::pbump(int)" (__imp_?pbump@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAAXH@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: char * __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::_Pninc(void)" (__imp_?_Pninc@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAAPEADXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: __int64 __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::_Pnavail(void)const " (__imp_?_Pnavail@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEBA_JXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: void __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::_Init(void)" (__imp_?_Init@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAAXXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: void __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::_Init(char * *,char * *,int *,char * *,char * *,int *)" (__imp_?_Init@?$basic_streambuf@DU?$char_traits@D@std@@@std@@IEAAXPEAPEAD0PEAH001@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: virtual __int64 __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::xsgetn(char *,__int64)" (__imp_?xsgetn@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAA_JPEAD_J@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: virtual __int64 __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::xsputn(char const *,__int64)" (__imp_?xsputn@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAA_JPEBD_J@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: virtual __cdecl std::basic_ios<char,struct std::char_traits<char> >::~basic_ios<char,struct std::char_traits<char> >(void)" (__imp_??1?$basic_ios@DU?$char_traits@D@std@@@std@@UEAA@XZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: void __cdecl std::basic_ios<char,struct std::char_traits<char> >::setstate(int,bool)" (__imp_?setstate@?$basic_ios@DU?$char_traits@D@std@@@std@@QEAAXH_N@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) protected: __cdecl std::basic_ios<char,struct std::char_traits<char> >::basic_ios<char,struct std::char_traits<char> >(void)" (__imp_??0?$basic_ios@DU?$char_traits@D@std@@@std@@IEAA@XZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __cdecl std::basic_ostream<char,struct std::char_traits<char> >::basic_ostream<char,struct std::char_traits<char> >(class std::basic_streambuf<char,struct std::char_traits<char> > *,bool)" (__imp_??0?$basic_ostream@DU?$char_traits@D@std@@@std@@QEAA@PEAV?$basic_streambuf@DU?$char_traits@D@std@@@1@_N@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: virtual __cdecl std::basic_ostream<char,struct std::char_traits<char> >::~basic_ostream<char,struct std::char_traits<char> >(void)" (__imp_??1?$basic_ostream@DU?$char_traits@D@std@@@std@@UEAA@XZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_ostream<char,struct std::char_traits<char> > & __cdecl std::basic_ostream<char,struct std::char_traits<char> >::write(char const *,__int64)" (__imp_?write@?$basic_ostream@DU?$char_traits@D@std@@@std@@QEAAAEAV12@PEBD_J@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __cdecl std::basic_istream<char,struct std::char_traits<char> >::basic_istream<char,struct std::char_traits<char> >(class std::basic_streambuf<char,struct std::char_traits<char> > *,bool)" (__imp_??0?$basic_istream@DU?$char_traits@D@std@@@std@@QEAA@PEAV?$basic_streambuf@DU?$char_traits@D@std@@@1@_N@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: virtual __cdecl std::basic_istream<char,struct std::char_traits<char> >::~basic_istream<char,struct std::char_traits<char> >(void)" (__imp_??1?$basic_istream@DU?$char_traits@D@std@@@std@@UEAA@XZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_istream<char,struct std::char_traits<char> > & __cdecl std::basic_istream<char,struct std::char_traits<char> >::read(char *,__int64)" (__imp_?read@?$basic_istream@DU?$char_traits@D@std@@@std@@QEAAAEAV12@PEAD_J@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __int64 __cdecl std::basic_istream<char,struct std::char_traits<char> >::gcount(void)const " (__imp_?gcount@?$basic_istream@DU?$char_traits@D@std@@@std@@QEBA_JXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_istream<char,struct std::char_traits<char> > & __cdecl std::basic_istream<char,struct std::char_traits<char> >::seekg(class std::fpos<struct _Mbstatet>)" (__imp_?seekg@?$basic_istream@DU?$char_traits@D@std@@@std@@QEAAAEAV12@V?$fpos@U_Mbstatet@@@2@@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_istream<char,struct std::char_traits<char> > & __cdecl std::basic_istream<char,struct std::char_traits<char> >::seekg(__int64,int)" (__imp_?seekg@?$basic_istream@DU?$char_traits@D@std@@@std@@QEAAAEAV12@_JH@Z)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::fpos<struct _Mbstatet> __cdecl std::basic_istream<char,struct std::char_traits<char> >::tellg(void)" (__imp_?tellg@?$basic_istream@DU?$char_traits@D@std@@@std@@QEAA?AV?$fpos@U_Mbstatet@@@2@XZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "protected: virtual __int64 __cdecl std::basic_streambuf<char,struct std::char_traits<char> >::showmanyc(void)" (?showmanyc@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAA_JXZ)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: static class std::locale::id std::codecvt<char,char,struct _Mbstatet>::id" (__imp_?id@?$codecvt@DDU_Mbstatet@@@std@@2V0locale@2@A)
+          Referenced in BrsFileManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found _Xtime_get_ticks
+          Referenced in RestoreEnhanced.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "struct std::nothrow_t const std::nothrow" (?nothrow@std@@3Unothrow_t@1@B)
+          Referenced in ShellExtension.obj
+          Loaded msvcprt.lib(nothrow.obj)
+        Found "__declspec(dllimport) public: int __cdecl std::ios_base::setf(int,int)" (__imp_?setf@ios_base@std@@QEAAHHH@Z)
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > & __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::operator<<(class std::ios_base & (__cdecl*)(class std::ios_base &))" (__imp_??6?$basic_ostream@_WU?$char_traits@_W@std@@@std@@QEAAAEAV01@P6AAEAVios_base@1@AEAV21@@Z@Z)
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: class std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> > & __cdecl std::basic_ostream<wchar_t,struct std::char_traits<wchar_t> >::operator<<(int)" (__imp_??6?$basic_ostream@_WU?$char_traits@_W@std@@@std@@QEAAAEAV01@H@Z)
+          Referenced in VolumeEnumeration.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: __cdecl std::basic_iostream<wchar_t,struct std::char_traits<wchar_t> >::basic_iostream<wchar_t,struct std::char_traits<wchar_t> >(class std::basic_streambuf<wchar_t,struct std::char_traits<wchar_t> > *)" (__imp_??0?$basic_iostream@_WU?$char_traits@_W@std@@@std@@QEAA@PEAV?$basic_streambuf@_WU?$char_traits@_W@std@@@1@@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: virtual __cdecl std::basic_iostream<wchar_t,struct std::char_traits<wchar_t> >::~basic_iostream<wchar_t,struct std::char_traits<wchar_t> >(void)" (__imp_??1?$basic_iostream@_WU?$char_traits@_W@std@@@std@@UEAA@XZ)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "__declspec(dllimport) public: wchar_t __cdecl std::basic_ios<wchar_t,struct std::char_traits<wchar_t> >::fill(wchar_t)" (__imp_?fill@?$basic_ios@_WU?$char_traits@_W@std@@@std@@QEAA_W_W@Z)
+          Referenced in WimMountManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found "struct std::_Smanip<__int64> __cdecl std::setw(__int64)" (?setw@std@@YA?AU?$_Smanip@_J@1@_J@Z)
+          Referenced in WimMountManager.obj
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found __IMPORT_DESCRIPTOR_MSVCP140
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Loaded msvcprt.lib(MSVCP140.dll)
+        Found MSVCP140_NULL_THUNK_DATA
+          Referenced in msvcprt.lib(MSVCP140.dll)
+          Loaded msvcprt.lib(MSVCP140.dll)
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRT.lib:
+        Found "void * __cdecl operator new(unsigned __int64)" (??2@YAPEAX_K@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded MSVCRT.lib(new_scalar.obj)
+        Found "void __cdecl operator delete(void *,unsigned __int64)" (??3@YAXPEAX_K@Z)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded MSVCRT.lib(delete_scalar_size.obj)
+        Found __GSHandlerCheck
+          Referenced in msvcprt.lib(vector_algorithms.obj)
+          Referenced in zlibstaticd.lib(crc32.obj)
+          Referenced in zlibstaticd.lib(inftrees.obj)
+          Referenced in zlibstaticd.lib(trees.obj)
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in HyperVRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded MSVCRT.lib(gshandler.obj)
+        Found __GSHandlerCheck_EH4
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded MSVCRT.lib(gshandlereh4.obj)
+        Found __security_check_cookie
+          Referenced in zlibstaticd.lib(trees.obj)
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in msvcprt.lib(vector_algorithms.obj)
+          Referenced in MSVCRT.lib(gshandler.obj)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in zlibstaticd.lib(crc32.obj)
+          Referenced in zlibstaticd.lib(inftrees.obj)
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded MSVCRT.lib(amdsecgs.obj)
+        Found "const type_info::`vftable'" (??_7type_info@@6B@)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded MSVCRT.lib(std_type_info_static.obj)
+        Found __security_cookie
+          Referenced in zlibstaticd.lib(trees.obj)
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in msvcprt.lib(vector_algorithms.obj)
+          Referenced in MSVCRT.lib(amdsecgs.obj)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in zlibstaticd.lib(crc32.obj)
+          Referenced in zlibstaticd.lib(inftrees.obj)
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded MSVCRT.lib(gs_cookie.obj)
+        Found __dyn_tls_on_demand_init
+          Referenced in BackupEngine_Exports.obj
+          Loaded MSVCRT.lib(tlsdyn.obj)
+        Found __tlregdtor
+          Referenced in BackupEngine_Exports.obj
+          Loaded MSVCRT.lib(tlsdtor.obj)
+        Found _tls_index
+          Referenced in BackupEngine_Exports.obj
+          Referenced in MSVCRT.lib(tlsdyn.obj)
+          Referenced in MSVCRT.lib(tlsdyn.obj)
+          Referenced in MSVCRT.lib(tlsdtor.obj)
+          Loaded MSVCRT.lib(tlssup.obj)
+        Found "void __cdecl `eh vector destructor iterator'(void *,unsigned __int64,unsigned __int64,void (__cdecl*)(void *))" (??_M@YAXPEAX_K1P6AX0@Z@Z)
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Loaded MSVCRT.lib(ehvecdtr.obj)
+        Found atexit
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in WimMountManager.obj
+          Referenced in msvcprt.lib(locale0_implib.obj)
+          Loaded MSVCRT.lib(utility.obj)
+        Found "void __cdecl operator delete(void *)" (??3@YAXPEAX@Z)
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in MSVCRT.lib(delete_scalar_size.obj)
+          Loaded MSVCRT.lib(delete_scalar.obj)
+        Found "void __cdecl operator delete[](void *)" (??_V@YAXPEAX@Z)
+          Referenced in HyperV_Enumeration.obj
+          Referenced in HyperVRestore.obj
+          Loaded MSVCRT.lib(delete_array.obj)
+        Found _fltused
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in msvcprt.lib(vector_algorithms.obj)
+          Loaded MSVCRT.lib(fltused.obj)
+        Found "void * __cdecl operator new(unsigned __int64,struct std::nothrow_t const &)" (??2@YAPEAX_KAEBUnothrow_t@std@@@Z)
+          Referenced in ShellExtension.obj
+          Loaded MSVCRT.lib(new_scalar_nothrow.obj)
+        Found __report_rangecheckfailure
+          Referenced in SystemStateRestore.obj
+          Referenced in zlibstaticd.lib(inftrees.obj)
+          Loaded MSVCRT.lib(gs_report.obj)
+        Found __chkstk
+          Referenced in SystemStateRestore.obj
+          Loaded MSVCRT.lib(chkstk.obj)
+        Found _DllMainCRTStartup
+          Loaded MSVCRT.lib(dll_dllmain.obj)
+        Found __guard_dispatch_icall_fptr
+          Referenced in MSVCRT.lib(ehvecdtr.obj)
+          Referenced in MSVCRT.lib(utility.obj)
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in msvcprt.lib(locale0_implib.obj)
+          Referenced in MSVCRT.lib(tlsdyn.obj)
+          Referenced in MSVCRT.lib(tlsdtor.obj)
+          Loaded MSVCRT.lib(guard_support.obj)
+        Found __isa_enabled
+          Referenced in msvcprt.lib(vector_algorithms.obj)
+          Loaded MSVCRT.lib(cpu_disp.obj)
+        Found "void __cdecl __scrt_throw_std_bad_alloc(void)" (?__scrt_throw_std_bad_alloc@@YAXXZ)
+          Referenced in MSVCRT.lib(new_scalar.obj)
+          Loaded MSVCRT.lib(throw_bad_alloc.obj)
+        Found _get_startup_argv_mode
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded MSVCRT.lib(argv_mode.obj)
+        Found __scrt_is_ucrt_dll_in_use
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded MSVCRT.lib(ucrt_detection.obj)
+        Found __scrt_fastfail
+          Referenced in MSVCRT.lib(utility.obj)
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Loaded MSVCRT.lib(utility_desktop.obj)
+        Found __security_init_cookie
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Loaded MSVCRT.lib(gs_support.obj)
+        Found "void __cdecl __scrt_initialize_type_info(void)" (?__scrt_initialize_type_info@@YAXXZ)
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Loaded MSVCRT.lib(tncleanup.obj)
+        Found __scrt_initialize_default_local_stdio_options
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Loaded MSVCRT.lib(default_local_stdio_options.obj)
+        Found __scrt_get_dyn_tls_init_callback
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Loaded MSVCRT.lib(dyn_tls_init.obj)
+        Found _RTC_Initialize
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Loaded MSVCRT.lib(initsect.obj)
+        Found __xi_a
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Loaded MSVCRT.lib(initializers.obj)
+   Processed /DISALLOWLIB:libcmt.lib
+   Processed /DISALLOWLIB:libcmtd.lib
+  Processed /DEFAULTLIB:vcruntime.lib
+   Processed /DISALLOWLIB:vcruntimed.lib
+   Processed /DISALLOWLIB:libvcruntime.lib
+   Processed /DISALLOWLIB:libvcruntimed.lib
+  Processed /DEFAULTLIB:ucrt.lib
+   Processed /DISALLOWLIB:ucrtd.lib
+   Processed /DISALLOWLIB:libucrt.lib
+   Processed /DISALLOWLIB:libucrtd.lib
+        Found _guard_dispatch_icall_nop
+          Referenced in MSVCRT.lib(guard_support.obj)
+          Loaded MSVCRT.lib(guard_dispatch.obj)
+        Found _guard_xfg_dispatch_icall_nop
+          Referenced in MSVCRT.lib(guard_support.obj)
+          Loaded MSVCRT.lib(guard_xfg_dispatch.obj)
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+        Found __imp_close
+          Referenced in zlibstaticd.lib(gzread.obj)
+          Referenced in zlibstaticd.lib(gzwrite.obj)
+          Loaded OLDNAMES.lib(close.obi)
+        Found __imp_read
+          Referenced in zlibstaticd.lib(gzread.obj)
+          Loaded OLDNAMES.lib(read.obi)
+        Found __imp_write
+          Referenced in zlibstaticd.lib(gzwrite.obj)
+          Loaded OLDNAMES.lib(write.obi)
+        Found __imp_open
+          Referenced in zlibstaticd.lib(gzlib.obj)
+          Loaded OLDNAMES.lib(open.obi)
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+        Found "void __cdecl _com_issue_error(long)" (?_com_issue_error@@YAXJ@Z)
+          Referenced in HyperV_Enumeration.obj
+          Referenced in HyperVRestore.obj
+          Loaded comsuppw.lib(comsupp.obj)
+        Found "wchar_t * __cdecl _com_util::ConvertStringToBSTR(char const *)" (?ConvertStringToBSTR@_com_util@@YAPEA_WPEBD@Z)
+          Referenced in HyperVRestore.obj
+          Loaded comsuppw.lib(comutil.obj)
+        Found "void __cdecl _com_raise_error(long,struct IErrorInfo *)" (?_com_raise_error@@YAXJPEAUIErrorInfo@@@Z)
+          Referenced in comsuppw.lib(comsupp.obj)
+          Loaded comsuppw.lib(comraise.obj)
+        Found "long __cdecl _com_invoke_helper(struct IDispatch *,long,unsigned short,unsigned short,void *,wchar_t const *,char *,struct IErrorInfo * *)" (?_com_invoke_helper@@YAJPEAUIDispatch@@JGGPEAXPEB_WPEADPEAPEAUIErrorInfo@@@Z)
+          Referenced in comsuppw.lib(comsupp.obj)
+          Loaded comsuppw.lib(invkprxy.obj)
+        Found "long __cdecl _com_handle_excepinfo(struct tagEXCEPINFO &,struct IErrorInfo * *)" (?_com_handle_excepinfo@@YAJAEAUtagEXCEPINFO@@PEAPEAUIErrorInfo@@@Z)
+          Referenced in comsuppw.lib(invkprxy.obj)
+          Loaded comsuppw.lib(invkerr.obj)
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+        Found "class ATL::CAtlBaseModule ATL::_AtlBaseModule" (?_AtlBaseModule@ATL@@3VCAtlBaseModule@1@A)
+          Referenced in HyperVBackup_Implementation.obj
+          Loaded atls.lib(atlbase.obj)
+        Found __@@_PchSym_@00@UzUPdlipUBUhUrmgvinvwrzgvUexHoryhUhsrkUzgonuxUhixUzgoUzgohUzgohOexckilqUlyqiPiUznwGEUhgwzucOlyq@4B2008FD98C1DD4
+          Referenced in atls.lib(atlbase.obj)
+          Loaded atls.lib(stdafx.obj)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+        Found QISearch
+          Referenced in ShellExtension.obj
+          Loaded shlwapi.lib(SHLWAPI.dll)
+        Found __IMPORT_DESCRIPTOR_SHLWAPI
+          Referenced in shlwapi.lib(SHLWAPI.dll)
+          Loaded shlwapi.lib(SHLWAPI.dll)
+        Found SHLWAPI_NULL_THUNK_DATA
+          Referenced in shlwapi.lib(SHLWAPI.dll)
+          Loaded shlwapi.lib(SHLWAPI.dll)
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRTD.lib:
+        Found "void * __cdecl operator new[](unsigned __int64)" (??_U@YAPEAX_K@Z)
+          Referenced in comsuppw.lib(comutil.obj)
+          Loaded MSVCRTD.lib(new_array.obj)
+        Found __GSHandlerCheck_SEH
+          Referenced in comsuppw.lib(comutil.obj)
+          Referenced in comsuppw.lib(invkprxy.obj)
+          Loaded MSVCRTD.lib(gshandlerseh.obj)
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\vcruntime.lib:
+        Found __std_terminate
+          Referenced in WimMountManager.obj
+          Referenced in comsuppw.lib(comraise.obj)
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupVerification.obj
+          Referenced in VSSSnapshotManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found __std_exception_copy
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in MSVCRT.lib(throw_bad_alloc.obj)
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found __std_exception_destroy
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in MSVCRT.lib(throw_bad_alloc.obj)
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found _CxxThrowException
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in MSVCRT.lib(throw_bad_alloc.obj)
+          Referenced in comsuppw.lib(comraise.obj)
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found __CxxFrameHandler4
+          Referenced in comsuppw.lib(comraise.obj)
+          Referenced in comsuppw.lib(invkprxy.obj)
+          Referenced in MSVCRT.lib(gshandlereh4.obj)
+          Referenced in MSVCRT.lib(tlsdyn.obj)
+          Referenced in MSVCRT.lib(new_scalar_nothrow.obj)
+          Referenced in comsuppw.lib(comutil.obj)
+          Referenced in BackupVerification.obj
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded vcruntime.lib(VCRUNTIME140_1.dll)
+        Found memcpy
+          Referenced in zlibstaticd.lib(inflate.obj)
+          Referenced in zlibstaticd.lib(deflate.obj)
+          Referenced in zlibstaticd.lib(trees.obj)
+          Referenced in msvcprt.lib(vector_algorithms.obj)
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in zlibstaticd.lib(gzread.obj)
+          Referenced in zlibstaticd.lib(gzwrite.obj)
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found memmove
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in atls.lib(atlbase.obj)
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found memset
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Referenced in comsuppw.lib(invkprxy.obj)
+          Referenced in atls.lib(atlbase.obj)
+          Referenced in BackupVerification.obj
+          Referenced in zlibstaticd.lib(gzwrite.obj)
+          Referenced in zlibstaticd.lib(deflate.obj)
+          Referenced in msvcprt.lib(vector_algorithms.obj)
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found memchr
+          Referenced in SystemStateRestore.obj
+          Referenced in zlibstaticd.lib(gzread.obj)
+          Referenced in msvcprt.lib(vector_algorithms.obj)
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found memcmp
+          Referenced in SystemStateRestore.obj
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in msvcprt.lib(vector_algorithms.obj)
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found __current_exception
+          Referenced in MSVCRT.lib(ehvecdtr.obj)
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found __current_exception_context
+          Referenced in MSVCRT.lib(ehvecdtr.obj)
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found __C_specific_handler
+          Referenced in MSVCRT.lib(ehvecdtr.obj)
+          Referenced in MSVCRT.lib(utility.obj)
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Referenced in MSVCRTD.lib(gshandlerseh.obj)
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found __std_type_info_destroy_list
+          Referenced in MSVCRT.lib(tncleanup.obj)
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found __IMPORT_DESCRIPTOR_VCRUNTIME140
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found __IMPORT_DESCRIPTOR_VCRUNTIME140_1
+          Referenced in vcruntime.lib(VCRUNTIME140_1.dll)
+          Loaded vcruntime.lib(VCRUNTIME140_1.dll)
+        Found VCRUNTIME140_NULL_THUNK_DATA
+          Referenced in vcruntime.lib(VCRUNTIME140.dll)
+          Loaded vcruntime.lib(VCRUNTIME140.dll)
+        Found VCRUNTIME140_1_NULL_THUNK_DATA
+          Referenced in vcruntime.lib(VCRUNTIME140_1.dll)
+          Loaded vcruntime.lib(VCRUNTIME140_1.dll)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\ucrt.lib:
+        Found __imp__invoke_watson
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found __imp_calloc
+          Referenced in BackupVerification.obj
+          Referenced in WimMountManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+        Found strlen
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in comsuppw.lib(comutil.obj)
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Loaded ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+        Found wcslen
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in comsuppw.lib(comutil.obj)
+          Referenced in comsuppw.lib(invkprxy.obj)
+          Referenced in VolumeEnumeration.obj
+          Referenced in HyperVRestore.obj
+          Referenced in SystemStateRestore.obj
+          Referenced in BackupVerification.obj
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in ShellExtension.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in BackupEngine.obj
+          Referenced in BackupEngine_Exports.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Loaded ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+        Found __imp_wcsncpy_s
+          Referenced in BackupEngine_Exports.obj
+          Loaded ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+        Found __imp_fgetwc
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_fputwc
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_ungetwc
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RecoveryEnvironment.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_fclose
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_fflush
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_fgetc
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_fgetpos
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_fsetpos
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp__fseeki64
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_fwrite
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_setvbuf
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_ungetc
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp__lock_file
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+        Found __imp__unlock_file
+          Referenced in RecoveryEnvironment.obj
+          Referenced in RestoreEngine_Advanced.obj
+          Referenced in BackupFiles_Implementation.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in BackupManager_Advanced.obj
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+        Found __imp_wcscpy_s
+          Referenced in VSSSnapshotManager.obj
+          Referenced in WimMountManager.obj
+          Referenced in BackupInfo_Implementation.obj
+          Referenced in HyperV_Enumeration.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in VolumeEnumeration.obj
+          Loaded ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+        Found __imp__errno
+          Referenced in BackupManager_Advanced.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in zlibstaticd.lib(gzread.obj)
+          Referenced in zlibstaticd.lib(gzwrite.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found __imp_wcstoul
+          Referenced in BackupManager_Advanced.obj
+          Loaded ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+        Found __imp_tolower
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+        Found __imp_strcpy_s
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+        Found __imp_mbstowcs_s
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+        Found __imp_wcstombs_s
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+        Found __imp___stdio_common_vswprintf_s
+          Referenced in WimMountManager.obj
+          Referenced in BrsFileManager.obj
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in RestoreEnhanced.obj
+          Referenced in HyperVRestore.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp__get_stream_buffer_pointers
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_fputc
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_fread
+          Referenced in BrsFileManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_free
+          Referenced in zlibstaticd.lib(zutil.obj)
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in msvcprt.lib(locale0_implib.obj)
+          Referenced in HyperVBackup_Implementation.obj
+          Referenced in zlibstaticd.lib(gzread.obj)
+          Referenced in zlibstaticd.lib(gzwrite.obj)
+          Referenced in zlibstaticd.lib(gzlib.obj)
+          Loaded ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+        Found __imp_wcstol
+          Referenced in RestoreEnhanced.obj
+          Loaded ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+        Found __imp__localtime64_s
+          Referenced in RestoreEnhanced.obj
+          Loaded ucrt.lib(api-ms-win-crt-time-l1-1-0.dll)
+        Found __imp___stdio_common_vswprintf
+          Referenced in ShellExtension.obj
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp__wcsicmp
+          Referenced in VSSSnapshotManager.obj
+          Loaded ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+        Found __imp_strerror
+          Referenced in zlibstaticd.lib(gzread.obj)
+          Referenced in zlibstaticd.lib(gzwrite.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found __imp_malloc
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in msvcprt.lib(locale0_implib.obj)
+          Referenced in zlibstaticd.lib(gzread.obj)
+          Referenced in zlibstaticd.lib(gzwrite.obj)
+          Referenced in zlibstaticd.lib(gzlib.obj)
+          Referenced in zlibstaticd.lib(zutil.obj)
+          Loaded ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+        Found __imp___stdio_common_vsprintf
+          Referenced in zlibstaticd.lib(gzwrite.obj)
+          Referenced in zlibstaticd.lib(gzlib.obj)
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp_wcstombs
+          Referenced in zlibstaticd.lib(gzlib.obj)
+          Loaded ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+        Found __imp__wopen
+          Referenced in zlibstaticd.lib(gzlib.obj)
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp__lseeki64
+          Referenced in zlibstaticd.lib(gzlib.obj)
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp____lc_codepage_func
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded ucrt.lib(api-ms-win-crt-locale-l1-1-0.dll)
+        Found __imp_abort
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _callnewh
+          Referenced in MSVCRT.lib(new_scalar.obj)
+          Loaded ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+        Found terminate
+          Referenced in MSVCRT.lib(ehvecdtr.obj)
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _seh_filter_dll
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _configure_narrow_argv
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _initialize_narrow_environment
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _initialize_onexit_table
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _register_onexit_function
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _execute_onexit_table
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _crt_atexit
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _crt_at_quick_exit
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _cexit
+          Referenced in MSVCRT.lib(utility.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _initterm
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _initterm_e
+          Referenced in MSVCRT.lib(dll_dllmain.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found __imp__close
+          Referenced in OLDNAMES.lib(close.obi)
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp__read
+          Referenced in OLDNAMES.lib(read.obi)
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp__write
+          Referenced in OLDNAMES.lib(write.obi)
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __imp__open
+          Referenced in OLDNAMES.lib(open.obi)
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found _invalid_parameter_noinfo
+          Referenced in atls.lib(atlbase.obj)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found _recalloc
+          Referenced in atls.lib(atlbase.obj)
+          Loaded ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+        Found __IMPORT_DESCRIPTOR_api-ms-win-crt-runtime-l1-1-0
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found __IMPORT_DESCRIPTOR_api-ms-win-crt-heap-l1-1-0
+          Referenced in ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+        Found __IMPORT_DESCRIPTOR_api-ms-win-crt-string-l1-1-0
+          Referenced in ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+        Found __IMPORT_DESCRIPTOR_api-ms-win-crt-stdio-l1-1-0
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found __IMPORT_DESCRIPTOR_api-ms-win-crt-filesystem-l1-1-0
+          Referenced in ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+        Found __IMPORT_DESCRIPTOR_api-ms-win-crt-convert-l1-1-0
+          Referenced in ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+          Referenced in ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+        Found __IMPORT_DESCRIPTOR_api-ms-win-crt-time-l1-1-0
+          Referenced in ucrt.lib(api-ms-win-crt-time-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-time-l1-1-0.dll)
+        Found __IMPORT_DESCRIPTOR_api-ms-win-crt-locale-l1-1-0
+          Referenced in ucrt.lib(api-ms-win-crt-locale-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-locale-l1-1-0.dll)
+        Found api-ms-win-crt-runtime-l1-1-0_NULL_THUNK_DATA
+          Referenced in ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+        Found api-ms-win-crt-heap-l1-1-0_NULL_THUNK_DATA
+          Referenced in ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+        Found api-ms-win-crt-string-l1-1-0_NULL_THUNK_DATA
+          Referenced in ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+        Found api-ms-win-crt-stdio-l1-1-0_NULL_THUNK_DATA
+          Referenced in ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+        Found api-ms-win-crt-filesystem-l1-1-0_NULL_THUNK_DATA
+          Referenced in ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+        Found api-ms-win-crt-convert-l1-1-0_NULL_THUNK_DATA
+          Referenced in ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+        Found api-ms-win-crt-time-l1-1-0_NULL_THUNK_DATA
+          Referenced in ucrt.lib(api-ms-win-crt-time-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-time-l1-1-0.dll)
+        Found api-ms-win-crt-locale-l1-1-0_NULL_THUNK_DATA
+          Referenced in ucrt.lib(api-ms-win-crt-locale-l1-1-0.dll)
+          Loaded ucrt.lib(api-ms-win-crt-locale-l1-1-0.dll)
+      Searching E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\packages\zlib-msvc-x64.1.2.11.8900\build\native\..\..\\build\native\lib_debug\zlibstaticd.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\VssApi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wbemuuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+        Found __imp_GetErrorInfo
+          Referenced in comsuppw.lib(comsupp.obj)
+          Loaded oleaut32.lib(OLEAUT32.dll)
+        Found __imp_VariantChangeType
+          Referenced in comsuppw.lib(invkprxy.obj)
+          Loaded oleaut32.lib(OLEAUT32.dll)
+        Found __imp_SetErrorInfo
+          Referenced in comsuppw.lib(invkprxy.obj)
+          Loaded oleaut32.lib(OLEAUT32.dll)
+        Found __imp_CreateErrorInfo
+          Referenced in comsuppw.lib(invkerr.obj)
+          Loaded oleaut32.lib(OLEAUT32.dll)
+      Searching C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Lib\amd64\wimgapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+        Found __imp_LocalFree
+          Referenced in msvcprt.lib(syserror_import_lib.obj)
+          Referenced in comsuppw.lib(comraise.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_FormatMessageA
+          Referenced in msvcprt.lib(syserror_import_lib.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetLocaleInfoEx
+          Referenced in msvcprt.lib(syserror_import_lib.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_SetCurrentDirectoryW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetCurrentDirectoryW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_FindClose
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_FindFirstFileW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_FindFirstFileExW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_FindNextFileW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetFileInformationByHandle
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetFinalPathNameByHandleW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetFullPathNameW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_SetFileInformationByHandle
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_AreFileApisANSI
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetModuleHandleW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CreateDirectoryExW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CopyFileW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_MoveFileExW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CreateHardLinkW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetFileInformationByHandleEx
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_CreateSymbolicLinkW
+          Referenced in msvcprt.lib(filesystem.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_MultiByteToWideChar
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in comsuppw.lib(comutil.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_WideCharToMultiByte
+          Referenced in msvcprt.lib(filesystem.obj)
+          Referenced in comsuppw.lib(comutil.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_RtlCaptureContext
+          Referenced in MSVCRT.lib(gs_report.obj)
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_RtlLookupFunctionEntry
+          Referenced in MSVCRT.lib(gs_report.obj)
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_RtlVirtualUnwind
+          Referenced in MSVCRT.lib(gs_report.obj)
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_UnhandledExceptionFilter
+          Referenced in MSVCRT.lib(gs_report.obj)
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_SetUnhandledExceptionFilter
+          Referenced in MSVCRT.lib(gs_report.obj)
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetCurrentProcess
+          Referenced in MSVCRT.lib(gs_report.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_TerminateProcess
+          Referenced in MSVCRT.lib(gs_report.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_IsProcessorFeaturePresent
+          Referenced in MSVCRT.lib(gs_report.obj)
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_IsDebuggerPresent
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Referenced in atls.lib(atlbase.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetStartupInfoW
+          Referenced in MSVCRT.lib(utility_desktop.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_QueryPerformanceCounter
+          Referenced in MSVCRT.lib(gs_support.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetCurrentProcessId
+          Referenced in MSVCRT.lib(gs_support.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetCurrentThreadId
+          Referenced in MSVCRT.lib(gs_support.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_GetSystemTimeAsFileTime
+          Referenced in MSVCRT.lib(gs_support.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_InitializeSListHead
+          Referenced in MSVCRT.lib(tncleanup.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_OutputDebugStringW
+          Referenced in atls.lib(atlbase.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+        Found __imp_RaiseException
+          Referenced in atls.lib(atlbase.obj)
+          Loaded kernel32.lib(KERNEL32.dll)
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbc32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbccp32.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\msvcprt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRT.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRTD.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\vcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\ucrt.lib:
+      Searching E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\packages\zlib-msvc-x64.1.2.11.8900\build\native\..\..\\build\native\lib_debug\zlibstaticd.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\VssApi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wbemuuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Lib\amd64\wimgapi.lib:
+  Finished searching libraries
+  Generating .exp file
+     Creating library Debug\BackupEngine.lib and object Debug\BackupEngine.exp
+  Finished generating .exp file
+  Searching libraries
+      Searching E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\packages\zlib-msvc-x64.1.2.11.8900\build\native\..\..\\build\native\lib_debug\zlibstaticd.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\VssApi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wbemuuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Lib\amd64\wimgapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbc32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbccp32.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\msvcprt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRT.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRTD.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\vcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\ucrt.lib:
+  Finished searching libraries
+LINK : warning LNK4098: defaultlib 'MSVCRTD' conflicts with use of other libs; use /NODEFAULTLIB:library
+  Searching libraries
+      Searching E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\packages\zlib-msvc-x64.1.2.11.8900\build\native\..\..\\build\native\lib_debug\zlibstaticd.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\VssApi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wbemuuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Lib\amd64\wimgapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbc32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbccp32.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\msvcprt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRT.lib:
+        Found __scrt_stub_for_acrt_initialize
+          Loaded MSVCRT.lib(ucrt_stubs.obj)
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRTD.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\vcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\ucrt.lib:
+  Finished searching libraries
+  Searching libraries
+      Searching E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\packages\zlib-msvc-x64.1.2.11.8900\build\native\..\..\\build\native\lib_debug\zlibstaticd.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\VssApi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wbemuuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Lib\amd64\wimgapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbc32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbccp32.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\msvcprt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRT.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRTD.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\vcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\ucrt.lib:
+  Finished searching libraries
+  Searching libraries
+      Searching E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\packages\zlib-msvc-x64.1.2.11.8900\build\native\..\..\\build\native\lib_debug\zlibstaticd.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\VssApi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wbemuuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Lib\amd64\wimgapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbc32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbccp32.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\msvcprt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRT.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRTD.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\vcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\ucrt.lib:
+  Finished searching libraries
+  Finished pass 1
+  Searching libraries
+      Searching E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\packages\zlib-msvc-x64.1.2.11.8900\build\native\..\..\\build\native\lib_debug\zlibstaticd.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\VssApi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wbemuuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Lib\amd64\wimgapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbc32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbccp32.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\msvcprt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRT.lib:
+        Found _load_config_used
+          Loaded MSVCRT.lib(loadcfg.obj)
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\MSVCRTD.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64\vcruntime.lib:
+        Found __guard_memcpy_fptr
+          Referenced in MSVCRT.lib(loadcfg.obj)
+          Loaded vcruntime.lib(softmemtag.obj)
+  Finished searching libraries
+  Invoking rc.exe:
+   /v
+   /x
+   /fo
+   "C:\Users\mdail.COMPADMIN\AppData\Local\Temp\lnk{2E22A72C-34E3-4353-9B74-FF6CB6B0C5C2}.tmp"
+   "C:\Users\mdail.COMPADMIN\AppData\Local\Temp\lnk{20E4C3F5-4C83-4D3D-82E0-14059FB56E2B}.tmp"
+  Microsoft (R) Windows (R) Resource Compiler Version 10.0.10011.16384
+  
+  Copyright (C) Microsoft Corporation.  All rights reserved.
+  
+  
+  Using codepage 1252 as default
+  Creating C:\Users\mdail.COMPADMIN\AppData\Local\Temp\lnk{2E22A72C-34E3-4353-9B74-FF6CB6B0C5C2}.tmp
+  
+  
+  C:\Users\mdail.COMPADMIN\AppData\Local\Temp\lnk{20E4C3F5-4C83-4D3D-82E0-14059FB56E2B}.tmp.
+  Writing 24:2,	lang:0x409,	size 381
+  Invoking cvtres.exe:
+   /machine:amd64
+   /verbose
+   /out:"C:\Users\mdail.COMPADMIN\AppData\Local\Temp\lnk{6F4B730E-C49E-4F5A-B58B-14C411853FF6}.tmp"
+   /readonly
+   "C:\Users\mdail.COMPADMIN\AppData\Local\Temp\lnk{2E22A72C-34E3-4353-9B74-FF6CB6B0C5C2}.tmp"
+  Microsoft (R) Windows Resource To Object Converter Version 14.44.35222.0
+  Copyright (C) Microsoft Corporation.  All rights reserved.
+  
+  adding resource. type:MANIFEST, name:2, language:0x0409, flags:0x30, size:381
+  Unused libraries:
+    C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib
+    C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib
+    C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib
+    C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbc32.lib
+    C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\odbccp32.lib
+  Starting pass 2
+       * linker generated manifest res *
+       BackupEngine.exp
+       WimMountManager.obj
+       VSSSnapshotManager.obj
+       BackupVerification.obj
+       SystemStateRestore.obj
+       HyperVRestore.obj
+       VSSManager.obj
+       VolumeEnumeration.obj
+       ShellExtension.obj
+       RestoreEnhanced.obj
+       RestoreEngine_Advanced.obj
+       RecoveryEnvironment.obj
+       HyperV_Enumeration.obj
+       HyperVManager.obj
+       HyperVBackup_Implementation.obj
+       BrsFileManager.obj
+       BackupManager_Advanced.obj
+       BackupInfo_Implementation.obj
+       BackupFiles_Implementation.obj
+       BackupEngine_Exports.obj
+       BackupEngine.obj
+       zlibstaticd.lib(adler32.obj)
+       zlibstaticd.lib(crc32.obj)
+       zlibstaticd.lib(deflate.obj)
+       zlibstaticd.lib(gzclose.obj)
+       zlibstaticd.lib(gzlib.obj)
+       zlibstaticd.lib(gzread.obj)
+       zlibstaticd.lib(gzwrite.obj)
+       zlibstaticd.lib(inflate.obj)
+       zlibstaticd.lib(inftrees.obj)
+       zlibstaticd.lib(inffast.obj)
+       zlibstaticd.lib(trees.obj)
+       zlibstaticd.lib(zutil.obj)
+       VssApi.lib(VSSAPI.DLL)
+       VssApi.lib(VSSAPI.DLL)
+       VssApi.lib(VSSAPI.DLL)
+       VssApi.lib(VSSAPI.DLL)
+       VssApi.lib(VSSAPI.DLL)
+       wbemuuid.lib(wbemcli_i.obj)
+       ole32.lib(ole32.dll)
+       ole32.lib(ole32.dll)
+       ole32.lib(ole32.dll)
+       ole32.lib(ole32.dll)
+       ole32.lib(ole32.dll)
+       ole32.lib(ole32.dll)
+       ole32.lib(ole32.dll)
+       ole32.lib(ole32.dll)
+       ole32.lib(ole32.dll)
+       oleaut32.lib(OLEAUT32.dll)
+       oleaut32.lib(OLEAUT32.dll)
+       oleaut32.lib(OLEAUT32.dll)
+       oleaut32.lib(OLEAUT32.dll)
+       oleaut32.lib(OLEAUT32.dll)
+       oleaut32.lib(OLEAUT32.dll)
+       oleaut32.lib(OLEAUT32.dll)
+       oleaut32.lib(OLEAUT32.dll)
+       oleaut32.lib(OLEAUT32.dll)
+       oleaut32.lib(OLEAUT32.dll)
+       wimgapi.lib(WIMGAPI.DLL)
+       wimgapi.lib(WIMGAPI.DLL)
+       wimgapi.lib(WIMGAPI.DLL)
+       wimgapi.lib(WIMGAPI.DLL)
+       wimgapi.lib(WIMGAPI.DLL)
+       wimgapi.lib(WIMGAPI.DLL)
+       wimgapi.lib(WIMGAPI.DLL)
+       wimgapi.lib(WIMGAPI.DLL)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       kernel32.lib(KERNEL32.dll)
+       user32.lib(USER32.dll)
+       user32.lib(USER32.dll)
+       user32.lib(USER32.dll)
+       user32.lib(USER32.dll)
+       user32.lib(USER32.dll)
+       advapi32.lib(ADVAPI32.dll)
+       advapi32.lib(ADVAPI32.dll)
+       advapi32.lib(ADVAPI32.dll)
+       advapi32.lib(ADVAPI32.dll)
+       advapi32.lib(ADVAPI32.dll)
+       advapi32.lib(ADVAPI32.dll)
+       advapi32.lib(ADVAPI32.dll)
+       advapi32.lib(ADVAPI32.dll)
+       shell32.lib(SHELL32.dll)
+       shell32.lib(SHELL32.dll)
+       shell32.lib(SHELL32.dll)
+       shell32.lib(SHELL32.dll)
+       uuid.lib(unknwn_i.obj)
+       uuid.lib(cguid_i.obj)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(MSVCP140.dll)
+       msvcprt.lib(vector_algorithms.obj)
+       msvcprt.lib(syserror_import_lib.obj)
+       msvcprt.lib(nothrow.obj)
+       msvcprt.lib(locale0_implib.obj)
+       msvcprt.lib(filesystem.obj)
+       MSVCRT.lib(argv_mode.obj)
+       MSVCRT.lib(default_local_stdio_options.obj)
+       MSVCRT.lib(fltused.obj)
+       MSVCRT.lib(ehvecdtr.obj)
+       MSVCRT.lib(std_type_info_static.obj)
+       MSVCRT.lib(tncleanup.obj)
+       MSVCRT.lib(delete_array.obj)
+       MSVCRT.lib(delete_scalar.obj)
+       MSVCRT.lib(delete_scalar_size.obj)
+       MSVCRT.lib(new_scalar.obj)
+       MSVCRT.lib(new_scalar_nothrow.obj)
+       MSVCRT.lib(throw_bad_alloc.obj)
+       MSVCRT.lib(dll_dllmain.obj)
+       MSVCRT.lib(tlsdtor.obj)
+       MSVCRT.lib(tlsdyn.obj)
+       MSVCRT.lib(tlssup.obj)
+       MSVCRT.lib(initializers.obj)
+       MSVCRT.lib(utility.obj)
+       MSVCRT.lib(ucrt_stubs.obj)
+       MSVCRT.lib(gs_cookie.obj)
+       MSVCRT.lib(gs_report.obj)
+       MSVCRT.lib(gs_support.obj)
+       MSVCRT.lib(guard_support.obj)
+       MSVCRT.lib(loadcfg.obj)
+       MSVCRT.lib(dyn_tls_init.obj)
+       MSVCRT.lib(ucrt_detection.obj)
+       MSVCRT.lib(cpu_disp.obj)
+       MSVCRT.lib(utility_desktop.obj)
+       MSVCRT.lib(initsect.obj)
+       MSVCRT.lib(gshandler.obj)
+       MSVCRT.lib(gshandlereh4.obj)
+       MSVCRT.lib(amdsecgs.obj)
+       MSVCRT.lib(chkstk.obj)
+       MSVCRT.lib(guard_dispatch.obj)
+       MSVCRT.lib(guard_xfg_dispatch.obj)
+       OLDNAMES.lib(close.obi)
+       OLDNAMES.lib(read.obi)
+       OLDNAMES.lib(write.obi)
+       OLDNAMES.lib(open.obi)
+       comsuppw.lib(comraise.obj)
+       comsuppw.lib(comsupp.obj)
+       comsuppw.lib(comutil.obj)
+       comsuppw.lib(invkerr.obj)
+       comsuppw.lib(invkprxy.obj)
+       atls.lib(atlbase.obj)
+       atls.lib(stdafx.obj)
+       shlwapi.lib(SHLWAPI.dll)
+       shlwapi.lib(SHLWAPI.dll)
+       shlwapi.lib(SHLWAPI.dll)
+       MSVCRTD.lib(new_array.obj)
+       MSVCRTD.lib(gshandlerseh.obj)
+       vcruntime.lib(VCRUNTIME140_1.dll)
+       vcruntime.lib(VCRUNTIME140_1.dll)
+       vcruntime.lib(VCRUNTIME140_1.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(VCRUNTIME140.dll)
+       vcruntime.lib(softmemtag.obj)
+       ucrt.lib(api-ms-win-crt-time-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-time-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-time-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-string-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-stdio-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-runtime-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-locale-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-locale-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-locale-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-heap-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-filesystem-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+       ucrt.lib(api-ms-win-crt-convert-l1-1-0.dll)
+  Finished pass 2
+  BackupEngine.vcxproj -> E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\BackupEngine\Debug\BackupEngine.dll

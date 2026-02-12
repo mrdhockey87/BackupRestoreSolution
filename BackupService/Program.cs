@@ -11,6 +11,8 @@ builder.Services.AddWindowsService(options =>
 builder.Services.AddHostedService<BackupSchedulerService>();
 builder.Services.AddSingleton<JobManager>();
 builder.Services.AddSingleton<BackupExecutor>();
+builder.Services.AddSingleton<BackupProgressTracker>();
+builder.Services.AddSingleton<BackupServiceCommunication>();
 
 var host = builder.Build();
 await host.RunAsync();

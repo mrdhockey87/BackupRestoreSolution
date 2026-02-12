@@ -1,5 +1,8 @@
 using System;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using BackupUI.Models;
 using BackupUI.Services;
 
@@ -25,9 +28,11 @@ namespace BackupUI.Windows
         {
             if (dgJobs.SelectedItem is BackupJob job)
             {
-                // Open BackupWindow with job loaded for editing
-                MessageBox.Show($"Edit job: {job.Name}\n(Edit functionality to be implemented)",
-                    "Edit Job", MessageBoxButton.OK, MessageBoxImage.Information);
+                var window = new BackupWindowNew(job);
+                if (window.ShowDialog() == true)
+                {
+                    LoadJobs();
+                }
             }
             else
             {
@@ -58,12 +63,39 @@ namespace BackupUI.Windows
             }
         }
 
-        private void RunNow_Click(object sender, RoutedEventArgs e)
+        private async void RunNow_Click(object sender, RoutedEventArgs e)
         {
             if (dgJobs.SelectedItem is BackupJob job)
             {
-                MessageBox.Show($"Running job: {job.Name}\n(Run now functionality to be implemented)",
-                    "Run Job", MessageBoxButton.OK, MessageBoxImage.Information);
+                var result = MessageBox.Show(
+                    $"Run backup job '{job.Name}' now?\n\nThe backup will run in the background service and continue even if you close this window.",
+                    "Run Backup",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    // Send job to service and show progress window
+                    var serviceClient = new BackupServiceClient();
+                    var success = await serviceClient.RunBackupNowAsync(job.Id);
+
+                    if (success)
+                    {
+                        BackupLogger.LogInfo(job.Name, "Manual backup started via service");
+                        
+                        // Show non-modal progress window
+                        var progressWindow = new BackupProgressWindow(job.Id, job.Name);
+                        progressWindow.Show();
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            "Failed to start backup. Please ensure the BackupRestoreService is running.",
+                            "Service Error",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error);
+                    }
+                }
             }
             else
             {

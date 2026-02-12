@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <!-- Centralized output paths for C++ projects -->
+    <OutDir>$(SolutionDir)artifacts\bin\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)artifacts\obj\$(Configuration)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+</Project>

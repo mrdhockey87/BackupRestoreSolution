@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BackupService
@@ -38,20 +39,43 @@ namespace BackupService
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern void GetLastErrorMessage(StringBuilder buffer, int bufferSize);
 
-        public async Task<bool> ExecuteBackupJob(BackupJob job, Action<string>? logger = null)
+        public async Task<bool> ExecuteBackupJobWithProgress(
+            BackupJob job, 
+            Action<int, string>? progressCallback,
+            CancellationToken cancellationToken,
+            Action<string>? logger = null)
         {
             return await Task.Run(() =>
             {
                 try
                 {
                     logger?.Invoke($"Starting backup job: {job.Name}");
+                    progressCallback?.Invoke(0, "Initializing backup...");
+
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        logger?.Invoke("Backup cancelled by user");
+                        return false;
+                    }
+
+                    // Create native progress callback
+                    ProgressCallback nativeCallback = (percentage, message) =>
+                    {
+                        progressCallback?.Invoke(percentage, message ?? $"Progress: {percentage}%");
+                    };
 
                     foreach (var sourcePath in job.SourcePaths)
                     {
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            logger?.Invoke("Backup cancelled by user");
+                            return false;
+                        }
+
                         var destPath = Path.Combine(job.DestinationPath,
                             $"{job.Name}_{DateTime.Now:yyyyMMdd_HHmmss}");
 
-                        int result = ExecuteBackup(job, sourcePath, destPath, logger);
+                        int result = ExecuteBackup(job, sourcePath, destPath, nativeCallback, logger);
 
                         if (result != 0)
                         {
@@ -66,10 +90,17 @@ namespace BackupService
                     {
                         foreach (var vm in job.HyperVMachines)
                         {
+                            if (cancellationToken.IsCancellationRequested)
+                            {
+                                logger?.Invoke("Backup cancelled by user");
+                                return false;
+                            }
+
                             var destPath = Path.Combine(job.DestinationPath,
                                 $"{vm}_{DateTime.Now:yyyyMMdd_HHmmss}");
                             
-                            int result = BackupHyperVVM(vm, destPath, null);
+                            progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {vm}...");
+                            int result = BackupHyperVVM(vm, destPath, nativeCallback);
 
                             if (result != 0)
                             {
@@ -81,10 +112,11 @@ namespace BackupService
                         }
                     }
 
-                    if (job.VerifyAfterBackup)
+                    if (job.VerifyAfterBackup && !cancellationToken.IsCancellationRequested)
                     {
                         logger?.Invoke("Verifying backup...");
-                        int result = VerifyBackup(job.DestinationPath, null);
+                        progressCallback?.Invoke(90, "Verifying backup...");
+                        int result = VerifyBackup(job.DestinationPath, nativeCallback);
                         if (result != 0)
                         {
                             logger?.Invoke("Backup verification failed!");
@@ -92,6 +124,7 @@ namespace BackupService
                         }
                     }
 
+                    progressCallback?.Invoke(100, "Backup completed successfully!");
                     logger?.Invoke($"Backup job completed successfully: {job.Name}");
                     return true;
                 }
@@ -100,10 +133,16 @@ namespace BackupService
                     logger?.Invoke($"Backup job failed with exception: {ex.Message}");
                     return false;
                 }
-            });
+            }, cancellationToken);
         }
 
-        private int ExecuteBackup(BackupJob job, string sourcePath, string destPath, Action<string>? logger)
+        public async Task<bool> ExecuteBackupJob(BackupJob job, Action<string>? logger = null)
+        {
+            return await ExecuteBackupJobWithProgress(job, null, CancellationToken.None, logger);
+        }
+
+        private int ExecuteBackup(BackupJob job, string sourcePath, string destPath, 
+            ProgressCallback? callback, Action<string>? logger)
         {
             int result;
 
@@ -113,25 +152,25 @@ namespace BackupService
                     if (job.Target == BackupTarget.Volume)
                     {
                         logger?.Invoke($"Backing up volume: {sourcePath}");
-                        result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, null);
+                        result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
                     }
                     else
                     {
                         logger?.Invoke($"Backing up files: {sourcePath}");
-                        result = BackupFiles(sourcePath, destPath, null);
+                        result = BackupFiles(sourcePath, destPath, callback);
                     }
                     break;
 
                 case BackupType.Incremental:
                     var lastBackup = FindLastBackup(job.DestinationPath, job.Name);
                     logger?.Invoke($"Creating incremental backup from: {lastBackup ?? "none"}");
-                    result = CreateIncrementalBackup(sourcePath, destPath, lastBackup ?? "", null);
+                    result = CreateIncrementalBackup(sourcePath, destPath, lastBackup ?? "", callback);
                     break;
 
                 case BackupType.Differential:
                     var fullBackup = FindFullBackup(job.DestinationPath, job.Name);
                     logger?.Invoke($"Creating differential backup from: {fullBackup ?? "none"}");
-                    result = CreateDifferentialBackup(sourcePath, destPath, fullBackup ?? "", null);
+                    result = CreateDifferentialBackup(sourcePath, destPath, fullBackup ?? "", callback);
                     break;
 
                 default:
