@@ -19,7 +19,8 @@ namespace BackupUI
 			return string.Format("{0} {1}", VersionClass.version_word, VersionClass.version_string);
 		}
 
-		static private string GetAssemblyVersion()
+		// Public so ServiceManagementWindow can access it
+		static public string GetAssemblyVersion()
 		{
 			try
 			{
@@ -54,18 +55,65 @@ namespace BackupUI
 				}
 				
 				// Last resort fallback
-				return "5.13.2.4";
+				return "5.13.3.3";
 			}
 			catch
 			{
 				// Fallback version if assembly version fails
-				return "5.13.2.4";
+				return "5.13.3.3";
 			}
 		}
 	}
 }
 
 /*
+* Version 5.13.3.3 After running into some other problems and fixing them it still gedts to line 92 in the BackupServiceClient exicutes that then
+*			       exits the function without any error or returning to any catch block and the version check just shows "Unknown (check failed)" in the UI. 
+*			       I added a lot of debug logging to try to figure out why but it still isn't clear mdail 2/13/2026
+* Version 5.13.3.2 VERSION CHECK TIMEOUT FIX: Fixed Service Management and About windows hanging when checking old service version! Added 3-second
+*					timeout wrapper around GetServiceVersionAsync calls using Task.WhenAny pattern. Version check now runs in background task without
+*					blocking UI thread. Shows "Checking..." immediately, then updates with result or timeout. Old services without GetVersion handler
+*					now show "Unknown (old version)" with "⚠️ Reinstall Required" warning in orange instead of hanging. Added null/empty string checks
+*					for service version responses. Comprehensive error handling with try-catch logging failures as "Unknown (check failed)". Window
+*					remains responsive during version check - buttons enabled immediately based on service status. Users can now interact with Service
+*					Management even if service is old version. No more frozen UI waiting for timeout! mdail 2/13/2026
+* Version 5.13.3.1 ABOUT DIALOG ENHANCEMENT: Created comprehensive About dialog (Help → About) showing all 3 component versions! New AboutWindow
+*					displays UI, Service, and Engine versions in a professional dialog. Service version retrieved via Named Pipe with real-time
+*					status checking (Running, Stopped, Not Installed). Shows ⚠️ warnings for version mismatches or service issues (Not Running,
+*					Version Mismatch, Not Responding, Not Installed). Includes full feature list describing all backup capabilities. Professional
+*					layout with header, component versions table, description, and copyright. Replaces simple MessageBox with rich UI. Users can
+*					quickly verify all components are same version and service is healthy. Perfect for troubleshooting version sync issues! mdail 2/13/2026
+* Version 5.13.3.0 CENTRALIZED VERSION MANAGEMENT: Implemented solution-wide version synchronization! All 3 projects (BackupUI, BackupService,
+*					BackupEngine) now share the SAME version number defined in Directory.Build.props. Service Management window now displays both
+*					UI and Service versions side-by-side with automatic version mismatch detection. Added ⛔ VERSION MISMATCH! warning (red, bold)
+*					when service version doesn't match UI version. Service version retrieved via Named Pipe GetVersion command. Added GetAssemblyVersion
+*					as public method in VersionClass for UI access. Service automatically reports its version from assembly metadata. Single source of
+*					truth for versioning - change version once in Directory.Build.props and ALL projects update! Perfect for ensuring UI and Service
+*					stay in sync. Visual warning prevents running mismatched versions. Enterprise-grade version control! mdail 2/13/2026
+* Version 5.13.2.9 ACTIVITY LOGGING ENHANCEMENT: Added comprehensive logging for ALL backup attempts - successful or failed! Every "Run Now"
+*					click now logs to Activity tab immediately. Service communication failures are logged with clear error messages. Service
+*					status issues (not installed, not running) are logged with system warnings. UI now logs: "User initiated manual backup",
+*					"Service accepted backup request", or "Failed to communicate with service". CheckBackupService logs service start attempts
+*					and results. No more silent failures - every attempt leaves a trace for troubleshooting! Users can now review Activity tab
+*					to see exactly what happened even if backup didn't start. Perfect for diagnosing service issues. mdail 2/13/2026
+* Version 5.13.2.8 CRITICAL FIX - NAMED PIPE BUG: Fixed root cause of "backups not starting" - BackupServiceCommunication.Start() was NEVER
+*					being called! BackupServiceCommunication was registered as Singleton but not as IHostedService, so the named pipe listener
+*					never started. Service was running but not listening for UI commands. Fixed by implementing IHostedService interface with
+*					StartAsync/StopAsync methods. Updated Program.cs to register as both Singleton AND HostedService so BackupSchedulerService
+*					can subscribe to events while StartAsync is called automatically. Removed manual Start() call from BackupSchedulerService.
+*					Added extensive debug logging to track pipe connections and messages. Named pipe now starts automatically when service starts.
+*					UI can now successfully send RunBackup commands and backups actually execute! mdail 2/13/2026
+* Version 5.13.2.7 SERVICE INSTALLATION FIX: Created installation scripts and service detection in UI. Not the actual issue - service was
+*					installed but named pipe wasn't working. mdail 2/13/2026
+* Version 5.13.2.6 RUNTIME CONFIG FIX: Fixed "install .NET runtime" error when launching app! Added explicit GenerateRuntimeConfigurationFiles
+*					property to BackupUI.csproj. The centralized build output was preventing automatic generation of BackupUI.runtimeconfig.json,
+*					which tells Windows which .NET runtime to use. App now generates proper runtime config and launches correctly. Build system
+*					fully functional with proper .NET runtime configuration! mdail 2/13/2026
+* Version 5.13.2.5 CENTRALIZED BUILD OUTPUT COMPLETE: All build output paths now working perfectly! All projects (BackupUI, BackupService,
+*					BackupEngine) now correctly output to unified artifacts\bin\<Configuration>\ directory. Intermediate files properly
+*					organized in artifacts\obj\<Configuration>\<ProjectName>\. Directory.Build.props and Directory.Build.targets fully
+*					functional across entire solution. BackupEngine.dll copies to correct location. No more scattered binaries or path
+*					issues. Clean, enterprise-grade build structure with proper MSBuild conventions. Everything ends up where it should! mdail 2/13/2026
 * Version 5.13.2.4 I used Microsoft Copilot to ask some questions the CENTRALIZED BUILD OUTPUT and Directory.Build.targets seemingly
 *				   getting ignored and I still need to work through some of the issues with that. mdail 2/12/2026
 * Version 5.13.2.3 CENTRALIZED BUILD OUTPUT: Implemented Directory.Build.props solution-wide build configuration! Created root

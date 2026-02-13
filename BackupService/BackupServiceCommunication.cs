@@ -2,47 +2,67 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Hosting;
 
 namespace BackupService
 {
     /// <summary>
     /// Handles communication between BackupService and UI via Named Pipes
+    /// Implements IHostedService to automatically start when service starts
     /// </summary>
-    public class BackupServiceCommunication : IDisposable
+    public class BackupServiceCommunication : IHostedService, IDisposable
     {
         private const string PipeName = "BackupRestoreServicePipe";
-        private NamedPipeServerStream? _pipeServer;
         private readonly CancellationTokenSource _cancellationTokenSource = new();
         private Task? _listenTask;
 
         public event EventHandler<BackupCommandEventArgs>? CommandReceived;
         public event EventHandler<ProgressQueryEventArgs>? ProgressQueried;
 
-        public void Start()
+        // IHostedService implementation - called automatically when Windows Service starts
+        public Task StartAsync(CancellationToken cancellationToken)
         {
-            _listenTask = Task.Run(ListenForConnectionsAsync);
+            System.Diagnostics.Debug.WriteLine("BackupServiceCommunication: Starting named pipe listener...");
+            _listenTask = Task.Run(ListenForConnectionsAsync, _cancellationTokenSource.Token);
+            return Task.CompletedTask;
+        }
+
+        public async Task StopAsync(CancellationToken cancellationToken)
+        {
+            System.Diagnostics.Debug.WriteLine("BackupServiceCommunication: Stopping named pipe listener...");
+            _cancellationTokenSource.Cancel();
+            if (_listenTask != null)
+            {
+                await _listenTask;
+            }
         }
 
         private async Task ListenForConnectionsAsync()
         {
+            System.Diagnostics.Debug.WriteLine("BackupServiceCommunication: Started listening for connections");
+            
             while (!_cancellationTokenSource.Token.IsCancellationRequested)
             {
                 try
                 {
-                    _pipeServer = new NamedPipeServerStream(
+                    var pipeServer = new NamedPipeServerStream(
                         PipeName,
                         PipeDirection.InOut,
                         NamedPipeServerStream.MaxAllowedServerInstances,
                         PipeTransmissionMode.Message,
                         PipeOptions.Asynchronous);
 
-                    await _pipeServer.WaitForConnectionAsync(_cancellationTokenSource.Token);
+                    System.Diagnostics.Debug.WriteLine("BackupServiceCommunication: Waiting for client connection...");
+                    await pipeServer.WaitForConnectionAsync(_cancellationTokenSource.Token);
+                    System.Diagnostics.Debug.WriteLine("BackupServiceCommunication: Client connected!");
 
-                    _ = Task.Run(() => HandleClientAsync(_pipeServer), _cancellationTokenSource.Token);
+                    // Handle client in separate task so we can continue listening
+                    _ = Task.Run(() => HandleClientAsync(pipeServer), _cancellationTokenSource.Token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -54,6 +74,8 @@ namespace BackupService
                     await Task.Delay(1000, _cancellationTokenSource.Token);
                 }
             }
+            
+            System.Diagnostics.Debug.WriteLine("BackupServiceCommunication: Stopped listening");
         }
 
         private async Task HandleClientAsync(NamedPipeServerStream pipeServer)
@@ -89,17 +111,24 @@ namespace BackupService
             {
                 var command = JsonSerializer.Deserialize<ServiceCommand>(message);
                 if (command == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("BackupServiceCommunication: Invalid command (null)");
                     return CreateResponse(false, "Invalid command");
+                }
+
+                System.Diagnostics.Debug.WriteLine($"BackupServiceCommunication: Processing command: {command.CommandType}");
 
                 switch (command.CommandType)
                 {
                     case "RunBackup":
                         var jobId = Guid.Parse(command.Data ?? "");
+                        System.Diagnostics.Debug.WriteLine($"BackupServiceCommunication: Raising RunBackup event for job: {jobId}");
                         CommandReceived?.Invoke(this, new BackupCommandEventArgs { JobId = jobId });
                         return CreateResponse(true, "Backup started");
 
                     case "AbortBackup":
                         var abortJobId = Guid.Parse(command.Data ?? "");
+                        System.Diagnostics.Debug.WriteLine($"BackupServiceCommunication: Raising AbortBackup event for job: {abortJobId}");
                         CommandReceived?.Invoke(this, new BackupCommandEventArgs 
                         { 
                             JobId = abortJobId, 
@@ -113,12 +142,31 @@ namespace BackupService
                         ProgressQueried?.Invoke(this, args);
                         return JsonSerializer.Serialize(args.Progress);
 
+                    case "GetVersion":
+                        // Return service version from assembly
+                        var assembly = Assembly.GetExecutingAssembly();
+                        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                                   ?? assembly.GetName().Version?.ToString()
+                                   ?? "Unknown";
+                        
+                        // Strip Git commit hash if present
+                        int plusIndex = version.IndexOf('+');
+                        if (plusIndex > 0)
+                        {
+                            version = version.Substring(0, plusIndex);
+                        }
+                        
+                        System.Diagnostics.Debug.WriteLine($"BackupServiceCommunication: Returning version: {version}");
+                        return CreateResponse(true, version);
+
                     default:
+                        System.Diagnostics.Debug.WriteLine($"BackupServiceCommunication: Unknown command type: {command.CommandType}");
                         return CreateResponse(false, "Unknown command");
                 }
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"BackupServiceCommunication: Error processing message: {ex.Message}");
                 return CreateResponse(false, $"Error: {ex.Message}");
             }
         }
@@ -131,7 +179,6 @@ namespace BackupService
         public void Dispose()
         {
             _cancellationTokenSource.Cancel();
-            _pipeServer?.Dispose();
             _cancellationTokenSource.Dispose();
         }
     }

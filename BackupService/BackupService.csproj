@@ -4,6 +4,10 @@
   <Nullable>enable</Nullable>
   <OutputType>Exe</OutputType>
   <Platforms>x64</Platforms>
+  <!-- Ensure runtime config is generated -->
+  <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+  <!-- Explicitly enable deps.json generation -->
+  <GenerateDependencyFile>true</GenerateDependencyFile>
 </PropertyGroup>
 
   <ItemGroup>

@@ -14,6 +14,18 @@ namespace BackupUI.Windows
         public ServiceManagementWindow()
         {
             InitializeComponent();
+            
+            // Show UI version immediately
+            txtUIVersion.Text = VersionClass.GetAssemblyVersion();
+            
+            // Explicitly enable all buttons initially to prevent XAML defaults from interfering
+            btnStart.IsEnabled = false;
+            btnStop.IsEnabled = false;
+            btnRestart.IsEnabled = false;
+            btnInstall.IsEnabled = false;
+            btnUninstall.IsEnabled = false;
+            
+            System.Diagnostics.Debug.WriteLine("ServiceManagement: Window initialized, starting RefreshStatusAsync");
             _ = RefreshStatusAsync();
         }
 
@@ -27,13 +39,92 @@ namespace BackupUI.Windows
             try
             {
                 bool isInstalled = await serviceManager.IsServiceInstalledAsync();
+                System.Diagnostics.Debug.WriteLine($"ServiceManagement: IsServiceInstalled = {isInstalled}");
+                
                 txtInstalled.Text = isInstalled ? "Yes" : "No";
 
                 if (isInstalled)
                 {
+                    System.Diagnostics.Debug.WriteLine("ServiceManagement: Service is installed");
                     var status = await serviceManager.GetServiceStatusAsync();
                     txtStatus.Text = status?.ToString() ?? "Unknown";
 
+                    // Get service version via Named Pipe (with timeout and error handling)
+                    if (status == ServiceControllerStatus.Running)
+                    {
+                        txtServiceVersion.Text = "Checking...";
+                        txtVersionWarning.Visibility = Visibility.Collapsed;
+                        
+                        // Run version check in background with timeout
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                var serviceClient = new BackupServiceClient();
+                                
+                                // Add 3-second timeout wrapper
+                                var versionTask = serviceClient.GetServiceVersionAsync();
+                                var timeoutTask = Task.Delay(3000);
+                                var completedTask = await Task.WhenAny(versionTask, timeoutTask);
+                                
+                                string? serviceVersion = null;
+                                if (completedTask == versionTask)
+                                {
+                                    serviceVersion = await versionTask;
+                                }
+                                
+                                // Update UI on UI thread
+                                await Dispatcher.InvokeAsync(() =>
+                                {
+                                    if (serviceVersion != null && !string.IsNullOrWhiteSpace(serviceVersion))
+                                    {
+                                        txtServiceVersion.Text = serviceVersion;
+                                        
+                                        // Check for version mismatch
+                                        var uiVersion = VersionClass.GetAssemblyVersion();
+                                        if (serviceVersion != uiVersion)
+                                        {
+                                            txtVersionWarning.Text = " ? VERSION MISMATCH!";
+                                            txtVersionWarning.Foreground = System.Windows.Media.Brushes.Red;
+                                            txtVersionWarning.Visibility = Visibility.Visible;
+                                        }
+                                        else
+                                        {
+                                            txtVersionWarning.Visibility = Visibility.Collapsed;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // Old service without GetVersion or timeout
+                                        txtServiceVersion.Text = "Unknown (old version)";
+                                        txtVersionWarning.Text = " ?? Reinstall Required";
+                                        txtVersionWarning.Foreground = System.Windows.Media.Brushes.Orange;
+                                        txtVersionWarning.Visibility = Visibility.Visible;
+                                    }
+                                });
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Version check error: {ex.Message}");
+                                await Dispatcher.InvokeAsync(() =>
+                                {
+                                    txtServiceVersion.Text = "Unknown (check failed)";
+                                    txtVersionWarning.Text = " ?? Check Failed";
+                                    txtVersionWarning.Foreground = System.Windows.Media.Brushes.Orange;
+                                    txtVersionWarning.Visibility = Visibility.Visible;
+                                });
+                            }
+                        });
+                    }
+                    else
+                    {
+                        txtServiceVersion.Text = "N/A (service not running)";
+                        txtVersionWarning.Text = " ?? Not Running";
+                        txtVersionWarning.Foreground = System.Windows.Media.Brushes.Orange;
+                        txtVersionWarning.Visibility = Visibility.Visible;
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"ServiceManagement: Setting buttons - Start={status != ServiceControllerStatus.Running}, Stop={status == ServiceControllerStatus.Running}");
                     btnStart.IsEnabled = status != ServiceControllerStatus.Running;
                     btnStop.IsEnabled = status == ServiceControllerStatus.Running;
                     btnRestart.IsEnabled = status == ServiceControllerStatus.Running;
@@ -42,16 +133,27 @@ namespace BackupUI.Windows
                 }
                 else
                 {
+                    System.Diagnostics.Debug.WriteLine("ServiceManagement: Service is NOT installed - enabling Install button");
                     txtStatus.Text = "Not Installed";
+                    txtServiceVersion.Text = "N/A (not installed)";
+                    txtVersionWarning.Visibility = Visibility.Collapsed;
                     btnStart.IsEnabled = false;
                     btnStop.IsEnabled = false;
                     btnRestart.IsEnabled = false;
                     btnInstall.IsEnabled = true;
                     btnUninstall.IsEnabled = false;
+                    
+                    System.Diagnostics.Debug.WriteLine($"ServiceManagement: Button states BEFORE UpdateLayout - Install={btnInstall.IsEnabled}, Uninstall={btnUninstall.IsEnabled}");
+                    
+                    // Force UI update
+                    this.UpdateLayout();
+                    
+                    System.Diagnostics.Debug.WriteLine($"ServiceManagement: Button states AFTER UpdateLayout - Install={btnInstall.IsEnabled}, Uninstall={btnUninstall.IsEnabled}");
                 }
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"ServiceManagement: RefreshStatusAsync error: {ex.Message}");
                 MessageBox.Show($"Failed to refresh status: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }

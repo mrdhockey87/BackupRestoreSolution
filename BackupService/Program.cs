@@ -8,11 +8,18 @@ builder.Services.AddWindowsService(options =>
     options.ServiceName = "BackupRestoreService";
 });
 
+// Register BackupServiceCommunication as singleton AND hosted service
+// This ensures it's created once and its StartAsync/StopAsync are called automatically
+var communicationInstance = new BackupServiceCommunication();
+builder.Services.AddSingleton(communicationInstance);
+builder.Services.AddHostedService(sp => communicationInstance);
+
 builder.Services.AddHostedService<BackupSchedulerService>();
 builder.Services.AddSingleton<JobManager>();
 builder.Services.AddSingleton<BackupExecutor>();
 builder.Services.AddSingleton<BackupProgressTracker>();
-builder.Services.AddSingleton<BackupServiceCommunication>();
 
 var host = builder.Build();
 await host.RunAsync();
+
+

@@ -43,8 +43,8 @@ namespace BackupService
             _logger.LogInformation("Backup Scheduler Service started at: {time}", DateTimeOffset.Now);
             LogToFile("Backup Scheduler Service started");
 
-            // Start named pipe communication
-            _communication.Start();
+            // NOTE: BackupServiceCommunication now starts automatically via IHostedService
+            // No need to call _communication.Start() here
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -199,10 +199,6 @@ namespace BackupService
             }
         }
 
-        public override void Dispose()
-        {
-            _communication?.Dispose();
-            base.Dispose();
-        }
+        // NOTE: Don't dispose _communication - it's managed by DI container as IHostedService
     }
 }

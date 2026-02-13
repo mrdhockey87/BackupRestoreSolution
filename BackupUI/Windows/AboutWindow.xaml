@@ -1,0 +1,103 @@
+﻿<Window x:Class="BackupUI.Windows.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="About Backup &amp; Restore Solution"
+        Height="450"
+        Width="550"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#F5F5F5">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#2C3E50" Padding="20">
+            <StackPanel>
+                <TextBlock Text="Backup &amp; Restore Solution" 
+                           FontSize="24" 
+                           FontWeight="Bold" 
+                           Foreground="White"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Name="txtMainVersion"
+                           Text="Version 5.13.3.0" 
+                           FontSize="14" 
+                           Foreground="#ECF0F1"
+                           HorizontalAlignment="Center"
+                           Margin="0,5,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Content -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="30,20">
+                <!-- Component Versions -->
+                <GroupBox Header="Component Versions" Margin="0,0,0,20" Padding="15">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,5">
+                            <TextBlock Text="User Interface (BackupUI):" Width="200" FontWeight="SemiBold"/>
+                            <TextBlock Name="txtUIVersion" Text="5.13.3.0" FontFamily="Consolas"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,5">
+                            <TextBlock Text="Backup Service:" Width="200" FontWeight="SemiBold"/>
+                            <TextBlock Name="txtServiceVersion" Text="Checking..." FontFamily="Consolas"/>
+                            <TextBlock Name="txtServiceWarning" 
+                                       Text=" ⚠️ Not Running" 
+                                       Foreground="Orange" 
+                                       FontWeight="Bold" 
+                                       Visibility="Collapsed"
+                                       Margin="10,0,0,0"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,5">
+                            <TextBlock Text="Backup Engine (C++):" Width="200" FontWeight="SemiBold"/>
+                            <TextBlock Name="txtEngineVersion" Text="5.13.3.0" FontFamily="Consolas"/>
+                        </StackPanel>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- Description -->
+                <GroupBox Header="Description" Margin="0,0,0,20" Padding="15">
+                    <TextBlock TextWrapping="Wrap">
+                        Enterprise-grade backup solution for Windows Servers with support for:
+                        <LineBreak/><LineBreak/>
+                        • Full, Incremental, and Differential backups<LineBreak/>
+                        • Hyper-V Virtual Machine backups<LineBreak/>
+                        • Volume Shadow Copy (VSS) integration<LineBreak/>
+                        • System State backup and restore<LineBreak/>
+                        • Disk and Volume cloning<LineBreak/>
+                        • Network path support (UNC shares)<LineBreak/>
+                        • Scheduled automated backups<LineBreak/>
+                        • Windows Service-based execution<LineBreak/>
+                        • Mount backups as read-only drives<LineBreak/>
+                        • Cross-platform restore (Linux ISO included)
+                    </TextBlock>
+                </GroupBox>
+
+                <!-- Copyright -->
+                <GroupBox Header="Copyright" Padding="15">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap">
+                            © 2026 Backup &amp; Restore Solution
+                            <LineBreak/><LineBreak/>
+                            Developed with GitHub Copilot assistance
+                        </TextBlock>
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer -->
+        <Border Grid.Row="2" BorderBrush="#CCC" BorderThickness="0,1,0,0" Background="White" Padding="15">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="OK" 
+                        Width="100" 
+                        Height="30" 
+                        Click="OK_Click"
+                        IsDefault="True"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

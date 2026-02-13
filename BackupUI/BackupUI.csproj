@@ -1,19 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>
-    <Platforms>x64</Platforms>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>5.13.2.4</Version>
-    <AssemblyVersion>5.13.2.4</AssemblyVersion>
-    <FileVersion>5.13.2.4</FileVersion>
-    <InformationalVersion>5.13.2.4</InformationalVersion>
-    <!-- Disable automatic Git commit hash appending to InformationalVersion -->
-    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-  </PropertyGroup>
+<PropertyGroup>
+  <OutputType>WinExe</OutputType>
+  <TargetFramework>net8.0-windows</TargetFramework>
+  <Nullable>enable</Nullable>
+  <UseWPF>true</UseWPF>
+  <UseWindowsForms>true</UseWindowsForms>
+  <Platforms>x64</Platforms>
+  <ApplicationManifest>app.manifest</ApplicationManifest>
+  <!-- Version comes from Directory.Build.props -->
+  <!-- Ensure runtime config is generated -->
+  <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+  <!-- Explicitly enable deps.json generation -->
+  <GenerateDependencyFile>true</GenerateDependencyFile>
+</PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.2" />
     <PackageReference Include="System.Management" Version="10.0.2" />
@@ -29,5 +28,16 @@
     <Copy SourceFiles="@(BackupEngineDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
     <Message Text="Copied BackupEngine.dll to centralized output: $(OutDir)" Importance="high" Condition="Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
     <Warning Text="BackupEngine.dll not found - Build BackupEngine C++ project first!" Condition="!Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
+  </Target>
+  
+  <!-- Ensure runtime config files are in the output directory -->
+  <Target Name="EnsureRuntimeConfig" AfterTargets="Build">
+    <ItemGroup>
+      <RuntimeConfigSource Include="$(IntermediateOutputPath)$(TargetFramework)\$(AssemblyName).runtimeconfig.json" />
+      <DepsFileSource Include="$(IntermediateOutputPath)$(TargetFramework)\$(AssemblyName).deps.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RuntimeConfigSource)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="false" Condition="Exists('@(RuntimeConfigSource)')" />
+    <Copy SourceFiles="@(DepsFileSource)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="false" Condition="Exists('@(DepsFileSource)')" />
+    <Message Text="Copied runtime config files to $(OutDir)" Importance="high" Condition="Exists('@(RuntimeConfigSource)')" />
   </Target>
 </Project>

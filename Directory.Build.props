@@ -1,28 +1,45 @@
 <Project>
 
+  <!-- CENTRALIZED VERSION - All projects use this version -->
   <PropertyGroup>
-	<!-- Root drop folders -->
-	<ArtifactsBin>$(SolutionDir)artifacts\bin\</ArtifactsBin>
-	<ArtifactsObj>$(SolutionDir)artifacts\obj\</ArtifactsObj>
+    <Version>5.13.3.3</Version>
+    <AssemblyVersion>5.13.3.3</AssemblyVersion>
+    <FileVersion>5.13.3.3</FileVersion>
+    <InformationalVersion>5.13.3.3</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+ <!-- Ensure SolutionDir is set for all projects -->
+ <PropertyGroup>
+<SolutionDir Condition="'$(SolutionDir)' == ''">$(MSBuildThisFileDirectory)</SolutionDir>
+<!-- Root drop folders -->
+<ArtifactsBin>$(SolutionDir)artifacts\bin\</ArtifactsBin>
+<ArtifactsObj>$(SolutionDir)artifacts\obj\</ArtifactsObj>
+ </PropertyGroup>
+
+  <!-- Native C++ projects -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
+	<!-- For C++ use OutDir/IntDir, *not* OutputPath -->
+	<OutDir>$(ArtifactsBin)$(Configuration)\</OutDir>
+	<!-- Keep obj separated per project to avoid collisions -->
+	<IntDir>$(ArtifactsObj)$(MSBuildProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
 
   <!-- Managed projects (.NET: csproj, fsproj, vbproj) -->
-  <PropertyGroup Condition="'$(TargetFrameworkIdentifier)' != ''">
-	<!-- Solution-wide default for .NET projects -->
-	<BaseOutputPath>$(ArtifactsBin)</BaseOutputPath>
-	<BaseIntermediateOutputPath>$(ArtifactsObj)</BaseIntermediateOutputPath>
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' != '.vcxproj'">
+	<!-- Set OutputPath directly - all binaries go to same folder -->
+	<OutputPath>$(ArtifactsBin)$(Configuration)\</OutputPath>
+	<!-- Keep obj separated per project to avoid collisions -->
+	<IntermediateOutputPath>$(ArtifactsObj)$(MSBuildProjectName)\$(Configuration)\</IntermediateOutputPath>
+	<!-- Don't append TFM or RID to paths -->
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
 	<!-- Optional to keep platforms consistent -->
 	<PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
-
-  <!-- Native C++ projects -->
-  <PropertyGroup Condition="'$(ProjectExtension)' == '.vcxproj'">
-	<!-- For C++ use OutDir/IntDir, *not* OutputPath -->
-	<OutDir>$(ArtifactsBin)$(Configuration)\</OutDir>
-	<!-- Keep obj separated per project to avoid collisions -->
-	<IntDir>$(ArtifactsObj)$(ProjectName)\$(Configuration)\</IntDir>
-  </PropertyGroup>
+  
+  <Target Name="__EchoOutput" BeforeTargets="Build">
+	<Message Importance="High" Text="[$(MSBuildProjectName)] SolutionDir=$(SolutionDir) Ext=$(MSBuildProjectExtension) OutDir=$(OutDir) OutputPath=$(OutputPath)" />
+  </Target>
 
 </Project>

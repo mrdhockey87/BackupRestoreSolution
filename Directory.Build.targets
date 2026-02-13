@@ -1,0 +1,20 @@
+<Project>
+  <!-- This file is imported AFTER the project file, so it overrides any settings in the .vcxproj -->
+  
+  <!-- Ensure SolutionDir is properly set -->
+  <PropertyGroup>
+    <SolutionDir Condition="'$(SolutionDir)' == ''">$(MSBuildThisFileDirectory)</SolutionDir>
+  </PropertyGroup>
+  
+  <!-- Force override for C++ projects with absolute paths -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
+    <OutDir>$(SolutionDir)artifacts\bin\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)artifacts\obj\$(MSBuildProjectName)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+
+  <Target Name="__EchoFinalPaths" BeforeTargets="Build">
+    <Message Importance="High" Text="[FINAL $(MSBuildProjectName)] OutDir=$(OutDir) IntDir=$(IntDir) SolutionDir=$(SolutionDir)" />
+  </Target>
+
+</Project>
+

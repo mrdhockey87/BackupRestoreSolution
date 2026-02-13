@@ -24,8 +24,8 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
-    <OutDir>$(ArtifactsBin)$(Configuration)\</OutDir>
-    <IntDir>$(ArtifactsObj)$(ProjectName)\$(Configuration)\</IntDir>
+    <OutDir>artifacts\bin\$(Configuration)\</OutDir>
+    <IntDir>artifacts\obj\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ExcludePath>$(CommonExcludePath);$(VC_ExecutablePath_x64);</ExcludePath>
@@ -83,7 +83,6 @@
     <ClCompile Include="WimMountManager.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Directory.Build.props" />
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
