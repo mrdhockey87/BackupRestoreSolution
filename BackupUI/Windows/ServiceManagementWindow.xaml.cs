@@ -47,7 +47,9 @@ namespace BackupUI.Windows
                 {
                     System.Diagnostics.Debug.WriteLine("ServiceManagement: Service is installed");
                     var status = await serviceManager.GetServiceStatusAsync();
-                    txtStatus.Text = status?.ToString() ?? "Unknown";
+                    
+                    // Format status with proper spacing (e.g., "StartPending" -> "Start Pending")
+                    txtStatus.Text = status.HasValue ? FormatServiceStatus(status.Value) : "Unknown";
 
                     // Get service version via Named Pipe (with timeout and error handling)
                     if (status == ServiceControllerStatus.Running)
@@ -297,6 +299,24 @@ namespace BackupUI.Windows
         private void Close_Click(object sender, RoutedEventArgs e)
         {
             Close();
+        }
+
+        /// <summary>
+        /// Formats ServiceControllerStatus enum to human-readable text with proper spacing
+        /// </summary>
+        private string FormatServiceStatus(ServiceControllerStatus status)
+        {
+            return status switch
+            {
+                ServiceControllerStatus.Running => "Running",
+                ServiceControllerStatus.Stopped => "Stopped",
+                ServiceControllerStatus.Paused => "Paused",
+                ServiceControllerStatus.StartPending => "Start Pending",
+                ServiceControllerStatus.StopPending => "Stop Pending",
+                ServiceControllerStatus.ContinuePending => "Continue Pending",
+                ServiceControllerStatus.PausePending => "Pause Pending",
+                _ => status.ToString()
+            };
         }
     }
 }

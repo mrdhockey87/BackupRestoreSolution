@@ -7,11 +7,7 @@
   <UseWindowsForms>true</UseWindowsForms>
   <Platforms>x64</Platforms>
   <ApplicationManifest>app.manifest</ApplicationManifest>
-  <!-- Version comes from Directory.Build.props -->
-  <!-- Ensure runtime config is generated -->
-  <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
-  <!-- Explicitly enable deps.json generation -->
-  <GenerateDependencyFile>true</GenerateDependencyFile>
+  <!-- Version, OutputPath, and Runtime config generation come from Directory.Build.props -->
 </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.2" />
@@ -28,16 +24,5 @@
     <Copy SourceFiles="@(BackupEngineDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
     <Message Text="Copied BackupEngine.dll to centralized output: $(OutDir)" Importance="high" Condition="Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
     <Warning Text="BackupEngine.dll not found - Build BackupEngine C++ project first!" Condition="!Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
-  </Target>
-  
-  <!-- Ensure runtime config files are in the output directory -->
-  <Target Name="EnsureRuntimeConfig" AfterTargets="Build">
-    <ItemGroup>
-      <RuntimeConfigSource Include="$(IntermediateOutputPath)$(TargetFramework)\$(AssemblyName).runtimeconfig.json" />
-      <DepsFileSource Include="$(IntermediateOutputPath)$(TargetFramework)\$(AssemblyName).deps.json" />
-    </ItemGroup>
-    <Copy SourceFiles="@(RuntimeConfigSource)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="false" Condition="Exists('@(RuntimeConfigSource)')" />
-    <Copy SourceFiles="@(DepsFileSource)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="false" Condition="Exists('@(DepsFileSource)')" />
-    <Message Text="Copied runtime config files to $(OutDir)" Importance="high" Condition="Exists('@(RuntimeConfigSource)')" />
   </Target>
 </Project>

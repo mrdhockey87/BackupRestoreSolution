@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -54,20 +54,90 @@ namespace BackupUI
 					return version.ToString();
 				}
 				
-				// Last resort fallback
-				return "5.13.3.3";
-			}
-			catch
-			{
-				// Fallback version if assembly version fails
-				return "5.13.3.3";
+			// Last resort fallback
+			return "5.13.3.13";
+		}
+		catch
+		{
+			// Fallback version if assembly version fails
+			return "5.13.3.13";
 			}
 		}
 	}
 }
 
+
 /*
-* Version 5.13.3.3 After running into some other problems and fixing them it still gedts to line 92 in the BackupServiceClient exicutes that then
+* Version 5.13.3.13 INCREMENTAL BACKUP AUTO-FULL LOGIC: Fixed incremental/differential backups failing when no full backup exists! Added intelligent
+*					detection in BackupExecutor - when incremental or differential backup is requested but no full backup found, automatically creates a full
+*					backup instead of failing with "Filesystem error in incremental backup". Enhanced FindFullBackup to search for actual full backup folders
+*					instead of just returning the most recent folder (which could be a failed backup). Prevents hundreds of failed backup folders from accumulating
+*					when scheduled backups run every minute. Service now logs clear message: "No full backup found. Creating initial full backup instead of
+*					incremental." Future incremental backups will properly chain from the new full backup. Cleaned up all failed backup folders. Production-ready
+*					backup chain management - first run always creates full backup, subsequent runs create incremental/differential as configured! mdail 2/14/2026
+* Version 5.13.3.12 NAMED PIPE DEADLOCK FIX (FINAL): Fixed named pipe communication hanging when UI requests service version! Root cause was
+*					StreamWriter AutoFlush=true causing deadlock between client and server. When both sides create StreamWriter with AutoFlush=true, 
+*					they both try to flush immediately, creating a deadlock waiting for each other. Added comprehensive file logging to 
+*					BackupServiceCommunication (pipe_debug.log) to diagnose the issue. Log revealed "Pipe is broken" IOException when creating writer 
+*					stream. Solution: Removed AutoFlush=true from server-side StreamWriter constructor and added manual FlushAsync() after writing 
+*					response. Named pipe communication now works perfectly! Service version check displays correctly in UI (Help → About and Service 
+*					Management). No more hanging or timeouts. Complete end-to-end verification successful - client connects, sends GetVersion command, 
+*					server processes and responds, client receives "5.13.3.12". Enterprise-grade IPC reliability! mdail 2/14/2026
+* Version 5.13.3.11 RUNTIME CONFIG LOCATION FIX (FINAL): Fixed "install .NET runtime" error caused by $(Configuration) being empty! Added default 
+*					value for Configuration property in Directory.Build.props - sets to "Debug" if not explicitly specified. This prevents OutputPath 
+*					from resolving to artifacts\bin\\ (double backslash) instead of artifacts\bin\Debug\. MSBuild was generating runtime config to wrong 
+*					location when Configuration was empty. Updated EnsureRuntimeConfigInOutput target to check multiple possible locations and copy to 
+*					correct OutputPath. Runtime config now ALWAYS generates to correct location (artifacts\bin\Debug\) regardless of how build is invoked. 
+*					BackupUI.exe now launches successfully without ".NET Desktop Runtime required" error. Three-version saga FINALLY resolved! mdail 2/14/2026
+* Version 5.13.3.10 SERVICE DESCRIPTION AUTO-UPDATE: Added automatic service description with version number! Service now sets its Windows 
+*					Services description to "Enterprise backup and restore service for Windows servers and Hyper-V VMs (Version X.X.X.X)" on startup. 
+*					Created SetServiceDescription method in BackupService that reads assembly version and updates service description via ServiceController. 
+*					Service description visible in services.msc shows current running version for easy verification. Installation scripts (Reinstall-Service.ps1, 
+*					Quick-Rebuild.ps1, Force-Service-Refresh.ps1) also set description during installation. Version mismatch now visible at a glance in 
+*					Windows Services Manager. No more confusion about which version is installed - description always matches running binary! mdail 2/14/2026
+* Version 5.13.3.9 RUNTIME CONFIG PERSISTENCE FIX: Fixed runtime config files disappearing after Clean operation! Added EnsureRuntimeConfigInOutput 
+*					target to Directory.Build.targets that automatically copies .runtimeconfig.json and .deps.json files from intermediate to output 
+*					directory after every build. Set SkipUnchangedFiles=false to force copy even when files exist. Added warning when runtime config 
+*					missing from intermediate directory. Clean solution no longer breaks runtime - files are regenerated and copied automatically on next 
+*					build. Created Verify-RuntimeConfigs.ps1 script to quickly check which executables have runtime configs. "Install .NET runtime" error 
+*					permanently resolved! mdail 2/14/2026
+* Version 5.13.3.8 RUNTIME CONFIG GENERATION FIX (FINAL): Fixed BackupUI.runtimeconfig.json not being generated after Visual Studio restart! 
+*					Removed conditional from GenerateRuntimeConfigurationFiles in Directory.Build.props - now always true for all managed projects. 
+*					Added ProduceReferenceAssembly=false to ensure runtime config generation with custom output paths. WinExe projects (BackupUI) now 
+*					correctly generate runtimeconfig.json with both Microsoft.NETCore.App and Microsoft.WindowsDesktop.App framework references. 
+*					BackupService.runtimeconfig.json continues to generate correctly. Both executables now launch without "install .NET runtime" error. 
+*					Centralized build configuration fully stable - runtime config files persist across rebuilds and VS restarts. Created comprehensive 
+*					diagnostic scripts: Check-ServiceVersion.ps1, Test-NamedPipe.ps1, Reinstall-Service.ps1, and NAMED_PIPE_DIAGNOSTIC.md for 
+*					troubleshooting service communication issues. Enterprise-grade build reliability! mdail 2/14/2026
+* Version 5.13.3.7 NAMED PIPE COMMUNICATION FIX: Fixed BackupServiceClient named pipe handling causing "Unknown (old version)" errors! 
+*					Added leaveOpen: true parameter to StreamWriter and StreamReader constructors to prevent premature pipe disposal - streams 
+*					were closing the underlying pipe before data could be transmitted. Added explicit FlushAsync() calls after writing to ensure 
+*					data is sent before reading response. Enhanced error logging to show exception type and stack trace for better debugging. 
+*					Removed duplicate GenerateRuntimeConfigurationFiles properties from BackupUI.csproj and BackupService.csproj - these are 
+*					already defined in Directory.Build.props and were causing confusion. Runtime config files now generated correctly from 
+*					centralized configuration. Service version check now works reliably - no more exiting SendCommandAsync without errors or 
+*					returning null responses. Named pipe communication stable across all commands! mdail 2/14/2026
+* Version 5.13.3.6 SERVICE COMMUNICATION SIMPLIFICATION: Fixed GetServiceVersionAsync to use SendCommandAsync helper method instead of custom pipe 
+*					handling! Simplified BackupService startup by removing excessive debug console logging that was causing confusion. Cleaned up 
+*					Program.cs to have minimal startup logging to startup.log file only. Removed verbose Console.WriteLine statements from 
+*					BackupServiceCommunication, BackupSchedulerService, JobManager, BackupProgressTracker, and BackupExecutor. Service now starts 
+*					cleanly without console spam. GetServiceVersionAsync now uses same code path as RunBackupNowAsync and AbortBackupAsync for 
+*					consistency and reliability. Fixed "Start Pending" display issue in ServiceManagementWindow by adding FormatServiceStatus helper 
+*					that properly formats enum values with spaces (StartPending → "Start Pending"). Code is cleaner, more maintainable, and easier 
+*					to debug. Service communication now reliable and consistent across all commands! mdail 2/14/2026
+* Version 5.13.3.5 RUNTIME CONFIG GENERATION FIX: Fixed missing BackupUI.runtimeconfig.json causing ".NET Desktop Runtime required" error! 
+*					Added centralized runtime config generation in Directory.Build.props for all executables (Exe and WinExe). Updated BackupUI.csproj 
+*					and BackupService.csproj to use EnsureRuntimeConfig target that copies runtime config files from intermediate output to final output 
+*					directory. Fixed path to look in IntermediateOutputPath without TFM subfolder since AppendTargetFrameworkToOutputPath is false. 
+*					Added diagnostic logging to track file generation. Both BackupUI.runtimeconfig.json and BackupService.runtimeconfig.json now 
+*					generated correctly with proper .NET 8 runtime references. No more "install .NET runtime" errors when launching applications! mdail 2/14/2026
+* Version 5.13.3.4 DEBUGGING IMPROVEMENTS: Added comprehensive debugging support for BackupService development! Added conditional #if DEBUG 
+*					to run service as console app during debugging instead of Windows Service (no service install/start needed). Added commented 
+*					Debugger.Launch() option for automatic debugger attachment when service starts. Added Console.WriteLine logging throughout 
+*					BackupServiceCommunication to show real-time pipe connections, client connections, and message processing in console window. 
+*					Enhanced ProcessMessage logging to track every command received and processed. Developers can now debug BackupService easily: 
+*					run as console app with F5, set breakpoints that actually hit, see real-time console output. No more "Attach to Process" required! mdail 2/14/2026
+* Version 5.13.3.3 After running into some other problems and fixing them it still gets to line 92 in the BackupServiceClient executes that then
 *			       exits the function without any error or returning to any catch block and the version check just shows "Unknown (check failed)" in the UI. 
 *			       I added a lot of debug logging to try to figure out why but it still isn't clear mdail 2/13/2026
 * Version 5.13.3.2 VERSION CHECK TIMEOUT FIX: Fixed Service Management and About windows hanging when checking old service version! Added 3-second

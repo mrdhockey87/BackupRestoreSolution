@@ -43,9 +43,6 @@ namespace BackupService
             _logger.LogInformation("Backup Scheduler Service started at: {time}", DateTimeOffset.Now);
             LogToFile("Backup Scheduler Service started");
 
-            // NOTE: BackupServiceCommunication now starts automatically via IHostedService
-            // No need to call _communication.Start() here
-
             while (!stoppingToken.IsCancellationRequested)
             {
                 try

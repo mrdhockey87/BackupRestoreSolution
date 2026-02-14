@@ -161,17 +161,52 @@ namespace BackupService
                     }
                     break;
 
-                case BackupType.Incremental:
-                    var lastBackup = FindLastBackup(job.DestinationPath, job.Name);
-                    logger?.Invoke($"Creating incremental backup from: {lastBackup ?? "none"}");
-                    result = CreateIncrementalBackup(sourcePath, destPath, lastBackup ?? "", callback);
-                    break;
+            case BackupType.Incremental:
+                // Incremental backups need a full backup as the base
+                var fullBackupBase = FindFullBackup(job.DestinationPath, job.Name);
+                if (string.IsNullOrEmpty(fullBackupBase))
+                {
+                    logger?.Invoke($"No full backup found. Creating initial full backup instead of incremental.");
+                    // Do a full backup if no previous full backup exists
+                    if (job.Target == BackupTarget.Volume)
+                    {
+                        result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
+                    }
+                    else
+                    {
+                        result = BackupFiles(sourcePath, destPath, callback);
+                    }
+                }
+                else
+                {
+                    // Find the most recent backup (could be full, incremental, or differential) to base the incremental on
+                    var lastBackup = FindLastBackup(job.DestinationPath, job.Name) ?? fullBackupBase;
+                    logger?.Invoke($"Creating incremental backup from: {lastBackup}");
+                    result = CreateIncrementalBackup(sourcePath, destPath, lastBackup, callback);
+                }
+                break;
 
-                case BackupType.Differential:
-                    var fullBackup = FindFullBackup(job.DestinationPath, job.Name);
-                    logger?.Invoke($"Creating differential backup from: {fullBackup ?? "none"}");
-                    result = CreateDifferentialBackup(sourcePath, destPath, fullBackup ?? "", callback);
-                    break;
+            case BackupType.Differential:
+                var fullBackup = FindFullBackup(job.DestinationPath, job.Name);
+                if (string.IsNullOrEmpty(fullBackup))
+                {
+                    logger?.Invoke($"No full backup found. Creating initial full backup instead of differential.");
+                    // Do a full backup if no base full backup exists
+                    if (job.Target == BackupTarget.Volume)
+                    {
+                        result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
+                    }
+                    else
+                    {
+                        result = BackupFiles(sourcePath, destPath, callback);
+                    }
+                }
+                else
+                {
+                    logger?.Invoke($"Creating differential backup from: {fullBackup}");
+                    result = CreateDifferentialBackup(sourcePath, destPath, fullBackup, callback);
+                }
+                break;
 
                 default:
                     result = -1;
@@ -200,7 +235,23 @@ namespace BackupService
 
         private string? FindFullBackup(string destPath, string jobName)
         {
-            return FindLastBackup(destPath, jobName);
+            try
+            {
+                if (!Directory.Exists(destPath))
+                    return null;
+
+                // Look for folders starting with Full_
+                var fullBackups = Directory.GetDirectories(destPath, $"{jobName}_*")
+                    .Where(d => Path.GetFileName(d).Contains("Full_") || !Path.GetFileName(d).Contains("Incremental_") && !Path.GetFileName(d).Contains("Differential_"))
+                    .OrderByDescending(d => Directory.GetCreationTime(d))
+                    .ToList();
+
+                return fullBackups.FirstOrDefault();
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

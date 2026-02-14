@@ -53,11 +53,12 @@ namespace BackupUI.Services
                 using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
                 await pipe.ConnectAsync(Timeout);
 
-                using var writer = new StreamWriter(pipe, Encoding.UTF8) { AutoFlush = true };
-                using var reader = new StreamReader(pipe, Encoding.UTF8);
+                using var writer = new StreamWriter(pipe, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
+                using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
 
                 var message = JsonSerializer.Serialize(command);
                 await writer.WriteLineAsync(message);
+                await writer.FlushAsync();
 
                 var responseJson = await reader.ReadLineAsync();
                 if (responseJson == null)
@@ -67,7 +68,8 @@ namespace BackupUI.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error getting progress: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error getting progress: {ex.GetType().Name} - {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 return null;
             }
         }
@@ -82,75 +84,14 @@ namespace BackupUI.Services
 
             try
             {
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 1: Creating pipe connection to '{PipeName}'");
-                using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
-                
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 2: Connecting with {Timeout}ms timeout...");
-                await pipe.ConnectAsync(Timeout);
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 3: Connected successfully! IsConnected={pipe.IsConnected}");
-
-                using var writer = new StreamWriter(pipe, Encoding.UTF8) { AutoFlush = true };
-                using var reader = new StreamReader(pipe, Encoding.UTF8);
-
-                var message = JsonSerializer.Serialize(command);
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 4: Sending command: {message}");
-                
-                // Write the command
-                await writer.WriteLineAsync(message);
-                await writer.FlushAsync();
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 5: Command sent and flushed, waiting for response...");
-
-                // Read with timeout using CancellationToken
-                using var cts = new CancellationTokenSource(Timeout);
-                string? responseJson = null;
-                
-                try
-                {
-                    System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 5a: Starting ReadLineAsync with {Timeout}ms timeout...");
-                    responseJson = await reader.ReadLineAsync().WaitAsync(cts.Token);
-                    System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 5b: ReadLineAsync completed");
-                }
-                catch (OperationCanceledException)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 5c: ReadLineAsync TIMED OUT after {Timeout}ms");
-                    return null;
-                }
-                
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 6: Received response: {responseJson ?? "<NULL>"}");
-                
-                if (responseJson == null)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 7: Response was NULL, returning null");
-                    return null;
-                }
-
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 8: Deserializing response...");
-                var response = JsonSerializer.Deserialize<ServiceResponse>(responseJson);
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 9: Deserialized - Success={response?.Success}, Message={response?.Message}");
-                
-                var result = response?.Message;
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] Step 10: Returning version: {result ?? "<NULL>"}");
-                return result;
-            }
-            catch (TimeoutException tex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] TIMEOUT ERROR: {tex.Message}");
-                return null;
-            }
-            catch (IOException ioex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] IO ERROR: {ioex.Message}");
-                return null;
-            }
-            catch (JsonException jex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] JSON ERROR: {jex.Message}");
-                return null;
+                var response = await SendCommandAsync(command);
+                System.Diagnostics.Debug.WriteLine($"GetServiceVersionAsync: Response = {(response != null ? $"Success={response.Success}, Message={response.Message}" : "null")}");
+                return response?.Message;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] GENERAL ERROR: Type={ex.GetType().Name}, Message={ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"[GetVersion] Stack Trace: {ex.StackTrace}");
+                System.Diagnostics.Debug.WriteLine($"Error getting service version: {ex.GetType().Name} - {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 return null;
             }
         }
@@ -162,11 +103,12 @@ namespace BackupUI.Services
                 using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
                 await pipe.ConnectAsync(Timeout);
 
-                using var writer = new StreamWriter(pipe, Encoding.UTF8) { AutoFlush = true };
-                using var reader = new StreamReader(pipe, Encoding.UTF8);
+                using var writer = new StreamWriter(pipe, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
+                using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
 
                 var message = JsonSerializer.Serialize(command);
                 await writer.WriteLineAsync(message);
+                await writer.FlushAsync();
 
                 var responseJson = await reader.ReadLineAsync();
                 if (responseJson == null)
@@ -176,7 +118,8 @@ namespace BackupUI.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error sending command: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error sending command '{command.CommandType}': {ex.GetType().Name} - {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 return null;
             }
         }
