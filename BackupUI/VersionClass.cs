@@ -55,12 +55,12 @@ namespace BackupUI
 				}
 				
 			// Last resort fallback
-			return "5.13.3.13";
+			return "5.13.3.14";
 		}
 		catch
 		{
 			// Fallback version if assembly version fails
-			return "5.13.3.13";
+			return "5.13.3.14";
 			}
 		}
 	}
@@ -68,6 +68,12 @@ namespace BackupUI
 
 
 /*
+* Version 5.13.3.14 AUTOMATIC SERVICE CLEANUP ON BUILD: Added automatic service stop/uninstall before building BackupService! Created MSBuild target
+*					in Directory.Build.targets that runs before BeforeBuild, BeforeRebuild, and BeforeClean. Automatically stops BackupRestoreService,
+*					waits 1 second for cleanup, and deletes the service before building. Prevents file locking errors when rebuilding BackupService while
+*					service is running. Only applies to BackupService project - doesn't affect BackupUI or BackupEngine builds. Uses IgnoreExitCode=true for
+*					silent failures if service not running. Works in both Visual Studio and command line builds. No more manual service stops needed before
+*					rebuild! Complete hands-free development workflow - just build and the service is automatically cleaned up. Production-ready CI/CD support! mdail 2/14/2026
 * Version 5.13.3.13 INCREMENTAL BACKUP AUTO-FULL LOGIC: Fixed incremental/differential backups failing when no full backup exists! Added intelligent
 *					detection in BackupExecutor - when incremental or differential backup is requested but no full backup found, automatically creates a full
 *					backup instead of failing with "Filesystem error in incremental backup". Enhanced FindFullBackup to search for actual full backup folders
@@ -139,7 +145,7 @@ namespace BackupUI
 *					run as console app with F5, set breakpoints that actually hit, see real-time console output. No more "Attach to Process" required! mdail 2/14/2026
 * Version 5.13.3.3 After running into some other problems and fixing them it still gets to line 92 in the BackupServiceClient executes that then
 *			       exits the function without any error or returning to any catch block and the version check just shows "Unknown (check failed)" in the UI. 
-*			       I added a lot of debug logging to try to figure out why but it still isn't clear mdail 2/13/2026
+*			       I added a lot of debug logging to try to figure out why but it still isn't clear mdail 2/14/2026
 * Version 5.13.3.2 VERSION CHECK TIMEOUT FIX: Fixed Service Management and About windows hanging when checking old service version! Added 3-second
 *					timeout wrapper around GetServiceVersionAsync calls using Task.WhenAny pattern. Version check now runs in background task without
 *					blocking UI thread. Shows "Checking..." immediately, then updates with result or timeout. Old services without GetVersion handler

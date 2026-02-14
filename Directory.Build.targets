@@ -1,10 +1,39 @@
 <Project>
-  <!-- This file is imported AFTER the project file, so it overrides any settings in the .vcxproj -->
+<!-- This file is imported AFTER the project file, so it overrides any settings in the .vcxproj -->
   
-  <!-- Ensure SolutionDir is properly set -->
-  <PropertyGroup>
-    <SolutionDir Condition="'$(SolutionDir)' == ''">$(MSBuildThisFileDirectory)</SolutionDir>
-  </PropertyGroup>
+<!-- ================================================================
+     AUTOMATIC SERVICE STOP BEFORE BUILD/REBUILD/CLEAN
+     ================================================================
+     Automatically stops and uninstalls BackupRestoreService before
+     building BackupService project to prevent file locking issues
+     ================================================================ -->
+<Target Name="StopServiceBeforeBuild" 
+        BeforeTargets="BeforeBuild;BeforeRebuild;BeforeClean"
+        Condition="'$(MSBuildProjectName)' == 'BackupService'">
+    
+  <Message Importance="High" Text="[AUTO-CLEANUP] Stopping BackupRestoreService before build..." />
+    
+  <!-- Stop the service -->
+  <Exec Command="net stop BackupRestoreService" 
+        IgnoreExitCode="true" 
+        ContinueOnError="true" />
+    
+  <!-- Wait 1 second for service to fully stop -->
+  <Exec Command="ping 127.0.0.1 -n 2 &gt; nul" 
+        IgnoreExitCode="true" />
+    
+  <!-- Delete the service -->
+  <Exec Command="sc delete BackupRestoreService" 
+        IgnoreExitCode="true" 
+        ContinueOnError="true" />
+    
+  <Message Importance="High" Text="[AUTO-CLEANUP] Service stopped and uninstalled (if it was running)" />
+</Target>
+
+<!-- Ensure SolutionDir is properly set -->
+<PropertyGroup>
+  <SolutionDir Condition="'$(SolutionDir)' == ''">$(MSBuildThisFileDirectory)</SolutionDir>
+</PropertyGroup>
   
   <!-- Force override for C++ projects with absolute paths -->
   <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
