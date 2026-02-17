@@ -632,45 +632,22 @@ namespace BackupUI
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("ViewJobDetailsFromTab_Click called");
-                
-                if (sender is Button btn)
+                if (sender is Button btn && btn.Tag is string jobName && !string.IsNullOrEmpty(jobName))
                 {
-                    System.Diagnostics.Debug.WriteLine($"Button sender confirmed. Tag type: {btn.Tag?.GetType().Name}");
-                    System.Diagnostics.Debug.WriteLine($"Tag value: {btn.Tag}");
-                    
-                    if (btn.Tag is string jobName)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"JobName extracted: '{jobName}'");
-                        
-                        if (!string.IsNullOrEmpty(jobName))
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Opening ActivityDetailWindow for job: {jobName}");
-                            var detailWindow = new ActivityDetailWindow(jobName);
-                            detailWindow.ShowDialog();
-                        }
-                        else
-                        {
-                            System.Diagnostics.Debug.WriteLine("JobName is null or empty!");
-                            MessageBox.Show("Job name is empty.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        }
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Tag is not a string! Tag type: {btn.Tag?.GetType().Name}");
-                        MessageBox.Show("Invalid job information.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    }
+                    System.Diagnostics.Debug.WriteLine($"ViewJobDetailsFromTab_Click: Opening detail window for job '{jobName}'");
+                    var detailWindow = new ActivityDetailWindow(jobName);
+                    detailWindow.ShowDialog();
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"Sender is not a Button! Sender type: {sender?.GetType().Name}");
+                    MessageBox.Show("Unable to identify the job. Please try again.",
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Exception in ViewJobDetailsFromTab_Click: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-                MessageBox.Show($"Error opening activity details: {ex.Message}\n\n{ex.StackTrace}",
+                MessageBox.Show($"Error opening activity details: {ex.Message}",
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -679,158 +656,35 @@ namespace BackupUI
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("JobLog_DoubleClickFromTab called");
-                
-                if (dgJobLogs != null)
+                // Simply use the selected item from the DataGrid
+                if (dgJobLogs != null && dgJobLogs.SelectedItem is JobLogSummary summary)
                 {
-                    System.Diagnostics.Debug.WriteLine($"dgJobLogs is not null. SelectedItem type: {dgJobLogs.SelectedItem?.GetType().Name}");
-                    
-                    if (dgJobLogs.SelectedItem is JobLogSummary summary)
+                    if (!string.IsNullOrEmpty(summary.JobName))
                     {
-                        System.Diagnostics.Debug.WriteLine($"JobLogSummary extracted. JobName: '{summary.JobName}'");
-                        
-                        if (!string.IsNullOrEmpty(summary.JobName))
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Opening ActivityDetailWindow for job: {summary.JobName}");
-                            var detailWindow = new ActivityDetailWindow(summary.JobName);
-                            detailWindow.ShowDialog();
-                        }
-                        else
-                        {
-                            System.Diagnostics.Debug.WriteLine("JobName is null or empty!");
-                            MessageBox.Show("Job name is empty.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        }
+                        System.Diagnostics.Debug.WriteLine($"JobLog_DoubleClickFromTab: Opening detail window for job '{summary.JobName}'");
+                        var detailWindow = new ActivityDetailWindow(summary.JobName);
+                        detailWindow.ShowDialog();
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine($"SelectedItem is not JobLogSummary! Type: {dgJobLogs.SelectedItem?.GetType().Name}");
-                        MessageBox.Show("Please select a job first.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+                        MessageBox.Show("Job name is empty.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("dgJobLogs is null!");
-                    MessageBox.Show("Job logs grid not initialized.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("Please select a job first.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Exception in JobLog_DoubleClickFromTab: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-                MessageBox.Show($"Error opening activity details: {ex.Message}\n\n{ex.StackTrace}",
+                MessageBox.Show($"Error opening activity details: {ex.Message}",
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void ExportJobLogFromTab_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button btn && btn.Tag is string jobName && !string.IsNullOrEmpty(jobName))
-            {
-                var allLogs = BackupLogger.GetRecentLogs(10000);
-                var jobLogs = allLogs.Where(l => l.JobName == jobName).ToList();
-
-                if (jobLogs.Count == 0)
-                {
-                    MessageBox.Show("No activities found for this job.",
-                        "No Data", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-
-                // Show export options
-                var exportDialog = new ExportOptionsDialog();
-                if (exportDialog.ShowDialog() == true)
-                {
-                    ExportActivitiesFromTab(jobLogs, exportDialog.ExportFormat, $"{jobName}_activities");
-                }
-            }
-        }
-
-        private void ExportActivitiesFromTab(List<BackupLogEntry> logs, string format, string suggestedName)
-        {
-            var dialog = new Microsoft.Win32.SaveFileDialog
-            {
-                FileName = suggestedName,
-                Filter = format == "CSV"
-                    ? "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*"
-                    : "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
-                DefaultExt = format == "CSV" ? ".csv" : ".txt"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                try
-                {
-                    if (format == "CSV")
-                    {
-                        ExportToCSVFromTab(logs, dialog.FileName);
-                    }
-                    else
-                    {
-                        ExportToTextFromTab(logs, dialog.FileName);
-                    }
-
-                    MessageBox.Show($"Successfully exported {logs.Count} activities to:\n{dialog.FileName}",
-                        "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error exporting activities: {ex.Message}",
-                        "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
-
-        private void ExportToCSVFromTab(List<BackupLogEntry> logs, string filePath)
-        {
-            var csv = new StringBuilder();
-            csv.AppendLine("Timestamp,Job Name,Level,Message,Details,Backup Path,Validation Passed");
-
-            foreach (var log in logs.OrderBy(l => l.Timestamp))
-            {
-                csv.AppendLine($"\"{log.Timestamp:yyyy-MM-dd HH:mm:ss}\"," +
-                              $"\"{EscapeCSVFromTab(log.JobName)}\"," +
-                              $"\"{log.Level}\"," +
-                              $"\"{EscapeCSVFromTab(log.Message)}\"," +
-                              $"\"{EscapeCSVFromTab(log.Details)}\"," +
-                              $"\"{EscapeCSVFromTab(log.BackupPath)}\"," +
-                              $"\"{log.ValidationPassed}\"");
-            }
-
-            File.WriteAllText(filePath, csv.ToString(), Encoding.UTF8);
-        }
-
-        private void ExportToTextFromTab(List<BackupLogEntry> logs, string filePath)
-        {
-            var text = new StringBuilder();
-            text.AppendLine("===== BACKUP ACTIVITY LOG =====");
-            text.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-            text.AppendLine($"Total Entries: {logs.Count}");
-            text.AppendLine("================================");
-            text.AppendLine();
-
-            foreach (var log in logs.OrderBy(l => l.Timestamp))
-            {
-                text.AppendLine($"[{log.Timestamp:yyyy-MM-dd HH:mm:ss}] [{log.Level}] {log.JobName}");
-                text.AppendLine($"  Message: {log.Message}");
-                if (!string.IsNullOrEmpty(log.Details))
-                    text.AppendLine($"  Details: {log.Details}");
-                if (!string.IsNullOrEmpty(log.BackupPath))
-                    text.AppendLine($"  Backup Path: {log.BackupPath}");
-                if (!string.IsNullOrEmpty(log.BackupPath))
-                    text.AppendLine($"  Validation: {(log.ValidationPassed ? "PASSED" : "FAILED")}");
-                text.AppendLine();
-            }
-
-            File.WriteAllText(filePath, text.ToString(), Encoding.UTF8);
-        }
-
-        private string EscapeCSVFromTab(string? value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
-
-            return value.Replace("\"", "\"\"").Replace("\n", " ").Replace("\r", "");
-        }
+        // Export functionality removed from job summary - users should open ActivityDetailWindow first
+        // Export is available in ActivityDetailWindow with full multi-select functionality
 
         // Update Activity tab header with warning icon if there are unread errors
         private void UpdateActivityTabWarning()

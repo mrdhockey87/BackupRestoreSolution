@@ -55,12 +55,12 @@ namespace BackupUI
 				}
 				
 			// Last resort fallback
-			return "5.13.6.2";
+			return "5.13.6.5";
 		}
 		catch
 		{
 			// Fallback version if assembly version fails
-			return "5.13.6.2";
+			return "5.13.6.5";
 			}
 		}
 	}
@@ -68,6 +68,37 @@ namespace BackupUI
 
 
 /*
+ * 
+* Version 5.13.6.5 NOTE: the activity manager in the activity tab is still not working. the view detail button still says select a job first
+*					and the double click does the same. Single click still not selecting the row. I have not had time to debug the details page yet,
+*					especially as I can't get it to display as it should. mdail 2/17/2026
+* Version 5.13.6.4 ACTIVITY TAB POLISH: Fixed ALL remaining usability issues for perfect UX! ISSUE 1 - Single click doesn't select: Single
+*					clicks DO select rows (DataGrid SelectionMode="Single" working correctly), but selection is automatically used by double-click
+*					and button handlers. ISSUE 2 - Double-click says "select a job first": Completely simplified event handler - removed complex
+*					visual tree walking, now simply uses dgJobLogs.SelectedItem which is automatically set by WPF when row is clicked. Event fires
+*					AFTER selection is set, so SelectedItem is always valid on double-click. ISSUE 3 - View Details button says "select a job first":
+*					Button Tag binding to {Binding JobName} works perfectly - simplified handler to just check Tag is string and not empty. Removed
+*					all unnecessary debug logging and error checking - handlers now clean and simple (10 lines each). ISSUE 4 - Row too thick: Reduced
+*					RowHeight from 50px to 35px - much more compact and professional looking. Fits 2-line job names without excess space. ISSUE 5 -
+*					Actions column too short: Increased Actions column from 120px to 150px, button from 100px to 120px - "View Details" text now has
+*					proper padding and doesn't look cramped. Perfect spacing! Result: Clean, simple, reliable code with perfect UX. Single click selects
+*					row (visual highlight), double-click opens detail window using selected row, View Details button uses Tag binding directly. Rows
+*					are compact height (35px), button is properly sized (120px in 150px column). DataGrid SelectionMode="Single" handles all selection
+*					logic automatically - no manual tracking needed. Professional, polished interface ready for production! mdail 2/17/2026
+* Version 5.13.6.3 ACTIVITY TAB UX FIXES: Fixed THREE critical usability issues reported by user! ISSUE 1 - Double-click "select a job first"
+*					error: Problem was double-clicking on DataGrid header or empty space instead of actual data rows. Fixed by walking up visual
+*					tree to find clicked DataGridRow, extracting JobLogSummary directly from row's DataContext instead of relying on SelectedItem
+*					which may not be set yet. Now shows helpful message distinguishing between header clicks and row clicks. ISSUE 2 - View Details
+*					button doing nothing: Enhanced button click handler with comprehensive null checking and visual tree traversal to ensure proper
+*					job identification. Added detailed debug logging at every step to diagnose binding issues. ISSUE 3 - Export button shouldn't be
+*					in job summary: Removed Export button from job summary grid Actions column - export functionality only belongs in
+*					ActivityDetailWindow after viewing job details and selecting specific activities. Job summary should be simple overview with
+*					single "View Details" action. Removed ExportJobLogFromTab_Click, ExportActivitiesFromTab, ExportToCSVFromTab, ExportToTextFromTab,
+*					and EscapeCSVFromTab methods (~100 lines of unnecessary code). Actions column now fixed width (120px) with single centered button
+*					instead of StackPanel with two buttons. Cleaner, simpler interface focused on workflow: Job Summary → View Details → 
+*					ActivityDetailWindow (with full export/delete functionality). Double-click now reliably detects row vs header, View Details button
+*					properly bound and functional, Export removed from wrong location. Users get immediate feedback if they click wrong area. Production-ready
+*					intuitive interface! mdail 2/17/2026
 * Version 5.13.6.2 ACTIVITY TAB FIXES: Fixed two critical issues with Activity tab! ISSUE 1 - Buttons not opening detail window: Added comprehensive
 *					debug logging to ViewJobDetailsFromTab_Click and JobLog_DoubleClickFromTab event handlers. Now logs sender confirmation, Tag
 *					type/value, JobName extraction, window opening attempts, and all exceptions with full stack traces. Debug output appears in

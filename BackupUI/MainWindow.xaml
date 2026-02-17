@@ -187,7 +187,7 @@ Width="900">
 				  AlternatingRowBackground="#F9F9F9"
 				  CanUserResizeColumns="True"
 				  MouseDoubleClick="JobLog_DoubleClickFromTab"
-				  RowHeight="50">
+				  RowHeight="35">
 							<DataGrid.Columns>
 							<DataGridTextColumn Header="Job Name" Binding="{Binding JobName}" Width="180">
 								<DataGridTextColumn.ElementStyle>
@@ -237,23 +237,17 @@ Width="900">
 										</Style>
 									</DataGridTextColumn.ElementStyle>
 								</DataGridTextColumn>
-							<DataGridTemplateColumn Header="Actions" Width="*" MinWidth="200">
+							<DataGridTemplateColumn Header="Actions" Width="150">
 									<DataGridTemplateColumn.CellTemplate>
 										<DataTemplate>
-										<StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
-												<Button Content="View Details" 
-										Width="100" 
-										Height="25" 
-										Margin="5,0"
-										Tag="{Binding JobName}"
-										Click="ViewJobDetailsFromTab_Click"/>
-												<Button Content="Export" 
-										Width="80" 
-										Height="25" 
-										Margin="5,0"
-										Tag="{Binding JobName}"
-										Click="ExportJobLogFromTab_Click"/>
-											</StackPanel>
+										<Button Content="View Details" 
+												Width="120" 
+												Height="28" 
+												Margin="5,0"
+												HorizontalAlignment="Center"
+												VerticalAlignment="Center"
+												Tag="{Binding JobName}"
+												Click="ViewJobDetailsFromTab_Click"/>
 										</DataTemplate>
 									</DataGridTemplateColumn.CellTemplate>
 								</DataGridTemplateColumn>

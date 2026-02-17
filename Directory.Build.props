@@ -6,14 +6,14 @@
        ALL PROJECTS (BackupUI, BackupService, BackupEngine) use this single version.
        Change version HERE and it updates everywhere automatically.
        
-       Current Version: 5.13.6.2
-       Last Updated: 2/16/2026
+       Current Version: 5.13.6.5
+       Last Updated: 2/17/2026
        ================================================================ -->
   <PropertyGroup>
-    <Version>5.13.6.2</Version>
-    <AssemblyVersion>5.13.6.2</AssemblyVersion>
-    <FileVersion>5.13.6.2</FileVersion>
-    <InformationalVersion>5.13.6.2</InformationalVersion>
+    <Version>5.13.6.5</Version>
+    <AssemblyVersion>5.13.6.5</AssemblyVersion>
+    <FileVersion>5.13.6.5</FileVersion>
+    <InformationalVersion>5.13.6.5</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
