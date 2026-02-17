@@ -1,0 +1,117 @@
+<Window x:Class="BackupUI.Windows.DiskSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select Target Disk"
+        Height="500"
+        Width="600"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="SingleBorderWindow"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" 
+                   Text="Select Target Disk for Clone Operation" 
+                   FontSize="16" 
+                   FontWeight="Bold" 
+                   Margin="0,0,0,15"/>
+
+        <!-- Instructions -->
+        <Border Grid.Row="1" 
+                Background="#E3F2FD" 
+                BorderBrush="#2196F3" 
+                BorderThickness="1" 
+                CornerRadius="4" 
+                Padding="10"
+                Margin="0,0,0,15">
+            <StackPanel>
+                <TextBlock Text="Select the destination disk for the clone operation:" 
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,5"/>
+                <TextBlock Text="- Only available physical disks are shown" 
+                           FontSize="11"
+                           Foreground="#666"/>
+                <TextBlock Text="- Source disk is excluded from the list" 
+                           FontSize="11"
+                           Foreground="#666"/>
+                <TextBlock Text="- All data on the target disk will be REPLACED" 
+                           FontSize="11"
+                           Foreground="#D32F2F"
+                           FontWeight="Bold"
+                           Margin="0,5,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Disk List -->
+        <Border Grid.Row="2" 
+                BorderBrush="#BDBDBD" 
+                BorderThickness="1" 
+                CornerRadius="4">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ListBox Name="lstDisks"
+                         SelectionMode="Single"
+                         BorderThickness="0"
+                         Padding="5"
+                         SelectionChanged="DiskList_SelectionChanged">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Padding" Value="10"/>
+                            <Setter Property="Margin" Value="2"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+                            <Setter Property="Background" Value="White"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#F5F5F5"/>
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter Property="Background" Value="#E3F2FD"/>
+                                    <Setter Property="BorderBrush" Value="#2196F3"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel>
+                                <TextBlock Text="{Binding DisplayName}" 
+                                           FontSize="14" 
+                                           FontWeight="Bold"/>
+                                <TextBlock Text="{Binding Details}" 
+                                           FontSize="12" 
+                                           Foreground="#666"
+                                           Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right"
+                    Margin="0,15,0,0">
+            <Button Name="btnSelect" 
+                    Content="Select Disk" 
+                    Width="100" 
+                    Height="35"
+                    Margin="0,0,10,0" 
+                    Click="Select_Click"
+                    IsEnabled="False"/>
+            <Button Name="btnCancel" 
+                    Content="Cancel" 
+                    Width="100" 
+                    Height="35"
+                    Click="Cancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

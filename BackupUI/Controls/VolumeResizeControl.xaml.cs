@@ -12,8 +12,8 @@ namespace BackupUI.Controls
 {
     public partial class VolumeResizeControl : UserControl
     {
-        private List<VolumeResizeInfo> _volumes;
-        private VolumeResizeManager _resizeManager;
+        private List<VolumeResizeInfo> _volumes = new();
+        private VolumeResizeManager? _resizeManager;
         private long _targetDiskSize;
         private Dictionary<Thumb, int> _thumbToVolumeIndex;
 
@@ -41,7 +41,7 @@ namespace BackupUI.Controls
             RenderBars();
         }
 
-        private void Volume_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void Volume_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(VolumeResizeInfo.TargetSize))
             {
@@ -51,7 +51,7 @@ namespace BackupUI.Controls
 
         private void RenderBars()
         {
-            if (_volumes == null || _volumes.Count == 0)
+            if (_volumes == null || _volumes.Count == 0 || _resizeManager == null)
                 return;
 
             RenderSourceBar();
@@ -202,7 +202,7 @@ namespace BackupUI.Controls
                             long newSize = _volumes[capturedIndex].TargetSize + sizeChange;
 
                             int dragDirection = sizeChange > 0 ? 1 : -1;
-                            _resizeManager.ResizeVolume(capturedIndex, newSize, dragDirection);
+                            _resizeManager!.ResizeVolume(capturedIndex, newSize, dragDirection);
                         }
                     };
 
@@ -213,7 +213,7 @@ namespace BackupUI.Controls
             }
 
             // Show free space
-            long freeSpace = _resizeManager.RemainingSpace;
+            long freeSpace = _resizeManager!.RemainingSpace;
             if (freeSpace > 0)
             {
                 double freeWidth = (freeSpace / (double)_targetDiskSize) * availableWidth;
@@ -301,7 +301,7 @@ namespace BackupUI.Controls
             int dragDirection = sizeChange > 0 ? 1 : -1;
 
             // Attempt resize
-            bool success = _resizeManager.ResizeVolume(volumeIndex, newSize, dragDirection);
+            bool success = _resizeManager!.ResizeVolume(volumeIndex, newSize, dragDirection);
 
             if (!success)
             {
@@ -313,14 +313,14 @@ namespace BackupUI.Controls
         {
             long totalOriginal = _volumes.Sum(v => v.OriginalSize);
             long totalTarget = _volumes.Sum(v => v.TargetSize);
-            long freeSpace = _resizeManager.RemainingSpace;
+            long freeSpace = _resizeManager!.RemainingSpace;
 
             txtSourceSize.Text = $"Total: {(totalOriginal / (1024.0 * 1024.0 * 1024.0)):F2} GB";
             txtTargetUsed.Text = $"Used: {(totalTarget / (1024.0 * 1024.0 * 1024.0)):F2} GB";
             txtTargetFree.Text = $"Free: {(freeSpace / (1024.0 * 1024.0 * 1024.0)):F2} GB";
 
             // Validate
-            var (isValid, errorMsg) = _resizeManager.Validate();
+            var (isValid, errorMsg) = _resizeManager!.Validate();
             if (!isValid)
             {
                 txtTargetFree.Foreground = Brushes.Red;
@@ -349,7 +349,7 @@ namespace BackupUI.Controls
 
         private void btnAutoFit_Click(object sender, RoutedEventArgs e)
         {
-            _resizeManager.AutoFit();
+            _resizeManager!.AutoFit();
             RenderBars();
         }
 
@@ -375,7 +375,7 @@ namespace BackupUI.Controls
         /// </summary>
         public (bool IsValid, string ErrorMessage) Validate()
         {
-            return _resizeManager.Validate();
+            return _resizeManager!.Validate();
         }
     }
 }

@@ -287,5 +287,71 @@ namespace BackupUI.Services
         {
             return GetUnreadErrorCount() > 0;
         }
+
+        // NEW: Delete a specific log entry
+        public static bool DeleteLogEntry(BackupLogEntry entryToDelete)
+        {
+            lock (lockObject)
+            {
+                try
+                {
+                    var logs = LoadLogs();
+                    
+                    // Find and remove the matching entry
+                    var removed = logs.RemoveAll(l => 
+                        l.Timestamp == entryToDelete.Timestamp &&
+                        l.JobName == entryToDelete.JobName &&
+                        l.Message == entryToDelete.Message);
+
+                    if (removed > 0)
+                    {
+                        SaveLogs(logs);
+                        return true;
+                    }
+
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error deleting log entry: {ex.Message}");
+                    return false;
+                }
+            }
+        }
+
+        // NEW: Delete multiple log entries
+        public static int DeleteLogEntries(List<BackupLogEntry> entriesToDelete)
+        {
+            lock (lockObject)
+            {
+                try
+                {
+                    var logs = LoadLogs();
+                    int deletedCount = 0;
+
+                    foreach (var entryToDelete in entriesToDelete)
+                    {
+                        var removed = logs.RemoveAll(l => 
+                            l.Timestamp == entryToDelete.Timestamp &&
+                            l.JobName == entryToDelete.JobName &&
+                            l.Message == entryToDelete.Message);
+                        
+                        deletedCount += removed;
+                    }
+
+                    if (deletedCount > 0)
+                    {
+                        SaveLogs(logs);
+                    }
+
+                    return deletedCount;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error deleting log entries: {ex.Message}");
+                    return 0;
+                }
+            }
+        }
     }
 }

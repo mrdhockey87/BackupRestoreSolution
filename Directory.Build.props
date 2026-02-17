@@ -6,14 +6,14 @@
        ALL PROJECTS (BackupUI, BackupService, BackupEngine) use this single version.
        Change version HERE and it updates everywhere automatically.
        
-       Current Version: 5.13.3.14
-       Last Updated: 2/14/2026
+       Current Version: 5.13.6.2
+       Last Updated: 2/16/2026
        ================================================================ -->
   <PropertyGroup>
-    <Version>5.13.3.14</Version>
-    <AssemblyVersion>5.13.3.14</AssemblyVersion>
-    <FileVersion>5.13.3.14</FileVersion>
-    <InformationalVersion>5.13.3.14</InformationalVersion>
+    <Version>5.13.6.2</Version>
+    <AssemblyVersion>5.13.6.2</AssemblyVersion>
+    <FileVersion>5.13.6.2</FileVersion>
+    <InformationalVersion>5.13.6.2</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
@@ -39,10 +39,10 @@
        Uses OutDir/IntDir (not OutputPath)
        ================================================================ -->
   <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
-	<!-- For C++ use OutDir/IntDir, *not* OutputPath -->
-	<OutDir>$(ArtifactsBin)$(Configuration)\</OutDir>
-	<!-- Keep obj separated per project to avoid collisions -->
-	<IntDir>$(ArtifactsObj)$(MSBuildProjectName)\$(Configuration)\</IntDir>
+    <!-- For C++ use OutDir/IntDir, *not* OutputPath -->
+    <OutDir>$(ArtifactsBin)$(Configuration)\</OutDir>
+    <!-- Keep obj separated per project to avoid collisions -->
+    <IntDir>$(ArtifactsObj)$(MSBuildProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
 
   <!-- ================================================================
@@ -67,27 +67,27 @@
           - Creates .deps.json files for runtime dependencies
        ================================================================ -->
   <PropertyGroup Condition="'$(MSBuildProjectExtension)' != '.vcxproj'">
-	<!-- Ensure Configuration has a value (defaults to Debug if not set) -->
-	<Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
-	<!-- Set OutputPath directly - all binaries go to same folder -->
-	<OutputPath>$(ArtifactsBin)$(Configuration)\</OutputPath>
-	<!-- Keep obj separated per project to avoid collisions 
-	     CRITICAL: Must match format MSBuild expects for runtime config generation! -->
-	<BaseIntermediateOutputPath>$(ArtifactsObj)$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-	<IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
-	<!-- Don't append TFM or RID to paths -->
-	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-	<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
-	<!-- Optional to keep platforms consistent -->
-	<PlatformTarget>x64</PlatformTarget>
-	<!-- CRITICAL: Ensure runtime config files are generated for ALL executables 
-	     Removing these will cause ".NET Desktop Runtime required" errors! -->
-	<GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
-	<GenerateDependencyFile>true</GenerateDependencyFile>
-	<!-- Force runtime config generation even with custom output paths -->
-	<ProduceReferenceAssembly>false</ProduceReferenceAssembly>
-	<!-- CRITICAL FIX: Override runtime config output path to match our OutputPath -->
-	<RuntimeConfigurationFilesOuputPath>$(OutputPath)</RuntimeConfigurationFilesOuputPath>
+    <!-- Ensure Configuration has a value (defaults to Debug if not set) -->
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+    <!-- Set OutputPath directly - all binaries go to same folder -->
+    <OutputPath>$(ArtifactsBin)$(Configuration)\</OutputPath>
+    <!-- Keep obj separated per project to avoid collisions 
+         CRITICAL: Must match format MSBuild expects for runtime config generation! -->
+    <BaseIntermediateOutputPath>$(ArtifactsObj)$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
+    <!-- Don't append TFM or RID to paths -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <!-- Optional to keep platforms consistent -->
+    <PlatformTarget>x64</PlatformTarget>
+    <!-- CRITICAL: Ensure runtime config files are generated for ALL executables 
+         Removing these will cause ".NET Desktop Runtime required" errors! -->
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <!-- Force runtime config generation even with custom output paths -->
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <!-- CRITICAL FIX: Override runtime config output path to match our OutputPath -->
+    <RuntimeConfigurationFilesOuputPath>$(OutputPath)</RuntimeConfigurationFilesOuputPath>
   </PropertyGroup>
   
   <!-- ================================================================
@@ -96,7 +96,7 @@
        Outputs build paths to console for verification
        ================================================================ -->
   <Target Name="__EchoOutput" BeforeTargets="Build">
-	<Message Importance="High" Text="[$(MSBuildProjectName)] SolutionDir=$(SolutionDir) Ext=$(MSBuildProjectExtension) OutDir=$(OutDir) OutputPath=$(OutputPath)" />
+    <Message Importance="High" Text="[$(MSBuildProjectName)] SolutionDir=$(SolutionDir) Ext=$(MSBuildProjectExtension) OutDir=$(OutDir) OutputPath=$(OutputPath)" />
   </Target>
 
 </Project>

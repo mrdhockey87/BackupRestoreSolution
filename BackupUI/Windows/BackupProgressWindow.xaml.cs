@@ -35,7 +35,7 @@ namespace BackupUI.Windows
             _progressTimer.Tick += ProgressTimer_Tick;
             _progressTimer.Start();
 
-            Loaded += (s, e) => UpdateProgressAsync();
+            Loaded += async (s, e) => await UpdateProgressAsync();
         }
 
         private async void ProgressTimer_Tick(object? sender, EventArgs e)

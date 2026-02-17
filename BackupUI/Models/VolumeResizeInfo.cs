@@ -15,7 +15,7 @@ namespace BackupUI.Models
         /// <summary>
         /// Volume label/name (e.g., "C:", "System Reserved")
         /// </summary>
-        public string Label { get; set; }
+        public string Label { get; set; } = string.Empty;
 
         /// <summary>
         /// Original volume size in bytes from backup
@@ -76,9 +76,9 @@ namespace BackupUI.Models
         public double TargetSizeGB => TargetSize / (1024.0 * 1024.0 * 1024.0);
         public double MinimumSizeGB => MinimumSize / (1024.0 * 1024.0 * 1024.0);
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }

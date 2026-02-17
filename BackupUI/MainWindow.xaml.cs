@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -538,6 +540,8 @@ namespace BackupUI
         }
         
         private void ManageSchedules_Click(object sender, RoutedEventArgs e) => new ScheduleManagementWindow().ShowDialog();
+        private void ActivityManagement_Click(object sender, RoutedEventArgs e) => new ActivityManagementWindow().ShowDialog();
+        private void OpenActivityManagement_Click(object sender, RoutedEventArgs e) => new ActivityManagementWindow().ShowDialog();
         private void ServiceManagement_Click(object sender, RoutedEventArgs e) => new ServiceManagementWindow().ShowDialog();
         private void RecoveryEnvironmentCreator_Click(object sender, RoutedEventArgs e) => new RecoveryEnvironmentWindow().ShowDialog();
         
@@ -547,97 +551,285 @@ namespace BackupUI
             aboutWindow.ShowDialog();
         }
 
-        // Activity Tab Methods
-        private void LoadActivity()
-        {
-            // Null check - control might not be initialized yet
-            if (dgActivityLog == null)
-                return;
-
-            var logs = BackupLogger.GetRecentLogs(500);
-            dgActivityLog.ItemsSource = logs;
-
-            if (logs.Count == 0)
-            {
-                if (txtNoLogs != null)
-                    txtNoLogs.Visibility = Visibility.Visible;
-                dgActivityLog.Visibility = Visibility.Collapsed;
-            }
-            else
-            {
-                if (txtNoLogs != null)
-                    txtNoLogs.Visibility = Visibility.Collapsed;
-                dgActivityLog.Visibility = Visibility.Visible;
-            }
-        }
-
-        private void RefreshActivity_Click(object sender, RoutedEventArgs e)
-        {
-            LoadActivity();
-        }
-
-        private void ClearOldLogs_Click(object sender, RoutedEventArgs e)
-        {
-            var result = MessageBox.Show(
-                "This will delete activity logs older than 30 days. Continue?",
-                "Clear Old Logs",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
-            {
-                BackupLogger.ClearOldLogs(30);
-                LoadActivity();
-                MessageBox.Show("Old logs have been cleared.", "Success", 
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-        }
-
-        private void FilterLevel_Changed(object sender, SelectionChangedEventArgs e)
-        {
-            // Null check
-            if (dgActivityLog == null || cmbFilterLevel == null)
-                return;
-
-            if (cmbFilterLevel.SelectedItem is ComboBoxItem item)
-            {
-                var filter = item.Content.ToString();
-                var allLogs = BackupLogger.GetRecentLogs(500);
-
-                switch (filter)
-                {
-                    case "Info":
-                        dgActivityLog.ItemsSource = allLogs.Where(l => l.Level == BackupLogLevel.Info).ToList();
-                        break;
-                    case "Success":
-                        dgActivityLog.ItemsSource = allLogs.Where(l => l.Level == BackupLogLevel.Success).ToList();
-                        break;
-                    case "Warning":
-                        dgActivityLog.ItemsSource = allLogs.Where(l => l.Level == BackupLogLevel.Warning).ToList();
-                        break;
-                    case "Error":
-                        dgActivityLog.ItemsSource = allLogs.Where(l => l.Level == BackupLogLevel.Error).ToList();
-                        break;
-                    case "Failed Validations":
-                        dgActivityLog.ItemsSource = BackupLogger.GetFailedValidations();
-                        break;
-                    default:
-                        dgActivityLog.ItemsSource = allLogs;
-                        break;
-                }
-            }
-        }
+        // OLD Activity Tab Methods - REMOVED (now using job summary tab)
+        // These methods were for the old dgActivityLog DataGrid which no longer exists
+        // New Activity tab uses dgJobLogs and shows job summaries instead
 
         // Tab selection handler - load activity when tab is selected
         private void TabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (sender is TabControl tabControl && tabControl.SelectedIndex == 1) // Activity tab is index 1
             {
-                LoadActivity();
+                LoadJobLogsTab();
                 // Mark all errors as read when user views Activity tab
                 BackupLogger.MarkAllErrorsAsRead();
                 UpdateActivityTabWarning();
             }
+        }
+
+        // NEW: Load job logs for Activity tab
+        private void LoadJobLogsTab()
+        {
+            try
+            {
+                var allLogs = BackupLogger.GetRecentLogs(10000);
+                
+                // Group by job name - filter out null or empty job names
+                var jobGroups = allLogs
+                    .Where(log => !string.IsNullOrEmpty(log.JobName))
+                    .GroupBy(log => log.JobName)
+                    .Select(group => new JobLogSummary
+                    {
+                        JobName = group.Key ?? "Unknown",
+                        TotalActivities = group.Count(),
+                        LastActivity = group.Max(l => l.Timestamp),
+                        SuccessCount = group.Count(l => l.Level == BackupLogLevel.Success),
+                        WarningCount = group.Count(l => l.Level == BackupLogLevel.Warning),
+                        ErrorCount = group.Count(l => l.Level == BackupLogLevel.Error),
+                        InfoCount = group.Count(l => l.Level == BackupLogLevel.Info)
+                    })
+                    .OrderByDescending(s => s.LastActivity)
+                    .ToList();
+
+                if (dgJobLogs != null)  // Will be null until XAML is updated
+                {
+                    dgJobLogs.ItemsSource = jobGroups;
+                }
+                
+                if (txtJobLogsStatus != null)  // Will be null until XAML is updated
+                {
+                    txtJobLogsStatus.Text = $"Found {jobGroups.Count} backup jobs with activity logs. Double-click to view details.";
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading job logs: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        // NEW: Activity tab event handlers
+        private void RefreshJobLogs_Click(object sender, RoutedEventArgs e)
+        {
+            LoadJobLogsTab();
+        }
+
+        private void ViewAllActivitiesFromTab_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var detailWindow = new ActivityDetailWindow(null);
+                detailWindow.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening activity details: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ViewJobDetailsFromTab_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("ViewJobDetailsFromTab_Click called");
+                
+                if (sender is Button btn)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Button sender confirmed. Tag type: {btn.Tag?.GetType().Name}");
+                    System.Diagnostics.Debug.WriteLine($"Tag value: {btn.Tag}");
+                    
+                    if (btn.Tag is string jobName)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"JobName extracted: '{jobName}'");
+                        
+                        if (!string.IsNullOrEmpty(jobName))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Opening ActivityDetailWindow for job: {jobName}");
+                            var detailWindow = new ActivityDetailWindow(jobName);
+                            detailWindow.ShowDialog();
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine("JobName is null or empty!");
+                            MessageBox.Show("Job name is empty.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Tag is not a string! Tag type: {btn.Tag?.GetType().Name}");
+                        MessageBox.Show("Invalid job information.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"Sender is not a Button! Sender type: {sender?.GetType().Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception in ViewJobDetailsFromTab_Click: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                MessageBox.Show($"Error opening activity details: {ex.Message}\n\n{ex.StackTrace}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void JobLog_DoubleClickFromTab(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("JobLog_DoubleClickFromTab called");
+                
+                if (dgJobLogs != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"dgJobLogs is not null. SelectedItem type: {dgJobLogs.SelectedItem?.GetType().Name}");
+                    
+                    if (dgJobLogs.SelectedItem is JobLogSummary summary)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"JobLogSummary extracted. JobName: '{summary.JobName}'");
+                        
+                        if (!string.IsNullOrEmpty(summary.JobName))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Opening ActivityDetailWindow for job: {summary.JobName}");
+                            var detailWindow = new ActivityDetailWindow(summary.JobName);
+                            detailWindow.ShowDialog();
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine("JobName is null or empty!");
+                            MessageBox.Show("Job name is empty.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"SelectedItem is not JobLogSummary! Type: {dgJobLogs.SelectedItem?.GetType().Name}");
+                        MessageBox.Show("Please select a job first.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("dgJobLogs is null!");
+                    MessageBox.Show("Job logs grid not initialized.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception in JobLog_DoubleClickFromTab: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                MessageBox.Show($"Error opening activity details: {ex.Message}\n\n{ex.StackTrace}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ExportJobLogFromTab_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string jobName && !string.IsNullOrEmpty(jobName))
+            {
+                var allLogs = BackupLogger.GetRecentLogs(10000);
+                var jobLogs = allLogs.Where(l => l.JobName == jobName).ToList();
+
+                if (jobLogs.Count == 0)
+                {
+                    MessageBox.Show("No activities found for this job.",
+                        "No Data", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                // Show export options
+                var exportDialog = new ExportOptionsDialog();
+                if (exportDialog.ShowDialog() == true)
+                {
+                    ExportActivitiesFromTab(jobLogs, exportDialog.ExportFormat, $"{jobName}_activities");
+                }
+            }
+        }
+
+        private void ExportActivitiesFromTab(List<BackupLogEntry> logs, string format, string suggestedName)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = suggestedName,
+                Filter = format == "CSV"
+                    ? "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*"
+                    : "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+                DefaultExt = format == "CSV" ? ".csv" : ".txt"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                try
+                {
+                    if (format == "CSV")
+                    {
+                        ExportToCSVFromTab(logs, dialog.FileName);
+                    }
+                    else
+                    {
+                        ExportToTextFromTab(logs, dialog.FileName);
+                    }
+
+                    MessageBox.Show($"Successfully exported {logs.Count} activities to:\n{dialog.FileName}",
+                        "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error exporting activities: {ex.Message}",
+                        "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void ExportToCSVFromTab(List<BackupLogEntry> logs, string filePath)
+        {
+            var csv = new StringBuilder();
+            csv.AppendLine("Timestamp,Job Name,Level,Message,Details,Backup Path,Validation Passed");
+
+            foreach (var log in logs.OrderBy(l => l.Timestamp))
+            {
+                csv.AppendLine($"\"{log.Timestamp:yyyy-MM-dd HH:mm:ss}\"," +
+                              $"\"{EscapeCSVFromTab(log.JobName)}\"," +
+                              $"\"{log.Level}\"," +
+                              $"\"{EscapeCSVFromTab(log.Message)}\"," +
+                              $"\"{EscapeCSVFromTab(log.Details)}\"," +
+                              $"\"{EscapeCSVFromTab(log.BackupPath)}\"," +
+                              $"\"{log.ValidationPassed}\"");
+            }
+
+            File.WriteAllText(filePath, csv.ToString(), Encoding.UTF8);
+        }
+
+        private void ExportToTextFromTab(List<BackupLogEntry> logs, string filePath)
+        {
+            var text = new StringBuilder();
+            text.AppendLine("===== BACKUP ACTIVITY LOG =====");
+            text.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            text.AppendLine($"Total Entries: {logs.Count}");
+            text.AppendLine("================================");
+            text.AppendLine();
+
+            foreach (var log in logs.OrderBy(l => l.Timestamp))
+            {
+                text.AppendLine($"[{log.Timestamp:yyyy-MM-dd HH:mm:ss}] [{log.Level}] {log.JobName}");
+                text.AppendLine($"  Message: {log.Message}");
+                if (!string.IsNullOrEmpty(log.Details))
+                    text.AppendLine($"  Details: {log.Details}");
+                if (!string.IsNullOrEmpty(log.BackupPath))
+                    text.AppendLine($"  Backup Path: {log.BackupPath}");
+                if (!string.IsNullOrEmpty(log.BackupPath))
+                    text.AppendLine($"  Validation: {(log.ValidationPassed ? "PASSED" : "FAILED")}");
+                text.AppendLine();
+            }
+
+            File.WriteAllText(filePath, text.ToString(), Encoding.UTF8);
+        }
+
+        private string EscapeCSVFromTab(string? value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            return value.Replace("\"", "\"\"").Replace("\n", " ").Replace("\r", "");
         }
 
         // Update Activity tab header with warning icon if there are unread errors
@@ -1007,6 +1199,18 @@ namespace BackupUI
         public string SourceDescription { get; set; }
         public string DestinationPath { get; set; }
         public string ScheduleDescription { get; set; }
+    }
+
+    // Job log summary for Activity tab
+    public class JobLogSummary
+    {
+        public string JobName { get; set; } = string.Empty;
+        public int TotalActivities { get; set; }
+        public DateTime LastActivity { get; set; }
+        public int SuccessCount { get; set; }
+        public int WarningCount { get; set; }
+        public int ErrorCount { get; set; }
+        public int InfoCount { get; set; }
     }
 }
 

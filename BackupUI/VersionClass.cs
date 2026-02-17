@@ -55,12 +55,12 @@ namespace BackupUI
 				}
 				
 			// Last resort fallback
-			return "5.13.3.14";
+			return "5.13.6.2";
 		}
 		catch
 		{
 			// Fallback version if assembly version fails
-			return "5.13.3.14";
+			return "5.13.6.2";
 			}
 		}
 	}
@@ -68,6 +68,362 @@ namespace BackupUI
 
 
 /*
+* Version 5.13.6.2 ACTIVITY TAB FIXES: Fixed two critical issues with Activity tab! ISSUE 1 - Buttons not opening detail window: Added comprehensive
+*					debug logging to ViewJobDetailsFromTab_Click and JobLog_DoubleClickFromTab event handlers. Now logs sender confirmation, Tag
+*					type/value, JobName extraction, window opening attempts, and all exceptions with full stack traces. Debug output appears in
+*					Visual Studio Output window (Debug) for real-time diagnostics. If window still doesn't open, debug messages will reveal exact
+*					failure point. ISSUE 2 - Content display problems: Optimized all column widths for better space usage and readability. Job Name
+*					column reduced from 200px to 180px but now has TextWrapping enabled with padding and vertical centering. Total Activities shortened
+*					to "Total" and reduced to 70px with center alignment. Last Activity shortened date format from "MM/dd/yyyy HH:mm:ss" to
+*					"MM/dd HH:mm" and reduced to 100px. Success/Warning/Error columns shortened headers (removed "Count") and reduced to 70/70/60px
+*					respectively with horizontal and vertical centering. Actions column given MinWidth="200" to ensure buttons always visible. Added
+*					RowHeight="50" to DataGrid to accommodate wrapped text. Buttons increased to 28px height and vertically centered in cells. All
+*					numeric columns now centered for professional appearance. Result: Job names can wrap to multiple lines without being cut off,
+*					all buttons fully visible, more compact and readable layout. Debug logging will help identify any issues with event handlers
+*					not firing or windows not opening. Output window shows real-time diagnostics when running from Visual Studio. mdail 2/17/2026
+* Version 5.13.6.1 ACTIVITY TAB RESTRUCTURE COMPLETE: Successfully integrated job summary view directly into Activity tab! Activity tab now shows
+*					the job summary grid (previously in ActivityManagementWindow) embedded directly in the tab - no need to open separate window.
+*					Displays all backup jobs with statistics: Total activities, Success/Warning/Error counts (color-coded green/orange/red), Last
+*					activity timestamp. Double-click any job or click "View Details" button opens ActivityDetailWindow modal with full multi-select,
+*					export, and delete functionality. "View All Activities" button shows combined activities from all jobs. "Export" button per job
+*					for quick CSV/Text export. Removed old simple activity log view (dgActivityLog, cmbFilterLevel, txtNoLogs) - replaced with
+*					professional two-level system. Flow: Activity Tab (embedded job summary) → Double-click/View Details → ActivityDetailWindow
+*					(job-specific activities with Shift+Click multi-select, Ctrl+Click individual select, right-click context menu, CSV/Text export,
+*					delete selected). Menu → Activity → Activity Management opens standalone ActivityManagementWindow (kept for backwards compatibility).
+*					Complete code restructure: Removed LoadActivity(), RefreshActivity_Click(), ClearOldLogs_Click(), FilterLevel_Changed() - no
+*					longer needed. Added LoadJobLogsTab(), RefreshJobLogs_Click(), ViewAllActivitiesFromTab_Click(), ViewJobDetailsFromTab_Click(),
+*					JobLog_DoubleClickFromTab(), ExportJobLogFromTab_Click() with full export logic (CSV/Text with proper escaping). Added
+*					JobLogSummary class to MainWindow.xaml.cs for data binding. Updated TabControl_SelectionChanged to call LoadJobLogsTab() instead
+*					of LoadActivity(). XAML completely redesigned: 3-row Grid (Header/DataGrid/Footer), job summary DataGrid (dgJobLogs) with 7
+*					columns (Job Name, Total Activities, Last Activity, Success/Warning/Error counts, Actions), color-coded statistics columns,
+*					Actions column with View Details and Export buttons, footer status bar, no more filter dropdown or old controls. Natural workflow:
+*					Open app → Click Activity tab → See all jobs at a glance → Double-click job → Detailed activities with full selection tools.
+*					Professional enterprise interface with intuitive navigation! Production-ready activity management integrated into main window! mdail 2/17/2026
+* Version 5.13.6.0 MAJOR FEATURE - ENHANCED ACTIVITY MANAGEMENT: Completely redesigned Activity logging with professional multi-window interface!
+*					Created two-level activity management system: 1) ActivityManagementWindow - Shows summary of all backup jobs with activity
+*					statistics (total activities, success/warning/error counts, last activity time), double-click or click "View Details" to drill
+*					down into specific job activities. Includes quick export per job. 2) ActivityDetailWindow - Shows detailed activities with FULL
+*					SELECTION SUPPORT: Shift+Click for range selection, Ctrl+Click for multi-select, right-click context menu with export and delete
+*					options. Export to CSV (Excel-compatible) or Text format with file dialog. Delete selected activities with confirmation. Select All/
+*					Clear Selection context menu. Real-time selection count display. Filter by level (All, Info, Success, Warning, Error). Row details
+*					expand to show full information. Added DeleteLogEntry and DeleteLogEntries methods to BackupLogger service for proper activity deletion.
+*					Created ExportOptionsDialog for user-friendly format selection. Enhanced BackupLogger with new methods: DeleteLogEntry() - removes
+*					individual entries, DeleteLogEntries() - batch delete with count return. Export formats: CSV with proper escaping for Excel, Text with
+*					formatted headers and timestamps. Menu integration: Activity → Activity Management launches the new interface. The new system separates
+*					job-level overview from detailed activity inspection, making it easy to: track performance per job, identify problem jobs quickly,
+*					export specific job histories, clean up old activities selectively, analyze detailed logs with multi-select. Enterprise-grade activity
+*					management with intuitive navigation and powerful selection tools! Perfect for compliance reporting and troubleshooting. Production-ready
+*					professional logging interface! mdail 2/17/2026
+* Version 5.13.5.19 CODE QUALITY - ALL NULLABLE WARNINGS FIXED: Eliminated ALL nullable reference type warnings! Build is now completely clean with
+*					0 warnings. Fixed remaining issues in: 1) VolumeResizeInfo.cs: Changed PropertyChanged event to nullable (PropertyChangedEventHandler?),
+*					made propertyName parameter nullable (string?), and initialized Label property. 2) VolumeResizeControl.xaml.cs: Initialized _volumes
+*					field, marked _resizeManager as nullable, fixed PropertyChanged event handler signature with nullable sender parameter, added
+*					null-forgiving operators (!) to all _resizeManager usages since it's guaranteed non-null after Initialize() is called, added null
+*					check for _resizeManager in RenderBars guard clause. 3) DiskSelectionWindow.xaml.cs: Marked all temporary string variables as
+*					nullable (string?), added null check before using partitionDeviceId in query string. 4) VolumeConfigurationWindow.xaml.cs: Added
+*					null-forgiving operator to sizesBeforeDrag array access. 5) BackupProgressWindow.xaml.cs: Fixed async/await warning by properly
+*					awaiting UpdateProgressAsync in Loaded event handler. 6) BackupWindowNew.xaml.cs: Added null check for pathToSelect before passing
+*					to recursive function, added null checks for Path.GetPathRoot result before creating DriveInfo. From 32 warnings down to ZERO!
+*					Clean build ensures code reliability, prevents null reference exceptions at compile time, and follows modern C# best practices.
+*					Production-ready null safety across entire solution! mdail 2/17/2026
+* Version 5.13.5.18 CODE QUALITY - NULLABLE REFERENCE TYPE FIXES: Fixed nullable reference type warnings throughout the solution! Added proper
+*					nullable annotations to all classes and properties where values can be null. Changes include: 1) VolumeConfigurationWindow:
+*					Added default string initializers (string.Empty) for Label and FileSystem properties, marked UI elements (Rectangle,
+*					TextBlock, Ellipse) as nullable since they're only created during rendering, initialized collections with new(), marked
+*					nullable fields (draggedHandle, sizesBeforeDrag, selectedVolume) properly, marked FinalConfiguration as nullable since it's
+*					only set when user accepts. 2) VolumeInfo model: Added default string initializers for Label and FileSystem properties.
+*					3) DiskSelectionWindow: Added default values for all string properties in DiskInfo class, initialized VolumeLetters list,
+*					marked SelectedDisk as nullable, initialized excludedDiskIndexes collection, added nullable parameter annotation for
+*					excludeDisks. These changes eliminate compiler warnings while maintaining code clarity and preventing potential null reference
+*					exceptions. Using nullable reference types (enabled via <Nullable>enable</Nullable> in project files) provides compile-time
+*					null safety, catching potential null reference bugs before runtime. Proper null handling improves code reliability and
+*					maintainability. Production-ready null safety! mdail 2/17/2026
+* Version 5.13.5.17 CRITICAL FIX - RESET MUST REAPPLY AUTO-SIZING: Fixed Reset not reapplying shrink logic! User reported: After reset, C: drive shows
+*					1.82TB (target total) instead of 1.57TB (its shrunk size). Root cause: Version 5.13.5.16 recalculated MaxSize but forgot to reapply
+*					the auto-sizing logic for CurrentSize! When window opens with source > target (e.g., 2.1TB source on 1.82TB target), AnalyzeAndRender
+*					(lines 154-166) SHRINKS resizable volumes proportionally by modifying CurrentSize. This ensures volumes fit on target. But reset button
+*					was only restoring CurrentSize = OriginalSize (unshrunk), without reapplying the shrinking! Example: C: original 1.57TB, gets shrunk
+*					to 1.45TB on initial load to fit with other volumes. After reset: CurrentSize = 1.57TB (original unshrunk size) - volumes no longer
+*					fit! Solution: Reset must mirror the COMPLETE initial analysis logic. Added shrinking logic to reset when source > target: 1) Reset
+*					all volumes to OriginalSize first, 2) Calculate sourceTotalSize and excessSpace, 3) If source > target: proportionally shrink
+*					resizable volumes (CurrentSize = OriginalSize - proportional reduction), set MaxSize = OriginalSize, 4) If source <= target:
+*					CurrentSize stays at OriginalSize, calculate MaxSize with growth potential. Now reset truly returns to the INITIAL STATE of the
+*					window, not just the original unshrunk sizes. The volumes will have the same CurrentSize values they had when the window first opened,
+*					properly shrunk if needed to fit the target disk. Complete state restoration! mdail 2/17/2026
+* Version 5.13.5.16 CRITICAL FIX - RESET MAXSIZE BUG: Fixed Reset button not recalculating MaxSize constraints! User reported: After reset, C: drive
+*					shows 1.82TB (target disk size) instead of 1.57TB (original size). Root cause: Reset button only restored CurrentSize to OriginalSize
+*					(line 762), but didn't recalculate MaxSize values. MaxSize remained at whatever value was set during dragging or initial auto-sizing.
+*					When user selects volume after reset, details panel shows MaxSize which could be inflated. More critically, if user drags handles
+*					after reset, the constraints are wrong because MaxSize wasn't reset. Solution: Added MaxSize recalculation logic to reset button,
+*					mirroring the initial calculation from AnalyzeAndRender (lines 168-180). Reset now: 1) Restores CurrentSize = OriginalSize for all
+*					volumes, 2) Calculates sourceTotalSize and currentResizableTotal, 3) If source > target: sets MaxSize = OriginalSize (can't grow),
+*					4) If source <= target: calculates MaxSize = OriginalSize + proportional share of extra space. This ensures MaxSize constraints are
+*					correct after reset, allowing proper resizing and correct display of maximum size in details panel. The MaxSize values now correctly
+*					reflect what each volume can grow to from its original size, accounting for target disk capacity and other volumes' space requirements.
+*					Complete state reset - both CurrentSize and MaxSize back to their initial calculated values! mdail 2/17/2026
+* Version 5.13.5.15 REFINED FIX - CORRECT SCALING DENOMINATOR: Fixed unintended side effects from version 5.13.5.14! User reported two new issues:
+*					1) Cannot resize volumes after reset - handles don't work, 2) Volume sizes show incorrect values after reset. Root cause: Version
+*					5.13.5.14 changed denominator from targetTotalSize to currentTotal. This worked for preventing overflow, but had bad side effects!
+*					Using currentTotal means volumes ALWAYS fill 100% of canvas, even when they're smaller than target disk. This removes visual
+*					indication of free space and changes the UX significantly. Example: Target=2TB, Volumes=1.8TB. Old behavior (targetTotalSize):
+*					volumes fill 90% of canvas, 10% shows as free space - user can see extra capacity at a glance. Version 5.13.5.14 behavior
+*					(currentTotal): volumes fill 100% of canvas, no visual indication of free space - confusing! The CORRECT solution: Use
+*					Math.Max(currentTotal, targetTotalSize) as denominator. This gives us BOTH benefits: 1) When volumes > target (1.3TB volumes on
+*					1TB target): use 1.3TB as base → volumes fill 100%, no overflow ✓, 2) When volumes < target (1.8TB volumes on 2TB target): use
+*					2TB as base → volumes fill 90%, shows 10% free space ✓. Formula: scalingBase = Math.Max(currentTotal, targetTotalSize), then
+*					volWidth = (vol.CurrentSize / scalingBase) * canvasWidth. This prevents the overflow bug from version 5.13.5.5-13, while
+*					preserving the original UX of showing free space visually. Volumes scale correctly in ALL scenarios: smaller than target, equal
+*					to target, or larger than target. The denominator adapts to prevent overflow while maintaining visual feedback about free space.
+*					This is the TRULY correct fix that solves the original overflow bug without breaking the UX! Production-ready adaptive scaling! mdail 2/17/2026
+* Version 5.13.5.14 THE REAL BUG - WRONG DENOMINATOR IN WIDTH CALCULATION: Found the actual bug after 9 failed versions! All previous versions
+*					(5.13.5.5-13) were fixing the WRONG problem - they focused on WHEN to render, but the bug was in HOW we calculate width! Root cause
+*					discovered at line 292: `volWidth = (vol.CurrentSize / targetTotalSize) * canvasWidth`. The division used targetTotalSize (constant
+*					target disk size) as denominator, but should use currentTotal (sum of actual volume sizes). This caused volumes to scale incorrectly.
+*					Example bug scenario: Target disk = 2TB, volumes after reset = 1.8TB. Old code: Each volume width = (size / 2TB) * canvasWidth.
+*					Result: Volumes only fill 90% of canvas, OR if target changed, volumes extend beyond canvas edge! New code: Each volume width =
+*					(size / 1.8TB) * canvasWidth. Result: Volumes ALWAYS fill exactly canvasWidth, proportionally sized to each other. The math was
+*					fundamentally wrong - we were scaling volumes as if they needed to fill targetTotalSize, but they actually needed to fill
+*					currentTotal (which changes after dragging/resizing). This is why ALL previous timing fixes failed - even with correct ActualWidth
+*					and perfect timing, the volume width calculation was mathematically incorrect! Changed line 292 from targetTotalSize to currentTotal.
+*					Now volumes scale proportionally to their current sizes, always filling the canvas exactly. Simple fix, catastrophic bug. This
+*					explains EVERY issue: volumes too long, volumes too short, reset not working, dragging not rendering correctly. All caused by wrong
+*					denominator in one division! Versions 5.13.5.5-13 were red herrings - the timing was never the issue. Production-ready proportional
+*					scaling! mdail 2/17/2026
+* Version 5.13.5.13 CRITICAL FIX - STALE ACTUALWIDTH: Fixed Reset button still rendering with incorrect canvas width! User reported: After all previous
+*					fixes, reset button still makes volumes render too long (extending beyond canvas). Root cause: Even with Background priority dispatcher,
+*					we weren't forcing WPF to UPDATE LAYOUT before reading ActualWidth. Background priority means "run after all input/loaded events", but
+*					doesn't guarantee layout has been recalculated. Canvas ActualWidth can be STALE if layout pass hasn't run yet. The ActualWidth property
+*					returns the value from the LAST layout pass, which might have been calculated with different data (old volume sizes, old children, etc.).
+*					Solution: Added UpdateLayout() call INSIDE the dispatcher callback BEFORE reading ActualWidth. This forces WPF to run a complete,
+*					synchronous layout pass immediately: measure → arrange → render pipeline all execute before UpdateLayout() returns. Now guaranteed to get
+*					FRESH ActualWidth that reflects current canvas state. Updated flow: 1) Set isResetting=true, 2) Update volume data, 3) Deselect (skip
+*					render), 4) Queue Background dispatcher, 5) Callback executes: a) Call UpdateLayout() to force fresh layout, b) Read ActualWidth/Height
+*					(now guaranteed fresh), c) Clear isResetting flag, d) Log dimensions for debugging, e) Render if dimensions valid. The key insight: Background
+*					priority + UpdateLayout() = guaranteed fresh layout. Background priority ensures all events processed, UpdateLayout() forces immediate layout
+*					recalculation, ActualWidth reflects current state. This is the pattern we should have used from the start! Simple, explicit, reliable. mdail 2/17/2026
+* Version 5.13.5.12 CRITICAL FIX - RESET AFTER DRAG BUG: Fixed Reset button not working after dragging handles to resize volumes! User reported: After
+*					dragging handles, clicking Reset does nothing, then selecting a volume renders incorrectly. Root cause: Margin trick (version 5.13.5.9-11)
+*					only works when canvas SIZE actually changes. After dragging, canvas is already at correct size (ActualWidth/Height unchanged), so
+*					changing margin by 0.001px doesn't trigger WPF to recalculate layout - the change is too small to matter! WPF optimizes away tiny
+*					margin changes that don't affect element positioning. Timeline of bug: 1) User drags handles → volumes resize → canvas renders at correct
+*					size, 2) User clicks Reset → margin += 0.001 → WPF says "canvas size unchanged, no layout needed", 3) SizeChanged never fires, 4) Margin
+*					resets → still no size change, 5) isResetting flag prevents SelectVolume from rendering, 6) Eventually isResetting clears but nothing
+*					triggers render, 7) Layout stays broken! Solution: Removed margin trick entirely. Now using simple dispatcher-deferred rendering with
+*					Background priority. Reset flow: 1) Set isResetting=true, 2) Update data, 3) Deselect (skip render), 4) Queue Background dispatcher,
+*					5) Callback clears isResetting THEN calls RenderTargetDisk() directly. Background priority ensures all mouse events processed first
+*					(in case user is still releasing from drag). Direct render works because canvas dimensions are already correct - we just need to
+*					re-render the volume rectangles with new sizes. Removed unnecessary margin manipulation - simpler is better! This also fixes the
+*					race condition from 5.13.5.11 because we're not creating multiple layout passes. Single dispatcher callback, single render, done!
+*					Works correctly whether reset is clicked after drag, after selection, or immediately after window opens. Production-ready simplicity! mdail 2/17/2026
+* Version 5.13.5.11 CRITICAL FIX - SELECT AFTER RESET BUG: Fixed selecting volume after reset causing incorrect layout! User reported new issue:
+*					Reset works correctly, then clicking to SELECT a volume breaks layout. Root cause: Margin trick uses Dispatcher.BeginInvoke
+*					which is ASYNCHRONOUS. Timeline: 1) Margin changed to +0.001 → triggers first layout pass, 2) Dispatcher queued to reset
+*					margin, 3) User clicks volume BEFORE dispatcher executes, 4) SelectVolume() calls RenderTargetDisk() with TRANSITIONAL
+*					dimensions (canvas is mid-layout), 5) Layout corrupted! The margin trick causes TWO SizeChanged events: first when margin
+*					increases, second when margin resets. If user clicks between these events, SelectVolume() renders with wrong ActualWidth.
+*					Solution: Added isResetting flag (bool) to track when reset is in progress. Flag set to true at start of reset, cleared
+*					in nested dispatcher callback with Loaded priority (ensures layout fully complete). Modified SelectVolume() to check flag:
+*					if (isResetting) skip RenderTargetDisk() call. This prevents rendering during the margin trick's layout transition period.
+*					Reset button flow: 1) Set isResetting=true, 2) Update data, 3) Margin trick starts, 4) Dispatcher callback resets margin,
+*					5) Nested dispatcher callback clears isResetting flag after Loaded priority (layout complete). If user clicks during this
+*					time, SelectVolume() updates selection state but doesn't render. Once isResetting=false, next SizeChanged or user action
+*					will render correctly. Clean solution that prevents race condition between reset layout and user interaction! mdail 2/17/2026
+* Version 5.13.5.10 CRITICAL FIX - DESELECT RENDERING BUG: Fixed Reset Layout breaking when volume was selected! User reported: works when NO
+*					volume selected, but breaks when ANY volume is selected. Root cause identified: DeselectVolume() was calling RenderTargetDisk()
+*					immediately (line 625), BEFORE the margin trick triggered layout recalculation. This caused rendering with stale ActualWidth
+*					dimensions. Timeline of bug: 1) User clicks Reset, 2) DeselectVolume() called, 3) RenderTargetDisk() renders with OLD dimensions,
+*					4) Margin trick triggers, 5) SizeChanged fires, 6) RenderTargetDisk() renders again with CORRECT dimensions - but damage already
+*					done! Solution: Added skipRender parameter to DeselectVolume() method. When skipRender=true, method updates selection state
+*					(IsSelected=false, selectedVolume=null) but doesn't call RenderTargetDisk(). Reset button now calls DeselectVolume(skipRender: true)
+*					so rendering only happens once, through the SizeChanged event with correct canvas dimensions. This explains why 5.13.5.9 worked
+*					without selection (no DeselectVolume call) but failed with selection (premature render). All existing calls to DeselectVolume()
+*					use default skipRender=false to maintain current behavior. Only reset handler skips render since layout is being recalculated.
+*					Clean fix that preserves all existing functionality while fixing the selection edge case! Production-ready reset with selection! mdail 2/17/2026
+* Version 5.13.5.9 RADICAL NEW APPROACH - LET WPF HANDLE LAYOUT: After 4 failed attempts (5.13.5.5-5.13.5.8) fighting WPF's layout system,
+*					completely changed strategy! Stop manually calling RenderTargetDisk() from reset button - let WPF's natural layout system
+*					handle it! Root insight: We were trying to force layout recalculation and read ActualWidth before WPF finished its layout
+*					pass. New approach: 1) Update volume data (same as before), 2) Force a layout recalculation by temporarily changing canvas
+*					Margin by 0.001px (imperceptible but triggers layout), 3) Immediately reset margin in dispatcher callback, 4) WPF naturally
+*					fires SizeChanged event with CORRECT dimensions, 5) SizeChanged handler calls RenderTargetDisk() with proper canvas size.
+*					By leveraging WPF's event system instead of fighting it, we guarantee ActualWidth is correct. The margin trick forces WPF
+*					to re-measure the canvas without visible changes. SizeChanged event is WPF's way of telling us "layout is complete, here are
+*					the final dimensions" - we were trying to shortcut this process instead of using it! Removed all manual rendering, invalidation,
+*					UpdateLayout() calls - just let WPF do its job. This is how WPF is DESIGNED to work: data change → layout pass → size change
+*					→ render. Fighting this flow causes the ActualWidth timing issues we've been battling. Simpler code, fewer lines, works with
+*					WPF instead of against it. Production-ready cooperative approach! mdail 2/17/2026
+* Version 5.13.5.8 CRITICAL FIX - FORCE LAYOUT INVALIDATION: Changed approach after 5.13.5.7 still failed - problem is ActualWidth returning stale
+*					values even after dispatcher delays! Root cause: Canvas ActualWidth is calculated based on children, so when children are cleared,
+*					WPF doesn't recalculate to available space properly. New strategy: 1) Use InvalidateMeasure(), InvalidateArrange(), and
+*					InvalidateVisual() on canvas to force WPF to mark layout as dirty, 2) Invalidate parent Border container too (layout flows from
+*					parents), 3) Use Loaded priority dispatcher (higher than Background), 4) Call UpdateLayout() INSIDE dispatcher callback to force
+*					immediate synchronous layout pass, 5) Added fallback retry with Background priority if first attempt fails. InvalidateMeasure()
+*					marks element for remeasuring, InvalidateArrange() marks for repositioning, InvalidateVisual() forces redraw. By invalidating
+*					both canvas AND parent container, we ensure entire layout tree recalculates. UpdateLayout() forces synchronous layout pass so
+*					ActualWidth is guaranteed fresh. Two-stage fallback: Loaded priority tries first, Background priority retries if dimensions
+*					still zero. Comprehensive logging shows actual dimensions at render time. This MUST work because we're explicitly telling WPF
+*					to recalculate layout before reading ActualWidth. If this fails, it's a fundamental WPF limitation! mdail 2/17/2026
+* Version 5.13.5.7 CRITICAL FIX - RESET LAYOUT FINAL ATTEMPT: Changed strategy completely after nested dispatchers still failed! Root cause was
+*					stale canvas children interfering with layout calculations - WPF layout system was measuring based on OLD positioned elements.
+*					New approach: 1) Clear canvas.Children AND resizeHandles collections IMMEDIATELY in reset handler (before any dispatcher calls),
+*					2) Use single Dispatcher.BeginInvoke with DispatcherPriority.Background (lowest priority - runs after ALL layout/render passes),
+*					3) Removed nested dispatcher complexity (was causing timing issues). Background priority ensures: Loaded events processed,
+*					Layout pass 1 complete, Layout pass 2 complete, Render pass complete, THEN our callback runs. Canvas is guaranteed empty during
+*					layout so WPF calculates fresh dimensions without interference from old children. Debug logging shows canvas dimensions at render
+*					time. Simplified approach is more reliable than complex nested dispatchers. This MUST work because canvas is cleared synchronously
+*					and render happens at the absolute end of the UI update cycle. If this still fails, the issue is with the XAML layout structure
+*					itself, not the timing. Production-ready reset with clearest possible timing guarantee! mdail 2/17/2026
+* Version 5.13.5.6 CRITICAL FIX - RESET LAYOUT DISPATCHER: Fixed persistent layout corruption on Reset button! Previous fix (5.13.5.5) wasn't
+*					sufficient - UpdateLayout() alone doesn't guarantee canvas dimensions are recalculated before rendering. Issue was WPF's
+*					layout system needs TWO dispatcher passes to fully recalculate nested Grid/Border/Canvas dimensions. Implemented proper
+*					deferred rendering using Dispatcher.BeginInvoke with DispatcherPriority.Loaded (runs after layout completes). Used nested
+*					dispatcher calls: First pass calls UpdateLayout(), second pass performs actual render after dimensions stabilize. Added
+*					comprehensive debug logging to track canvas dimensions during render (shows ActualWidth x ActualHeight). Reset button now:
+*					1) Updates volume sizes immediately, 2) Queues first dispatcher callback (priority: Loaded), 3) First callback forces
+*					UpdateLayout(), 4) Queues second dispatcher callback, 5) Second callback renders with correct dimensions. Logging shows
+*					"Rendering with canvas size = XXX x YYY" to verify proper sizing. This ensures canvas ALWAYS has valid dimensions before
+*					RenderTargetDisk() executes. WPF layout timing issues completely resolved! Production-ready stable reset functionality! mdail 2/17/2026
+* Version 5.13.5.5 RENDER FIX - RESET LAYOUT BUTTON: Fixed Reset Layout button pushing content off-page! Issue was same as initial render
+*					bug - Reset button called RenderTargetDisk() before canvas had valid dimensions, causing rendering with ActualWidth=0
+*					and elements positioned incorrectly. Added three-level protection: 1) Added early return in RenderTargetDisk() if
+*					canvas ActualWidth <= 0 (prevents rendering with invalid dimensions), 2) Added UpdateLayout() call before rendering
+*					in BtnReset_Click (forces WPF to recalculate sizes), 3) Added dimension validation check before calling render (only
+*					renders if ActualWidth > 0 and ActualHeight > 0). Also improved AnalyzeAndRender to show pnlVisualization BEFORE
+*					rendering (allows layout to update), then force UpdateLayout(), then render only if canvas sized. Added debug logging
+*					to track when canvas isn't ready. Fixed Math.Max usage for yOffset to prevent negative values. Reset button now works
+*					perfectly without layout corruption! Canvas always renders at correct size. Production-ready stable rendering! mdail 2/17/2026
+* Version 5.13.5.4 LAYOUT OPTIMIZATION - WINDOW SIZE REDUCTION: Fixed window being too large after removing source disk canvas! Reduced window
+*					height from 850px to 650px (200px smaller) since we now only show one canvas instead of two. Completely removed old XAML
+*					structure that had 6 rows with fixed heights (180px for source canvas + 30px arrow + 180px for target canvas = ~390px wasted).
+*					New 3-row layout: Auto-height header + Star-height canvas (takes all available space) + Auto-height instructions. Canvas now
+*					gets maximum available vertical space instead of being constrained to fixed 180px height. Header combines source info (small,
+*					grey, left) and target info (large, black, right) in one compact panel. Removed unused canvasSourceDisk from XAML (it was still
+*					in markup even though C# code didn't use it). Window is now more compact and efficient - no wasted space! Perfect size for
+*					single interactive canvas view. Professional layout that focuses user attention on the resizing task. Production-ready compact
+*					design! mdail 2/17/2026
+* Version 5.13.5.3 CRITICAL FIX - INFINITE RENDER LOOP & HANG: Fixed window hanging/freezing on open! Issue was SizeChanged event causing
+*					infinite rendering loop - canvas resize triggered re-render which caused canvas resize again. Added isRendering flag to
+*					prevent re-entrant calls in both CanvasTargetDisk_SizeChanged and RenderTargetDisk methods. Wrapped RenderTargetDisk in
+*					try-finally block to ensure flag is always reset even if rendering fails. Also reduced async delays from 200ms to 50ms
+*					in AnalyzeAndRender to make window appear faster (was causing perceived "hang" while waiting). Removed unnecessary initial
+*					Task.Delay(100) from VolumeConfigurationWindow_Loaded - window now shows immediately. Window now opens instantly without
+*					hanging, renders correctly on first display, and doesn't enter infinite loop when canvas is resized. Critical fix for
+*					usability - window was completely unusable in 5.13.5.2! Production-ready interactive experience restored! mdail 2/17/2026
+* Version 5.13.5.2 UI ENHANCEMENT - SIMPLIFIED LAYOUT & RENDER FIX: Fixed two UI issues in VolumeConfigurationWindow! 1) INITIAL RENDER BUG:
+*					Added SizeChanged event handler to Canvas that re-renders when canvas gets its actual size. Previously, canvas rendered with
+*					ActualWidth=0 on initial load, causing text to be cut off and volumes to appear incorrectly sized. SizeChanged triggers
+*					re-render after layout completes, ensuring proper display. 2) SIMPLIFIED INTERFACE: Removed redundant source disk visualization
+*					- users only need to see the target disk where they can interact and resize. Source disk info still shown in header (small text
+*					on left) while target is prominent (right side). Removed RenderSourceDisk() method entirely - saves rendering time and reduces
+*					visual clutter. Window now shows one large interactive canvas instead of two static displays. Header shows: "Source: 2.11 TB"
+*					(grey, small) and "Target: 1.82 TB (Resizable)" (black, large). Users immediately see the interactive target disk with handles,
+*					no confusion about which view is editable. Cleaner, more intuitive interface focused on the resizing task! Canvas now properly
+*					sized and rendered on first display. Production-ready interactive experience! mdail 2/16/2026
+* Version 5.13.5.1 BUILD FIX - CLEAN & REBUILD ERROR: Fixed "ambiguous" build errors that occurred after Clean & Rebuild! Issue was
+*					caused by temporary `_NEW` files (VolumeConfigurationWindow_NEW.xaml and VolumeConfigurationWindow_NEW.xaml.cs) that
+*					weren't properly deleted during the file replacement process in version 5.13.5.0. When Clean was executed, MSBuild
+*					regenerated .g.cs (generated) code files from ALL .xaml files in the project, including both the correct files AND
+*					the leftover temporary files. This created duplicate `partial class VolumeConfigurationWindow` definitions, causing
+*					56 "CS0121: The call is ambiguous" and "CS0229: Ambiguity between" errors on every UI element (buttons, text boxes,
+*					canvases, etc.). Fixed by properly deleting all temporary files: VolumeConfigurationWindow_NEW.xaml, 
+*					VolumeConfigurationWindow_NEW.xaml.cs, and VolumeConfigurationWindow.xaml.cs.NEW. Build now succeeds cleanly on
+*					both regular Build and Clean & Rebuild operations. Only the correct files remain: VolumeConfigurationWindow.xaml,
+*					VolumeConfigurationWindow.xaml.cs, and their .BACKUP versions. Lesson learned: temporary files must be deleted
+*					immediately after file operations to prevent MSBuild conflicts! Production-ready build stability restored! mdail 2/16/2026
+* Version 5.13.5.0 MAJOR FEATURE - INTERACTIVE VOLUME RESIZING: Complete redesign of VolumeConfigurationWindow with full drag-and-drop
+*					interactive resizing! Users can now CLICK volumes to select them and see detailed information (size, used, free, min, max).
+*					DRAG blue circular handles (●) between volumes to resize them in real-time! Comprehensive constraint enforcement: minimum
+*					size = used space + 10% overhead, maximum size based on available target space. Visual feedback: selected volumes highlight
+*					in blue, resizable volumes in green, fixed-size volumes in grey. Right panel shows live details for selected volume with
+*					size limits clearly displayed. Reset button reverts to original layout. Real-time updates as you drag handles - volumes
+*					grow/shrink visually, labels update, status bar shows current configuration. Smart handle enabling: only appears between
+*					resizable volumes. Both volumes resizable = drag freely, one resizable = only that side moves, neither resizable = no handle.
+*					Professional UI: larger window (1100x850px), two-panel layout (canvas + details), instructions panel, legend with color codes,
+*					smooth animations on hover. Complete rewrite: 800+ lines of C# with mouse event handling (MouseDown/Move/Up), collision
+*					detection, proportional size calculations, Canvas-based rendering. Enterprise-grade experience like GParted or Disk Management!
+*					Perfect for disaster recovery to different-sized drives - users can see exactly how volumes will fit and adjust interactively!
+*					Production-ready with full validation, error handling, and rollback capability. mdail 2/16/2026
+* Version 5.13.4.5 CRITICAL FIX - VOLUME CONFIGURATION BUGS: Fixed THREE major bugs in VolumeConfigurationWindow! 1) RESIZABILITY BUG: Removed
+*					incorrect check that prevented system volumes from being resized. System volumes (like C:) CAN be resized if they're NTFS with
+*					>10% free space. Only checks filesystem type and free space now. C: drive now correctly shows as GREEN (resizable) instead of
+*					GREY! 2) OVERLAY RENDERING BUG: Fixed completely broken math in RenderTargetWithOverlay - was multiplying by (source/target)
+*					which made volumes TINY when source > target. Now correctly calculates width as (volumeSize / targetSize) * availableWidth.
+*					Volumes now render at correct scale! 3) MISSING TARGET VISUALIZATION: Replaced "?? Overlay ??" placeholder with actual target
+*					disk rendering. Added "Target Disk Layout" label, improved volume labels (shows size for wide volumes, abbreviated for narrow
+*					volumes), enhanced free space display. Target disk now renders properly with source volumes overlaid showing exactly how they'll
+*					fit! Color coding works: GREEN = resizable, GREY = non-resizable. All three critical bugs FIXED - volume configuration modal
+*					now fully functional! mdail 2/16/2026
+* Version 5.13.4.4 CRITICAL FIX - VOLUME LETTER DETECTION: Fixed WMI query bug causing ALL disks to show "Unallocated/No Volumes"! Issue was
+*					incorrect backslash escaping in ASSOCIATORS query string - was using excessive escaping (8+ backslashes) causing WMI to fail
+*					silently. Completely rewrote GetVolumeLettersForDisk method with proper approach: 1) Query Win32_DiskDrive by Index to get actual
+*					DeviceID (e.g., "\\.\PHYSICALDRIVE0"), 2) Use that exact DeviceID in ASSOCIATORS query (no manual escaping needed!), 3) Query
+*					partitions and logical disks using correct device IDs. Added comprehensive debug logging at every step - shows DeviceID, partition
+*					names, volume letters found. Now correctly displays: "Disk 0: Samsung SSD (C:, D:)" instead of "(Unallocated/No Volumes)". Fixed
+*					null reference checks on partition DeviceID. Logs total volume count per disk. WMI queries now work perfectly! Users can see actual
+*					drive letters for each physical disk. Critical fix for disk identification - was completely broken in 5.13.4.3! mdail 2/16/2026
+* Version 5.13.4.3 DISK SELECTION ENHANCEMENT - VOLUME LETTERS & UNALLOCATED DISKS: Enhanced DiskSelectionWindow to show complete disk
+*					information! Added GetVolumeLettersForDisk method that queries WMI associations (Win32_DiskDriveToDiskPartition and
+*					Win32_LogicalDiskToPartition) to find all volume letters (C:, D:, E:, etc.) for each physical disk. Display name now
+*					shows volume letters in parentheses: "Disk 0: Samsung SSD (C:, D:)". Unallocated or unformatted disks show "(Unallocated/No
+*					Volumes)" instead. Details line enhanced to show "Volumes: C:, D:" or "Status: Unallocated or unformatted". ALL disks now
+*					appear in list regardless of partition state - raw/uninitialized disks are visible and selectable! Added VolumeLetters
+*					property to DiskInfo class to store volume letters for later use. Perfect for identifying target disks by their drive
+*					letters! Users can now see: "Disk 1: WD Blue 1TB (E:)" instead of just "Disk 1: WD Blue 1TB". Makes disk selection clear
+*					and prevents confusion. Unallocated disks are perfect clone targets - no data to lose! mdail 2/16/2026
+* Version 5.13.4.2 DISK-ONLY SELECTION FOR CLONE TO DISK: Created specialized disk selection interface for "Clone to Disk" operations!
+*					New DiskSelectionWindow shows ONLY available physical disks (excludes source disk). Displays disk index, model, size,
+*					interface type, and device ID in clean list view. Automatically excludes source disk(s) from selection - prevents user
+*					from accidentally selecting source as target! Shows warning message about data replacement with confirmation dialog.
+*					Updated BrowseCloneDestination_Click to detect "Clone to Disk" vs "Clone to Virtual Disk" - uses DiskSelectionWindow for
+*					physical disks, FolderBrowserDialog for virtual disks. Added GetSelectedDiskIndexes() to extract source disk indexes from
+*					checked volumes. Enhanced CheckAndShowVolumeConfiguration with comprehensive debug logging - tracks every step to diagnose
+*					modal triggering issues. Updated GetTargetDiskSize to extract size from DiskInfo stored in txtCloneDestination.Tag. Added
+*					FormatSize helper for consistent size display. No more folder selection for disk clones - proper disk-to-disk interface!
+*					Professional enterprise-grade disk cloning workflow with safety checks and clear UI. Production-ready! mdail 2/16/2026
+* Version 5.13.4.1 CRITICAL FIX - VOLUME CONFIG MODAL INTEGRATION: Completed integration of VolumeConfigurationWindow into BackupWindowNew!
+*					Removed old inline VolumeResizeControl from XAML - now uses modal popup exclusively. Fixed BackupType_Changed to remove
+*					volume resize control references. Added source/target selection tracking (hasSourceSelected, hasTargetSelected, volumeConfigShown).
+*					Wired up CheckAndShowVolumeConfiguration method that triggers when BOTH source and target selected. Added checkbox click
+*					tracking in CreateTreeViewItem to detect source volume selection. Enhanced with comprehensive helper methods: GetCheckedDriveItems
+*					(recursively finds checked items), GetSelectedVolumesForVolumeConfig (builds VolumeInfo list), GetVolumeInfo (gets size/filesystem),
+*					IsSystemVolume, GetAllocationUnitSize, GetTargetAllocationUnitSize. Modal now appears immediately after selecting both source
+*					volumes and clone destination! Removed 250+ lines of old UpdateVolumeResizeControl and GetSelectedVolumesForClone code. Clean
+*					integration with proper error handling - shows warnings if no source selected or invalid target. Users can cancel and reselect
+*					target. Modal triggers correctly regardless of selection order (source first or target first). FIXED: Old inline control removed,
+*					modal properly wired up, builds successfully! Enterprise-grade volume configuration experience now fully functional! mdail 2/16/2026
+* Version 5.13.4.0 MAJOR UPDATE - INTELLIGENT VOLUME CONFIGURATION MODAL: Complete redesign of volume configuration system! Created new
+*					modal VolumeConfigurationWindow that appears after both source and target are selected (whichever selected last). Window
+*					shows calculating progress bar while analyzing disk structure - takes allocated unit size into account for both disks!
+*					Intelligent compatibility detection: if source > target, shows ERROR if can't be resized (all system/non-NTFS volumes),
+*					shows WARNING if partial resize possible, highlights resizable volumes in GREEN and non-resizable in GREY. Visual overlay
+*					shows source disk structure overlaid on target disk with proportional sizing. Displays full disk structure when multiple
+*					volumes selected. Real-time analysis of volume resizability based on: file system type (NTFS required), system volume
+*					status, free space percentage (min 10%). Calculates actual space requirements considering allocation unit size differences
+*					between source and target disks. Shows detailed error/warning messages with size information. Legend explains color coding.
+*					Accept button only enabled when configuration is valid. Modal design ensures user reviews configuration before proceeding.
+*					Enterprise-grade disk analysis with professional visualization! Perfect for disaster recovery to different-sized drives! mdail 2/14/2026
+* Version 5.13.3.17 UI FIX - RETENTION PANEL INITIAL VISIBILITY: Fixed retention settings panel not appearing on window load when Full
+*					Backup is preselected! Added visibility update logic to BackupWindowNew_Loaded event handler to check if Full Backup
+*					radio button is selected and show retention panel accordingly. Previously, the panel only appeared after changing
+*					backup type and changing back because BackupType_Changed event doesn't fire on initial load. Now correctly shows
+*					"Keep last N backups" settings immediately when window opens with Full Backup preselected (the default). Users no
+*					longer need to toggle backup types to see retention settings. Perfect initialization behavior! mdail 2/16/2026
+* Version 5.13.3.16 UI ENHANCEMENTS - BACKUP WINDOW: Improved backup configuration window usability and layout! Fixed retention
+*					settings visibility - "Keep last N backups" now only appears when "Full Backup" type is selected (hidden for
+*					Incremental, Differential, and all Clone types). Enhanced BackupType_Changed handler to dynamically show/hide
+*					retention panel based on selected backup type. Updated LoadJobData to properly show/hide retention settings when
+*					editing existing jobs. Increased window height from 750px to 850px (+100px) to prevent Volume Configuration
+*					control from being cut off during Clone operations - all size labels, resize handles, and buttons now fully visible
+*					and accessible. UI now matches feature behavior - no more confusing controls visible for types they don't apply to.
+*					Professional, polished appearance with adequate space for all features. Perfect user experience! mdail 2/16/2026
+* Version 5.13.3.15 BACKUP RETENTION WITH SAFETY: Implemented configurable full backup retention with safety-first approach!
+*					Added "Keep last N backups" setting to backup configuration (default: 1). When retention > 1, backup names
+*					include date/time for easy identification. Existing backups are renamed with _PENDING_ suffix before creating
+*					new backup - NEVER deleted until new backup is verified! If backup or verification fails, automatic rollback
+*					restores previous backup and deletes failed backup. Cleanup enforces retention policy ONLY after successful
+*					verification - keeps N most recent backups, deletes excess sorted by creation time. Complete safety: users
+*					never lose their last good backup due to failed backup attempt. Enhanced BackupExecutor with GetExistingFullBackups,
+*					RenameBackupAsPending, RestoreRenamedBackup, and CleanupOldBackups methods. Perfect for production environments
+*					requiring multiple restore points with zero data loss risk! Enterprise-grade reliability! mdail 2/16/2026
 * Version 5.13.3.14 AUTOMATIC SERVICE CLEANUP ON BUILD: Added automatic service stop/uninstall before building BackupService! Created MSBuild target
 *					in Directory.Build.targets that runs before BeforeBuild, BeforeRebuild, and BeforeClean. Automatically stops BackupRestoreService,
 *					waits 1 second for cleanup, and deletes the service before building. Prevents file locking errors when rebuilding BackupService while

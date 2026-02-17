@@ -22,6 +22,11 @@ namespace BackupUI.Windows
         private BackupJob? existingJob = null;
         private List<string>? _pathsToPreselect = null;  // Paths to pre-select after tree loads
 
+        // Volume configuration tracking
+        private bool hasSourceSelected = false;
+        private bool hasTargetSelected = false;
+        private bool volumeConfigShown = false;
+
         public BackupWindowNew()
         {
             InitializeWindow();
@@ -88,6 +93,13 @@ namespace BackupUI.Windows
             // Set options
             chkCompress.IsChecked = job.CompressData;
             chkVerify.IsChecked = job.VerifyAfterBackup;
+            txtRetainCount.Text = job.RetainFullBackupCount.ToString();
+
+            // Show retention settings if Full backup type
+            if (pnlRetentionSettings != null)
+            {
+                pnlRetentionSettings.Visibility = job.Type == BackupType.Full ? Visibility.Visible : Visibility.Collapsed;
+            }
 
             // Store job data for pre-selection after tree loads
             if (job.Target == BackupTarget.Disk || job.Target == BackupTarget.Volume || job.Target == BackupTarget.FilesAndFolders)
@@ -165,6 +177,14 @@ namespace BackupUI.Windows
                 {
                     PreSelectItems(_pathsToPreselect);
                 }
+
+                // Update retention settings visibility based on initially selected backup type
+                // This ensures the panel shows correctly when Full Backup is preselected
+                if (pnlRetentionSettings != null)
+                {
+                    bool isFullBackup = rbFullBackup?.IsChecked == true;
+                    pnlRetentionSettings.Visibility = isFullBackup ? Visibility.Visible : Visibility.Collapsed;
+                }
             }
             catch (Exception ex)
             {
@@ -203,8 +223,9 @@ namespace BackupUI.Windows
                     return true;
                 }
                 
+                
                 // Check children
-                if (item.Children.Count > 0)
+                if (item.Children.Count > 0 && !string.IsNullOrEmpty(pathToSelect))
                 {
                     if (PreSelectItemRecursive(item.Children, pathToSelect))
                     {
@@ -448,6 +469,7 @@ namespace BackupUI.Windows
                 Orientation = System.Windows.Controls.Orientation.Horizontal 
             };
             
+            
             var checkbox = new System.Windows.Controls.CheckBox
             {
                 IsChecked = item.IsChecked,
@@ -464,12 +486,29 @@ namespace BackupUI.Windows
                 if (item.IsChecked == true)
                 {
                     item.IsChecked = false;
+                    System.Diagnostics.Debug.WriteLine($"[Checkbox] Unchecked: {item.Name} ({item.ItemType})");
                 }
                 else
                 {
                     item.IsChecked = true;
+                    System.Diagnostics.Debug.WriteLine($"[Checkbox] Checked: {item.Name} ({item.ItemType})");
                 }
                 e.Handled = true;  // Prevent default three-state behavior
+
+                // Track source selection for clone operations (volumes OR disks)
+                if ((item.ItemType == DriveTreeItemType.Volume || item.ItemType == DriveTreeItemType.Disk) && item.IsChecked == true)
+                {
+                    hasSourceSelected = true;
+                    volumeConfigShown = false; // Reset to allow showing again
+                    System.Diagnostics.Debug.WriteLine($"[Checkbox] {item.ItemType} checked, hasSourceSelected = true, hasTargetSelected = {hasTargetSelected}");
+                    CheckAndShowVolumeConfiguration();
+                }
+                else if (item.ItemType == DriveTreeItemType.Volume || item.ItemType == DriveTreeItemType.Disk)
+                {
+                    // Check if any volumes/disks are still selected
+                    hasSourceSelected = GetCheckedDriveItems().Any(i => i.ItemType == DriveTreeItemType.Volume || i.ItemType == DriveTreeItemType.Disk);
+                    System.Diagnostics.Debug.WriteLine($"[Checkbox] {item.ItemType} unchecked, hasSourceSelected = {hasSourceSelected}");
+                }
             };
             
             // Update checkbox when model changes (allows indeterminate from parent updates)
@@ -1246,52 +1285,37 @@ namespace BackupUI.Windows
             if (pnlCloneOptions == null || pnlBackupDestination == null) 
                 return;
 
-            // Clone to Disk: Show ONLY Clone to Physical Disk field + Volume Resize Control
+            // Check if Full Backup is selected to show/hide retention settings
+            bool isFullBackup = rbFullBackup?.IsChecked == true;
+            if (pnlRetentionSettings != null)
+            {
+                pnlRetentionSettings.Visibility = isFullBackup ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            // Clone to Disk: Show ONLY Clone to Physical Disk field
             if (rbCloneDisk?.IsChecked == true)
             {
                 pnlCloneOptions.Visibility = Visibility.Visible;
                 pnlBackupDestination.Visibility = Visibility.Collapsed;
                 txtCloneDestinationLabel.Text = "Clone to Physical Disk:";
-                
-                // Show volume resize control for disk cloning
-                if (grpVolumeResize != null)
-                {
-                    grpVolumeResize.Visibility = Visibility.Visible;
-                    UpdateVolumeResizeControl();
-                }
             }
-            // Clone to Virtual Disk (Hyper-V): Show ONLY Backup Destination field + Volume Resize Control
+            // Clone to Virtual Disk (Hyper-V): Show ONLY Backup Destination field
             else if (rbCloneVirtual?.IsChecked == true)
             {
                 pnlCloneOptions.Visibility = Visibility.Collapsed;
                 pnlBackupDestination.Visibility = Visibility.Visible;
-                
-                // Show volume resize control for virtual disk cloning
-                if (grpVolumeResize != null)
-                {
-                    grpVolumeResize.Visibility = Visibility.Visible;
-                    UpdateVolumeResizeControl();
-                }
             }
-            // Clone Hyper-V System: Show ONLY Backup Destination field (NO volume resize)
+            // Clone Hyper-V System: Show ONLY Backup Destination field
             else if (rbCloneHyperV?.IsChecked == true)
             {
                 pnlCloneOptions.Visibility = Visibility.Collapsed;
                 pnlBackupDestination.Visibility = Visibility.Visible;
-                
-                // Hide volume resize for Hyper-V system clone
-                if (grpVolumeResize != null)
-                    grpVolumeResize.Visibility = Visibility.Collapsed;
             }
-            // All other backup types: Show ONLY Backup Destination field (NO volume resize)
+            // All other backup types: Show ONLY Backup Destination field
             else
             {
                 pnlCloneOptions.Visibility = Visibility.Collapsed;
                 pnlBackupDestination.Visibility = Visibility.Visible;
-                
-                // Hide volume resize for non-clone operations
-                if (grpVolumeResize != null)
-                    grpVolumeResize.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -1312,104 +1336,269 @@ namespace BackupUI.Windows
 
         private void BrowseCloneDestination_Click(object sender, RoutedEventArgs e)
         {
-            using var dialog = new FolderBrowserDialog
+            bool isCloneToDisk = rbCloneDisk?.IsChecked == true;
+            
+            if (isCloneToDisk)
             {
-                Description = "Select clone destination drive or folder",
-                UseDescriptionForTitle = true,
-                ShowNewFolderButton = true
-            };
+                // For "Clone to Disk", show disk selection dialog
+                try
+                {
+                    // Get source disk indexes to exclude
+                    var sourceDiskIndexes = GetSelectedDiskIndexes();
+                    
+                    var diskDialog = new DiskSelectionWindow(sourceDiskIndexes);
+                    diskDialog.Owner = this;
+                    bool? result = diskDialog.ShowDialog();
+                    
+                    if (result == true && diskDialog.SelectedDisk != null)
+                    {
+                        var disk = diskDialog.SelectedDisk;
+                        txtCloneDestination.Text = $"Disk {disk.DiskIndex}: {disk.Model} ({FormatSize(disk.SizeBytes)})";
+                        txtCloneDestination.Tag = disk; // Store disk info for later use
+                        
+                        hasTargetSelected = true;
+                        
+                        System.Diagnostics.Debug.WriteLine($"[BrowseCloneDestination] ========== DISK SELECTED ==========");
+                        System.Diagnostics.Debug.WriteLine($"[BrowseCloneDestination] Target: Disk {disk.DiskIndex}");
+                        System.Diagnostics.Debug.WriteLine($"[BrowseCloneDestination] hasSourceSelected: {hasSourceSelected}");
+                        System.Diagnostics.Debug.WriteLine($"[BrowseCloneDestination] hasTargetSelected: {hasTargetSelected}");
+                        System.Diagnostics.Debug.WriteLine($"[BrowseCloneDestination] volumeConfigShown: {volumeConfigShown}");
+                        System.Diagnostics.Debug.WriteLine($"[BrowseCloneDestination] About to call CheckAndShowVolumeConfiguration()");
+                        System.Diagnostics.Debug.WriteLine($"[BrowseCloneDestination] =======================================");
+                        
+                        // Check if we should show volume configuration
+                        CheckAndShowVolumeConfiguration();
+                        
+                        System.Diagnostics.Debug.WriteLine($"[BrowseCloneDestination] CheckAndShowVolumeConfiguration() returned");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error selecting disk: {ex.Message}",
+                        "Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
+            else
+            {
+                // For "Clone to Virtual Disk", use folder browser
+                using var dialog = new FolderBrowserDialog
+                {
+                    Description = "Select folder for virtual disk clone",
+                    UseDescriptionForTitle = true,
+                    ShowNewFolderButton = true
+                };
 
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-            {
-                txtCloneDestination.Text = dialog.SelectedPath;
-                
-                // Update volume resize control when destination changes
-                UpdateVolumeResizeControl();
+                if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    txtCloneDestination.Text = dialog.SelectedPath;
+                    hasTargetSelected = true;
+                    
+                    System.Diagnostics.Debug.WriteLine($"[BrowseCloneDestination] Target selected: {dialog.SelectedPath}, Source selected: {hasSourceSelected}");
+                    
+                    // Check if we should show volume configuration
+                    CheckAndShowVolumeConfiguration();
+                }
             }
         }
 
         /// <summary>
-        /// Updates the volume resize control based on selected source volumes and target destination
+        /// Gets the disk indexes of selected source volumes
         /// </summary>
-        private void UpdateVolumeResizeControl()
+        private List<int> GetSelectedDiskIndexes()
+        {
+            var diskIndexes = new List<int>();
+            
+            try
+            {
+                var checkedItems = GetCheckedDriveItems();
+                
+                foreach (var item in checkedItems)
+                {
+                    if (item.ItemType == DriveTreeItemType.Disk)
+                    {
+                        // Extract disk index from item (e.g., "Disk 0" -> 0)
+                        if (int.TryParse(item.Name.Replace("Disk", "").Trim(), out int diskIndex))
+                        {
+                            diskIndexes.Add(diskIndex);
+                        }
+                    }
+                    else if (item.ItemType == DriveTreeItemType.Volume && item.Parent != null)
+                    {
+                        // Get parent disk index
+                        if (int.TryParse(item.Parent.Name.Replace("Disk", "").Trim(), out int diskIndex))
+                        {
+                            if (!diskIndexes.Contains(diskIndex))
+                            {
+                                diskIndexes.Add(diskIndex);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting disk indexes: {ex.Message}");
+            }
+            
+            return diskIndexes;
+        }
+
+        private string FormatSize(long bytes)
+        {
+            string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+            double len = bytes;
+            int order = 0;
+            while (len >= 1024 && order < sizes.Length - 1)
+            {
+                order++;
+                len = len / 1024;
+            }
+            return $"{len:0.##} {sizes[order]}";
+        }
+
+        /// <summary>
+        /// Checks if both source and target are selected for clone operations and shows volume configuration modal
+        /// </summary>
+        private void CheckAndShowVolumeConfiguration()
         {
             try
             {
-                if (volumeResizeControl == null || grpVolumeResize == null)
-                    return;
-
+                System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] Called");
+                
                 // Only for clone operations
                 bool isCloneToDisk = rbCloneDisk?.IsChecked == true;
                 bool isCloneToVirtual = rbCloneVirtual?.IsChecked == true;
                 
+                System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] IsCloneToDisk: {isCloneToDisk}, IsCloneToVirtual: {isCloneToVirtual}");
+                
                 if (!isCloneToDisk && !isCloneToVirtual)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] Not a clone operation, returning");
                     return;
+                }
 
-                // Get selected volumes from tree
-                var selectedVolumes = GetSelectedVolumesForClone();
+                // Check if both source and target are selected
+                System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] hasSourceSelected: {hasSourceSelected}, hasTargetSelected: {hasTargetSelected}");
+                
+                if (!hasSourceSelected || !hasTargetSelected)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] Both not selected yet, returning");
+                    return;
+                }
+
+                // Don't show multiple times
+                if (volumeConfigShown)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] Already shown, returning");
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] All checks passed, preparing to show modal");
+                volumeConfigShown = true;
+
+                // Get selected volumes
+                var selectedVolumes = GetSelectedVolumesForVolumeConfig();
+                
+                System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] Selected volumes count: {selectedVolumes.Count}");
                 
                 if (selectedVolumes.Count == 0)
                 {
-                    System.Diagnostics.Debug.WriteLine("No volumes selected for clone");
+                    MessageBox.Show("Please select at least one volume to clone.",
+                        "No Source Selected",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    volumeConfigShown = false;
                     return;
                 }
 
                 // Get target disk size
                 long targetDiskSize = GetTargetDiskSize();
                 
+                System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] Target disk size: {targetDiskSize}");
+                
                 if (targetDiskSize <= 0)
                 {
-                    System.Diagnostics.Debug.WriteLine("No valid target disk size");
+                    MessageBox.Show("Unable to determine target disk size.",
+                        "Invalid Target",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    volumeConfigShown = false;
                     return;
                 }
 
-                // Create volume resize information
-                var volumeResizeInfos = new System.Collections.Generic.List<VolumeResizeInfo>();
-                int index = 0;
+                // Get allocation unit sizes
+                int sourceAUS = GetAllocationUnitSize(selectedVolumes[0].FileSystem);
+                int targetAUS = GetTargetAllocationUnitSize();
 
-                foreach (var vol in selectedVolumes)
+                System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] Showing modal window");
+                
+                // Show volume configuration modal
+                var configWindow = new VolumeConfigurationWindow(
+                    selectedVolumes,
+                    targetDiskSize,
+                    sourceAUS,
+                    targetAUS
+                );
+
+                configWindow.Owner = this;
+                bool? result = configWindow.ShowDialog();
+
+                if (result == true)
                 {
-                    volumeResizeInfos.Add(new VolumeResizeInfo
-                    {
-                        Label = vol.Label,
-                        OriginalSize = vol.TotalSize,
-                        DataSize = vol.UsedSpace,
-                        Index = index++
-                    });
+                    // User accepted configuration - can proceed with clone
+                    System.Diagnostics.Debug.WriteLine("Volume configuration accepted");
                 }
-
-                // Initialize the resize control
-                volumeResizeControl.Initialize(volumeResizeInfos, targetDiskSize);
+                else
+                {
+                    // User cancelled - reset target selection
+                    hasTargetSelected = false;
+                    txtCloneDestination.Text = string.Empty;
+                    volumeConfigShown = false;
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error updating volume resize control: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] ERROR: {ex.Message}\n{ex.StackTrace}");
+                MessageBox.Show($"Error showing volume configuration: {ex.Message}",
+                    "Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                volumeConfigShown = false;
             }
         }
 
         /// <summary>
-        /// Gets the list of selected volumes for cloning with their sizes
+        /// Gets the list of selected volumes for volume configuration
         /// </summary>
-        private System.Collections.Generic.List<(string Label, long TotalSize, long UsedSpace)> GetSelectedVolumesForClone()
+        private List<VolumeInfo> GetSelectedVolumesForVolumeConfig()
         {
-            var volumes = new System.Collections.Generic.List<(string Label, long TotalSize, long UsedSpace)>();
+            var volumes = new List<VolumeInfo>();
 
             try
             {
-                var driveItems = treeViewDrives.Items.OfType<DriveTreeItem>();
+                var checkedItems = GetCheckedDriveItems();
 
-                foreach (var drive in driveItems)
+                foreach (var item in checkedItems)
                 {
-                    // Get volumes from this drive
-                    var selectedVolumes = drive.Children
-                        .Where(c => c.ItemType == DriveTreeItemType.Volume && c.IsChecked == true)
-                        .ToList();
-
-                    foreach (var volume in selectedVolumes)
+                    if (item.ItemType == DriveTreeItemType.Volume)
                     {
-                        // Get volume info from WMI or filesystem
-                        var (totalSize, usedSpace) = GetVolumeSize(volume.FullPath);
-                        volumes.Add((volume.Name, totalSize, usedSpace));
+                        // Get volume info
+                        var (totalSize, usedSpace, fileSystem) = GetVolumeInfo(item.FullPath);
+                        bool isSystemVolume = IsSystemVolume(item.FullPath);
+                        int aus = GetAllocationUnitSize(fileSystem);
+
+                        volumes.Add(new VolumeInfo
+                        {
+                            Label = item.Name,
+                            Size = totalSize,
+                            UsedSpace = usedSpace,
+                            FileSystem = fileSystem,
+                            IsSystemVolume = isSystemVolume,
+                            AllocationUnitSize = aus,
+                            IsResizable = false // Will be determined by VolumeConfigurationWindow
+                        });
                     }
                 }
             }
@@ -1422,25 +1611,85 @@ namespace BackupUI.Windows
         }
 
         /// <summary>
-        /// Gets the size information for a volume
+        /// Gets comprehensive volume information
         /// </summary>
-        private (long TotalSize, long UsedSpace) GetVolumeSize(string volumePath)
+        private (long TotalSize, long UsedSpace, string FileSystem) GetVolumeInfo(string volumePath)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(volumePath))
-                    return (0, 0);
+                    return (0, 0, "Unknown");
 
-                var driveInfo = new System.IO.DriveInfo(volumePath);
+                var driveInfo = new DriveInfo(volumePath);
                 long totalSize = driveInfo.TotalSize;
                 long usedSpace = totalSize - driveInfo.AvailableFreeSpace;
+                string fileSystem = driveInfo.DriveFormat; // "NTFS", "FAT32", etc.
 
-                return (totalSize, usedSpace);
+                return (totalSize, usedSpace, fileSystem);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error getting volume size for {volumePath}: {ex.Message}");
-                return (100L * 1024 * 1024 * 1024, 50L * 1024 * 1024 * 1024); // Default: 100GB total, 50GB used
+                System.Diagnostics.Debug.WriteLine($"Error getting volume info for {volumePath}: {ex.Message}");
+                return (100L * 1024 * 1024 * 1024, 50L * 1024 * 1024 * 1024, "NTFS");
+            }
+        }
+
+        /// <summary>
+        /// Checks if a volume is a system volume
+        /// </summary>
+        private bool IsSystemVolume(string volumePath)
+        {
+            try
+            {
+                string winDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+                return winDir.StartsWith(volumePath, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Gets the allocation unit size for a file system
+        /// </summary>
+        private int GetAllocationUnitSize(string fileSystem)
+        {
+            // Default allocation unit sizes by file system type
+            return fileSystem.ToUpperInvariant() switch
+            {
+                "NTFS" => 4096,      // 4 KB (most common for NTFS)
+                "FAT32" => 4096,     // 4 KB
+                "EXFAT" => 32768,    // 32 KB
+                "REFS" => 65536,     // 64 KB (ReFS default)
+                _ => 4096            // Default to 4 KB
+            };
+        }
+
+        /// <summary>
+        /// Gets the target disk allocation unit size
+        /// </summary>
+        private int GetTargetAllocationUnitSize()
+        {
+            try
+            {
+                string targetPath = rbCloneDisk?.IsChecked == true 
+                    ? txtCloneDestination.Text 
+                    : txtDestination.Text;
+
+                if (string.IsNullOrWhiteSpace(targetPath))
+                    return 4096;
+
+                string? rootPath = Path.GetPathRoot(targetPath);
+                if (string.IsNullOrEmpty(rootPath))
+                    return 4096;
+                    
+                var driveInfo = new DriveInfo(rootPath);
+                return GetAllocationUnitSize(driveInfo.DriveFormat);
+            }
+            catch
+            {
+                return 4096; // Default to 4 KB
             }
         }
 
@@ -1456,21 +1705,21 @@ namespace BackupUI.Windows
 
                 if (isCloneToDisk)
                 {
-                    // For physical disk clones, get the target disk size
-                    string destinationPath = txtCloneDestination.Text;
+                    // For physical disk clones, get size from selected disk
+                    if (txtCloneDestination.Tag is DiskSelectionWindow.DiskInfo disk)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GetTargetDiskSize] Using disk size from DiskInfo: {disk.SizeBytes}");
+                        return disk.SizeBytes;
+                    }
                     
-                    if (string.IsNullOrWhiteSpace(destinationPath))
-                        return 500L * 1024 * 1024 * 1024; // Default: 500GB
-
-                    // Try to get actual disk size if it's a disk device
-                    // For now, use drive info
-                    var driveInfo = new System.IO.DriveInfo(System.IO.Path.GetPathRoot(destinationPath));
-                    return driveInfo.TotalSize;
+                    System.Diagnostics.Debug.WriteLine($"[GetTargetDiskSize] No DiskInfo found in tag");
+                    return 500L * 1024 * 1024 * 1024; // Default: 500GB
                 }
                 else if (isCloneToVirtual)
                 {
                     // For virtual disk clones, default to 500GB (user can adjust)
                     // In a full implementation, you'd allow the user to specify VHDX size
+                    System.Diagnostics.Debug.WriteLine($"[GetTargetDiskSize] Using default for virtual disk: 500GB");
                     return 500L * 1024 * 1024 * 1024; // Default: 500GB
                 }
 
@@ -1480,6 +1729,37 @@ namespace BackupUI.Windows
             {
                 System.Diagnostics.Debug.WriteLine($"Error getting target disk size: {ex.Message}");
                 return 500L * 1024 * 1024 * 1024; // Default: 500GB
+            }
+        }
+
+        /// <summary>
+        /// Gets all checked items from the drive tree
+        /// </summary>
+        private List<DriveTreeItem> GetCheckedDriveItems()
+        {
+            var checkedItems = new List<DriveTreeItem>();
+            
+            foreach (var item in driveItems)
+            {
+                GetCheckedItemsRecursive(item, checkedItems);
+            }
+            
+            return checkedItems;
+        }
+
+        /// <summary>
+        /// Recursively gets checked items from the tree
+        /// </summary>
+        private void GetCheckedItemsRecursive(DriveTreeItem item, List<DriveTreeItem> checkedItems)
+        {
+            if (item.IsChecked == true)
+            {
+                checkedItems.Add(item);
+            }
+            
+            foreach (var child in item.Children)
+            {
+                GetCheckedItemsRecursive(child, checkedItems);
             }
         }
 
@@ -1855,7 +2135,8 @@ namespace BackupUI.Windows
                 // For Clone to Disk, use Clone destination; for all others, use Backup destination
                 DestinationPath = rbCloneDisk?.IsChecked == true ? txtCloneDestination.Text : txtDestination.Text,
                 CompressData = chkCompress.IsChecked == true,
-                VerifyAfterBackup = chkVerify.IsChecked == true
+                VerifyAfterBackup = chkVerify.IsChecked == true,
+                RetainFullBackupCount = int.TryParse(txtRetainCount.Text, out int retainCount) ? Math.Max(1, retainCount) : 1
             };
 
             // For Clone Hyper-V System, create subdirectories

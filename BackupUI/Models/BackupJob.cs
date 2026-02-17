@@ -19,6 +19,9 @@ namespace BackupUI.Models
         public bool IsHyperVBackup { get; set; }
         public List<string> HyperVMachines { get; set; } = new();
         
+        // Retention settings
+        public int RetainFullBackupCount { get; set; } = 1; // Default: keep only 1 full backup
+        
         // Import support
         public bool IsImported { get; set; } = false; // True if imported from external backup
         public bool UseCompression { get; set; } = true; // True to create .brs (compressed), false for .wim

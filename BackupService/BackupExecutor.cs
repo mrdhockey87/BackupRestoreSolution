@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -47,6 +48,9 @@ namespace BackupService
         {
             return await Task.Run(() =>
             {
+                string? oldBackupToDelete = null;
+                string? renamedOldBackup = null;
+
                 try
                 {
                     logger?.Invoke($"Starting backup job: {job.Name}");
@@ -58,32 +62,62 @@ namespace BackupService
                         return false;
                     }
 
+                    // Handle full backup retention - rename existing backup before starting new one
+                    if (job.Type == BackupType.Full && Directory.Exists(job.DestinationPath))
+                    {
+                        var existingBackups = GetExistingFullBackups(job.DestinationPath, job.Name);
+                        
+                        if (existingBackups.Count > 0)
+                        {
+                            // Rename the most recent backup as a safety measure
+                            var mostRecentBackup = existingBackups.OrderByDescending(b => Directory.GetCreationTime(b)).First();
+                            renamedOldBackup = RenameBackupAsPending(mostRecentBackup, logger);
+                            logger?.Invoke($"Existing backup renamed to: {Path.GetFileName(renamedOldBackup)}");
+                        }
+                    }
+
                     // Create native progress callback
                     ProgressCallback nativeCallback = (percentage, message) =>
                     {
                         progressCallback?.Invoke(percentage, message ?? $"Progress: {percentage}%");
                     };
 
+                    bool backupSuccess = false;
+                    string? newBackupPath = null;
+
                     foreach (var sourcePath in job.SourcePaths)
                     {
                         if (cancellationToken.IsCancellationRequested)
                         {
                             logger?.Invoke("Backup cancelled by user");
+                            RestoreRenamedBackup(renamedOldBackup, logger);
                             return false;
                         }
 
-                        var destPath = Path.Combine(job.DestinationPath,
-                            $"{job.Name}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                        // Create destination path with timestamp if retaining multiple backups
+                        if (job.Type == BackupType.Full && job.RetainFullBackupCount > 1)
+                        {
+                            newBackupPath = Path.Combine(job.DestinationPath,
+                                $"{job.Name}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                        }
+                        else
+                        {
+                            newBackupPath = Path.Combine(job.DestinationPath,
+                                $"{job.Name}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                        }
 
-                        int result = ExecuteBackup(job, sourcePath, destPath, nativeCallback, logger);
+                        int result = ExecuteBackup(job, sourcePath, newBackupPath, nativeCallback, logger);
 
                         if (result != 0)
                         {
                             var error = new StringBuilder(1024);
                             GetLastErrorMessage(error, error.Capacity);
                             logger?.Invoke($"Backup failed: {error}");
+                            RestoreRenamedBackup(renamedOldBackup, logger);
                             return false;
                         }
+
+                        backupSuccess = true;
                     }
 
                     if (job.IsHyperVBackup)
@@ -93,34 +127,95 @@ namespace BackupService
                             if (cancellationToken.IsCancellationRequested)
                             {
                                 logger?.Invoke("Backup cancelled by user");
+                                RestoreRenamedBackup(renamedOldBackup, logger);
                                 return false;
                             }
 
-                            var destPath = Path.Combine(job.DestinationPath,
-                                $"{vm}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                            if (job.Type == BackupType.Full && job.RetainFullBackupCount > 1)
+                            {
+                                newBackupPath = Path.Combine(job.DestinationPath,
+                                    $"{vm}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                            }
+                            else
+                            {
+                                newBackupPath = Path.Combine(job.DestinationPath,
+                                    $"{vm}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                            }
                             
                             progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {vm}...");
-                            int result = BackupHyperVVM(vm, destPath, nativeCallback);
+                            int result = BackupHyperVVM(vm, newBackupPath, nativeCallback);
 
                             if (result != 0)
                             {
                                 var error = new StringBuilder(1024);
                                 GetLastErrorMessage(error, error.Capacity);
                                 logger?.Invoke($"Hyper-V backup failed: {error}");
+                                RestoreRenamedBackup(renamedOldBackup, logger);
                                 return false;
                             }
+
+                            backupSuccess = true;
                         }
                     }
 
+                    // Verify backup if requested
                     if (job.VerifyAfterBackup && !cancellationToken.IsCancellationRequested)
                     {
                         logger?.Invoke("Verifying backup...");
                         progressCallback?.Invoke(90, "Verifying backup...");
-                        int result = VerifyBackup(job.DestinationPath, nativeCallback);
+                        
+                        string verifyPath = newBackupPath ?? job.DestinationPath;
+                        int result = VerifyBackup(verifyPath, nativeCallback);
+                        
                         if (result != 0)
                         {
-                            logger?.Invoke("Backup verification failed!");
+                            logger?.Invoke("Backup verification failed! Restoring previous backup...");
+                            RestoreRenamedBackup(renamedOldBackup, logger);
+                            
+                            // Delete the failed backup
+                            if (newBackupPath != null && Directory.Exists(newBackupPath))
+                            {
+                                try
+                                {
+                                    Directory.Delete(newBackupPath, true);
+                                    logger?.Invoke($"Failed backup deleted: {newBackupPath}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    logger?.Invoke($"Warning: Could not delete failed backup: {ex.Message}");
+                                }
+                            }
+                            
                             return false;
+                        }
+                        
+                        logger?.Invoke("Backup verification successful!");
+                    }
+
+                    // Only clean up old backups after successful verification (or if verification disabled)
+                    if (backupSuccess && job.Type == BackupType.Full)
+                    {
+                        // Delete the renamed backup now that the new one is verified
+                        if (renamedOldBackup != null && Directory.Exists(renamedOldBackup))
+                        {
+                            try
+                            {
+                                oldBackupToDelete = renamedOldBackup;
+                                logger?.Invoke($"Deleting old backup: {Path.GetFileName(renamedOldBackup)}");
+                                Directory.Delete(renamedOldBackup, true);
+                                logger?.Invoke("Old backup deleted successfully");
+                                renamedOldBackup = null; // Prevent restore attempt
+                            }
+                            catch (Exception ex)
+                            {
+                                logger?.Invoke($"Warning: Could not delete old backup: {ex.Message}");
+                            }
+                        }
+
+                        // Clean up excess backups based on retention policy
+                        if (job.RetainFullBackupCount > 1)
+                        {
+                            CleanupOldBackups(job.DestinationPath, job.Name, job.RetainFullBackupCount, logger);
                         }
                     }
 
@@ -131,6 +226,7 @@ namespace BackupService
                 catch (Exception ex)
                 {
                     logger?.Invoke($"Backup job failed with exception: {ex.Message}");
+                    RestoreRenamedBackup(renamedOldBackup, logger);
                     return false;
                 }
             }, cancellationToken);
@@ -251,6 +347,135 @@ namespace BackupService
             catch
             {
                 return null;
+            }
+        }
+
+        private List<string> GetExistingFullBackups(string destPath, string jobName)
+        {
+            try
+            {
+                if (!Directory.Exists(destPath))
+                    return new List<string>();
+
+                // Find all full backup directories (excluding _PENDING_ and _OLD_)
+                return Directory.GetDirectories(destPath, $"{jobName}_*")
+                    .Where(d =>
+                    {
+                        var fileName = Path.GetFileName(d);
+                        return !fileName.Contains("_PENDING_") && 
+                               !fileName.Contains("_OLD_") &&
+                               !fileName.Contains("Incremental_") && 
+                               !fileName.Contains("Differential_");
+                    })
+                    .ToList();
+            }
+            catch
+            {
+                return new List<string>();
+            }
+        }
+
+        private string? RenameBackupAsPending(string backupPath, Action<string>? logger)
+        {
+            try
+            {
+                var dirInfo = new DirectoryInfo(backupPath);
+                var parentDir = dirInfo.Parent?.FullName;
+                
+                if (parentDir == null)
+                    return null;
+
+                var newName = $"{dirInfo.Name}_PENDING_{DateTime.Now:yyyyMMddHHmmss}";
+                var newPath = Path.Combine(parentDir, newName);
+
+                Directory.Move(backupPath, newPath);
+                logger?.Invoke($"Renamed existing backup for safety: {dirInfo.Name} -> {newName}");
+                
+                return newPath;
+            }
+            catch (Exception ex)
+            {
+                logger?.Invoke($"Warning: Could not rename existing backup: {ex.Message}");
+                return null;
+            }
+        }
+
+        private void RestoreRenamedBackup(string? renamedBackupPath, Action<string>? logger)
+        {
+            if (string.IsNullOrEmpty(renamedBackupPath) || !Directory.Exists(renamedBackupPath))
+                return;
+
+            try
+            {
+                var dirInfo = new DirectoryInfo(renamedBackupPath);
+                var parentDir = dirInfo.Parent?.FullName;
+                
+                if (parentDir == null)
+                    return;
+
+                // Remove the _PENDING_timestamp suffix to restore original name
+                var originalName = dirInfo.Name;
+                var pendingIndex = originalName.IndexOf("_PENDING_");
+                
+                if (pendingIndex > 0)
+                {
+                    originalName = originalName.Substring(0, pendingIndex);
+                    var restoredPath = Path.Combine(parentDir, originalName);
+
+                    // Only restore if original path doesn't exist
+                    if (!Directory.Exists(restoredPath))
+                    {
+                        Directory.Move(renamedBackupPath, restoredPath);
+                        logger?.Invoke($"Restored previous backup: {originalName}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.Invoke($"Warning: Could not restore renamed backup: {ex.Message}");
+            }
+        }
+
+        private void CleanupOldBackups(string destPath, string jobName, int retainCount, Action<string>? logger)
+        {
+            try
+            {
+                var existingBackups = GetExistingFullBackups(destPath, jobName);
+                
+                if (existingBackups.Count <= retainCount)
+                {
+                    logger?.Invoke($"Retention policy: Keeping {existingBackups.Count} backup(s) (limit: {retainCount})");
+                    return;
+                }
+
+                // Sort by creation time, newest first
+                var sortedBackups = existingBackups
+                    .OrderByDescending(b => Directory.GetCreationTime(b))
+                    .ToList();
+
+                // Keep the most recent 'retainCount' backups, delete the rest
+                var backupsToDelete = sortedBackups.Skip(retainCount).ToList();
+
+                logger?.Invoke($"Retention policy: Deleting {backupsToDelete.Count} old backup(s), keeping {retainCount} most recent");
+
+                foreach (var oldBackup in backupsToDelete)
+                {
+                    try
+                    {
+                        var backupName = Path.GetFileName(oldBackup);
+                        logger?.Invoke($"Deleting old backup: {backupName}");
+                        Directory.Delete(oldBackup, true);
+                        logger?.Invoke($"Deleted: {backupName}");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger?.Invoke($"Warning: Could not delete backup {Path.GetFileName(oldBackup)}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.Invoke($"Warning: Error during backup cleanup: {ex.Message}");
             }
         }
     }

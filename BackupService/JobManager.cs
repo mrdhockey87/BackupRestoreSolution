@@ -21,6 +21,7 @@ namespace BackupService
         public BackupSchedule? Schedule { get; set; }
         public bool IsHyperVBackup { get; set; }
         public List<string> HyperVMachines { get; set; } = new();
+        public int RetainFullBackupCount { get; set; } = 1; // Default: keep only 1 full backup
     }
 
     public class BackupSchedule
