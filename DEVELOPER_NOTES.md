@@ -80,6 +80,7 @@ using (var reader = new StreamReader(pipeClient, Encoding.UTF8, leaveOpen: true)
 ## Version History Notes
 
 ### Version Number System
+After note add mdail DATE format mm/dd/yyyy
 Format: `MAJOR.MINOR.PATCH.BUILD`
 - **MAJOR** (5): Breaking changes, major features
 - **MINOR** (13): New features, significant updates

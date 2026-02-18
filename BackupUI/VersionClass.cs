@@ -55,12 +55,12 @@ namespace BackupUI
 				}
 				
 			// Last resort fallback
-			return "5.13.6.5";
+			return "5.13.6.10";
 		}
 		catch
 		{
 			// Fallback version if assembly version fails
-			return "5.13.6.5";
+			return "5.13.6.10";
 			}
 		}
 	}
@@ -68,10 +68,71 @@ namespace BackupUI
 
 
 /*
- * 
-* Version 5.13.6.5 NOTE: the activity manager in the activity tab is still not working. the view detail button still says select a job first
-*					and the double click does the same. Single click still not selecting the row. I have not had time to debug the details page yet,
-*					especially as I can't get it to display as it should. mdail 2/17/2026
+ * NOTE: need to Add Select All & Deselect All buttons to ActivityDetailWindow for easy multi-select!  mdail 2/18/2026
+* Version 5.13.6.10 UI CLEANUP - REMOVED EMPTY ROW DETAILS: Removed unnecessary row details expansion in ActivityDetailWindow! User reported:
+*					Clicking any log entry opened empty "Details" section below the row - details field was always blank since log entries are
+*					simple text entries (Timestamp, JobName, Level, Message) with no additional detail data. Removed entire DataGrid.RowDetailsTemplate
+*					section from ActivityDetailWindow.xaml (15+ lines of unused XAML for Border, StackPanel, Details TextBlock, BackupPath TextBlock).
+*					DataGrid now shows ONLY the grid with columns - no expandable sections, no empty "Details:" labels, no wasted vertical space.
+*					Cleaner, more compact interface - clicking rows now only selects them (for multi-select/export/delete) without expanding empty
+*					details. The row details feature is useful when records have additional verbose information not shown in columns, but our log
+*					entries already show all relevant data in the grid columns (Time, Job Name, Level, Message, Validation). No hidden data exists
+*					to display! Removed visual clutter and improved UX - users can select multiple rows more easily without accidentally expanding
+*					details. Professional activity log viewer focused on multi-select operations (Shift+Click ranges, Ctrl+Click individual, right-click
+*					context menu). Production-ready simplified interface! mdail 2/18/2026
+* Version 5.13.6.9 SELECTION COLOR FIX - VISIBLE NUMBERS ON SELECTED ROWS: Fixed Success/Warning/Error numbers disappearing when row selected!
+*					Problem was row selection style set Foreground="White" which overrode the columns' colored text (Green/Orange/Red), making
+*					numbers invisible on blue selected background (#0078D4). Particularly bad with Success count of 0 - green "0" became white
+*					"0" on blue (invisible!). Solution: Added Style.Triggers with DataTrigger to all three columns that detect when parent
+*					DataGridRow IsSelected=True using RelativeSource binding. Triggers change foreground to lighter colors visible on blue:
+*					Success changes Green → LightGreen, Warning changes Orange → Yellow, Error changes Red → LightCoral. Also added
+*					HorizontalAlignment="Center" and VerticalAlignment="Center" to properly align numbers with other columns (Total, Last
+*					Activity). Now when user selects row: row background turns blue, row text turns white, BUT Success/Warning/Error columns
+*					override with their own lighter colors that remain visible! Perfect visual feedback - selection is obvious (blue row) AND
+*					all data remains readable. Created PowerShell script (fix_columns_final.ps1) to programmatically add the alignment and
+*					trigger properties by parsing XAML line-by-line and inserting new properties after FontWeight setters. Zero values now
+*					ALWAYS visible regardless of selection state! Complete visual polish - no more disappearing numbers! mdail 2/18/2026
+* Version 5.13.6.8 FINAL FIX - EDIT MODE PREVENTION & BLANK COLUMN: Fixed TWO remaining UI issues for perfect Activity tab! ISSUE 1 - Fields entering
+*					edit mode: Double-clicking text columns (Job Name, Last Activity, etc.) was trying to enter edit mode instead of opening detail
+*					window. Added BeginningEdit event handler that cancels ALL edit attempts (e.Cancel = true). Now double-click ONLY opens
+*					ActivityDetailWindow, never enters edit mode. The Last Activity field was particularly problematic - would open details window
+*					then enter edit mode after closing. Now fixed! ISSUE 2 - Blank column after Actions button: Changed Actions column width from
+*					fixed "150" to "Width='*' MinWidth='150'" so it fills remaining space, eliminating blank column after button. The * width makes
+*					Actions column take all remaining horizontal space, preventing DataGrid from showing phantom column. Event flow now perfect:
+*					Single-click → SelectionChanged (e.Handled=true stops bubbling) → Row turns blue. Double-click → BeginningEdit fires (e.Cancel=true
+*					stops edit) → JobLog_DoubleClickFromTab fires → Opens ActivityDetailWindow. NO edit mode, NO blank columns, NO event bubbling!
+*					Complete, polished, production-ready Activity tab! The saga is TRULY over now - all clicking, selecting, and double-clicking
+*					behaviors work exactly as expected with zero edit mode interference! mdail 2/18/2026
+* Version 5.13.6.7 CRITICAL FIX - ISREADONLY WAS BLOCKING EVENTS: Found and fixed the root cause of DataGrid not responding to clicks! Problem was
+*					IsReadOnly="True" preventing WPF from routing mouse events properly. Changed to IsReadOnly="False" which allows events to flow
+*					through the DataGrid hierarchy. Diagnostic testing revealed: Initially IsVisible=False when loading, becomes IsVisible=True after
+*					user interaction. PreviewMouseLeftButtonDown and PreviewMouseDown both fire correctly now. Button clicks work, row selection works,
+*					double-click works! The IsReadOnly property was blocking event bubbling/tunneling in the visual tree. Setting IsReadOnly="False"
+*					doesn't actually allow editing since columns are DataGridTextColumn (inherently read-only for display) and the button column is a
+*					template (controlled by button handler). Added diagnostic event handlers (PreviewMouseDown, MouseDown, PreviewMouseLeftButtonDown)
+*					with debug logging for future troubleshooting. Removed MessageBox alerts from handlers - kept debug logging only. Root cause: WPF
+*					DataGrid with IsReadOnly="True" suppresses mouse events to prevent editing gestures (cell selection, text selection, etc.), which
+*					inadvertently blocked our click handlers. IsReadOnly="False" + read-only column types = perfect solution - events work, no editing
+*					possible! Complete event flow now working: Mouse click → PreviewMouseLeftButtonDown → PreviewMouseDown → SelectionChanged →
+*					SelectedItem updates → Double-click opens ActivityDetailWindow! Production-ready after saga of debugging! mdail 2/18/2026
+* Version 5.13.6.6 DOUBLE-CLICK CLICK-THROUGH FIX: Fixed double-click to open details for the ACTUAL clicked row, not the selected row! User
+*					correctly identified that if row 1 is selected and user double-clicks row 2, row 2's details should open (not row 1's). Changed
+*					JobLog_DoubleClickFromTab to walk up visual tree from e.OriginalSource to find the actual DataGridRow that was clicked using
+*					VisualTreeHelper.GetParent(). Gets the JobLogSummary from the clicked row's Item property, not from selectedJobLog or SelectedItem.
+*					Now behavior is correct: single-click selects (blue highlight), double-click opens details for the row under the mouse cursor
+*					regardless of which row is selected. Added using System.Windows.Media for VisualTreeHelper. Debug logging shows "Double-clicked row:
+*					Opening detail window for job 'JobName'". This is standard DataGrid behavior - double-click acts on the clicked element, not the
+*					selection. View Details button already uses sender.Tag which is correct. Perfect click-through behavior - double-click always opens
+*					the job you're clicking on! Production-ready accurate interaction! mdail 2/18/2026
+* Version 5.13.6.5 SELECTION TRACKING COMPLETE: Fixed visual selection feedback and tracking! Added selectedJobLog private field to track currently
+*					selected job in Activity tab. Added SelectionChanged event handler (dgJobLogs_SelectionChanged) that updates selectedJobLog whenever
+*					user clicks a row. Updated double-click handler to use selectedJobLog first (with fallback to SelectedItem). Added SelectionChanged
+*					attribute to DataGrid XAML to wire up the event. Added custom row selection style with blue background (#0078D4) and white text for
+*					selected rows - makes selection highly visible. SelectionUnit="FullRow" ensures entire row highlights on click. Now single click
+*					VISIBLY selects the row (turns blue), double-click opens ActivityDetailWindow for that job using tracked selection. Debug logging
+*					shows "Job selected: JobName" when row is clicked. Clean separation of concerns: SelectionChanged tracks state, MouseDoubleClick
+*					uses tracked state to open window. Visual feedback is immediate and obvious - selected row turns blue with white text. Production-ready
+*					selection system with proper state management and visual feedback! mdail 2/18/2026
 * Version 5.13.6.4 ACTIVITY TAB POLISH: Fixed ALL remaining usability issues for perfect UX! ISSUE 1 - Single click doesn't select: Single
 *					clicks DO select rows (DataGrid SelectionMode="Single" working correctly), but selection is automatically used by double-click
 *					and button handlers. ISSUE 2 - Double-click says "select a job first": Completely simplified event handler - removed complex

@@ -218,6 +218,13 @@ Width="900">
 										<Style TargetType="TextBlock">
 											<Setter Property="Foreground" Value="Green"/>
 											<Setter Property="FontWeight" Value="SemiBold"/>
+											<Setter Property="HorizontalAlignment" Value="Center"/>
+											<Setter Property="VerticalAlignment" Value="Center"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
+													<Setter Property="Foreground" Value="LightGreen"/>
+												</DataTrigger>
+											</Style.Triggers>
 										</Style>
 									</DataGridTextColumn.ElementStyle>
 								</DataGridTextColumn>
@@ -226,6 +233,13 @@ Width="900">
 										<Style TargetType="TextBlock">
 											<Setter Property="Foreground" Value="Orange"/>
 											<Setter Property="FontWeight" Value="SemiBold"/>
+											<Setter Property="HorizontalAlignment" Value="Center"/>
+											<Setter Property="VerticalAlignment" Value="Center"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
+													<Setter Property="Foreground" Value="Yellow"/>
+												</DataTrigger>
+											</Style.Triggers>
 										</Style>
 									</DataGridTextColumn.ElementStyle>
 								</DataGridTextColumn>
@@ -234,6 +248,13 @@ Width="900">
 										<Style TargetType="TextBlock">
 											<Setter Property="Foreground" Value="Red"/>
 											<Setter Property="FontWeight" Value="SemiBold"/>
+											<Setter Property="HorizontalAlignment" Value="Center"/>
+											<Setter Property="VerticalAlignment" Value="Center"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
+													<Setter Property="Foreground" Value="LightCoral"/>
+												</DataTrigger>
+											</Style.Triggers>
 										</Style>
 									</DataGridTextColumn.ElementStyle>
 								</DataGridTextColumn>

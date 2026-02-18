@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using BackupUI.Models;
 using BackupUI.Services;
 using BackupUI.Windows;
@@ -17,6 +18,7 @@ namespace BackupUI
     {
         private readonly JobManager jobManager = new();
         private ObservableCollection<BackupJobViewModel> backupJobs = new();
+        private JobLogSummary? selectedJobLog = null;  // Track selected job in Activity tab
 
         public MainWindow()
         {
@@ -558,8 +560,16 @@ namespace BackupUI
         // Tab selection handler - load activity when tab is selected
         private void TabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // CRITICAL: Only handle events from the TabControl itself, not from child controls!
+            if (e.Source != sender)
+            {
+                System.Diagnostics.Debug.WriteLine("TabControl_SelectionChanged: Event from child control, ignoring");
+                return;
+            }
+            
             if (sender is TabControl tabControl && tabControl.SelectedIndex == 1) // Activity tab is index 1
             {
+                System.Diagnostics.Debug.WriteLine("TabControl_SelectionChanged: Activity tab selected, loading logs");
                 LoadJobLogsTab();
                 // Mark all errors as read when user views Activity tab
                 BackupLogger.MarkAllErrorsAsRead();
@@ -572,7 +582,10 @@ namespace BackupUI
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine("LoadJobLogsTab: Starting...");
+                
                 var allLogs = BackupLogger.GetRecentLogs(10000);
+                System.Diagnostics.Debug.WriteLine($"LoadJobLogsTab: Loaded {allLogs.Count} total log entries");
                 
                 // Group by job name - filter out null or empty job names
                 var jobGroups = allLogs
@@ -591,18 +604,27 @@ namespace BackupUI
                     .OrderByDescending(s => s.LastActivity)
                     .ToList();
 
-                if (dgJobLogs != null)  // Will be null until XAML is updated
+                System.Diagnostics.Debug.WriteLine($"LoadJobLogsTab: Created {jobGroups.Count} job summaries");
+
+                if (dgJobLogs != null)
                 {
                     dgJobLogs.ItemsSource = jobGroups;
+                    System.Diagnostics.Debug.WriteLine($"LoadJobLogsTab: Set ItemsSource. IsEnabled={dgJobLogs.IsEnabled}, IsVisible={dgJobLogs.IsVisible}, IsHitTestVisible={dgJobLogs.IsHitTestVisible}");
+                    System.Diagnostics.Debug.WriteLine($"LoadJobLogsTab: DataGrid has {dgJobLogs.Items.Count} items");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("LoadJobLogsTab: ERROR - dgJobLogs is NULL!");
                 }
                 
-                if (txtJobLogsStatus != null)  // Will be null until XAML is updated
+                if (txtJobLogsStatus != null)
                 {
                     txtJobLogsStatus.Text = $"Found {jobGroups.Count} backup jobs with activity logs. Double-click to view details.";
                 }
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"LoadJobLogsTab: ERROR - {ex.Message}");
                 MessageBox.Show($"Error loading job logs: {ex.Message}",
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -612,6 +634,50 @@ namespace BackupUI
         private void RefreshJobLogs_Click(object sender, RoutedEventArgs e)
         {
             LoadJobLogsTab();
+        }
+
+        private void dgJobLogs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine("dgJobLogs_SelectionChanged: Event fired!");
+            
+            // CRITICAL: Stop event from bubbling up to TabControl which would reload the entire grid!
+            e.Handled = true;
+            
+            if (dgJobLogs != null && dgJobLogs.SelectedItem is JobLogSummary summary)
+            {
+                selectedJobLog = summary;
+                System.Diagnostics.Debug.WriteLine($"Job selected: {summary.JobName}");
+            }
+            else
+            {
+                selectedJobLog = null;
+                System.Diagnostics.Debug.WriteLine("dgJobLogs_SelectionChanged: No item selected or not JobLogSummary");
+            }
+        }
+
+        private void dgJobLogs_BeginningEdit(object sender, DataGridBeginningEditEventArgs e)
+        {
+            // CRITICAL: Cancel ALL edit attempts - we want selection only, not editing!
+            System.Diagnostics.Debug.WriteLine("dgJobLogs_BeginningEdit: Canceling edit attempt");
+            e.Cancel = true;
+        }
+
+        private void dgJobLogs_PreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            // This event fires before any other mouse events - used for diagnostics
+            System.Diagnostics.Debug.WriteLine($"PreviewMouseDown: Button={e.ChangedButton}, ClickCount={e.ClickCount}");
+        }
+
+        private void dgJobLogs_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            // Normal mouse down event - not needed since we have SelectionChanged
+            System.Diagnostics.Debug.WriteLine($"MouseDown: Button={e.ChangedButton}");
+        }
+
+        private void dgJobLogs_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            // Left button specific event - not needed
+            System.Diagnostics.Debug.WriteLine("PreviewMouseLeftButtonDown fired");
         }
 
         private void ViewAllActivitiesFromTab_Click(object sender, RoutedEventArgs e)
@@ -656,12 +722,20 @@ namespace BackupUI
         {
             try
             {
-                // Simply use the selected item from the DataGrid
-                if (dgJobLogs != null && dgJobLogs.SelectedItem is JobLogSummary summary)
+                // Find the DataGridRow that was actually clicked (not the selected item)
+                var clickedElement = e.OriginalSource as DependencyObject;
+                
+                // Walk up the visual tree to find the DataGridRow
+                while (clickedElement != null && !(clickedElement is DataGridRow))
+                {
+                    clickedElement = VisualTreeHelper.GetParent(clickedElement);
+                }
+                
+                if (clickedElement is DataGridRow row && row.Item is JobLogSummary summary)
                 {
                     if (!string.IsNullOrEmpty(summary.JobName))
                     {
-                        System.Diagnostics.Debug.WriteLine($"JobLog_DoubleClickFromTab: Opening detail window for job '{summary.JobName}'");
+                        System.Diagnostics.Debug.WriteLine($"Double-clicked row: Opening detail window for job '{summary.JobName}'");
                         var detailWindow = new ActivityDetailWindow(summary.JobName);
                         detailWindow.ShowDialog();
                     }
@@ -672,7 +746,8 @@ namespace BackupUI
                 }
                 else
                 {
-                    MessageBox.Show("Please select a job first.", "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+                    // Clicked outside data rows (header or empty space)
+                    System.Diagnostics.Debug.WriteLine("Double-click was not on a data row");
                 }
             }
             catch (Exception ex)

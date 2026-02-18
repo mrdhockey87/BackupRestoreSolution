@@ -82,6 +82,7 @@
                   AutoGenerateColumns="False" 
                   IsReadOnly="True"
                   SelectionMode="Extended"
+                  SelectionUnit="FullRow"
                   GridLinesVisibility="Horizontal"
                   AlternatingRowBackground="#F9F9F9"
                   CanUserResizeColumns="True"
@@ -155,31 +156,12 @@
                                 </TextBlock.Style>
                             </TextBlock>
                         </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </DataGrid.Columns>
+                </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+        </DataGrid.Columns>
+    </DataGrid>
 
-            <!-- Row Details for full information -->
-            <DataGrid.RowDetailsTemplate>
-                <DataTemplate>
-                    <Border Background="#F5F5F5" Padding="10" Margin="5" BorderBrush="#CCC" BorderThickness="1">
-                        <StackPanel>
-                            <TextBlock Text="Details:" 
-                                       FontWeight="Bold" 
-                                       Margin="0,0,0,5"/>
-                            <TextBlock Text="{Binding Details}" 
-                                       TextWrapping="Wrap" 
-                                       Margin="0,0,0,10"/>
-                            <TextBlock Text="{Binding BackupPath, StringFormat='Backup Path: {0}'}" 
-                                       TextWrapping="Wrap"
-                                       Visibility="{Binding BackupPath, Converter={StaticResource StringToVisibilityConverter}}"/>
-                        </StackPanel>
-                    </Border>
-                </DataTemplate>
-            </DataGrid.RowDetailsTemplate>
-        </DataGrid>
-
-        <!-- Footer Info -->
+    <!-- Footer Info -->
         <Border Grid.Row="2" 
                 Background="#F0F0F0" 
                 Padding="10" 
