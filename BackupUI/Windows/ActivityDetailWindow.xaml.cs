@@ -255,6 +255,16 @@ namespace BackupUI.Windows
             dgActivities.UnselectAll();
         }
 
+        private void SelectAll_Click(object sender, RoutedEventArgs e)
+        {
+            dgActivities.SelectAll();
+        }
+
+        private void DeselectAll_Click(object sender, RoutedEventArgs e)
+        {
+            dgActivities.UnselectAll();
+        }
+
         private void ExportToCSV(List<BackupLogEntry> logs, string filePath)
         {
             var csv = new StringBuilder();

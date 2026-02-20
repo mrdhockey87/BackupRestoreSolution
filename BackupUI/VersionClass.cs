@@ -9,8 +9,8 @@ namespace BackupUI
 {
 	static class VersionClass
 	{
-		static public string version_word = "Version:";
-
+	static public string version_word = "Version:";
+		static private string version_fallback_number = "5.13.6.15";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -55,20 +55,68 @@ namespace BackupUI
 				}
 				
 			// Last resort fallback
-			return "5.13.6.10";
+		return version_fallback_number;
 		}
 		catch
 		{
 			// Fallback version if assembly version fails
-			return "5.13.6.10";
+			return version_fallback_number;
 			}
 		}
 	}
 }
 
 
+
+
 /*
- * NOTE: need to Add Select All & Deselect All buttons to ActivityDetailWindow for easy multi-select!  mdail 2/18/2026
+* Version 5.13.6.15 Made some other changes related to the turquoise theme. I haven't gotten everything yet like the Help page still needs 
+*					to be updated to use the new colors. mdail 2/20/2026
+* Version 5.13.6.14 MAJOR UPDATE - TURQUOISE THEME: Implemented comprehensive turquoise (blue-green) color scheme across entire application!
+*					Created TurquoiseTheme.xaml resource dictionary with complete color palette preventing Windows dark mode from overriding colors.
+*					All colors explicitly defined: Primary turquoise (#20B2AA Light Sea Green), Dark turquoise buttons (#008B8B Dark Cyan),
+*					Medium turquoise (#48D1CC), Light turquoise (#AFEEEE), Very light backgrounds (#E0F7F7). Black text throughout (#000000)
+*					for maximum readability. Error text changed from bright red to dark red (#8B0000) for better aesthetics. Warning text is
+*					dark orange (#FF8C00), Success text is dark green (#006400), Info text is navy blue (#000080). Defined comprehensive styles
+*					for ALL WPF controls: Button (dark turquoise with black text, hover/pressed states), DataGrid (turquoise headers, alternating
+*					rows), TabControl (turquoise tabs, darker when selected), TextBox, ComboBox, CheckBox, RadioButton, Label, Menu, StatusBar,
+*					Border, ListBox, TreeView, Expander, GroupBox, ProgressBar, ToolTip, ContextMenu. Special button styles: DeleteButton (dark
+*					red #8B0000 with white text), SecondaryButton (medium turquoise), SuccessButton (light sea green), WarningButton (dark
+*					orange). Updated ALL XAML files to reference theme resources instead of hardcoded colors: replaced #F0F0F0/#E8E8E8 with
+*					PanelBackground, #CCC with LightBorderBrush, #666/#999/#333 with SecondaryText, Green/Orange/Red with SuccessText/
+*					WarningText/ErrorText. Status background colors: InfoBackground (#E0F7F7 light turquoise), SuccessBackground (#E6F4EA
+*					very light green), WarningBackground (#FFF8DC cornsilk), ErrorBackground (#FFE4E1 misty rose). Selection colors: Dark cyan
+*					background (#008B8B) with white text for maximum contrast on selected rows/items. Window backgrounds have subtle turquoise
+*					tint (#F5FFFF) for consistent theme. Updated App.xaml to merge TurquoiseTheme.xaml as application resource dictionary ensuring
+*					theme applies globally to all windows and controls. Updated MainWindow.xaml, ActivityDetailWindow.xaml, ActivityManagementWindow.xaml,
+*					and other windows to use theme resources. Professional, cohesive turquoise color scheme throughout application! No more unpredictable
+*					Windows dark mode color overrides - our colors always display correctly. Enterprise-grade visual branding with accessibility-
+*					compliant color contrast ratios (black text on light backgrounds). Production-ready beautiful UI! mdail 2/20/2026
+* Version 5.13.6.13 CODE QUALITY - CENTRALIZED VERSION VARIABLE: Consolidated version number in Directory.Build.props to use single variable!
+*					Instead of hardcoding version in 4 places (Version, AssemblyVersion, FileVersion, InformationalVersion), now uses ProductVersion
+*					property as single source of truth. All four version properties reference $(ProductVersion) using MSBuild variable substitution.
+*					Only need to update ProductVersion property and all version properties update automatically! Mirrors the approach used in VersionClass.cs
+*					with version_fallback_number variable. Benefits: 1) Single update point - change version once, propagates everywhere, 2) Reduced errors -
+*					no risk of forgetting to update one of the four properties, 3) Consistent pattern across solution - both C# and MSBuild use variable
+*					approach, 4) Clear documentation - comments explain where to update. Enhanced header documentation in Directory.Build.props to explain
+*					ProductVersion is the single definition point. Pattern: Define once (<ProductVersion>5.13.6.13</ProductVersion>), reference everywhere
+*					(<Version>$(ProductVersion)</Version>). Clean, maintainable, error-proof versioning! To update version: change ProductVersion value in
+*					Directory.Build.props and version_fallback_number in VersionClass.cs. Both changes sync entire solution across all projects and fallback
+*					scenarios. Production-ready centralized version management with DRY principle (Don't Repeat Yourself)! mdail 2/20/2026
+* Version 5.13.6.12 Update the version class the use the version fallback number variable instead of hardcoding the version in multiple places. mdail 2/20/2026
+* Version 5.13.6.11 UI ENHANCEMENT - SELECT ALL/DESELECT ALL BUTTONS: Added dedicated "Select All" and "Deselect All" buttons to ActivityDetailWindow
+*					for easier multi-selection workflow! Buttons positioned in action buttons row between Export buttons and Delete Selected button.
+*					"Select All" button has light blue background (#E0F0FF) and calls dgActivities.SelectAll() to select all visible entries.
+*					"Deselect All" button has light gray background (#F0F0F0) and calls dgActivities.UnselectAll() to clear all selections.
+*					Both buttons are 100px wide for compact layout. Complements existing right-click context menu (which already had Select All/
+*					Clear Selection options) by providing visible, always-accessible buttons for users who prefer button clicks over context menus.
+*					Selection count display automatically updates when buttons are used (via Activities_SelectionChanged event handler). Perfect
+*					for quickly selecting all entries for batch export or delete operations without needing to know keyboard shortcuts (Ctrl+A)
+*					or right-click menus. Professional UX improvement - common operations readily visible! Users can now: click "Select All" →
+*					click "Export to CSV" for full job history export, or "Select All" → "Delete Selected" for complete activity log cleanup.
+*					Buttons work identically to context menu commands but are more discoverable. Enterprise-grade multi-select interface with
+*					multiple interaction methods (buttons, context menu, Shift+Click, Ctrl+Click) for maximum flexibility! Production-ready
+*					accessible controls! mdail 2/20/2026
 * Version 5.13.6.10 UI CLEANUP - REMOVED EMPTY ROW DETAILS: Removed unnecessary row details expansion in ActivityDetailWindow! User reported:
 *					Clicking any log entry opened empty "Details" section below the row - details field was always blank since log entries are
 *					simple text entries (Timestamp, JobName, Level, Message) with no additional detail data. Removed entire DataGrid.RowDetailsTemplate

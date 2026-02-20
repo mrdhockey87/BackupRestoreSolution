@@ -43,13 +43,13 @@ WindowStartupLocation="CenterOwner">
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="#666" FontSize="11" Margin="0,0,0,10">
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="{StaticResource SecondaryText}" FontSize="11" Margin="0,0,0,10">
                         Check drives or volumes to backup. Files and folders are shown when volumes are unchecked. 
                         Boot volumes will automatically include system state backup.
                     </TextBlock>
 
                     <Grid Grid.Row="1">
-                        <TreeView Name="treeViewDrives" BorderBrush="#CCC" BorderThickness="1">
+                        <TreeView Name="treeViewDrives" BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="1">
                             <TreeView.ItemContainerStyle>
                                 <Style TargetType="TreeViewItem">
                                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
@@ -59,7 +59,7 @@ WindowStartupLocation="CenterOwner">
                         </TreeView>
                         
                         <!-- Loading Overlay -->
-                        <Border Name="loadingOverlay" Background="#F0F0F0" Opacity="0.9" Visibility="Collapsed">
+                        <Border Name="loadingOverlay" Background="{StaticResource PanelBackground}" Opacity="0.9" Visibility="Collapsed">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <TextBlock Text="Loading drives and volumes..." FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
                                 <ProgressBar IsIndeterminate="True" Width="200" Height="20"/>
@@ -138,7 +138,7 @@ WindowStartupLocation="CenterOwner">
                         <StackPanel Name="pnlRetentionSettings" Visibility="Collapsed">
                             <TextBlock Text="Full Backup Retention:" Margin="0,0,0,5" FontWeight="SemiBold"/>
                             <TextBlock Text="Specify how many full backups to keep (applies to Full backup type only)" 
-                                       TextWrapping="Wrap" Foreground="#666" FontSize="10" Margin="0,0,0,5"/>
+                                       TextWrapping="Wrap" Foreground="{StaticResource SecondaryText}" FontSize="10" Margin="0,0,0,5"/>
                             <Grid Margin="0,0,0,5">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -150,7 +150,7 @@ WindowStartupLocation="CenterOwner">
                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
                                 <TextBlock Grid.Column="2" Text="full backup(s)" VerticalAlignment="Center" Margin="5,0,0,0"/>
                             </Grid>
-                            <TextBlock TextWrapping="Wrap" Foreground="#999" FontSize="10" Margin="0,0,0,0">
+                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource SecondaryText}" FontSize="10" Margin="0,0,0,0">
                                 Note: When keeping more than 1 backup, date/time will be added to backup names. Old backups are only deleted after successful verification.
                             </TextBlock>
                         </StackPanel>

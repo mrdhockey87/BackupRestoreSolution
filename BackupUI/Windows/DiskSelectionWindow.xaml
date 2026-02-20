@@ -25,7 +25,7 @@
 
         <!-- Instructions -->
         <Border Grid.Row="1" 
-                Background="#E3F2FD" 
+                Background="{StaticResource InfoBackground}" 
                 BorderBrush="#2196F3" 
                 BorderThickness="1" 
                 CornerRadius="4" 
@@ -37,10 +37,10 @@
                            Margin="0,0,0,5"/>
                 <TextBlock Text="- Only available physical disks are shown" 
                            FontSize="11"
-                           Foreground="#666"/>
+                           Foreground="{StaticResource SecondaryText}"/>
                 <TextBlock Text="- Source disk is excluded from the list" 
                            FontSize="11"
-                           Foreground="#666"/>
+                           Foreground="{StaticResource SecondaryText}"/>
                 <TextBlock Text="- All data on the target disk will be REPLACED" 
                            FontSize="11"
                            Foreground="#D32F2F"
@@ -86,7 +86,7 @@
                                            FontWeight="Bold"/>
                                 <TextBlock Text="{Binding Details}" 
                                            FontSize="12" 
-                                           Foreground="#666"
+                                           Foreground="{StaticResource SecondaryText}"
                                            Margin="0,3,0,0"/>
                             </StackPanel>
                         </DataTemplate>

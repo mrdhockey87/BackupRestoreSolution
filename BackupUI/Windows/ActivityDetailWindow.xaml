@@ -19,7 +19,7 @@
         <!-- Header with Controls -->
         <StackPanel Grid.Row="0" Orientation="Vertical" Margin="0,0,0,10">
             <!-- Title and Refresh -->
-            <StackPanel Orientation="Horizontal" Background="#F0F0F0" Height="50">
+            <StackPanel Orientation="Horizontal" Background="{StaticResource PanelBackground}" Height="50">
                 <TextBlock Name="txtTitle" 
                            Text="Activity Details" 
                            FontSize="18" 
@@ -45,7 +45,7 @@
             </StackPanel>
 
             <!-- Action Buttons -->
-            <StackPanel Orientation="Horizontal" Background="#E8E8E8" Height="45" Margin="0,5,0,0">
+            <StackPanel Orientation="Horizontal" Background="{StaticResource PanelBackground}" Height="45" Margin="0,5,0,0">
                 <TextBlock Text="Selected Actions:" 
                            VerticalAlignment="Center" 
                            Margin="10,0,10,0"
@@ -60,18 +60,29 @@
                         Width="120" 
                         Height="30" 
                         Margin="5"/>
+                <Button Content="Select All" 
+                        Click="SelectAll_Click" 
+                        Width="100" 
+                        Height="30" 
+                        Margin="5"
+                        Style="{StaticResource SecondaryButton}"/>
+                <Button Content="Deselect All" 
+                        Click="DeselectAll_Click" 
+                        Width="100" 
+                        Height="30" 
+                        Margin="5"/>
                 <Button Content="Delete Selected" 
                         Click="DeleteSelected_Click" 
                         Width="120" 
                         Height="30" 
                         Margin="5"
-                        Background="#FFE0E0"/>
+                        Style="{StaticResource DeleteButton}"/>
                 <TextBlock Name="txtSelectionCount" 
                            Text="0 selected" 
                            VerticalAlignment="Center" 
                            Margin="15,0,10,0"
                            FontWeight="SemiBold"
-                           Foreground="#2196F3"/>
+                           Foreground="{StaticResource PrimaryTurquoise}"/>
             </StackPanel>
         </StackPanel>
 
@@ -84,7 +95,6 @@
                   SelectionMode="Extended"
                   SelectionUnit="FullRow"
                   GridLinesVisibility="Horizontal"
-                  AlternatingRowBackground="#F9F9F9"
                   CanUserResizeColumns="True"
                   SelectionChanged="Activities_SelectionChanged">
             <DataGrid.ContextMenu>
@@ -113,16 +123,16 @@
                                     <Style TargetType="Border">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding Level}" Value="Info">
-                                                <Setter Property="Background" Value="#E3F2FD"/>
+                                                <Setter Property="Background" Value="{StaticResource InfoBackground}"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding Level}" Value="Success">
-                                                <Setter Property="Background" Value="#E8F5E9"/>
+                                                <Setter Property="Background" Value="{StaticResource SuccessBackground}"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding Level}" Value="Warning">
-                                                <Setter Property="Background" Value="#FFF3E0"/>
+                                                <Setter Property="Background" Value="{StaticResource WarningBackground}"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding Level}" Value="Error">
-                                                <Setter Property="Background" Value="#FFEBEE"/>
+                                                <Setter Property="Background" Value="{StaticResource ErrorBackground}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -144,7 +154,7 @@
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Text" Value="?"/>
-                                        <Setter Property="Foreground" Value="Green"/>
+                                        <Setter Property="Foreground" Value="{StaticResource SuccessText}"/>
                                         <Setter Property="FontWeight" Value="Bold"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding ValidationPassed}" Value="False">
@@ -163,14 +173,14 @@
 
     <!-- Footer Info -->
         <Border Grid.Row="2" 
-                Background="#F0F0F0" 
+                Background="{StaticResource PanelBackground}" 
                 Padding="10" 
-                BorderBrush="#CCC" 
+                BorderBrush="{StaticResource LightBorderBrush}" 
                 BorderThickness="1">
             <TextBlock Name="txtStatus" 
                        Text="Use Shift+Click or Ctrl+Click to select multiple activities. Right-click for export and delete options." 
                        FontSize="12" 
-                       Foreground="#666"/>
+                       Foreground="{StaticResource SecondaryText}"/>
         </Border>
     </Grid>
 </Window>

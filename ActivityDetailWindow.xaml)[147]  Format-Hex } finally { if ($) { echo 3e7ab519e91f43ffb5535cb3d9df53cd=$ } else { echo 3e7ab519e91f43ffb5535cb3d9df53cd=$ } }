@@ -1,0 +1,20 @@
+warning: in the working copy of 'BackupUI/App.xaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'BackupUI/VersionClass.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'BackupUI/Windows/RestoreWindow.xaml', LF will be replaced by CRLF the next time Git touches it
+BackupUI/App.xaml
+BackupUI/BackupUI.csproj
+BackupUI/Controls/VolumeResizeControl.xaml
+BackupUI/MainWindow.xaml
+BackupUI/VersionClass.cs
+BackupUI/Windows/AboutWindow.xaml
+BackupUI/Windows/ActivityDetailWindow.xaml
+BackupUI/Windows/ActivityDetailWindow.xaml.cs
+BackupUI/Windows/ActivityManagementWindow.xaml
+BackupUI/Windows/BackupWindowNew.xaml
+BackupUI/Windows/DiskSelectionWindow.xaml
+BackupUI/Windows/ExportOptionsDialog.xaml
+BackupUI/Windows/RestoreWindow.xaml
+BackupUI/Windows/RestoreWindowNew.xaml
+BackupUI/Windows/ServiceManagementWindow.xaml
+BackupUI/Windows/VolumeConfigurationWindow.xaml
+Directory.Build.props

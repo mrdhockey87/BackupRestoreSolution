@@ -29,7 +29,7 @@
                          FontSize="13"/>
             <TextBlock Text="Best for opening in Excel or other spreadsheet programs" 
                        Margin="20,0,0,10" 
-                       Foreground="#666" 
+                       Foreground="{StaticResource SecondaryText}" 
                        FontSize="11"/>
             
             <RadioButton Name="rbText" 
@@ -38,7 +38,7 @@
                          FontSize="13"/>
             <TextBlock Text="Human-readable format, suitable for viewing in any text editor" 
                        Margin="20,0,0,10" 
-                       Foreground="#666" 
+                       Foreground="{StaticResource SecondaryText}" 
                        FontSize="11"/>
         </StackPanel>
 

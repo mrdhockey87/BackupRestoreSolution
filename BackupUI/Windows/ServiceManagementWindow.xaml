@@ -37,7 +37,7 @@ WindowStartupLocation="CenterOwner">
                         <TextBlock Text="Service Version:" Width="100" FontWeight="Bold"/>
                         <TextBlock Name="txtServiceVersion" Text="Unknown"/>
                         <TextBlock Name="txtVersionWarning" Text="? VERSION MISMATCH!" 
-                                   Foreground="Red" FontWeight="Bold" Margin="10,0,0,0" 
+                                   Foreground="{StaticResource ErrorText}" FontWeight="Bold" Margin="10,0,0,0" 
                                    Visibility="Collapsed"/>
                     </StackPanel>
                     <Button Content="Refresh Status" Width="120" HorizontalAlignment="Left" Click="RefreshStatus_Click"/>

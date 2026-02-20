@@ -13,7 +13,7 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10" Background="#F0F0F0" Height="50">
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10" Background="{StaticResource PanelBackground}" Height="50">
             <TextBlock Text="Backup Job Activity Logs" 
                        FontSize="18" 
                        FontWeight="Bold" 
@@ -95,14 +95,14 @@
 
         <!-- Footer Info -->
         <Border Grid.Row="2" 
-                Background="#F0F0F0" 
+                Background="{StaticResource PanelBackground}" 
                 Padding="10" 
-                BorderBrush="#CCC" 
+                BorderBrush="{StaticResource LightBorderBrush}" 
                 BorderThickness="1">
             <TextBlock Name="txtStatus" 
                        Text="Double-click a job to view detailed activities" 
                        FontSize="12" 
-                       Foreground="#666"/>
+                       Foreground="{StaticResource SecondaryText}"/>
         </Border>
     </Grid>
 </Window>

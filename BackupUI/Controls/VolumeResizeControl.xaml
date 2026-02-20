@@ -82,7 +82,7 @@
                        HorizontalAlignment="Right" 
                        Margin="0,5,0,0"
                        FontSize="11"
-                       Foreground="#666"/>
+                       Foreground="{StaticResource SecondaryText}"/>
         </Grid>
 
         <!-- Arrows/Labels Area -->
@@ -109,7 +109,7 @@
                     BorderBrush="#4CAF50" 
                     BorderThickness="2" 
                     CornerRadius="4"
-                    Background="#E8F5E9"
+                    Background="{StaticResource SuccessBackground}"
                     Height="50"/>
 
             <!-- Size labels -->
@@ -117,7 +117,7 @@
                 <TextBlock x:Name="txtTargetUsed"
                            Text="Used: 0 GB" 
                            FontSize="11"
-                           Foreground="#666"
+                           Foreground="{StaticResource SecondaryText}"
                            Margin="0,0,15,0"/>
                 <TextBlock x:Name="txtTargetFree"
                            Text="Free: 0 GB" 

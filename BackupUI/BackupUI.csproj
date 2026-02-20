@@ -7,8 +7,12 @@
   <UseWindowsForms>true</UseWindowsForms>
   <Platforms>x64</Platforms>
   <ApplicationManifest>app.manifest</ApplicationManifest>
+  <ApplicationIcon>SSB_LogoWinIcos.ico</ApplicationIcon>
   <!-- Version, OutputPath, and Runtime config generation come from Directory.Build.props -->
 </PropertyGroup>
+<ItemGroup>
+  <Content Include="SSB_LogoWinIcos.ico" />
+</ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.2" />
     <PackageReference Include="System.Management" Version="10.0.2" />
