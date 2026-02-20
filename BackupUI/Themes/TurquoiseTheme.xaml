@@ -32,8 +32,8 @@
     <!-- Background Colors -->
     <SolidColorBrush x:Key="WindowBackground" Color="#F5FFFF"/><!-- Very light turquoise tint -->
     <SolidColorBrush x:Key="PanelBackground" Color="#E0F7F7"/><!-- Light turquoise -->
-    <SolidColorBrush x:Key="AlternateRowBackground" Color="#F0FAFA"/><!-- Very light turquoise -->
-    <SolidColorBrush x:Key="HeaderBackground" Color="#B0E0E6"/><!-- Powder Blue -->
+	<SolidColorBrush x:Key="AlternateRowBackground"  Color="#5F9EA0"/>	<!-- Cadet Blue -->
+	<SolidColorBrush x:Key="HeaderBackground" Color="#B0E0E6"/><!-- Powder Blue -->
     <SolidColorBrush x:Key="StatusBarBackground" Color="#AFEEEE"/><!-- Pale Turquoise -->
 
     <!-- Border Colors -->
@@ -50,7 +50,7 @@
     <SolidColorBrush x:Key="ErrorBackground" Color="#FFE4E1"/><!-- Misty Rose -->
     <SolidColorBrush x:Key="InfoBackground" Color="#E0F7F7"/><!-- Light Turquoise -->
 
-    <!-- ================================================================
+	<!-- ================================================================
          BUTTON STYLES
          ================================================================ -->
     <Style x:Key="TurquoiseButton" TargetType="Button">

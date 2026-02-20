@@ -186,7 +186,7 @@ Width="900">
 				  SelectionMode="Single"
 				  GridLinesVisibility="Horizontal"
 				  Background="{StaticResource LightTurquoise}"
-				  AlternatingRowBackground="#F9F9F9"
+				  AlternatingRowBackground="{StaticResource AlternateRowBackground}"
 				  CanUserResizeColumns="True"
 				  MouseDoubleClick="JobLog_DoubleClickFromTab"
 				  RowHeight="35">
@@ -315,7 +315,7 @@ Width="900">
 									<RowDefinition Height="Auto"/>
 								</Grid.RowDefinitions>
 
-								<DataGrid Grid.Row="0" Name="dgAvailableBackups" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" GridLinesVisibility="Horizontal" AlternatingRowBackground="#F9F9F9" SelectionChanged="AvailableBackups_SelectionChanged">
+								<DataGrid Grid.Row="0" Name="dgAvailableBackups" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" GridLinesVisibility="Horizontal" AlternatingRowBackground="{StaticResource AlternateRowBackground}" SelectionChanged="AvailableBackups_SelectionChanged">
 									<DataGrid.Columns>
 										<DataGridTextColumn Header="Backup Name" Binding="{Binding BackupName}" Width="200"/>
 										<DataGridTextColumn Header="Type" Binding="{Binding BackupType}" Width="100"/>
@@ -340,7 +340,7 @@ Width="900">
 
 						<!-- Mounted Backups -->
 						<GroupBox Grid.Row="2" Header="Mounted Backups" Margin="10">
-							<DataGrid Name="dgMountedBackups" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" GridLinesVisibility="Horizontal" AlternatingRowBackground="#F9F9F9">
+							<DataGrid Name="dgMountedBackups" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" GridLinesVisibility="Horizontal" AlternatingRowBackground="{StaticResource AlternateRowBackground}">
 								<DataGrid.Columns>
 									<DataGridTextColumn Header="Drive" Binding="{Binding DriveLetter}" Width="60"/>
 									<DataGridTextColumn Header="Backup Name" Binding="{Binding BackupName}" Width="200"/>

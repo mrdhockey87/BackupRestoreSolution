@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.15";
+		static private string version_fallback_number = "5.13.6.16";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -70,6 +70,8 @@ namespace BackupUI
 
 
 /*
+* Version 5.13.6.16 I changed the AlternateRowBackground color to a Cadet Blue (#5F9EA0) for better contrast with the new turquoise theme.
+*					and there were some missed AlternateRowBackground in the main page mdail 2/20/2026
 * Version 5.13.6.15 Made some other changes related to the turquoise theme. I haven't gotten everything yet like the Help page still needs 
 *					to be updated to use the new colors. mdail 2/20/2026
 * Version 5.13.6.14 MAJOR UPDATE - TURQUOISE THEME: Implemented comprehensive turquoise (blue-green) color scheme across entire application!
