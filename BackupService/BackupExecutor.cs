@@ -94,16 +94,37 @@ namespace BackupService
                             return false;
                         }
 
-                        // Create destination path with timestamp if retaining multiple backups
+                        // Determine backup type prefix based on what we're actually creating
+                        string backupTypePrefix;
+                        if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
+                        {
+                            // Check if we need to do a full backup as the base
+                            var existingFull = FindFullBackup(job.DestinationPath, job.Name);
+                            if (string.IsNullOrEmpty(existingFull))
+                            {
+                                backupTypePrefix = "Full"; // Creating full backup as base
+                                logger?.Invoke($"No full backup exists. Creating initial full backup for {job.Name}");
+                            }
+                            else
+                            {
+                                backupTypePrefix = job.Type == BackupType.Incremental ? "Incremental" : "Differential";
+                            }
+                        }
+                        else
+                        {
+                            backupTypePrefix = "Full";
+                        }
+
+                        // Create destination path with backup type and timestamp
                         if (job.Type == BackupType.Full && job.RetainFullBackupCount > 1)
                         {
                             newBackupPath = Path.Combine(job.DestinationPath,
-                                $"{job.Name}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                                $"{job.Name}_{backupTypePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}");
                         }
                         else
                         {
                             newBackupPath = Path.Combine(job.DestinationPath,
-                                $"{job.Name}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                                $"{job.Name}_{backupTypePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}");
                         }
 
                         int result = ExecuteBackup(job, sourcePath, newBackupPath, nativeCallback, logger);
@@ -131,17 +152,38 @@ namespace BackupService
                                 return false;
                             }
 
+                            // Determine backup type prefix for Hyper-V backup
+                            string backupTypePrefix;
+                            if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
+                            {
+                                // Check if we need to do a full backup as the base
+                                var existingFull = FindFullBackup(job.DestinationPath, vm);
+                                if (string.IsNullOrEmpty(existingFull))
+                                {
+                                    backupTypePrefix = "Full"; // Creating full backup as base
+                                    logger?.Invoke($"No full backup exists. Creating initial full backup for {vm}");
+                                }
+                                else
+                                {
+                                    backupTypePrefix = job.Type == BackupType.Incremental ? "Incremental" : "Differential";
+                                }
+                            }
+                            else
+                            {
+                                backupTypePrefix = "Full";
+                            }
+
                             if (job.Type == BackupType.Full && job.RetainFullBackupCount > 1)
                             {
                                 newBackupPath = Path.Combine(job.DestinationPath,
-                                    $"{vm}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                                    $"{vm}_{backupTypePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}");
                             }
                             else
                             {
                                 newBackupPath = Path.Combine(job.DestinationPath,
-                                    $"{vm}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                                    $"{vm}_{backupTypePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}");
                             }
-                            
+
                             progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {vm}...");
                             int result = BackupHyperVVM(vm, newBackupPath, nativeCallback);
 

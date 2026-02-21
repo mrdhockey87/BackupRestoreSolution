@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.24";
+		static private string version_fallback_number = "5.13.6.25";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,23 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.6.25 CRITICAL FIX - INCREMENTAL/DIFFERENTIAL AUTO-FULL BACKUP: Fixed incremental and differential backups failing when no
+*					full backup exists! User reported: "I told an incremental job to run now, it failed after saying there was no full backup
+*					instead of just doing a full backup." Root cause: Backup folder naming didn't include backup type prefix (Full_, Incremental_,
+*					Differential_), causing FindFullBackup() to never find the base backup! When incremental/differential ran first time, it
+*					would log "No full backup found. Creating initial full backup instead" but then create a folder named
+*					"JobName_yyyyMMdd_HHmmss" without "Full_" prefix. Next run would again fail to find full backup because FindFullBackup()
+*					specifically searches for folders containing "Full_" in the name (line 341 in BackupExecutor.cs). FIXED by: 1) Added intelligent
+*					backup type prefix determination in ExecuteBackupJobWithProgress - checks if running incremental/differential, looks for existing
+*					full backup using FindFullBackup(), if no full backup exists sets backupTypePrefix = "Full" and logs clear message, otherwise
+*					uses correct backup type prefix (Incremental/Differential), 2) Changed folder naming from "{job.Name}_{timestamp}" to
+*					"{job.Name}_{backupTypePrefix}_{timestamp}" ensuring all folders have proper type identification, 3) Applied same logic to both
+*					regular backups (sourcePaths) and Hyper-V backups (HyperVMachines loop). Now workflow works perfectly: First run of incremental
+*					backup creates "JobName_Full_20260221_143000" folder, subsequent runs create "JobName_Incremental_20260221_150000" folders,
+*					FindFullBackup() finds base backup using "Full_" in folder name, incremental/differential backups chain correctly! Folder names
+*					now clearly show backup type for easy identification in file explorer. Complete fix for auto-full backup on first run - no more
+*					"no full backup" failures! Incremental and differential backups work exactly as expected - automatically create full backup as
+*					base on first run, then create incremental/differential backups on subsequent runs. Production-ready intelligent backup chaining! mdail 2/21/2026
 * Version 5.13.6.24 CRITICAL FIX - RUNTIME CONFIG TYPO: Fixed typo in Directory.Build.props preventing runtime config files from being generated
 *					for BOTH Debug and Release! Root cause: Line 98 had RuntimeConfigurationFilesOuputPath (missing 't' in Output) instead of
 *					RuntimeConfigurationFilesOutputPath. This typo meant MSBuild wasn't recognizing the property override to put runtime config
