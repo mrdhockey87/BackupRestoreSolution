@@ -49,42 +49,56 @@
        VERIFY AND COPY RUNTIME CONFIG FILES TO OUTPUT
        ================================================================
        MSBuild generates runtime config to different locations depending on project type
-       This target ensures they end up in the correct OutputPath
+       This target ensures they end up in the correct OutputPath for both Debug and Release
        ================================================================ -->
   <Target Name="EnsureRuntimeConfigInOutput" 
-          AfterTargets="GenerateBuildRuntimeConfigurationFiles" 
+          AfterTargets="GenerateBuildRuntimeConfigurationFiles;Build" 
           Condition="'$(MSBuildProjectExtension)' != '.vcxproj' AND ('$(OutputType)' == 'Exe' OR '$(OutputType)' == 'WinExe')">
-    
+
     <PropertyGroup>
-      <!-- Check multiple possible source locations -->
+      <!-- Diagnostic: Show all paths being checked -->
       <RuntimeConfigInOutput>$(OutputPath)$(TargetName).runtimeconfig.json</RuntimeConfigInOutput>
       <RuntimeConfigInBin>$(ArtifactsBin)$(TargetName).runtimeconfig.json</RuntimeConfigInBin>
-      <RuntimeConfigInBase>$(BaseIntermediateOutputPath)$(TargetName).runtimeconfig.json</RuntimeConfigInBase>
+      <RuntimeConfigInBase>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetName).runtimeconfig.json</RuntimeConfigInBase>
+      <RuntimeConfigInObj>$(IntermediateOutputPath)$(TargetName).runtimeconfig.json</RuntimeConfigInObj>
     </PropertyGroup>
-    
-    <Message Importance="High" Text="[$(MSBuildProjectName)] Ensuring runtime config in correct location..." />
-    
-    <!-- If it exists in wrong location (artifacts\bin\) copy to correct location (artifacts\bin\Debug\) -->
+
+    <Message Importance="High" Text="[$(MSBuildProjectName) $(Configuration)] Ensuring runtime config in correct location..." />
+    <Message Importance="High" Text="  Target: $(RuntimeConfigInOutput)" />
+    <Message Importance="High" Text="  Checking: $(RuntimeConfigInBin) - Exists: $([System.IO.File]::Exists('$(RuntimeConfigInBin)'))" />
+    <Message Importance="High" Text="  Checking: $(RuntimeConfigInBase) - Exists: $([System.IO.File]::Exists('$(RuntimeConfigInBase)'))" />
+    <Message Importance="High" Text="  Checking: $(RuntimeConfigInObj) - Exists: $([System.IO.File]::Exists('$(RuntimeConfigInObj)'))" />
+
+    <!-- Copy from artifacts\bin\ if it exists there -->
     <Copy SourceFiles="$(RuntimeConfigInBin)" 
           DestinationFiles="$(RuntimeConfigInOutput)" 
           SkipUnchangedFiles="false"
           Condition="Exists('$(RuntimeConfigInBin)') AND !Exists('$(RuntimeConfigInOutput)')">
       <Output TaskParameter="CopiedFiles" ItemName="RuntimeConfigCopied"/>
     </Copy>
-    
-    <!-- If it exists in base intermediate, copy to output -->
+
+    <!-- Copy from base intermediate if it exists there -->
     <Copy SourceFiles="$(RuntimeConfigInBase)" 
           DestinationFiles="$(RuntimeConfigInOutput)" 
           SkipUnchangedFiles="false"
           Condition="Exists('$(RuntimeConfigInBase)') AND !Exists('$(RuntimeConfigInOutput)')">
       <Output TaskParameter="CopiedFiles" ItemName="RuntimeConfigCopied2"/>
     </Copy>
-    
-    <Message Importance="High" Text="  ? Runtime config exists: $(RuntimeConfigInOutput)" Condition="Exists('$(RuntimeConfigInOutput)')" />
-    <Message Importance="High" Text="  ? Copied from $(RuntimeConfigInBin)" Condition="'@(RuntimeConfigCopied)' != ''" />
-    <Message Importance="High" Text="  ? Copied from $(RuntimeConfigInBase)" Condition="'@(RuntimeConfigCopied2)' != ''" />
-    <Warning Text="  ?? Runtime config NOT FOUND in any location - Application will fail to launch!" 
-             Condition="!Exists('$(RuntimeConfigInOutput)') AND !Exists('$(RuntimeConfigInBin)') AND !Exists('$(RuntimeConfigInBase)')" />
+
+    <!-- Copy from obj folder if it exists there -->
+    <Copy SourceFiles="$(RuntimeConfigInObj)" 
+          DestinationFiles="$(RuntimeConfigInOutput)" 
+          SkipUnchangedFiles="false"
+          Condition="Exists('$(RuntimeConfigInObj)') AND !Exists('$(RuntimeConfigInOutput)')">
+      <Output TaskParameter="CopiedFiles" ItemName="RuntimeConfigCopied3"/>
+    </Copy>
+
+    <Message Importance="High" Text="  ✓ Runtime config exists: $(RuntimeConfigInOutput)" Condition="Exists('$(RuntimeConfigInOutput)')" />
+    <Message Importance="High" Text="  ✓ Copied from $(RuntimeConfigInBin)" Condition="'@(RuntimeConfigCopied)' != ''" />
+    <Message Importance="High" Text="  ✓ Copied from $(RuntimeConfigInBase)" Condition="'@(RuntimeConfigCopied2)' != ''" />
+    <Message Importance="High" Text="  ✓ Copied from $(RuntimeConfigInObj)" Condition="'@(RuntimeConfigCopied3)' != ''" />
+    <Warning Text="  ⚠️ Runtime config NOT FOUND in any location - Application will fail to launch! Run 'dotnet build' to regenerate." 
+             Condition="!Exists('$(RuntimeConfigInOutput)') AND !Exists('$(RuntimeConfigInBin)') AND !Exists('$(RuntimeConfigInBase)') AND !Exists('$(RuntimeConfigInObj)')" />
   </Target>
 
 </Project>

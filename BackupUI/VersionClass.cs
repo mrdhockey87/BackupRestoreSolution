@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.22";
+		static private string version_fallback_number = "5.13.6.23";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,19 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.6.23 RELEASE BUILD FIX - RUNTIME CONFIG GENERATION: Fixed "install .NET" error when running Release builds! Enhanced
+*					Directory.Build.targets to properly detect and copy .runtimeconfig.json files for both Debug and Release configurations.
+*					Root cause: EnsureRuntimeConfigInOutput target only ran AfterTargets="GenerateBuildRuntimeConfigurationFiles" and didn't
+*					check intermediate output path with $(Configuration) included. This caused Release builds to miss runtime config files.
+*					FIXED by: 1) Added AfterTargets="Build" so target runs after build completes, 2) Added check for $(RuntimeConfigInObj)
+*					location (intermediate output path), 3) Fixed $(RuntimeConfigInBase) to include $(Configuration) in path:
+*					$(BaseIntermediateOutputPath)$(Configuration)\$(TargetName).runtimeconfig.json, 4) Added comprehensive diagnostic messages
+*					showing all paths being checked with Exists() results, 5) Enhanced error messages with emojis (✓/✗/⚠️) for quick visual
+*					scanning. Created Fix-ReleaseRuntimeConfig.ps1 PowerShell script to diagnose and automatically fix missing runtime config
+*					files. Script checks all .exe files in Release bin, searches for missing files in obj folders, copies them automatically,
+*					and provides clear instructions if rebuild is needed. Now Release builds work correctly out of the box! Users can run
+*					artifacts\bin\Release\BackupUI.exe without "install .NET Desktop Runtime" error. Complete Release configuration support
+*					with proper MSBuild integration. Production-ready deployment for both Debug and Release! mdail 2/21/2026
 * Version 5.13.6.22 CRITICAL BUG FIX - JOB DELETION STALE DATA: Fixed critical bug where "Run Now" was showing deleted job names!
 *					Root cause: JobManager.GetJob(Guid) was using stale in-memory job list instead of reloading from disk. After deleting
 *					a job, creating a new one, and clicking "Run Now", the confirmation dialog showed the OLD deleted job name instead of
