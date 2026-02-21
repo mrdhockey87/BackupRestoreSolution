@@ -36,6 +36,8 @@ namespace BackupUI.Services
 
         public BackupJob? GetJob(Guid id)
         {
+            // Always reload from file to ensure we have the latest job data
+            LoadJobs();
             return jobs.FirstOrDefault(j => j.Id == id);
         }
 

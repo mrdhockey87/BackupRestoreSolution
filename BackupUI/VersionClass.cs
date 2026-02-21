@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.21";
+		static private string version_fallback_number = "5.13.6.22";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,8 +71,22 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.6.22 CRITICAL BUG FIX - JOB DELETION STALE DATA: Fixed critical bug where "Run Now" was showing deleted job names!
+*					Root cause: JobManager.GetJob(Guid) was using stale in-memory job list instead of reloading from disk. After deleting
+*					a job, creating a new one, and clicking "Run Now", the confirmation dialog showed the OLD deleted job name instead of
+*					the current job! This happened because: 1) DeleteJob() removed job from memory and saved to disk, 2) LoadBackupJobs()
+*					called GetAllJobs() which reloaded the list correctly, 3) But RunJobNow_Click called GetJob(jobId) which searched the
+*					in-memory list WITHOUT reloading first, potentially returning stale data. FIXED by adding LoadJobs() call at the start
+*					of GetJob() method to ensure we always have the latest job data from disk. This matches the pattern already used in
+*					GetAllJobs(). Now GetJob() always reloads before searching, guaranteeing fresh job information. User reported: "After
+*					deleting a job, entered new job, hit run now - popup asked to run the DELETED job name!" Now resolved - always shows
+*					correct current job name! Also fixed DataGrid vertical grid lines visibility in MainWindow.xaml - changed GridLinesVisibility
+*					from "Horizontal" to "All" in three DataGrids (dgJobLogs in Activity tab, dgAvailableBackups and dgMountedBackups in Mount
+*					Backups tab). Vertical column separator lines now visible in all data rows. Also fixed TurquoiseTheme.xaml DataGrid style
+*					to include VerticalGridLinesBrush in DarkTurquoise color. Complete grid structure now displays properly with both horizontal
+*					and vertical lines in bright cyan (#00CED1)! Production-ready data integrity and visual consistency! mdail 2/21/2026
 * Version 5.13.6.21 Fix Jobs Activity Grid not showing the vertical lines between the columns and the date not being centered. Also added
-*					the github copilot directory to the ignore file mdail 2/21/2026 
+*					the github copilot directory to the ignore file mdail 2/21/2026
 * Version 5.13.6.20 UI ENHANCEMENT - ABOUTWINDOW GROUPBOX STYLING: Enhanced About dialog with professional turquoise theme for GroupBox
 *					controls! Created custom AboutGroupBoxStyle that applies VeryLightTurquoise (#E0F7F7) background to GroupBox content
 *					areas while using LightTurquoise (#AFEEEE) for borders and headers. Added solid background behind header text to prevent
