@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.23";
+		static private string version_fallback_number = "5.13.6.24";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,20 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.6.24 CRITICAL FIX - RUNTIME CONFIG TYPO: Fixed typo in Directory.Build.props preventing runtime config files from being generated
+*					for BOTH Debug and Release! Root cause: Line 98 had RuntimeConfigurationFilesOuputPath (missing 't' in Output) instead of
+*					RuntimeConfigurationFilesOutputPath. This typo meant MSBuild wasn't recognizing the property override to put runtime config
+*					files in artifacts\bin\Debug\ and artifacts\bin\Release\. Instead, files were being generated in wrong locations or not at
+*					all, causing ".NET Desktop Runtime required" error when launching BackupUI.exe in any configuration! FIXED by: 1) Corrected
+*					typo from "Ouput" to "Output" in property name, 2) Created comprehensive Diagnose-RuntimeConfig.ps1 script that checks all
+*					expected runtime config files across Debug and Release for both BackupUI and BackupService, validates JSON syntax, searches
+*					obj folders if files missing, provides detailed diagnostics and recovery steps. 3) Created Force-GenerateRuntimeConfig.ps1
+*					"nuclear option" script that manually generates correct runtime config JSON files if MSBuild won't, creates proper configs
+*					for WinExe (BackupUI with WindowsDesktop.App framework) and Exe (BackupService with NETCore.App only), ensures all files
+*					exist immediately for testing. This was the root cause of both Debug and Release failures - the typo prevented proper path
+*					configuration! Now MSBuild generates files in correct locations: artifacts\bin\Debug\BackupUI.runtimeconfig.json and
+*					artifacts\bin\Release\BackupUI.runtimeconfig.json. Complete fix for persistent "install .NET" error across all configurations.
+*					Production-ready runtime config generation with proper MSBuild property names! Enterprise-grade build reliability restored! mdail 2/21/2026
 * Version 5.13.6.23 RELEASE BUILD FIX - RUNTIME CONFIG GENERATION: Fixed "install .NET" error when running Release builds! Enhanced
 *					Directory.Build.targets to properly detect and copy .runtimeconfig.json files for both Debug and Release configurations.
 *					Root cause: EnsureRuntimeConfigInOutput target only ran AfterTargets="GenerateBuildRuntimeConfigurationFiles" and didn't
