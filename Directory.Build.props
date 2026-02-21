@@ -5,7 +5,7 @@
        ================================================================
        ALL PROJECTS (BackupUI, BackupService, BackupEngine) use this single version.
        Change version HERE and it updates everywhere automatically.
-       Current Version: 5.13.6.26
+       Current Version: 5.13.6.28
        Last Updated: 2/21/2026
        
        UPDATE VERSION IN ONE PLACE: Change ProductVersion property below.
@@ -14,7 +14,7 @@
        ================================================================ -->
   <PropertyGroup>
     <!-- SINGLE VERSION DEFINITION - Update this value only -->
-    <ProductVersion>5.13.6.26</ProductVersion>
+    <ProductVersion>5.13.6.28</ProductVersion>
     
     <!-- All version properties use the ProductVersion variable -->
     <Version>$(ProductVersion)</Version>
@@ -95,6 +95,8 @@
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <!-- CRITICAL FIX: Override runtime config output path to match our OutputPath -->
     <RuntimeConfigurationFilesOutputPath>$(OutputPath)</RuntimeConfigurationFilesOutputPath>
+    <!-- Force full rebuild to ensure runtime configs regenerate in Visual Studio -->
+    <DisableIncrementalBuild Condition="'$(Configuration)' == 'Release'">true</DisableIncrementalBuild>
   </PropertyGroup>
   
   <!-- ================================================================
