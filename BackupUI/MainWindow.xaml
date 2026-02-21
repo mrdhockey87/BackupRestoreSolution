@@ -1,49 +1,46 @@
-<Window x:Class="BackupUI.MainWindow"
-xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-xmlns:local="clr-namespace:BackupUI.Converters"
-Title="Backup &amp; Restore"
-Background="{StaticResource PanelBackground}"
-Height="600"
-Width="900">
+<Window
+	x:Class="BackupUI.MainWindow"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:local="clr-namespace:BackupUI.Converters"
+	Title="Backup &amp; Restore"
+	Width="900"
+	Height="600"
+	Background="{StaticResource PanelBackground}">
 	<Window.Resources>
-		<local:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+		<local:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
 	</Window.Resources>
 	<DockPanel>
 		<Menu DockPanel.Dock="Top">
 			<MenuItem Header="_File">
-				<MenuItem Header="_Exit"
-						  Click="Exit_Click" />
+				<MenuItem Click="Exit_Click" Header="_Exit" />
 			</MenuItem>
 			<MenuItem Header="_Backup">
-				<MenuItem Header="_New Backup..."
-						  Click="NewBackup_Click" />
-				<MenuItem Header="_Restore..."
-						  Click="Restore_Click" />
+				<MenuItem Click="NewBackup_Click" Header="_New Backup..." />
+				<MenuItem Click="Restore_Click" Header="_Restore..." />
 			</MenuItem>
 			<MenuItem Header="_Schedules">
-				<MenuItem Header="_Manage Schedules..."
-						  Click="ManageSchedules_Click" />
+				<MenuItem Click="ManageSchedules_Click" Header="_Manage Schedules..." />
 			</MenuItem>
 			<MenuItem Header="_Activity">
-				<MenuItem Header="_Activity Management..."
-						  Click="ActivityManagement_Click" />
+				<MenuItem Click="ActivityManagement_Click" Header="_Activity Management..." />
 			</MenuItem>
 			<MenuItem Header="_Service">
-				<MenuItem Header="_Service Management..."
-						  Click="ServiceManagement_Click" />
+				<MenuItem Click="ServiceManagement_Click" Header="_Service Management..." />
 				<Separator />
-				<MenuItem Header="_Recovery Environment Creator..."
-						  Click="RecoveryEnvironmentCreator_Click" />
+				<MenuItem Click="RecoveryEnvironmentCreator_Click" Header="_Recovery Environment Creator..." />
 			</MenuItem>
 			<MenuItem Header="_Help">
-				<MenuItem Header="_About..."
-						  Click="About_Click" />
+				<MenuItem Click="About_Click" Header="_About..." />
 			</MenuItem>
 		</Menu>
-		<StatusBar DockPanel.Dock="Bottom" Height="25">
+		<StatusBar Height="25" DockPanel.Dock="Bottom">
 			<StatusBarItem>
-				<TextBlock Name="txtVersion" Text="Version: Loading..." FontSize="11" Foreground="{StaticResource SecondaryText}"/>
+				<TextBlock
+					Name="txtVersion"
+					FontSize="11"
+					Foreground="{StaticResource SecondaryText}"
+					Text="Version: Loading..." />
 			</StatusBarItem>
 		</StatusBar>
 		<Grid Margin="10">
@@ -51,84 +48,156 @@ Width="900">
 				<TabItem Header="Backup">
 					<Grid>
 						<Grid.RowDefinitions>
-							<RowDefinition Height="Auto"/>
-							<RowDefinition Height="*"/>
+							<RowDefinition Height="Auto" />
+							<RowDefinition Height="*" />
 						</Grid.RowDefinitions>
-
-						<!-- Header -->
-						<StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,5" Background="{StaticResource PanelBackground}">
-							<TextBlock Text="Backup Jobs" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="10,10,20,10"/>
-							<Button Content="New Backup..." Click="NewBackup_Click" Width="120" Height="30" Margin="5,5"/>
-							<Button Content="Import Backup..." Click="ImportBackup_Click" Width="130" Height="30" Margin="5,5"/>
-							<Button Content="Refresh" Click="RefreshJobs_Click" Width="100" Height="30" Margin="5,5"/>
+						<!--  Header  -->
+						<StackPanel
+							Grid.Row="0"
+							Margin="10,10,10,5"
+							Background="{StaticResource PanelBackground}"
+							Orientation="Horizontal">
+							<TextBlock
+								Margin="10,10,20,10"
+								VerticalAlignment="Center"
+								FontSize="16"
+								FontWeight="Bold"
+								Text="Backup Jobs" />
+							<Button
+								Width="120"
+								Height="30"
+								Margin="5,5"
+								Click="NewBackup_Click"
+								Content="New Backup..." />
+							<Button
+								Width="130"
+								Height="30"
+								Margin="5,5"
+								Click="ImportBackup_Click"
+								Content="Import Backup..." />
+							<Button
+								Width="100"
+								Height="30"
+								Margin="5,5"
+								Click="RefreshJobs_Click"
+								Content="Refresh" />
 						</StackPanel>
-
-						<!-- Job List -->
-						<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="10">
+						<!--  Job List  -->
+						<ScrollViewer
+							Grid.Row="1"
+							Margin="10"
+							VerticalScrollBarVisibility="Auto">
 							<ItemsControl Name="lstBackupJobs">
 								<ItemsControl.ItemTemplate>
 									<DataTemplate>
-										<Border BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="1" Margin="0,0,0,10"  Background="{StaticResource PanelBackground}" CornerRadius="5">
+										<Border
+											Margin="0,0,0,10"
+											Background="{StaticResource PanelBackground}"
+											BorderBrush="{StaticResource LightBorderBrush}"
+											BorderThickness="1"
+											CornerRadius="5">
 											<Grid Margin="15">
 												<Grid.RowDefinitions>
-													<RowDefinition Height="Auto"/>
-													<RowDefinition Height="Auto"/>
-													<RowDefinition Height="Auto"/>
-													<RowDefinition Height="Auto"/>
-													<RowDefinition Height="Auto"/>
+													<RowDefinition Height="Auto" />
+													<RowDefinition Height="Auto" />
+													<RowDefinition Height="Auto" />
+													<RowDefinition Height="Auto" />
+													<RowDefinition Height="Auto" />
 												</Grid.RowDefinitions>
 												<Grid.ColumnDefinitions>
-													<ColumnDefinition Width="150"/>
-													<ColumnDefinition Width="*"/>
-													<ColumnDefinition Width="Auto"/>
+													<ColumnDefinition Width="150" />
+													<ColumnDefinition Width="*" />
+													<ColumnDefinition Width="Auto" />
 												</Grid.ColumnDefinitions>
-
-												<!-- Job Name -->
-												<TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" 
-														   Text="{Binding Name}" 
-														   FontSize="16" FontWeight="Bold" 
-														   Margin="0,0,0,10"/>
-
-												<!-- Type -->
-												<TextBlock Grid.Row="1" Grid.Column="0" Text="Type:" FontWeight="SemiBold" Margin="0,5"/>
-												<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TypeDescription}" Margin="0,5"/>
-
-												<!-- Source -->
-												<TextBlock Grid.Row="2" Grid.Column="0" Text="Source:" FontWeight="SemiBold" Margin="0,5"/>
-												<TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SourceDescription}" Margin="0,5" TextWrapping="Wrap"/>
-
-												<!-- Destination -->
-												<TextBlock Grid.Row="3" Grid.Column="0" Text="Destination:" FontWeight="SemiBold" Margin="0,5"/>
-												<TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding DestinationPath}" Margin="0,5" TextWrapping="Wrap"/>
-
-												<!-- Schedule -->
-												<TextBlock Grid.Row="4" Grid.Column="0" Text="Schedule:" FontWeight="SemiBold" Margin="0,5"/>
-												<TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ScheduleDescription}" Margin="0,5"/>
-
-												<!-- Buttons -->
-												<StackPanel Grid.Row="0" Grid.RowSpan="5" Grid.Column="2" 
-														    Orientation="Vertical" 
-														    VerticalAlignment="Center" 
-														    Margin="20,0,0,0">
-													<Button Content="Run Now" 
-															Width="100" 
-															Height="35" 
-															Margin="0,5"
-															Tag="{Binding Id}"
-															Click="RunJobNow_Click"/>
-													<Button Content="Edit" 
-															Width="100" 
-															Height="35" 
-															Margin="0,5"
-															Tag="{Binding Id}"
-															Click="EditJob_Click"/>
-													<Button Content="Delete" 
-															Width="100" 
-															Height="35" 
-															Margin="0,5"
-															Style="{StaticResource DeleteButton}"
-															Tag="{Binding Id}"
-															Click="DeleteJob_Click"/>
+												<!--  Job Name  -->
+												<TextBlock
+													Grid.Row="0"
+													Grid.Column="0"
+													Grid.ColumnSpan="3"
+													Margin="0,0,0,10"
+													FontSize="16"
+													FontWeight="Bold"
+													Text="{Binding Name}" />
+												<!--  Type  -->
+												<TextBlock
+													Grid.Row="1"
+													Grid.Column="0"
+													Margin="0,5"
+													FontWeight="SemiBold"
+													Text="Type:" />
+												<TextBlock
+													Grid.Row="1"
+													Grid.Column="1"
+													Margin="0,5"
+													Text="{Binding TypeDescription}" />
+												<!--  Source  -->
+												<TextBlock
+													Grid.Row="2"
+													Grid.Column="0"
+													Margin="0,5"
+													FontWeight="SemiBold"
+													Text="Source:" />
+												<TextBlock
+													Grid.Row="2"
+													Grid.Column="1"
+													Margin="0,5"
+													Text="{Binding SourceDescription}"
+													TextWrapping="Wrap" />
+												<!--  Destination  -->
+												<TextBlock
+													Grid.Row="3"
+													Grid.Column="0"
+													Margin="0,5"
+													FontWeight="SemiBold"
+													Text="Destination:" />
+												<TextBlock
+													Grid.Row="3"
+													Grid.Column="1"
+													Margin="0,5"
+													Text="{Binding DestinationPath}"
+													TextWrapping="Wrap" />
+												<!--  Schedule  -->
+												<TextBlock
+													Grid.Row="4"
+													Grid.Column="0"
+													Margin="0,5"
+													FontWeight="SemiBold"
+													Text="Schedule:" />
+												<TextBlock
+													Grid.Row="4"
+													Grid.Column="1"
+													Margin="0,5"
+													Text="{Binding ScheduleDescription}" />
+												<!--  Buttons  -->
+												<StackPanel
+													Grid.Row="0"
+													Grid.RowSpan="5"
+													Grid.Column="2"
+													Margin="20,0,0,0"
+													VerticalAlignment="Center"
+													Orientation="Vertical">
+													<Button
+														Width="100"
+														Height="35"
+														Margin="0,5"
+														Click="RunJobNow_Click"
+														Content="Run Now"
+														Tag="{Binding Id}" />
+													<Button
+														Width="100"
+														Height="35"
+														Margin="0,5"
+														Click="EditJob_Click"
+														Content="Edit"
+														Tag="{Binding Id}" />
+													<Button
+														Width="100"
+														Height="35"
+														Margin="0,5"
+														Click="DeleteJob_Click"
+														Content="Delete"
+														Style="{StaticResource DeleteButton}"
+														Tag="{Binding Id}" />
 												</StackPanel>
 											</Grid>
 										</Border>
@@ -136,256 +205,376 @@ Width="900">
 								</ItemsControl.ItemTemplate>
 							</ItemsControl>
 						</ScrollViewer>
-
-						<!-- No Jobs Message -->
-						<TextBlock Name="txtNoJobs"
-								   Grid.Row="1"
-								   Text="No backup jobs found. Click 'New Backup...' to create one."
-								   HorizontalAlignment="Center"
-								   VerticalAlignment="Center"
-								   FontSize="14"
-								   Foreground="{StaticResource SecondaryText}"
-								   Visibility="Collapsed"/>
+						<!--  No Jobs Message  -->
+						<TextBlock
+							Name="txtNoJobs"
+							Grid.Row="1"
+							HorizontalAlignment="Center"
+							VerticalAlignment="Center"
+							FontSize="14"
+							Foreground="{StaticResource SecondaryText}"
+							Text="No backup jobs found. Click 'New Backup...' to create one."
+							Visibility="Collapsed" />
 					</Grid>
 				</TabItem>
-
-				<!-- Activity/Logs Tab -->
+				<!--  Activity/Logs Tab  -->
 				<TabItem Name="tabActivity" Header="Activity">
 					<Grid>
 						<Grid.RowDefinitions>
-							<RowDefinition Height="Auto"/>
-							<RowDefinition Height="*"/>
-							<RowDefinition Height="Auto"/>
+							<RowDefinition Height="Auto" />
+							<RowDefinition Height="*" />
+							<RowDefinition Height="Auto" />
 						</Grid.RowDefinitions>
-
-						<!-- Header -->
-						<StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10" Background="{StaticResource PanelBackground}" Height="50">
-							<TextBlock Text="Backup Job Activity Logs" 
-					   FontSize="18" 
-					   FontWeight="Bold" 
-					   VerticalAlignment="Center" 
-					   Margin="15,0,20,0"/>
-							<Button Content="Refresh" 
-					Click="RefreshJobLogs_Click" 
-					Width="100" 
-					Height="32" 
-					Margin="5"/>
-							<Button Content="View All Activities" 
-					Click="ViewAllActivitiesFromTab_Click" 
-					Width="140" 
-					Height="32" 
-					Margin="5"/>
+						<!--  Header  -->
+						<StackPanel
+							Grid.Row="0"
+							Height="50"
+							Margin="0,0,0,10"
+							Background="{StaticResource PanelBackground}"
+							Orientation="Horizontal">
+							<TextBlock
+								Margin="15,0,20,0"
+								VerticalAlignment="Center"
+								FontSize="18"
+								FontWeight="Bold"
+								Text="Backup Job Activity Logs" />
+							<Button
+								Width="100"
+								Height="32"
+								Margin="5"
+								Click="RefreshJobLogs_Click"
+								Content="Refresh" />
+							<Button
+								Width="140"
+								Height="32"
+								Margin="5"
+								Click="ViewAllActivitiesFromTab_Click"
+								Content="View All Activities" />
 						</StackPanel>
-
-						<!-- Job Logs List -->
-						<DataGrid Grid.Row="1" 
-				  Name="dgJobLogs" 
-				  Margin="10"
-				  AutoGenerateColumns="False" 
-				  IsReadOnly="True"
-				  SelectionMode="Single"
-				  GridLinesVisibility="Horizontal"
-				  Background="{StaticResource LightTurquoise}"
-				  AlternatingRowBackground="{StaticResource AlternateRowBackground}"
-				  CanUserResizeColumns="True"
-				  MouseDoubleClick="JobLog_DoubleClickFromTab"
-				  RowHeight="35">
+						<!--  Job Logs List  -->
+						<DataGrid
+							Name="dgJobLogs"
+							Grid.Row="1"
+							Margin="10"
+							AlternatingRowBackground="{StaticResource AlternateRowBackground}"
+							AutoGenerateColumns="False"
+							CanUserResizeColumns="True"
+							GridLinesVisibility="All"
+							HeadersVisibility="Column"
+							IsReadOnly="True"
+							MouseDoubleClick="JobLog_DoubleClickFromTab"
+							RowHeight="35"
+							SelectionMode="Single">
 							<DataGrid.Columns>
-							<DataGridTextColumn Header="Job Name" Binding="{Binding JobName}" Width="180">
-								<DataGridTextColumn.ElementStyle>
-									<Style TargetType="TextBlock">
-										<Setter Property="TextWrapping" Value="Wrap"/>
-										<Setter Property="VerticalAlignment" Value="Center"/>
-										<Setter Property="Padding" Value="5"/>
-									</Style>
-								</DataGridTextColumn.ElementStyle>
-							</DataGridTextColumn>
-							<DataGridTextColumn Header="Total" Binding="{Binding TotalActivities}" Width="70">
-								<DataGridTextColumn.ElementStyle>
-									<Style TargetType="TextBlock">
-										<Setter Property="HorizontalAlignment" Value="Center"/>
-										<Setter Property="VerticalAlignment" Value="Center"/>
-									</Style>
-								</DataGridTextColumn.ElementStyle>
-							</DataGridTextColumn>
-							<DataGridTextColumn Header="Last Activity" Binding="{Binding LastActivity, StringFormat='{}{0:MM/dd HH:mm}'}" Width="100">
-								<DataGridTextColumn.ElementStyle>
-									<Style TargetType="TextBlock">
-										<Setter Property="VerticalAlignment" Value="Center"/>
-									</Style>
-								</DataGridTextColumn.ElementStyle>
-							</DataGridTextColumn>
-							<DataGridTextColumn Header="Success" Binding="{Binding SuccessCount}" Width="70">
+								<DataGridTextColumn
+									Width="*"
+									Binding="{Binding JobName}"
+									Header="Job Name">
 									<DataGridTextColumn.ElementStyle>
 										<Style TargetType="TextBlock">
-											<Setter Property="Foreground" Value="Green"/>
-											<Setter Property="FontWeight" Value="SemiBold"/>
-											<Setter Property="HorizontalAlignment" Value="Center"/>
-											<Setter Property="VerticalAlignment" Value="Center"/>
+											<Setter Property="TextWrapping" Value="Wrap" />
+											<Setter Property="VerticalAlignment" Value="Center" />
+											<Setter Property="Padding" Value="5" />
+										</Style>
+									</DataGridTextColumn.ElementStyle>
+								</DataGridTextColumn>
+								<DataGridTextColumn
+									Width="70"
+									Binding="{Binding TotalActivities}"
+									Header="Total">
+									<DataGridTextColumn.ElementStyle>
+										<Style TargetType="TextBlock">
+											<Setter Property="HorizontalAlignment" Value="Center" />
+											<Setter Property="VerticalAlignment" Value="Center" />
+										</Style>
+									</DataGridTextColumn.ElementStyle>
+								</DataGridTextColumn>
+								<DataGridTextColumn
+									Width="100"
+									Binding="{Binding LastActivity, StringFormat='{}{0:MM/dd HH:mm}'}"
+									Header="Last Activity">
+									<DataGridTextColumn.ElementStyle>
+										<Style TargetType="TextBlock">
+											<Setter Property="HorizontalAlignment" Value="Center" />
+											<Setter Property="VerticalAlignment" Value="Center" />
+										</Style>
+									</DataGridTextColumn.ElementStyle>
+								</DataGridTextColumn>
+								<DataGridTextColumn
+									Width="70"
+									Binding="{Binding SuccessCount}"
+									Header="Success">
+									<DataGridTextColumn.ElementStyle>
+										<Style TargetType="TextBlock">
+											<Setter Property="Foreground" Value="Green" />
+											<Setter Property="FontWeight" Value="SemiBold" />
+											<Setter Property="HorizontalAlignment" Value="Center" />
+											<Setter Property="VerticalAlignment" Value="Center" />
 											<Style.Triggers>
 												<DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
-													<Setter Property="Foreground" Value="LightGreen"/>
+													<Setter Property="Foreground" Value="LightGreen" />
 												</DataTrigger>
 											</Style.Triggers>
 										</Style>
 									</DataGridTextColumn.ElementStyle>
 								</DataGridTextColumn>
-							<DataGridTextColumn Header="Warning" Binding="{Binding WarningCount}" Width="70">
+								<DataGridTextColumn
+									Width="70"
+									Binding="{Binding WarningCount}"
+									Header="Warning">
 									<DataGridTextColumn.ElementStyle>
 										<Style TargetType="TextBlock">
-											<Setter Property="Foreground" Value="Orange"/>
-											<Setter Property="FontWeight" Value="SemiBold"/>
-											<Setter Property="HorizontalAlignment" Value="Center"/>
-											<Setter Property="VerticalAlignment" Value="Center"/>
+											<Setter Property="Foreground" Value="Orange" />
+											<Setter Property="FontWeight" Value="SemiBold" />
+											<Setter Property="HorizontalAlignment" Value="Center" />
+											<Setter Property="VerticalAlignment" Value="Center" />
 											<Style.Triggers>
 												<DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
-													<Setter Property="Foreground" Value="Yellow"/>
+													<Setter Property="Foreground" Value="Yellow" />
 												</DataTrigger>
 											</Style.Triggers>
 										</Style>
 									</DataGridTextColumn.ElementStyle>
 								</DataGridTextColumn>
-							<DataGridTextColumn Header="Error" Binding="{Binding ErrorCount}" Width="60">
+								<DataGridTextColumn
+									Width="60"
+									Binding="{Binding ErrorCount}"
+									Header="Error">
 									<DataGridTextColumn.ElementStyle>
 										<Style TargetType="TextBlock">
-											<Setter Property="Foreground" Value="Red"/>
-											<Setter Property="FontWeight" Value="SemiBold"/>
-											<Setter Property="HorizontalAlignment" Value="Center"/>
-											<Setter Property="VerticalAlignment" Value="Center"/>
+											<Setter Property="Foreground" Value="Red" />
+											<Setter Property="FontWeight" Value="SemiBold" />
+											<Setter Property="HorizontalAlignment" Value="Center" />
+											<Setter Property="VerticalAlignment" Value="Center" />
 											<Style.Triggers>
 												<DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=IsSelected}" Value="True">
-													<Setter Property="Foreground" Value="LightCoral"/>
+													<Setter Property="Foreground" Value="LightCoral" />
 												</DataTrigger>
 											</Style.Triggers>
 										</Style>
 									</DataGridTextColumn.ElementStyle>
 								</DataGridTextColumn>
-							<DataGridTemplateColumn Header="Actions" Width="150">
+								<DataGridTemplateColumn Width="150" Header="Actions">
 									<DataGridTemplateColumn.CellTemplate>
 										<DataTemplate>
-										<Button Content="View Details" 
-												Width="120" 
-												Height="28" 
+											<Button
+												Width="120"
+												Height="28"
 												Margin="5,0"
 												HorizontalAlignment="Center"
 												VerticalAlignment="Center"
-												Tag="{Binding JobName}"
-												Click="ViewJobDetailsFromTab_Click"/>
+												Click="ViewJobDetailsFromTab_Click"
+												Content="View Details"
+												Tag="{Binding JobName}" />
 										</DataTemplate>
 									</DataGridTemplateColumn.CellTemplate>
 								</DataGridTemplateColumn>
 							</DataGrid.Columns>
 						</DataGrid>
-
-						<!-- Footer Info -->
-						<Border Grid.Row="2" 
-				Background="{StaticResource PanelBackground}" 
-				Padding="10" 
-				BorderBrush="{StaticResource LightBorderBrush}" 
-				BorderThickness="1">
-							<TextBlock Name="txtJobLogsStatus" 
-					   Text="Double-click a job to view detailed activities" 
-					   FontSize="12" 
-					   Foreground="{StaticResource SecondaryText}"/>
+						<!--  Footer Info  -->
+						<Border
+							Grid.Row="2"
+							Padding="10"
+							Background="{StaticResource PanelBackground}"
+							BorderBrush="{StaticResource LightBorderBrush}"
+							BorderThickness="1">
+							<TextBlock
+								Name="txtJobLogsStatus"
+								FontSize="12"
+								Foreground="{StaticResource SecondaryText}"
+								Text="Double-click a job to view detailed activities" />
 						</Border>
 					</Grid>
 				</TabItem>
-
-				<!-- Mount Backups Tab -->
+				<!--  Mount Backups Tab  -->
 				<TabItem Header="Mount Backups">
 					<Grid>
 						<Grid.RowDefinitions>
-							<RowDefinition Height="Auto"/>
-							<RowDefinition Height="*"/>
-							<RowDefinition Height="200"/>
+							<RowDefinition Height="Auto" />
+							<RowDefinition Height="*" />
+							<RowDefinition Height="200" />
 						</Grid.RowDefinitions>
-
-						<!-- Header -->
-						<StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,5" Background="{StaticResource PanelBackground}">
-							<TextBlock Text="Mount Backups as Virtual Drives" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="10,10,20,10"/>
-							<Button Content="Refresh" Click="RefreshMounts_Click" Width="100" Height="30" Margin="5,5"/>
-							<Button Content="Unmount All" Click="UnmountAll_Click" Width="120" Height="30" Margin="5,5" Style="{StaticResource DeleteButton}"/>
+						<!--  Header  -->
+						<StackPanel
+							Grid.Row="0"
+							Margin="10,10,10,5"
+							Background="{StaticResource PanelBackground}"
+							Orientation="Horizontal">
+							<TextBlock
+								Margin="10,10,20,10"
+								VerticalAlignment="Center"
+								FontSize="16"
+								FontWeight="Bold"
+								Text="Mount Backups as Virtual Drives" />
+							<Button
+								Width="100"
+								Height="30"
+								Margin="5,5"
+								Click="RefreshMounts_Click"
+								Content="Refresh" />
+							<Button
+								Width="120"
+								Height="30"
+								Margin="5,5"
+								Click="UnmountAll_Click"
+								Content="Unmount All"
+								Style="{StaticResource DeleteButton}" />
 						</StackPanel>
-
-						<!-- Available Backups -->
-						<GroupBox Grid.Row="1" Header="Available Backups" Margin="10">
+						<!--  Available Backups  -->
+						<GroupBox
+							Grid.Row="1"
+							Margin="10"
+							Header="Available Backups">
 							<Grid>
 								<Grid.RowDefinitions>
-									<RowDefinition Height="*"/>
-									<RowDefinition Height="Auto"/>
+									<RowDefinition Height="*" />
+									<RowDefinition Height="Auto" />
 								</Grid.RowDefinitions>
-
-								<DataGrid Grid.Row="0" Name="dgAvailableBackups" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" GridLinesVisibility="Horizontal" AlternatingRowBackground="{StaticResource AlternateRowBackground}" SelectionChanged="AvailableBackups_SelectionChanged">
+								<DataGrid
+									Name="dgAvailableBackups"
+									Grid.Row="0"
+									AlternatingRowBackground="{StaticResource AlternateRowBackground}"
+									AutoGenerateColumns="False"
+									GridLinesVisibility="All"
+									HeadersVisibility="Column"
+									IsReadOnly="True"
+									SelectionChanged="AvailableBackups_SelectionChanged"
+									SelectionMode="Single">
 									<DataGrid.Columns>
-										<DataGridTextColumn Header="Backup Name" Binding="{Binding BackupName}" Width="200"/>
-										<DataGridTextColumn Header="Type" Binding="{Binding BackupType}" Width="100"/>
-										<DataGridTextColumn Header="Date" Binding="{Binding BackupDate, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="140"/>
-										<DataGridTextColumn Header="Path" Binding="{Binding BackupPath}" Width="*"/>
-										<DataGridTemplateColumn Header="Action" Width="100">
+										<DataGridTextColumn
+											Width="200"
+											Binding="{Binding BackupName}"
+											Header="Backup Name" />
+										<DataGridTextColumn
+											Width="100"
+											Binding="{Binding BackupType}"
+											Header="Type" />
+										<DataGridTextColumn
+											Width="140"
+											Binding="{Binding BackupDate, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+											Header="Date" />
+										<DataGridTextColumn
+											Width="*"
+											Binding="{Binding BackupPath}"
+											Header="Path" />
+										<DataGridTemplateColumn Width="100" Header="Action">
 											<DataGridTemplateColumn.CellTemplate>
 												<DataTemplate>
-													<Button Content="Mount" Width="80" Height="25" Click="MountBackup_Click" Tag="{Binding}"/>
+													<Button
+														Width="80"
+														Height="25"
+														Click="MountBackup_Click"
+														Content="Mount"
+														Tag="{Binding}" />
 												</DataTemplate>
 											</DataGridTemplateColumn.CellTemplate>
 										</DataGridTemplateColumn>
 									</DataGrid.Columns>
 								</DataGrid>
-
-								<StackPanel Grid.Row="1" Name="pnlBackupPoints" Visibility="Collapsed" Margin="10">
-									<TextBlock Text="Select Backup Point:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-									<ComboBox Name="cmbBackupPoints" Height="30"/>
+								<StackPanel
+									Name="pnlBackupPoints"
+									Grid.Row="1"
+									Margin="10"
+									Visibility="Collapsed">
+									<TextBlock
+										Margin="0,0,0,5"
+										FontWeight="SemiBold"
+										Text="Select Backup Point:" />
+									<ComboBox Name="cmbBackupPoints" Height="30" />
 								</StackPanel>
 							</Grid>
 						</GroupBox>
-
-						<!-- Mounted Backups -->
-						<GroupBox Grid.Row="2" Header="Mounted Backups" Margin="10">
-							<DataGrid Name="dgMountedBackups" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" GridLinesVisibility="Horizontal" AlternatingRowBackground="{StaticResource AlternateRowBackground}">
+						<!--  Mounted Backups  -->
+						<GroupBox
+							Grid.Row="2"
+							Margin="10"
+							Header="Mounted Backups">
+							<DataGrid
+								Name="dgMountedBackups"
+								AlternatingRowBackground="{StaticResource AlternateRowBackground}"
+								AutoGenerateColumns="False"
+								GridLinesVisibility="All"
+								HeadersVisibility="Column"
+								IsReadOnly="True"
+								SelectionMode="Single">
 								<DataGrid.Columns>
-									<DataGridTextColumn Header="Drive" Binding="{Binding DriveLetter}" Width="60"/>
-									<DataGridTextColumn Header="Backup Name" Binding="{Binding BackupName}" Width="200"/>
-									<DataGridTextColumn Header="Type" Binding="{Binding BackupType}" Width="100"/>
-									<DataGridTextColumn Header="Date" Binding="{Binding BackupDate, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" Width="140"/>
-									<DataGridTextColumn Header="Mounted At" Binding="{Binding MountTime, StringFormat='{}{0:HH:mm:ss}'}" Width="100"/>
-									<DataGridTemplateColumn Header="Status" Width="80">
+									<DataGridTextColumn
+										Width="60"
+										Binding="{Binding DriveLetter}"
+										Header="Drive" />
+									<DataGridTextColumn
+										Width="200"
+										Binding="{Binding BackupName}"
+										Header="Backup Name" />
+									<DataGridTextColumn
+										Width="100"
+										Binding="{Binding BackupType}"
+										Header="Type" />
+									<DataGridTextColumn
+										Width="140"
+										Binding="{Binding BackupDate, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+										Header="Date" />
+									<DataGridTextColumn
+										Width="100"
+										Binding="{Binding MountTime, StringFormat='{}{0:HH:mm:ss}'}"
+										Header="Mounted At" />
+									<DataGridTemplateColumn Width="80" Header="Status">
 										<DataGridTemplateColumn.CellTemplate>
 											<DataTemplate>
-												<TextBlock Text="Read-Only" Foreground="{StaticResource SuccessText}" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+												<TextBlock
+													HorizontalAlignment="Center"
+													FontWeight="SemiBold"
+													Foreground="{StaticResource SuccessText}"
+													Text="Read-Only" />
 											</DataTemplate>
 										</DataGridTemplateColumn.CellTemplate>
 									</DataGridTemplateColumn>
-									<DataGridTemplateColumn Header="Action" Width="100">
+									<DataGridTemplateColumn Width="100" Header="Action">
 										<DataGridTemplateColumn.CellTemplate>
 											<DataTemplate>
-												<Button Content="Unmount" Width="80" Height="25" Style="{StaticResource DeleteButton}" Click="UnmountBackup_Click" Tag="{Binding DriveLetter}"/>
+												<Button
+													Width="80"
+													Height="25"
+													Click="UnmountBackup_Click"
+													Content="Unmount"
+													Style="{StaticResource DeleteButton}"
+													Tag="{Binding DriveLetter}" />
 											</DataTemplate>
 										</DataGridTemplateColumn.CellTemplate>
 									</DataGridTemplateColumn>
 								</DataGrid.Columns>
 							</DataGrid>
 						</GroupBox>
-
-						<TextBlock Name="txtNoBackups" Grid.Row="1" Text="No backups available to mount." HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14" Foreground="{StaticResource SecondaryText}" Visibility="Collapsed"/>
+						<TextBlock
+							Name="txtNoBackups"
+							Grid.Row="1"
+							HorizontalAlignment="Center"
+							VerticalAlignment="Center"
+							FontSize="14"
+							Foreground="{StaticResource SecondaryText}"
+							Text="No backups available to mount."
+							Visibility="Collapsed" />
 					</Grid>
 				</TabItem>
-
 				<TabItem Header="Restore">
-					<TextBlock Text="Use File  Restore to restore from backup"
-							   HorizontalAlignment="Center"
-							   VerticalAlignment="Center" />
+					<TextBlock
+						HorizontalAlignment="Center"
+						VerticalAlignment="Center"
+						Text="Use File  Restore to restore from backup" />
 				</TabItem>
 				<TabItem Header="Schedules">
-					<StackPanel HorizontalAlignment="Center"
-								VerticalAlignment="Center">
-						<Button Content="Manage Schedules"
-								Width="200"
-								Height="40"
-								Click="ManageSchedules_Click"
-								Margin="0,0,0,10" />
-						<Button Content="Service Management"
-								Width="200"
-								Height="40"
-								Click="ServiceManagement_Click" />
+					<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+						<Button
+							Width="200"
+							Height="40"
+							Margin="0,0,0,10"
+							Click="ManageSchedules_Click"
+							Content="Manage Schedules" />
+						<Button
+							Width="200"
+							Height="40"
+							Click="ServiceManagement_Click"
+							Content="Service Management" />
 					</StackPanel>
 				</TabItem>
 			</TabControl>

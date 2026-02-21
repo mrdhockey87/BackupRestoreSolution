@@ -2,6 +2,7 @@
 *.suo
 *.user
 *.sln.docstates
+.github/
 [Dd]ebug/
 [Rr]elease/
 x64/

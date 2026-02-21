@@ -35,10 +35,10 @@
   <SolutionDir Condition="'$(SolutionDir)' == ''">$(MSBuildThisFileDirectory)</SolutionDir>
 </PropertyGroup>
   
-  <!-- Force override for C++ projects with absolute paths -->
+  <!-- Force override for C++ projects with consistent relative paths -->
   <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
-    <OutDir>$(SolutionDir)artifacts\bin\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)artifacts\obj\$(MSBuildProjectName)\$(Configuration)\</IntDir>
+    <OutDir>$(ArtifactsBin)$(Configuration)\</OutDir>
+    <IntDir>$(ArtifactsObj)$(MSBuildProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
 
   <Target Name="__EchoFinalPaths" BeforeTargets="Build">

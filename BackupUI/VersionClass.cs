@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.16";
+		static private string version_fallback_number = "5.13.6.21";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -70,6 +70,42 @@ namespace BackupUI
 
 
 /*
+ * 
+* Version 5.13.6.21 Fix Jobs Activity Grid not showing the vertical lines between the columns and the date not being centered. Also added
+*					the github copilot directory to the ignore file mdail 2/21/2026 
+* Version 5.13.6.20 UI ENHANCEMENT - ABOUTWINDOW GROUPBOX STYLING: Enhanced About dialog with professional turquoise theme for GroupBox
+*					controls! Created custom AboutGroupBoxStyle that applies VeryLightTurquoise (#E0F7F7) background to GroupBox content
+*					areas while using LightTurquoise (#AFEEEE) for borders and headers. Added solid background behind header text to prevent
+*					turquoise window header from showing through where GroupBox header text overlaps the border line. Style includes: Content
+*					background (VeryLightTurquoise - very light, subtle turquoise for readability), Border (LightTurquoise - more visible
+*					turquoise outline), Header background (LightTurquoise - matches border for cohesive look), Header text (Black on turquoise
+*					with SemiBold font). Applied to all three GroupBoxes in AboutWindow: Component Versions, Description, and Copyright.
+*					Creates beautiful layered visual hierarchy with subtle color gradients. Header padding (5px horizontal) ensures text has
+*					breathing room. Complete integration with existing TurquoiseTheme.xaml color palette. Professional, polished appearance
+*					that matches application branding! No more plain white GroupBoxes - now fully themed! Enterprise-grade visual consistency
+*					across all UI elements! mdail 2/21/2026
+* Version 5.13.6.19 Set a background for the DataGrids in the Theme file and added a theme for scrollbars. I also updated the 
+*				    colors of the Help windows mdail 2/21/2026
+* Version 5.13.6.18 Set the DataGrids in the MainPage to use HeadersVisibility="Column" to eliminate the empty row at the top of 
+*				    the grid. mdail 2/21/2026
+* Version 5.13.6.17 C++ BUILD TOOLS UPGRADE COMPLETE: Successfully upgraded to Platform Toolset v145 and Windows SDK 10.0 with ALL
+*					warnings resolved! Fixed TWO critical build warnings after C++ build tools upgrade: 1) MSB8012 - TargetPath Mismatch:
+*					Root cause was Directory.Build.targets using absolute paths $(SolutionDir)artifacts\bin\$(Configuration)\ while
+*					vcxproj used relative paths artifacts\bin\$(Configuration)\. MSBuild calculated TargetPath early with relative path,
+*					then Directory.Build.targets overrode with absolute path, causing linker OutputFile mismatch warning. FIXED by
+*					changing Directory.Build.targets to use relative paths with macros: $(ArtifactsBin)$(Configuration)\ instead of
+*					hardcoded $(SolutionDir) prefix. Also removed redundant OutDir/IntDir from BackupEngine.vcxproj since they're managed
+*					centrally in Directory.Build files. 2) LNK4098 - Runtime Library Conflict: Root cause was Debug configuration using
+*					/MD (Multi-threaded DLL Release runtime) but linking zlibstaticd.lib (Debug library compiled with /MDd runtime),
+*					creating conflict between MSVCRT and MSVCRTD. FIXED by adding explicit RuntimeLibrary settings to BackupEngine.vcxproj:
+*					Debug uses MultiThreadedDebugDLL (/MDd) to match zlibstaticd.lib, Release uses MultiThreadedDLL (/MD) to match
+*					zlibstatic.lib. Also added proper optimization settings: Debug uses Disabled with EnableFastChecks, Release uses
+*					MaxSpeed with function-level linking and intrinsics. Build now completes with 0 errors, 0 warnings! Compiler flags
+*					confirmed: Debug shows /MDd /Od /RTC1 (correct), Release shows /MD /O2 (correct). All three projects validated:
+*					BackupEngine (C++ vcxproj) - clean build, BackupService (.NET 8) - no issues, BackupUI (.NET 8 WPF) - no issues.
+*					LinuxRestore (CMake for Linux) - not affected by MSVC upgrade, builds separately via cmake. Complete enterprise-grade
+*					C++ build tools migration with proper runtime library configuration and centralized build path management! Production-ready
+*					stable builds across all platforms! mdail 2/21/2026
 * Version 5.13.6.16 I changed the AlternateRowBackground color to a Cadet Blue (#5F9EA0) for better contrast with the new turquoise theme.
 *					and there were some missed AlternateRowBackground in the main page mdail 2/20/2026
 * Version 5.13.6.15 Made some other changes related to the turquoise theme. I haven't gotten everything yet like the Help page still needs 

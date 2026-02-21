@@ -7,6 +7,24 @@
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="#F5F5F5">
+	<Window.Resources>
+		<!-- Custom GroupBox style with VeryLightTurquoise background, LightTurquoise header/border -->
+		<Style x:Key="AboutGroupBoxStyle" TargetType="GroupBox">
+			<Setter Property="Background" Value="{StaticResource VeryLightTurquoise}"/>
+			<Setter Property="BorderBrush" Value="{StaticResource LightTurquoise}"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="HeaderTemplate">
+				<Setter.Value>
+					<DataTemplate>
+						<Border Background="{StaticResource LightTurquoise}"
+								Padding="5,0">
+							<TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="13"/>
+						</Border>
+					</DataTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+	</Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -15,7 +33,9 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Border Grid.Row="0" Background="#2C3E50" Padding="20">
+        <Border Grid.Row="0"
+                Background="{StaticResource HelpHeaderBackground}"
+                Padding="20">
             <StackPanel>
                 <TextBlock Text="Backup &amp; Restore Solution" 
                            FontSize="24" 
@@ -32,10 +52,11 @@
         </Border>
 
         <!-- Content -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="30,20">
                 <!-- Component Versions -->
-                <GroupBox Header="Component Versions" Margin="0,0,0,20" Padding="15">
+                <GroupBox Header="Component Versions" Margin="0,0,0,20" Padding="15" Style="{StaticResource AboutGroupBoxStyle}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,5">
                             <TextBlock Text="User Interface (BackupUI):" Width="200" FontWeight="SemiBold"/>
@@ -59,7 +80,7 @@
                 </GroupBox>
 
                 <!-- Description -->
-                <GroupBox Header="Description" Margin="0,0,0,20" Padding="15">
+                <GroupBox Header="Description" Margin="0,0,0,20" Padding="15" Style="{StaticResource AboutGroupBoxStyle}">
                     <TextBlock TextWrapping="Wrap">
                         Enterprise-grade backup solution for Windows Servers with support for:
                         <LineBreak/><LineBreak/>
@@ -77,7 +98,7 @@
                 </GroupBox>
 
                 <!-- Copyright -->
-                <GroupBox Header="Copyright" Padding="15">
+                <GroupBox Header="Copyright" Padding="15" Style="{StaticResource AboutGroupBoxStyle}">
                     <StackPanel>
                         <TextBlock TextWrapping="Wrap">
                             © 2026 Backup &amp; Restore Solution
@@ -90,7 +111,11 @@
         </ScrollViewer>
 
         <!-- Footer -->
-        <Border Grid.Row="2" BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="0,1,0,0" Background="White" Padding="15">
+        <Border Grid.Row="2"
+                BorderBrush="{StaticResource LightBorderBrush}"
+                BorderThickness="0,1,0,0"
+                Background="{StaticResource HelpHeaderBackground}"
+                Padding="15">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="OK" 
                         Width="100" 

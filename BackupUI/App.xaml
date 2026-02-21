@@ -6,8 +6,8 @@
 	<Application.Resources>
 		<ResourceDictionary>
 			<ResourceDictionary.MergedDictionaries>
-				<!-- Turquoise Theme - Prevents Windows dark mode from overriding colors -->
-				<ResourceDictionary Source="Themes/TurquoiseTheme.xaml"/>
+				<!--  Turquoise Theme - Prevents Windows dark mode from overriding colors  -->
+				<ResourceDictionary Source="Themes/TurquoiseTheme.xaml" />
 			</ResourceDictionary.MergedDictionaries>
 		</ResourceDictionary>
 	</Application.Resources>
