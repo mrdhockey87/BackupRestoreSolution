@@ -4,9 +4,11 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:local="clr-namespace:BackupUI.Converters"
 	Title="Backup &amp; Restore"
-	Width="900"
-	Height="600"
-	Background="{StaticResource PanelBackground}">
+	MinWidth="800"
+	MinHeight="500"
+	Background="{StaticResource PanelBackground}"
+	Loaded="Window_Loaded"
+	Closing="Window_Closing">
 	<Window.Resources>
 		<local:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
 	</Window.Resources>

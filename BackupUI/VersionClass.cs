@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.33";
+		static private string version_fallback_number = "5.13.6.35";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,38 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.6.35 CRITICAL FIX - DEVICE PATH AUTO-DETECTION: Fixed backup jobs failing with "Device paths must be backed up using BackupVolume
+*					or BackupDisk" error! Issue occurred when existing backup jobs had incorrect BackupTarget setting (Files instead of Disk) for
+*					physical drive paths like \\.\PHYSICALDRIVE5. While version 5.13.6.29 added logic to correctly set BackupTarget when creating NEW
+*					jobs, EXISTING jobs saved before that fix still had wrong target type. Added defensive device path auto-detection at start of
+*					ExecuteBackup() method in BackupExecutor.cs. Now automatically detects two types of device paths: 1) Physical drives
+*					(\\.\PHYSICALDRIVE<N>) - auto-corrects job.Target to Disk, then calls BackupDisk(diskNumber), 2) Volume GUIDs (\\?\Volume{GUID})
+*					- auto-corrects job.Target to Volume, then calls BackupVolume(). Detection uses string.StartsWith() with case-insensitive comparison
+*					to check sourcePath before switch statement executes. Logs clear message: "AUTO-CORRECT: Detected device path (PHYSICALDRIVE) -
+*					treating as Disk backup instead of Files" so users can see exactly what happened. Provides backward compatibility for jobs created
+*					before 5.13.6.29 fix. Zero breaking changes - correctly configured jobs still work identically. Defensive programming pattern
+*					handles edge cases gracefully. Benefits: old jobs work without recreation, user-friendly auto-fix, clear audit trail in logs.
+*					Complements version 5.13.6.29 which added BackupDisk P/Invoke, ExtractDiskNumber() helper, and initial BackupTarget detection.
+*					Auto-correction adds safety net for cases where BackupTarget wasn't set correctly during job creation. Users can optionally edit
+*					and resave jobs to persist correct BackupTarget in jobs.json, but not required - auto-detection handles it every time. Complete
+*					device path handling with automatic correction for both new and existing jobs! Production-ready robust backup execution! mdail 2/23/2026
+* Version 5.13.6.34 UX ENHANCEMENT - INTELLIGENT WINDOW POSITION MANAGEMENT: Implemented comprehensive window position persistence and intelligent
+*					placement! Main window now remembers its position, size, and state (normal/maximized) between sessions. Position saved to JSON file
+*					in %APPDATA%\BackupRestoreApp\window-position.json on close, restored on next launch. Created WindowPositionManager service with
+*					screen validation ensuring saved position is visible on current monitor configuration. If saved position off-screen (monitor
+*					disconnected), automatically centers on available screen. Multi-monitor aware using System.Windows.Forms.Screen.AllScreens to check
+*					all displays. Main window now user-resizable (removed fixed 900x600 size), added MinWidth=800 MinHeight=500 for usability. All child
+*					windows (New Backup, Restore, Import, Schedule Management, Activity Management, Service Management, Recovery Environment, About,
+*					Progress windows) now open centered on main window using Owner property and WindowStartupLocation.CenterOwner. Child windows DON'T
+*					remember position - always open relative to main window current location. Setting Owner provides benefits: child stays on top of
+*					parent, minimizing parent minimizes children, closing parent closes children, taskbar grouping. SaveMainWindowPosition saves
+*					Left/Top/Width/Height/WindowState to JSON. RestoreMainWindowPosition loads and validates position, falls back to centering if
+*					invalid. SetChildWindowPosition configures child window with Owner and CenterOwner placement. IsPositionValid checks if window
+*					intersects any screen's working area (accounts for taskbar). Professional UX matching enterprise applications - main window appears
+*					where you left it, dialogs consistently centered. Works seamlessly across monitor configuration changes. Updated all window creation
+*					in MainWindow.xaml.cs from inline ShowDialog() to explicit variable creation with SetChildWindowPosition() call. Added Window_Loaded
+*					and Window_Closing event handlers to MainWindow. No more fixed window sizes or unpredictable window placement! Production-ready
+*					window management with graceful error handling and automatic fallback! mdail 2/23/2026
 * Version 5.13.6.33 UI ENHANCEMENT - Modified the theme changing the backgrounds and forgrounds from white to VeryLightTurquoise to stay consistent
 *					with the new turquoise theme. mdail 2/23/2026
 * Version 5.13.6.32 UI ENHANCEMENT - PROFESSIONAL MENU STYLING: Completely redesigned menu bar and dropdown styling with comprehensive turquoise

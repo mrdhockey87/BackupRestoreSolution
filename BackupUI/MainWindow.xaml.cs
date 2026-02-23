@@ -27,12 +27,24 @@ namespace BackupUI
             LoadBackupJobs();
             NotificationService.Initialize();
             UpdateActivityTabWarning();
-            
+
             // Check for unread errors periodically
             var timer = new System.Windows.Threading.DispatcherTimer();
             timer.Interval = TimeSpan.FromSeconds(30);
             timer.Tick += (s, e) => UpdateActivityTabWarning();
             timer.Start();
+        }
+
+        private void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+            // Restore saved window position
+            WindowPositionManager.RestoreMainWindowPosition(this);
+        }
+
+        private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            // Save window position for next time
+            WindowPositionManager.SaveMainWindowPosition(this);
         }
 
         private void LoadVersion()
@@ -106,9 +118,10 @@ namespace BackupUI
                         if (success)
                         {
                             BackupLogger.LogInfo(job.Name, "Service accepted backup request - backup is starting");
-                            
+
                             // Show non-modal progress window
                             var progressWindow = new Windows.BackupProgressWindow(jobId, job.Name);
+                            WindowPositionManager.SetChildWindowPosition(progressWindow, this);
                             progressWindow.Show();
                         }
                         else
@@ -520,32 +533,64 @@ namespace BackupUI
         private void NewBackup_Click(object sender, RoutedEventArgs e)
         {
             var window = new BackupWindowNew();
+            WindowPositionManager.SetChildWindowPosition(window, this);
             if (window.ShowDialog() == true)
             {
                 LoadBackupJobs();
             }
         }
-        
+
         private void ImportBackup_Click(object sender, RoutedEventArgs e)
         {
             var window = new ImportBackupWindow();
+            WindowPositionManager.SetChildWindowPosition(window, this);
             if (window.ShowDialog() == true)
             {
                 LoadBackupJobs();
             }
         }
-        
+
         private void Restore_Click(object sender, RoutedEventArgs e)
         {
             var window = new RestoreWindowNew();
+            WindowPositionManager.SetChildWindowPosition(window, this);
             window.ShowDialog();
         }
-        
-        private void ManageSchedules_Click(object sender, RoutedEventArgs e) => new ScheduleManagementWindow().ShowDialog();
-        private void ActivityManagement_Click(object sender, RoutedEventArgs e) => new ActivityManagementWindow().ShowDialog();
-        private void OpenActivityManagement_Click(object sender, RoutedEventArgs e) => new ActivityManagementWindow().ShowDialog();
-        private void ServiceManagement_Click(object sender, RoutedEventArgs e) => new ServiceManagementWindow().ShowDialog();
-        private void RecoveryEnvironmentCreator_Click(object sender, RoutedEventArgs e) => new RecoveryEnvironmentWindow().ShowDialog();
+
+        private void ManageSchedules_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new ScheduleManagementWindow();
+            WindowPositionManager.SetChildWindowPosition(window, this);
+            window.ShowDialog();
+        }
+
+        private void ActivityManagement_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new ActivityManagementWindow();
+            WindowPositionManager.SetChildWindowPosition(window, this);
+            window.ShowDialog();
+        }
+
+        private void OpenActivityManagement_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new ActivityManagementWindow();
+            WindowPositionManager.SetChildWindowPosition(window, this);
+            window.ShowDialog();
+        }
+
+        private void ServiceManagement_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new ServiceManagementWindow();
+            WindowPositionManager.SetChildWindowPosition(window, this);
+            window.ShowDialog();
+        }
+
+        private void RecoveryEnvironmentCreator_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new RecoveryEnvironmentWindow();
+            WindowPositionManager.SetChildWindowPosition(window, this);
+            window.ShowDialog();
+        }
         
         private void About_Click(object sender, RoutedEventArgs e)
         {

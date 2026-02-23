@@ -288,6 +288,24 @@ namespace BackupService
         {
             int result;
 
+            // DEFENSIVE FIX: Auto-detect if sourcePath is actually a device path but job.Target is wrong
+            // This handles cases where jobs were created before the fix or with incorrect settings
+            if (sourcePath.StartsWith(@"\\.\PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase) ||
+                sourcePath.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase))
+            {
+                // Device path detected - correct the job target
+                if (sourcePath.StartsWith(@"\\.\PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger?.Invoke($"AUTO-CORRECT: Detected device path (PHYSICALDRIVE) - treating as Disk backup instead of {job.Target}");
+                    job.Target = BackupTarget.Disk;
+                }
+                else if (sourcePath.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger?.Invoke($"AUTO-CORRECT: Detected device path (Volume GUID) - treating as Volume backup instead of {job.Target}");
+                    job.Target = BackupTarget.Volume;
+                }
+            }
+
             switch (job.Type)
             {
                 case BackupType.Full:
