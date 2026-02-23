@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.30";
+		static private string version_fallback_number = "5.13.6.33";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,37 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.6.33 UI ENHANCEMENT - Modified the theme changing the backgrounds and forgrounds from white to VeryLightTurquoise to stay consistent
+*					with the new turquoise theme. mdail 2/23/2026
+* Version 5.13.6.32 UI ENHANCEMENT - PROFESSIONAL MENU STYLING: Completely redesigned menu bar and dropdown styling with comprehensive turquoise
+*					theme integration! Created custom MenuItem template with professional appearance and proper role-based rendering. Menu bar now
+*					uses powder blue header background (#B0E0E6) with bottom border for visual separation. Enhanced top-level menu items (File,
+*					Backup, Schedules, etc.) with horizontal padding (15px, 5px) and intelligent hover states - light turquoise on hover, medium
+*					turquoise when submenu open. Implemented complete 4-column grid layout for dropdown items: Column 1 (25px) for icon/checkmark,
+*					Column 2 (auto) for menu text, Column 3 (auto) for keyboard shortcuts, Column 4 (20px) for submenu arrow (➤). Dropdown popups
+*					styled with window background (#F5FFFF), border, and smooth fade animation. Added sophisticated template triggers that adapt to
+*					MenuItem roles: TopLevelHeader/TopLevelItem (menu bar), SubmenuHeader/SubmenuItem (dropdowns). Hover effects use light turquoise
+*					highlight, disabled items show gray text (#999999). Implemented checkable menu item support with checkmark symbol (✓). Added
+*					custom separator style (1px Cadet Blue line with 5px margins). All interactive states properly styled: normal (white background,
+*					black text), hover (light turquoise), active (medium turquoise), disabled (gray). Complete visual hierarchy with proper spacing
+*					and alignment. Popup placement intelligent: bottom for top-level menus, right for nested submenus. Professional appearance
+*					consistent with entire turquoise theme - all colors from defined palette (HeaderBackground, WindowBackground, LightTurquoise,
+*					MediumTurquoise, BorderBrush). Menu now matches professional applications with polish and usability. Supports keyboard shortcuts,
+*					access keys, nested submenus, separators between groups. Complete enterprise-grade menu system with modern design! Production-ready
+*					professional UI that enhances user experience! mdail 2/23/2026
+* Version 5.13.6.31 CRITICAL FIX - RUN NOW & ABORT BACKUP BUGS: Fixed two critical issues with manual backup execution! ISSUE 1: "Waiting
+*					for backup to start" indefinitely - Root cause: Race condition between service initializing backup and UI polling for progress.
+*					BackupSchedulerService spawned Task.Run(() => ExecuteBackupJobAsync()) but didn't call StartJob() until inside the background
+*					task. UI opened progress window and immediately polled - found no progress → showed "waiting" forever. FIXED by calling
+*					_progressTracker.StartJob(jobId) IMMEDIATELY in OnCommandReceived (before Task.Run), ensuring progress tracking initialized
+*					synchronously when command received. Updated ExecuteBackupJobAsync to skip StartJob if already started. Added 5-second grace
+*					period in UI showing "Initializing backup..." before "Waiting for backup to start..." for better UX. Now backup progress
+*					visible immediately when window opens! ISSUE 2: False "backup running" warning after abort - Root cause: OnClosing only checked
+*					_isCompleted flag which wasn't set when abort clicked. User aborts → closes window → warning shown even though backup stopped.
+*					FIXED by adding _abortRequested flag. AbortBackup_Click now sets both _isCompleted=true and _abortRequested=true when abort
+*					succeeds. OnClosing checks both flags: only shows warning if NOT completed AND NOT aborted. Warning only appears when backup
+*					is genuinely still running. Complete fix for Run Now workflow - backups start immediately with visible progress, abort properly
+*					marks completion, no false warnings! Production-ready manual backup execution! mdail 2/23/2026
 * Version 5.13.6.30 UX ENHANCEMENT - SERVICE MANAGEMENT AUTO-START: Enhanced Service Management window to automatically start service after
 *					installation! Changed "Install Service" button to "Install and Start Service" (width increased from 120px to 150px for
 *					longer text). Updated InstallService_Click to: 1) Install service using InstallServiceAsync(), 2) Wait 1 second for system

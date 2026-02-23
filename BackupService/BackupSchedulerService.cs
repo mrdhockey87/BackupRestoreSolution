@@ -94,10 +94,25 @@ namespace BackupService
             else
             {
                 var job = _jobManager.GetJob(e.JobId);
-                if (job != null && !_progressTracker.IsJobRunning(job.Id))
+                if (job != null)
                 {
+                    if (_progressTracker.IsJobRunning(job.Id))
+                    {
+                        _logger.LogWarning("Job {jobId} is already running, ignoring duplicate run request", job.Id);
+                        return;
+                    }
+
                     _logger.LogInformation("Manual execution requested for job: {jobName}", job.Name);
+
+                    // Initialize job tracking IMMEDIATELY so UI sees progress right away
+                    _progressTracker.StartJob(job.Id);
+
+                    // Execute backup in background (ExecuteBackupJobAsync won't call StartJob again since job is already running)
                     _ = Task.Run(() => ExecuteBackupJobAsync(job, CancellationToken.None));
+                }
+                else
+                {
+                    _logger.LogWarning("Job {jobId} not found", e.JobId);
                 }
             }
         }
@@ -111,7 +126,12 @@ namespace BackupService
         {
             try
             {
-                _progressTracker.StartJob(job.Id);
+                // Only call StartJob if not already started (manual runs call StartJob in OnCommandReceived)
+                if (!_progressTracker.IsJobRunning(job.Id))
+                {
+                    _progressTracker.StartJob(job.Id);
+                }
+
                 BackupLogger.LogInfo(job.Name, "Starting backup job execution (via service)");
 
                 bool success = await _backupExecutor.ExecuteBackupJobWithProgress(

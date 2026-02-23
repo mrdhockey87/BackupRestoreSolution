@@ -19,6 +19,7 @@ namespace BackupUI.Windows
         private readonly BackupServiceClient _serviceClient;
         private readonly DispatcherTimer _progressTimer;
         private bool _isCompleted;
+        private bool _abortRequested;
 
         public BackupProgressWindow(Guid jobId, string jobName)
         {
@@ -86,7 +87,21 @@ namespace BackupUI.Windows
                 else
                 {
                     // No progress found - backup might not have started yet
-                    txtProgress.Text = "Waiting for backup to start...";
+                    // Give it a grace period of 5 seconds before showing "waiting" message
+                    if (_progressTimer.Tag == null)
+                    {
+                        _progressTimer.Tag = DateTime.Now;
+                    }
+
+                    var elapsed = DateTime.Now - (DateTime)_progressTimer.Tag;
+                    if (elapsed.TotalSeconds < 5)
+                    {
+                        txtProgress.Text = "Initializing backup...";
+                    }
+                    else
+                    {
+                        txtProgress.Text = "Waiting for backup to start...";
+                    }
                 }
             }
             catch (Exception ex)
@@ -107,14 +122,19 @@ namespace BackupUI.Windows
             {
                 btnAbort.IsEnabled = false;
                 txtProgress.Text = "Aborting backup...";
+                _abortRequested = true;
 
                 var success = await _serviceClient.AbortBackupAsync(_jobId);
 
                 if (success)
                 {
+                    // Mark as completed since we requested abort
+                    _isCompleted = true;
+                    _progressTimer.Stop();
+
                     MessageBox.Show(
-                        "Backup abort requested. The backup will stop as soon as possible.",
-                        "Abort Requested",
+                        "Backup abort requested. The backup has been cancelled.",
+                        "Backup Aborted",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
                 }
@@ -126,6 +146,7 @@ namespace BackupUI.Windows
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
                     btnAbort.IsEnabled = true;
+                    _abortRequested = false;
                 }
             }
         }
@@ -137,7 +158,8 @@ namespace BackupUI.Windows
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
-            if (!_isCompleted)
+            // Only show warning if backup is NOT completed AND NOT aborted
+            if (!_isCompleted && !_abortRequested)
             {
                 var result = MessageBox.Show(
                     "Backup is still running in the background.\n\nClosing this window will not stop the backup.\n\nYou can reopen this window from the main window to view progress again.",
