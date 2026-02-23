@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.28";
+		static private string version_fallback_number = "5.13.6.30";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,30 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.6.30 UX ENHANCEMENT - SERVICE MANAGEMENT AUTO-START: Enhanced Service Management window to automatically start service after
+*					installation! Changed "Install Service" button to "Install and Start Service" (width increased from 120px to 150px for
+*					longer text). Updated InstallService_Click to: 1) Install service using InstallServiceAsync(), 2) Wait 1 second for system
+*					to register service, 3) Automatically call StartServiceAsync() to start service immediately, 4) Show appropriate success
+*					messages: "Service installed and started successfully!" for full success, "Service installed successfully, but failed to
+*					start automatically. Please use the 'Start Service' button to start it manually." for partial success (install succeeded
+*					but start failed). Start/Stop/Restart buttons remain available for manual control. Logical UX improvement since backups
+*					require service to be running - no need for two-step process (install, then manually start). Clear feedback messages inform
+*					user of exact outcome. Fallback support ensures users can manually start if auto-start fails. Better workflow, better user
+*					experience! Production-ready one-click service installation and startup! mdail 2/23/2026
+* Version 5.13.6.29 CRITICAL FIX - PHYSICALDRIVE DEVICE PATH BUG: Fixed "Filesystem error: exists: Incorrect function.: \\.\PHYSICALDRIVE5"
+*					error when running backup jobs! Root cause: When user selected entire disk (not just volume), BackupWindowNew stored device
+*					path \\.\PHYSICALDRIVE5 in BackupJob.SourcePaths. BackupExecutor treated ALL non-volume backups as file backups, calling
+*					BackupFiles() with device path. BackupFiles() tried to call std::filesystem::exists() on device path, which FAILS because
+*					device paths (\\.\PHYSICALDRIVE, \\?\Volume{guid}) are Windows kernel-mode paths requiring special API handling, NOT regular
+*					filesystem paths! Fixed by: 1) Added BackupDisk P/Invoke declaration to BackupExecutor.cs, 2) Enhanced ExecuteBackup method
+*					to detect BackupTarget.Disk and call BackupDisk(diskNumber, ...) instead of BackupFiles(), 3) Added ExtractDiskNumber() helper
+*					to parse disk number from device path (\\.\PHYSICALDRIVE5 -> 5), 4) Enhanced BackupFiles_Implementation.cpp to detect device
+*					paths and return clear error message instead of cryptic filesystem error, preventing misuse of BackupFiles() with device paths.
+*					Now backup flow correctly routes: Volume backups (W:\) -> BackupVolume(), Disk backups (\\.\PHYSICALDRIVE5) -> BackupDisk(5),
+*					File/folder backups (C:\Data) -> BackupFiles(). Restore side already correct - RestoreDisk takes disk number parameter,
+*					RestoreVolume takes volume path, both use Windows APIs (CreateFileW, GetDriveTypeW) not filesystem functions. Device paths
+*					now handled properly throughout backup system! Complete fix with clear error messages and proper function routing. Production-ready
+*					disk backup support! mdail 2/23/2026
 * Version 5.13.6.28 VISUAL STUDIO INCREMENTAL BUILD FIX: Fixed runtime config not regenerating when rebuilding Release in Visual Studio!
 *					User reported: "It does not seem to do that when I rebuild it from vs" - after deleting Release folder and rebuilding in Visual Studio,
 *					BackupUI.runtimeconfig.json wasn't being created, causing "install .NET" error. Root cause: Visual Studio uses INCREMENTAL builds by

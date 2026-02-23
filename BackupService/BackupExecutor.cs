@@ -24,6 +24,10 @@ namespace BackupService
             bool compress, ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private static extern int BackupDisk(int diskNumber, string destPath, bool includeSystemState, 
+            bool compress, ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupHyperVVM(string vmName, string destPath, ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
@@ -287,7 +291,19 @@ namespace BackupService
             switch (job.Type)
             {
                 case BackupType.Full:
-                    if (job.Target == BackupTarget.Volume)
+                    if (job.Target == BackupTarget.Disk)
+                    {
+                        // Extract disk number from device path (e.g., \\.\PHYSICALDRIVE5 -> 5)
+                        int diskNumber = ExtractDiskNumber(sourcePath);
+                        if (diskNumber < 0)
+                        {
+                            logger?.Invoke($"ERROR: Invalid disk path format: {sourcePath}");
+                            return -11;
+                        }
+                        logger?.Invoke($"Backing up disk: {diskNumber} ({sourcePath})");
+                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+                    }
+                    else if (job.Target == BackupTarget.Volume)
                     {
                         logger?.Invoke($"Backing up volume: {sourcePath}");
                         result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
@@ -451,14 +467,14 @@ namespace BackupService
             {
                 var dirInfo = new DirectoryInfo(renamedBackupPath);
                 var parentDir = dirInfo.Parent?.FullName;
-                
+
                 if (parentDir == null)
                     return;
 
                 // Remove the _PENDING_timestamp suffix to restore original name
                 var originalName = dirInfo.Name;
                 var pendingIndex = originalName.IndexOf("_PENDING_");
-                
+
                 if (pendingIndex > 0)
                 {
                     originalName = originalName.Substring(0, pendingIndex);
@@ -476,6 +492,31 @@ namespace BackupService
             {
                 logger?.Invoke($"Warning: Could not restore renamed backup: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Extracts disk number from physical drive device path
+        /// </summary>
+        /// <param name="devicePath">Device path like \\.\PHYSICALDRIVE5</param>
+        /// <returns>Disk number or -1 if invalid format</returns>
+        private int ExtractDiskNumber(string devicePath)
+        {
+            if (string.IsNullOrEmpty(devicePath))
+                return -1;
+
+            // Expected format: \\.\PHYSICALDRIVE5 or \\.\PhysicalDrive5
+            const string prefix = "\\\\.\\PHYSICALDRIVE";
+
+            if (devicePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                string numberPart = devicePath.Substring(prefix.Length);
+                if (int.TryParse(numberPart, out int diskNumber))
+                {
+                    return diskNumber;
+                }
+            }
+
+            return -1;
         }
 
         private void CleanupOldBackups(string destPath, string jobName, int retainCount, Action<string>? logger)

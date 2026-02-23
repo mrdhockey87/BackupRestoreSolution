@@ -238,7 +238,7 @@ namespace BackupUI.Windows
             try
             {
                 var servicePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BackupService.exe");
-                
+
                 if (!File.Exists(servicePath))
                 {
                     MessageBox.Show($"Service executable not found at: {servicePath}", "Error",
@@ -246,18 +246,36 @@ namespace BackupUI.Windows
                     return;
                 }
 
-                bool success = await serviceManager.InstallServiceAsync(servicePath);
-                if (success)
-                {
-                    MessageBox.Show("Service installed successfully.", "Success",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
-                    await RefreshStatusAsync();
-                }
-                else
+                // Install the service
+                bool installSuccess = await serviceManager.InstallServiceAsync(servicePath);
+                if (!installSuccess)
                 {
                     MessageBox.Show("Failed to install service. Make sure you run as Administrator.", "Error",
                         MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
                 }
+
+                // Service installed successfully - now start it automatically
+                System.Diagnostics.Debug.WriteLine("ServiceManagement: Service installed, attempting to start...");
+
+                // Give the system a moment to register the service
+                await Task.Delay(1000);
+
+                bool startSuccess = await serviceManager.StartServiceAsync();
+                if (startSuccess)
+                {
+                    MessageBox.Show("Service installed and started successfully!", "Success",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    // Installation succeeded but start failed - still a partial success
+                    MessageBox.Show("Service installed successfully, but failed to start automatically.\n\nPlease use the 'Start Service' button to start it manually.", 
+                        "Partial Success",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+
+                await RefreshStatusAsync();
             }
             catch (Exception ex)
             {

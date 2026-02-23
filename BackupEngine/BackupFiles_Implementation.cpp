@@ -97,10 +97,22 @@ extern "C" {
                 callback(0, L"Starting file backup...");
             }
 
-            // Verify source exists
-            if (!fs::exists(sourcePath)) {
+            std::wstring sourceStr(sourcePath);
+
+            // Check if source is a device path (e.g., \\.\PHYSICALDRIVE5 or \\?\Volume{guid}\)
+            // Device paths can't be checked with fs::exists() - they need special handling
+            bool isDevicePath = (sourceStr.find(L"\\\\.\\") == 0 || sourceStr.find(L"\\\\?\\") == 0);
+
+            // Verify source exists (skip for device paths - they're handled differently)
+            if (!isDevicePath && !fs::exists(sourcePath)) {
                 SetLastErrorMessage(L"Source path does not exist");
                 return -2;
+            }
+
+            // If source is a device path, return error - these should be handled by BackupVolume or BackupDisk
+            if (isDevicePath) {
+                SetLastErrorMessage(L"Device paths (e.g., \\\\.\\PHYSICALDRIVE or \\\\?\\Volume) must be backed up using BackupVolume or BackupDisk functions, not BackupFiles");
+                return -10;
             }
 
             // Create destination directory
