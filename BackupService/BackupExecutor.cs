@@ -292,7 +292,6 @@ namespace BackupService
                     // Do a full backup if no previous full backup exists
                     if (job.Target == BackupTarget.Disk)
                     {
-                        // Extract disk number from device path
                         int diskNumber = ExtractDiskNumber(sourcePath);
                         if (diskNumber < 0)
                         {
@@ -327,7 +326,6 @@ namespace BackupService
                     // Do a full backup if no base full backup exists
                     if (job.Target == BackupTarget.Disk)
                     {
-                        // Extract disk number from device path
                         int diskNumber = ExtractDiskNumber(sourcePath);
                         if (diskNumber < 0)
                         {
