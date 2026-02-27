@@ -41,6 +41,9 @@ namespace BackupUI.Services
         // Service log file for service-only messages
         private static readonly string ServiceLogFile = Path.Combine(LogDirectory, "service.json");
 
+        // Legacy log file (pre-5.13.7.2) - kept for backward compatibility
+        private static readonly string LegacyLogFile = Path.Combine(LogDirectory, "backup_activity.json");
+
         private static readonly object lockObject = new object();
         private static readonly int MaxLogEntriesPerFile = 500; // Keep last 500 entries per job
 
@@ -514,7 +517,7 @@ namespace BackupUI.Services
             {
                 try
                 {
-                    // Determine which file contains this entry
+                    // Try to delete from current per-job files first
                     string logFile;
                     if (entryToDelete.JobName == "[SERVICE]")
                     {
@@ -526,17 +529,37 @@ namespace BackupUI.Services
                         logFile = Path.Combine(LogDirectory, $"{safeJobName}.json");
                     }
 
-                    var logs = LoadLogsFromFile(logFile);
-
-                    var removed = logs.RemoveAll(l => 
-                        l.Timestamp == entryToDelete.Timestamp &&
-                        l.JobName == entryToDelete.JobName &&
-                        l.Message == entryToDelete.Message);
-
-                    if (removed > 0)
+                    if (File.Exists(logFile))
                     {
-                        SaveLogsToFile(logFile, logs);
-                        return true;
+                        var logs = LoadLogsFromFile(logFile);
+
+                        var removed = logs.RemoveAll(l => 
+                            l.Timestamp == entryToDelete.Timestamp &&
+                            l.JobName == entryToDelete.JobName &&
+                            l.Message == entryToDelete.Message);
+
+                        if (removed > 0)
+                        {
+                            SaveLogsToFile(logFile, logs);
+                            return true;
+                        }
+                    }
+
+                    // If not found in per-job file, check legacy file
+                    if (File.Exists(LegacyLogFile))
+                    {
+                        var logs = LoadLogsFromFile(LegacyLogFile);
+
+                        var removed = logs.RemoveAll(l => 
+                            l.Timestamp == entryToDelete.Timestamp &&
+                            l.JobName == entryToDelete.JobName &&
+                            l.Message == entryToDelete.Message);
+
+                        if (removed > 0)
+                        {
+                            SaveLogsToFile(LegacyLogFile, logs);
+                            return true;
+                        }
                     }
 
                     return false;
@@ -555,9 +578,11 @@ namespace BackupUI.Services
             {
                 try
                 {
-                    // Group entries by job name for efficient deletion
-                    var entriesByJob = entriesToDelete.GroupBy(e => e.JobName);
                     int totalDeleted = 0;
+                    var remainingEntries = new List<BackupLogEntry>(entriesToDelete);
+
+                    // Group entries by job name for efficient deletion from per-job files
+                    var entriesByJob = entriesToDelete.GroupBy(e => e.JobName);
 
                     foreach (var group in entriesByJob)
                     {
@@ -572,23 +597,53 @@ namespace BackupUI.Services
                             logFile = Path.Combine(LogDirectory, $"{safeJobName}.json");
                         }
 
-                        var logs = LoadLogsFromFile(logFile);
-                        int deletedCount = 0;
-
-                        foreach (var entryToDelete in group)
+                        if (File.Exists(logFile))
                         {
-                            var removed = logs.RemoveAll(l => 
+                            var logs = LoadLogsFromFile(logFile);
+                            int deletedCount = 0;
+
+                            foreach (var entryToDelete in group)
+                            {
+                                var removed = logs.RemoveAll(l => 
+                                    l.Timestamp == entryToDelete.Timestamp &&
+                                    l.JobName == entryToDelete.JobName &&
+                                    l.Message == entryToDelete.Message);
+
+                                deletedCount += removed;
+                                if (removed > 0)
+                                {
+                                    remainingEntries.Remove(entryToDelete);
+                                }
+                            }
+
+                            if (deletedCount > 0)
+                            {
+                                SaveLogsToFile(logFile, logs);
+                                totalDeleted += deletedCount;
+                            }
+                        }
+                    }
+
+                    // Try to delete remaining entries from legacy file
+                    if (remainingEntries.Count > 0 && File.Exists(LegacyLogFile))
+                    {
+                        var legacyLogs = LoadLogsFromFile(LegacyLogFile);
+                        int legacyDeletedCount = 0;
+
+                        foreach (var entryToDelete in remainingEntries)
+                        {
+                            var removed = legacyLogs.RemoveAll(l => 
                                 l.Timestamp == entryToDelete.Timestamp &&
                                 l.JobName == entryToDelete.JobName &&
                                 l.Message == entryToDelete.Message);
 
-                            deletedCount += removed;
+                            legacyDeletedCount += removed;
                         }
 
-                        if (deletedCount > 0)
+                        if (legacyDeletedCount > 0)
                         {
-                            SaveLogsToFile(logFile, logs);
-                            totalDeleted += deletedCount;
+                            SaveLogsToFile(LegacyLogFile, legacyLogs);
+                            totalDeleted += legacyDeletedCount;
                         }
                     }
 
