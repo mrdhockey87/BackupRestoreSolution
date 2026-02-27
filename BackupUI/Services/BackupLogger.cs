@@ -23,18 +23,26 @@ namespace BackupUI.Services
         public string Details { get; set; } = "";
         public bool ValidationPassed { get; set; } = true;
         public string BackupPath { get; set; } = "";
-        public bool IsRead { get; set; } = false;  // NEW: Track if user has seen this error
+        public bool IsRead { get; set; } = false;
     }
 
+    /// <summary>
+    /// Enhanced BackupLogger with per-job log files.
+    /// Logs are organized as:
+    ///  - service.json: Service-only messages (startup, shutdown, etc.)
+    ///  - {JobName}.json: Job-specific activity logs
+    /// </summary>
     public class BackupLogger
     {
         private static readonly string LogDirectory = 
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), 
                         "BackupRestoreService", "Logs");
-        
-        private static readonly string LogFile = Path.Combine(LogDirectory, "backup_activity.json");
+
+        // Service log file for service-only messages
+        private static readonly string ServiceLogFile = Path.Combine(LogDirectory, "service.json");
+
         private static readonly object lockObject = new object();
-        private static readonly int MaxLogEntries = 1000; // Keep last 1000 entries
+        private static readonly int MaxLogEntriesPerFile = 500; // Keep last 500 entries per job
 
         static BackupLogger()
         {
@@ -42,9 +50,11 @@ namespace BackupUI.Services
             Directory.CreateDirectory(LogDirectory);
         }
 
+        #region Job-Specific Logging
+
         public static void LogInfo(string jobName, string message, string details = "")
         {
-            Log(new BackupLogEntry
+            LogToJobFile(jobName, new BackupLogEntry
             {
                 Timestamp = DateTime.Now,
                 JobName = jobName,
@@ -56,7 +66,7 @@ namespace BackupUI.Services
 
         public static void LogSuccess(string jobName, string message, string backupPath = "", string details = "")
         {
-            Log(new BackupLogEntry
+            LogToJobFile(jobName, new BackupLogEntry
             {
                 Timestamp = DateTime.Now,
                 JobName = jobName,
@@ -69,7 +79,7 @@ namespace BackupUI.Services
 
         public static void LogWarning(string jobName, string message, string details = "")
         {
-            Log(new BackupLogEntry
+            LogToJobFile(jobName, new BackupLogEntry
             {
                 Timestamp = DateTime.Now,
                 JobName = jobName,
@@ -81,7 +91,7 @@ namespace BackupUI.Services
 
         public static void LogError(string jobName, string message, string details = "")
         {
-            Log(new BackupLogEntry
+            LogToJobFile(jobName, new BackupLogEntry
             {
                 Timestamp = DateTime.Now,
                 JobName = jobName,
@@ -93,7 +103,7 @@ namespace BackupUI.Services
 
         public static void LogValidationResult(string jobName, string backupPath, bool passed, string details = "")
         {
-            Log(new BackupLogEntry
+            LogToJobFile(jobName, new BackupLogEntry
             {
                 Timestamp = DateTime.Now,
                 JobName = jobName,
@@ -105,44 +115,166 @@ namespace BackupUI.Services
             });
         }
 
-        private static void Log(BackupLogEntry entry)
+        #endregion
+
+        #region Service-Only Logging
+
+        /// <summary>
+        /// Log service-only messages (startup, shutdown, communication errors, etc.)
+        /// </summary>
+        public static void LogServiceInfo(string message, string details = "")
+        {
+            LogToServiceFile(new BackupLogEntry
+            {
+                Timestamp = DateTime.Now,
+                JobName = "[SERVICE]",
+                Level = BackupLogLevel.Info,
+                Message = message,
+                Details = details
+            });
+        }
+
+        public static void LogServiceWarning(string message, string details = "")
+        {
+            LogToServiceFile(new BackupLogEntry
+            {
+                Timestamp = DateTime.Now,
+                JobName = "[SERVICE]",
+                Level = BackupLogLevel.Warning,
+                Message = message,
+                Details = details
+            });
+        }
+
+        public static void LogServiceError(string message, string details = "")
+        {
+            LogToServiceFile(new BackupLogEntry
+            {
+                Timestamp = DateTime.Now,
+                JobName = "[SERVICE]",
+                Level = BackupLogLevel.Error,
+                Message = message,
+                Details = details
+            });
+        }
+
+        #endregion
+
+        #region File Operations
+
+        private static void LogToJobFile(string jobName, BackupLogEntry entry)
+        {
+            if (string.IsNullOrWhiteSpace(jobName))
+            {
+                jobName = "Unknown";
+            }
+
+            // Sanitize job name for filename
+            var safeJobName = SanitizeFileName(jobName);
+            var jobLogFile = Path.Combine(LogDirectory, $"{safeJobName}.json");
+
+            lock (lockObject)
+            {
+                try
+                {
+                    var logs = LoadLogsFromFile(jobLogFile);
+                    logs.Add(entry);
+
+                    // Keep only last MaxLogEntriesPerFile
+                    if (logs.Count > MaxLogEntriesPerFile)
+                    {
+                        logs = logs.OrderByDescending(l => l.Timestamp)
+                                   .Take(MaxLogEntriesPerFile)
+                                   .OrderBy(l => l.Timestamp)
+                                   .ToList();
+                    }
+
+                    SaveLogsToFile(jobLogFile, logs);
+                }
+                catch (Exception ex)
+                {
+                    WriteFallbackLog($"ERROR logging to job file: {DateTime.Now}: {entry.Level} - {entry.JobName}: {entry.Message} - Exception: {ex.Message}");
+                }
+            }
+        }
+
+        private static void LogToServiceFile(BackupLogEntry entry)
         {
             lock (lockObject)
             {
                 try
                 {
-                    var logs = LoadLogs();
+                    var logs = LoadLogsFromFile(ServiceLogFile);
                     logs.Add(entry);
 
-                    // Keep only last MaxLogEntries
-                    if (logs.Count > MaxLogEntries)
+                    // Keep only last MaxLogEntriesPerFile
+                    if (logs.Count > MaxLogEntriesPerFile)
                     {
                         logs = logs.OrderByDescending(l => l.Timestamp)
-                                   .Take(MaxLogEntries)
+                                   .Take(MaxLogEntriesPerFile)
                                    .OrderBy(l => l.Timestamp)
                                    .ToList();
                     }
 
-                    SaveLogs(logs);
-                }
-                catch (UnauthorizedAccessException accessEx)
-                {
-                    // Access denied - write to fallback file
-                    WriteFallbackLog($"ACCESS DENIED: {DateTime.Now}: {entry.Level} - {entry.JobName}: {entry.Message}");
-                    System.Diagnostics.Debug.WriteLine($"Log access denied: {accessEx.Message}");
-                }
-                catch (IOException ioEx)
-                {
-                    // I/O error - write to fallback file
-                    WriteFallbackLog($"IO ERROR: {DateTime.Now}: {entry.Level} - {entry.JobName}: {entry.Message}");
-                    System.Diagnostics.Debug.WriteLine($"Log I/O error: {ioEx.Message}");
+                    SaveLogsToFile(ServiceLogFile, logs);
                 }
                 catch (Exception ex)
                 {
-                    // Generic error - write to fallback file
-                    WriteFallbackLog($"ERROR ({ex.GetType().Name}): {DateTime.Now}: {entry.Level} - {entry.JobName}: {entry.Message}");
-                    System.Diagnostics.Debug.WriteLine($"Log error: {ex.Message}");
+                    WriteFallbackLog($"ERROR logging to service file: {DateTime.Now}: {entry.Level} - {entry.Message} - Exception: {ex.Message}");
                 }
+            }
+        }
+
+        private static List<BackupLogEntry> LoadLogsFromFile(string filePath)
+        {
+            try
+            {
+                if (!File.Exists(filePath))
+                    return new List<BackupLogEntry>();
+
+                var json = File.ReadAllText(filePath);
+
+                if (string.IsNullOrWhiteSpace(json))
+                    return new List<BackupLogEntry>();
+
+                var logs = JsonSerializer.Deserialize<List<BackupLogEntry>>(json);
+                return logs ?? new List<BackupLogEntry>();
+            }
+            catch (JsonException)
+            {
+                // Corrupted JSON file - backup and start fresh
+                try
+                {
+                    var fileName = Path.GetFileNameWithoutExtension(filePath);
+                    var backupFile = Path.Combine(LogDirectory, $"{fileName}_corrupted_{DateTime.Now:yyyyMMddHHmmss}.json");
+                    File.Copy(filePath, backupFile, true);
+                    System.Diagnostics.Debug.WriteLine($"Corrupted log file backed up to: {backupFile}");
+                }
+                catch { }
+
+                return new List<BackupLogEntry>();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading logs from {filePath}: {ex.Message}");
+                return new List<BackupLogEntry>();
+            }
+        }
+
+        private static void SaveLogsToFile(string filePath, List<BackupLogEntry> logs)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(logs, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+                File.WriteAllText(filePath, json);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error saving logs to {filePath}: {ex.Message}");
+                throw; // Let caller handle via fallback
             }
         }
 
@@ -160,60 +292,53 @@ namespace BackupUI.Services
             }
         }
 
+        private static string SanitizeFileName(string fileName)
+        {
+            // Remove invalid filename characters
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitized = string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+            return string.IsNullOrWhiteSpace(sanitized) ? "UnknownJob" : sanitized;
+        }
+
+        #endregion
+
+        #region Legacy Support / Backward Compatibility
+
+        /// <summary>
+        /// Load all logs from all job files plus service log
+        /// </summary>
         public static List<BackupLogEntry> LoadLogs()
         {
             lock (lockObject)
             {
+                var allLogs = new List<BackupLogEntry>();
+
                 try
                 {
-                    if (!File.Exists(LogFile))
-                        return new List<BackupLogEntry>();
+                    // Load service logs
+                    allLogs.AddRange(LoadLogsFromFile(ServiceLogFile));
 
-                    var json = File.ReadAllText(LogFile);
-                    
-                    if (string.IsNullOrWhiteSpace(json))
-                        return new List<BackupLogEntry>();
+                    // Load all job log files
+                    var logFiles = Directory.GetFiles(LogDirectory, "*.json")
+                        .Where(f => !f.Equals(ServiceLogFile, StringComparison.OrdinalIgnoreCase));
 
-                    var logs = JsonSerializer.Deserialize<List<BackupLogEntry>>(json);
-                    return logs ?? new List<BackupLogEntry>();
-                }
-                catch (JsonException)
-                {
-                    // Corrupted JSON file - backup and start fresh
-                    try
+                    foreach (var logFile in logFiles)
                     {
-                        var backupFile = Path.Combine(LogDirectory, $"backup_activity_corrupted_{DateTime.Now:yyyyMMddHHmmss}.json");
-                        File.Copy(LogFile, backupFile, true);
-                        System.Diagnostics.Debug.WriteLine($"Corrupted log file backed up to: {backupFile}");
+                        allLogs.AddRange(LoadLogsFromFile(logFile));
                     }
-                    catch { }
-
-                    return new List<BackupLogEntry>();
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error loading logs: {ex.Message}");
-                    return new List<BackupLogEntry>();
+                    System.Diagnostics.Debug.WriteLine($"Error loading all logs: {ex.Message}");
                 }
+
+                return allLogs.OrderBy(l => l.Timestamp).ToList();
             }
         }
 
-        private static void SaveLogs(List<BackupLogEntry> logs)
-        {
-            try
-            {
-                var json = JsonSerializer.Serialize(logs, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-                File.WriteAllText(LogFile, json);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error saving logs: {ex.Message}");
-                throw; // Let caller handle via fallback
-            }
-        }
+        #endregion
+
+        #region Query Methods
 
         public static List<BackupLogEntry> GetRecentLogs(int count = 100)
         {
@@ -225,10 +350,25 @@ namespace BackupUI.Services
 
         public static List<BackupLogEntry> GetLogsByJob(string jobName)
         {
-            return LoadLogs()
-                .Where(l => l.JobName.Equals(jobName, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(l => l.Timestamp)
-                .ToList();
+            var safeJobName = SanitizeFileName(jobName);
+            var jobLogFile = Path.Combine(LogDirectory, $"{safeJobName}.json");
+
+            lock (lockObject)
+            {
+                return LoadLogsFromFile(jobLogFile)
+                    .OrderByDescending(l => l.Timestamp)
+                    .ToList();
+            }
+        }
+
+        public static List<BackupLogEntry> GetServiceLogs()
+        {
+            lock (lockObject)
+            {
+                return LoadLogsFromFile(ServiceLogFile)
+                    .OrderByDescending(l => l.Timestamp)
+                    .ToList();
+            }
         }
 
         public static List<BackupLogEntry> GetFailedValidations()
@@ -239,71 +379,155 @@ namespace BackupUI.Services
                 .ToList();
         }
 
+        public static List<string> GetAllJobNames()
+        {
+            lock (lockObject)
+            {
+                try
+                {
+                    var jobNames = new List<string>();
+                    var logFiles = Directory.GetFiles(LogDirectory, "*.json")
+                        .Where(f => !f.Equals(ServiceLogFile, StringComparison.OrdinalIgnoreCase));
+
+                    foreach (var logFile in logFiles)
+                    {
+                        var fileName = Path.GetFileNameWithoutExtension(logFile);
+                        if (!string.IsNullOrWhiteSpace(fileName))
+                        {
+                            jobNames.Add(fileName);
+                        }
+                    }
+
+                    return jobNames.OrderBy(n => n).ToList();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error getting job names: {ex.Message}");
+                    return new List<string>();
+                }
+            }
+        }
+
         public static void ClearOldLogs(int daysToKeep = 30)
         {
             lock (lockObject)
             {
-                var cutoffDate = DateTime.Now.AddDays(-daysToKeep);
-                var logs = LoadLogs()
-                    .Where(l => l.Timestamp >= cutoffDate)
-                    .ToList();
-                SaveLogs(logs);
+                try
+                {
+                    var cutoffDate = DateTime.Now.AddDays(-daysToKeep);
+                    var logFiles = Directory.GetFiles(LogDirectory, "*.json");
+
+                    foreach (var logFile in logFiles)
+                    {
+                        try
+                        {
+                            var logs = LoadLogsFromFile(logFile);
+                            var filteredLogs = logs.Where(l => l.Timestamp >= cutoffDate).ToList();
+
+                            if (filteredLogs.Count != logs.Count)
+                            {
+                                SaveLogsToFile(logFile, filteredLogs);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error clearing old logs from {logFile}: {ex.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error clearing old logs: {ex.Message}");
+                }
             }
         }
 
-        // NEW: Get count of unread errors and warnings
+        #endregion
+
+        #region Unread Tracking
+
         public static int GetUnreadErrorCount()
         {
             return LoadLogs()
                 .Count(l => !l.IsRead && (l.Level == BackupLogLevel.Error || l.Level == BackupLogLevel.Warning));
         }
 
-        // NEW: Check if there are unread errors (not warnings)
         public static bool HasUnreadErrors()
         {
             return LoadLogs().Any(l => !l.IsRead && l.Level == BackupLogLevel.Error);
         }
 
-        // NEW: Check if there are unread warnings (not errors)
         public static bool HasUnreadWarnings()
         {
             return LoadLogs().Any(l => !l.IsRead && l.Level == BackupLogLevel.Warning);
         }
 
-        // NEW: Mark all errors as read
         public static void MarkAllErrorsAsRead()
         {
             lock (lockObject)
             {
-                var logs = LoadLogs();
-                bool changed = false;
-
-                foreach (var log in logs)
+                try
                 {
-                    if (!log.IsRead && (log.Level == BackupLogLevel.Error || log.Level == BackupLogLevel.Warning))
+                    var logFiles = Directory.GetFiles(LogDirectory, "*.json");
+
+                    foreach (var logFile in logFiles)
                     {
-                        log.IsRead = true;
-                        changed = true;
+                        try
+                        {
+                            var logs = LoadLogsFromFile(logFile);
+                            bool changed = false;
+
+                            foreach (var log in logs)
+                            {
+                                if (!log.IsRead && (log.Level == BackupLogLevel.Error || log.Level == BackupLogLevel.Warning))
+                                {
+                                    log.IsRead = true;
+                                    changed = true;
+                                }
+                            }
+
+                            if (changed)
+                            {
+                                SaveLogsToFile(logFile, logs);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error marking errors as read in {logFile}: {ex.Message}");
+                        }
                     }
                 }
-
-                if (changed)
+                catch (Exception ex)
                 {
-                    SaveLogs(logs);
+                    System.Diagnostics.Debug.WriteLine($"Error marking all errors as read: {ex.Message}");
                 }
             }
         }
 
-        // NEW: Delete a specific log entry
+        #endregion
+
+        #region Delete Operations
+
         public static bool DeleteLogEntry(BackupLogEntry entryToDelete)
         {
             lock (lockObject)
             {
                 try
                 {
-                    var logs = LoadLogs();
-                    
-                    // Find and remove the matching entry
+                    // Determine which file contains this entry
+                    string logFile;
+                    if (entryToDelete.JobName == "[SERVICE]")
+                    {
+                        logFile = ServiceLogFile;
+                    }
+                    else
+                    {
+                        var safeJobName = SanitizeFileName(entryToDelete.JobName);
+                        logFile = Path.Combine(LogDirectory, $"{safeJobName}.json");
+                    }
+
+                    var logs = LoadLogsFromFile(logFile);
+
                     var removed = logs.RemoveAll(l => 
                         l.Timestamp == entryToDelete.Timestamp &&
                         l.JobName == entryToDelete.JobName &&
@@ -311,7 +535,7 @@ namespace BackupUI.Services
 
                     if (removed > 0)
                     {
-                        SaveLogs(logs);
+                        SaveLogsToFile(logFile, logs);
                         return true;
                     }
 
@@ -325,32 +549,50 @@ namespace BackupUI.Services
             }
         }
 
-        // NEW: Delete multiple log entries
         public static int DeleteLogEntries(List<BackupLogEntry> entriesToDelete)
         {
             lock (lockObject)
             {
                 try
                 {
-                    var logs = LoadLogs();
-                    int deletedCount = 0;
+                    // Group entries by job name for efficient deletion
+                    var entriesByJob = entriesToDelete.GroupBy(e => e.JobName);
+                    int totalDeleted = 0;
 
-                    foreach (var entryToDelete in entriesToDelete)
+                    foreach (var group in entriesByJob)
                     {
-                        var removed = logs.RemoveAll(l => 
-                            l.Timestamp == entryToDelete.Timestamp &&
-                            l.JobName == entryToDelete.JobName &&
-                            l.Message == entryToDelete.Message);
-                        
-                        deletedCount += removed;
+                        string logFile;
+                        if (group.Key == "[SERVICE]")
+                        {
+                            logFile = ServiceLogFile;
+                        }
+                        else
+                        {
+                            var safeJobName = SanitizeFileName(group.Key);
+                            logFile = Path.Combine(LogDirectory, $"{safeJobName}.json");
+                        }
+
+                        var logs = LoadLogsFromFile(logFile);
+                        int deletedCount = 0;
+
+                        foreach (var entryToDelete in group)
+                        {
+                            var removed = logs.RemoveAll(l => 
+                                l.Timestamp == entryToDelete.Timestamp &&
+                                l.JobName == entryToDelete.JobName &&
+                                l.Message == entryToDelete.Message);
+
+                            deletedCount += removed;
+                        }
+
+                        if (deletedCount > 0)
+                        {
+                            SaveLogsToFile(logFile, logs);
+                            totalDeleted += deletedCount;
+                        }
                     }
 
-                    if (deletedCount > 0)
-                    {
-                        SaveLogs(logs);
-                    }
-
-                    return deletedCount;
+                    return totalDeleted;
                 }
                 catch (Exception ex)
                 {
@@ -359,5 +601,7 @@ namespace BackupUI.Services
                 }
             }
         }
+
+        #endregion
     }
 }
