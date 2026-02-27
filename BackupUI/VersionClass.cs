@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.7.6";
+		static private string version_fallback_number = "5.13.7.7";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,20 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.7.7 CRITICAL FIX - INCREMENTAL/DIFFERENTIAL DISK BACKUP BUG: Fixed "Device paths must be backed up using BackupVolume or BackupDisk"
+*					error when running Incremental or Differential backups of physical disks! Root cause: While Full backup correctly handled disk
+*					targets (lines 262-273), Incremental (lines 286-309) and Differential (lines 311-331) backup fallback logic ONLY checked for
+*					Volume target, not Disk target! When no full backup existed and incremental/differential created initial full backup, it would
+*					fall through to BackupFiles() which cannot handle device paths like \\.\PHYSICALDRIVE5. Error message: "Device paths (e.g.,
+*					\\.\PHYSICALDRIVE or \\?\Volume) must be backed up using BackupVolume or BackupDisk functions, not BackupFiles". The auto-correct
+*					code (lines 243-257 from version 5.13.6.35) properly detected device paths and set job.Target = Disk, but fallback code didn't
+*					check for Disk target! FIXED by adding complete target checking to both Incremental and Differential fallback logic: 1) Check
+*					if (job.Target == BackupTarget.Disk) FIRST, 2) Extract disk number using ExtractDiskNumber(), 3) Call BackupDisk() with proper
+*					parameters, 4) Then check Volume target, 5) Finally fall back to BackupFiles() for regular files. Now all three backup types
+*					(Full/Incremental/Differential) have IDENTICAL target handling logic: Disk → BackupDisk(), Volume → BackupVolume(), Files →
+*					BackupFiles(). Workflow now correct: First incremental run → no full backup → creates full disk backup using BackupDisk() →
+*					subsequent runs → chain from full backup correctly. Complete parity across all backup types - disk backups work for Full,
+*					Incremental, AND Differential! Production-ready disk backup support for all backup types! mdail 2/27/2026
 * Version 5.13.7.6 UX ENHANCEMENT - COPY SELECTED TO CLIPBOARD: Added clipboard copy functionality to Activity Detail window! User requested:
 *					"when on the activity detail page copy selected should copy the selected detail or details to the clipboard" - needed quick
 *					way to share activity logs with support or documentation. Added "Copy Selected" button as first action button (120px wide) in
