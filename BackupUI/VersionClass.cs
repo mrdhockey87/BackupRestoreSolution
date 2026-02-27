@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.7.4";
+		static private string version_fallback_number = "5.13.7.5";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,23 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.7.5 UX ENHANCEMENT - TRULY SILENT SERVICE INSTALLATION: Removed success MessageBox from automatic service installation for
+*					completely transparent service management! User requested: "when the service is installed automatically when a run now is
+*					clicked it should not give and alert" - even success notifications were interrupting the workflow. Previously version 5.13.7.4
+*					removed confirmation dialogs but still showed a success MessageBox after installation, requiring user to click OK before
+*					continuing. This final polish removes even the success alert - service now installs completely silently in background with
+*					zero user interaction required! Changed CheckBackupServiceAsync to: 1) Install service automatically when missing (no prompts),
+*					2) Log success to Activity tab (BackupLogger.LogServiceInfo), 3) Return immediately without showing any MessageBox, 4) Only
+*					show MessageBox for errors that require user attention. Benefits: Completely seamless workflow (user never interrupted), True
+*					one-click backups (click Run Now → backup starts immediately), Audit trail preserved (all installations logged to Activity tab),
+*					Error visibility maintained (failures still shown with MessageBox). New flow: Click "Run Now" → Service missing? Silently
+*					auto-install → Service stopped? Silently auto-start → Backup runs immediately! User experience: No dialogs, no alerts, no
+*					interruptions - just click and backup happens. Users can verify service installation by checking Activity tab which logs:
+*					"BackupRestoreService not installed - installing automatically..." and "BackupRestoreService installed and started successfully".
+*					Only errors shown: Installation failures, Service start failures, Backup failures. Success is silent - as it should be! Complete
+*					transparency for routine operations, immediate feedback only when intervention needed. This is the ultimate UX refinement -
+*					removing the last remaining interruption from the automatic service management workflow. Enterprise-grade invisible infrastructure
+*					management - users focus on backups, not on service installation. Production-ready truly silent automation! mdail 2/27/2026
 * Version 5.13.7.4 CRITICAL UX FIX - AUTO-INSTALL SERVICE WITHOUT BLOCKING UI: Fixed service installation blocking and locking up the user
 *					interface! User reported: "when I tried to do run now when the service was not installed it told me I needed admin privileges
 *					and after I click OK is locked up" - UI became completely unresponsive during service installation. Root cause: THREE issues
