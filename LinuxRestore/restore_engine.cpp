@@ -1,5 +1,6 @@
 // LinuxRestore/restore_engine.cpp
 // Cross-platform restore engine for Linux-based bootable USB
+// Version 5.13.7.0 - Added WIM (.ssb) support for unified backup format
 
 #include <iostream>
 #include <string>
@@ -36,6 +37,72 @@ private:
         std::cout << "[" << percentage << "%] " << message << std::endl;
     }
 
+    // NEW: Check if file is WIM format (.ssb or .wim)
+    bool IsWimBackup(const std::string& path) {
+        // Check file extension
+        std::string ext = fs::path(path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+        if (ext == ".ssb" || ext == ".wim") {
+            return true;
+        }
+
+        // Check magic number for WIM files (MSWIM)
+        std::ifstream file(path, std::ios::binary);
+        if (file) {
+            char magic[8] = {0};
+            file.read(magic, 8);
+            if (strncmp(magic, "MSWIM", 5) == 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // NEW: Extract WIM backup using wimlib
+    int ExtractWimBackup(const std::string& wimPath, 
+                        const std::string& destPath,
+                        int imageIndex = 1) {
+        ReportProgress(10, "Detected WIM format backup (.ssb file)");
+
+        // Check if wimlib-imagex is available
+        int result = system("which wimlib-imagex > /dev/null 2>&1");
+        if (result != 0) {
+            SetError("wimlib-imagex not found. Install wimlib: sudo apt-get install wimtools");
+            std::cerr << "\nTo extract WIM backups, install wimlib:" << std::endl;
+            std::cerr << "  Debian/Ubuntu: sudo apt-get install wimtools" << std::endl;
+            std::cerr << "  Fedora/RHEL:   sudo dnf install wimlib-utils" << std::endl;
+            std::cerr << "  Arch Linux:    sudo pacman -S wimlib" << std::endl;
+            return -1;
+        }
+
+        ReportProgress(20, "Using wimlib to extract backup...");
+
+        // First, get information about the WIM file
+        std::string infoCmd = "wimlib-imagex info '" + wimPath + "' 2>&1";
+        ReportProgress(25, "Reading WIM metadata...");
+        system(infoCmd.c_str());
+
+        // Extract the WIM image
+        ReportProgress(30, "Extracting WIM image " + std::to_string(imageIndex) + "...");
+
+        std::string extractCmd = "wimlib-imagex extract '" + wimPath + "' " + 
+                                std::to_string(imageIndex) + " '" + destPath + 
+                                "' --preserve-modes --preserve-timestamps 2>&1";
+
+        std::cout << "\nExecuting: " << extractCmd << std::endl;
+        result = system(extractCmd.c_str());
+
+        if (result != 0) {
+            SetError("WIM extraction failed with code " + std::to_string(result));
+            return -2;
+        }
+
+        ReportProgress(90, "WIM extraction complete");
+        return 0;
+    }
+
 public:
     RestoreEngine(ProgressCallback callback = nullptr) 
         : progressCallback(callback) {}
@@ -43,6 +110,7 @@ public:
     std::string GetLastError() const { return lastError; }
 
     // Restore files from backup to destination
+    // Now supports both folder-based backups AND WIM (.ssb) backups
     int RestoreFiles(const std::string& backupPath, 
                      const std::string& destPath, 
                      bool overwriteExisting) {
@@ -54,6 +122,32 @@ public:
                 SetError("Backup path does not exist: " + backupPath);
                 return -1;
             }
+
+            // Check if this is a WIM backup
+            if (fs::is_regular_file(backupPath) && IsWimBackup(backupPath)) {
+                // NEW: Handle WIM backup
+                ReportProgress(5, "Detected WIM backup format");
+
+                // Create destination directory
+                try {
+                    fs::create_directories(destPath);
+                } catch (const std::exception& e) {
+                    SetError(std::string("Failed to create destination: ") + e.what());
+                    return -1;
+                }
+
+                // Extract WIM
+                int result = ExtractWimBackup(backupPath, destPath);
+                if (result != 0) {
+                    return result;
+                }
+
+                ReportProgress(100, "WIM restore complete!");
+                return 0;
+            }
+
+            // OLD: Handle folder-based backup (legacy support)
+            ReportProgress(5, "Detected folder-based backup (legacy format)");
 
             // Create destination directory
             try {

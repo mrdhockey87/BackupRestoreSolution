@@ -1,32 +1,63 @@
 # Backup & Restore - Linux Recovery USB
 
-**Version 5.11.0.7** (Updated with intelligent restore logic)
+**Version 5.13.7.0** (Updated with WIM/.ssb backup support)
 
 A lightweight, bootable Linux-based restore solution that works with backups created by the Backup & Restore Windows application.
 
 ## Features
 
-? **No Windows ADK Required** - Freely redistributable
-? **Small Footprint** - ~500 MB total (vs 2+ GB for WinPE)  
-? **Fast Boot** - Alpine Linux boots in seconds  
-? **NTFS Support** - Can restore to Windows partitions  
-? **Intelligent Restore** - Auto-detects disk/volume/file backups (NEW in 5.11.0.7)
-? **Two Interfaces** - Terminal UI (TUI) or command-line (CLI)  
-? **Self-Contained** - Everything needed on one USB drive  
+✓ **No Windows ADK Required** - Freely redistributable
+✓ **Small Footprint** - ~500 MB total (vs 2+ GB for WinPE)  
+✓ **Fast Boot** - Alpine Linux boots in seconds  
+✓ **NTFS Support** - Can restore to Windows partitions  
+✓ **WIM Support** - Extracts .ssb/.wim backup files (NEW in 5.13.7.0)
+✓ **Intelligent Restore** - Auto-detects disk/volume/file backups
+✓ **Two Interfaces** - Terminal UI (TUI) or command-line (CLI)  
+✓ **Self-Contained** - Everything needed on one USB drive  
 
 ---
 
-## What's New in 5.11.0.7
+## What's New in 5.13.7.0
+
+### WIM (.ssb) Backup Support
+
+The restore engine now supports the unified WIM backup format:
+- **Detects .ssb files** - Automatically recognizes Windows Imaging backups
+- **Uses wimlib** - Extracts WIM archives with full metadata
+- **Cross-platform** - Same backup format works on Windows and Linux
+- **Backward Compatible** - Still supports legacy folder-based backups
 
 ### Intelligent Restore Type Detection
 
-The restore engine now automatically detects backup types:
+The restore engine automatically detects backup types:
+- **WIM Archives** (.ssb, .wim) - Extracts using wimlib-imagex
 - **Disk Images** (.img files) - Warns about manual restore requirement
 - **Volume Backups** (with SystemState) - Restores files, notes system state is Windows-only
 - **Directories** - Standard file restore
 - **Individual Files** - Direct copy with optimizations
 
 This matches the Windows restore functionality for consistent cross-platform recovery.
+
+---
+
+## Requirements
+
+### Runtime Dependencies
+
+**For WIM/.ssb backup support, install wimlib:**
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install wimtools
+
+# Fedora/RHEL
+sudo dnf install wimlib-utils
+
+# Arch Linux
+sudo pacman -S wimlib
+```
+
+Without wimlib, only legacy folder-based backups can be restored.
 
 ---
 

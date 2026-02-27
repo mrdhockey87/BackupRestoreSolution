@@ -1,8 +1,8 @@
 # CMakeLists.txt for Linux Restore Application
-# Version 4.7.1.0 - Updated with 3-step wizard restore tools
+# Version 5.13.7.0 - Added WIM (.ssb) support via wimlib
 
 cmake_minimum_required(VERSION 3.10)
-project(BackupRestoreLinux VERSION 4.7.1)
+project(BackupRestoreLinux VERSION 5.13.7)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,6 +10,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find required packages
 find_package(Curses REQUIRED)
 find_package(PkgConfig)
+
+# NOTE: WIM support requires wimlib-imagex to be installed on the target system
+# This is a runtime dependency, not a compile-time dependency
+# Debian/Ubuntu: sudo apt-get install wimtools
+# Fedora/RHEL:   sudo dnf install wimlib-utils
+# Arch Linux:    sudo pacman -S wimlib
 
 # Restore Engine Library
 add_library(restore_engine STATIC
