@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.7.0";
+		static private string version_fallback_number = "5.13.7.1";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,30 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.7.1 UI ENHANCEMENT - RECOVERY ENVIRONMENT CREATOR REDESIGN: Completely redesigned Recovery Environment Creator menu option
+*					with comprehensive Rufus instructions! Replaced programmatic USB creation with professional step-by-step guide for using
+*					Rufus to create bootable USB drives. New window features: 5-step numbered wizard format with styled circles (Download Rufus,
+*					Locate ISO File, Create Bootable USB, Boot from USB, Use Restore Options). Automatic ISO file detection - finds
+*					BackupRestore_Recovery.iso in LinuxRestore directory, displays path and status (✓ ISO Found with size, or ✗ ISO File Not
+*					Found with build instructions). Quick action buttons: "Open Rufus Website" (launches https://rufus.ie), "Open ISO Folder"
+*					(opens Explorer with ISO file selected), "Print Instructions" (generates printable HTML). Detailed Rufus configuration
+*					guide: Device selection, Boot selection (ISO file), Partition scheme (MBR for BIOS/UEFI compatibility), File system (FAT32),
+*					DD Image mode recommendation. Complete documentation of all 3 restore methods: Option 1 - restore_gui (Graphical Interface,
+*					easiest for point-and-click users), Option 2 - restore_tui (Terminal UI with arrow key navigation, recommended for
+*					interactive 3-step wizard), Option 3 - restore_cli (Command line for advanced users and scripting, fastest option).
+*					Professional layout with scrollable content, color-coded option blocks (GUI=light green, TUI=cornsilk, CLI=light turquoise),
+*					turquoise theme integration. Printable HTML generation includes all 5 steps, code examples, warning boxes, step numbers with
+*					circles, print-optimized CSS. Safety warnings prominently displayed (⚠️ WARNING: This will erase ALL data on the USB drive!).
+*					Boot instructions cover boot menu keys (F12, F2, DEL, ESC), complete process from USB insertion to boot selection. Usage
+*					instructions for each restore tool: GUI with browse/select/restore, TUI with 3-step wizard flow, CLI with command syntax
+*					examples. Complete removal of old programmatic creation code - no more USB drive selection, formatting options, progress
+*					bars. Window now purely instructional, providing clear guidance instead of attempting complex USB creation. Benefits:
+*					professional documentation replacing complex implementation, proven tool (Rufus) instead of custom code, printable reference
+*					for offline use, complete coverage from download to restore, three restore methods fully explained. Users can now: follow
+*					step-by-step Rufus guide, locate ISO file with one click, print instructions for reference, understand all restore options
+*					before booting. Perfect for disaster recovery preparation - users create bootable USB with confidence, understand restore
+*					process completely. Production-ready instructional interface that replaces programmatic complexity with clear, actionable
+*					guidance! Enterprise-grade documentation with professional layout and comprehensive coverage! mdail 2/27/2026
 * Version 5.13.7.0 MAJOR ARCHITECTURAL CHANGE - UNIFIED WIM BACKUP SYSTEM (PHASE 1 & 2 COMPLETE): Implemented revolutionary unified backup
 *					architecture using Windows Imaging (WIM) format with custom .ssb extension for ALL backup types! PHASE 1 (C# Service):
 *					Changed from folder-based backups with timestamps to direct .ssb file creation. Format: JobName_Full.ssb, JobName_Incremental.ssb,
