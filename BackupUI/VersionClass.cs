@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.7.1";
+		static private string version_fallback_number = "5.13.7.2";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,30 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.7.2 MAJOR REFACTORING - PER-JOB ACTIVITY LOGGING + AUTO-SERVICE INSTALL: Completely redesigned logging system for better
+*					organization and diagnostics! Logs now stored in separate files per backup job instead of single monolithic file.
+*					New structure: service.json (service-only messages like startup/shutdown/communication), JobName.json (per-job activity
+*					logs), organized in C:\ProgramData\BackupRestoreService\Logs\. Enhanced BackupLogger with new methods: LogServiceInfo(),
+*					LogServiceWarning(), LogServiceError() for service-specific logging, existing methods (LogInfo, LogSuccess, LogWarning,
+*					LogError) now write to per-job files. Automatic file naming sanitization - invalid characters replaced with underscores.
+*					Per-file capacity management: 500 entries per job (down from 1000 combined), unlimited total capacity grows with number
+*					of jobs, oldest entries auto-purged when limit reached. New query methods: GetLogsByJob(jobName) returns specific job logs,
+*					GetServiceLogs() returns service-only logs, GetAllJobNames() lists all jobs with log files. Backward compatible: LoadLogs()
+*					combines all files, existing Activity tab continues working, all query methods unchanged. Created ServiceInstaller helper
+*					class for complete service management from C# - no more PowerShell scripts! Methods: IsServiceInstalled(), IsServiceRunning(),
+*					InstallServiceAsync() uses sc.exe with admin elevation, StartServiceAsync()/StopServiceAsync() with 30-second timeouts,
+*					InstallAndStartServiceAsync() one-click install+start. Automatic service description with version number visible in
+*					services.msc. Enhanced MainWindow.CheckBackupService to auto-install service when missing - user clicks "Run Now" → prompted
+*					to install if not found → clicks Yes → service automatically installs and starts → ready to backup! No more manual PowerShell
+*					instructions. New workflow: service not installed → "Would you like to install now?" → automatic installation with admin
+*					elevation → service starts automatically → seamless user experience. Benefits: Better organization (find issues per job
+*					quickly), Service diagnostics (separate service log), Scalability (each job maintains independent 500-entry history),
+*					One-click setup (no PowerShell knowledge required), Automatic recovery (service auto-installs if missing), Enterprise-ready
+*					(proper separation of concerns). File structure example: service.json (500 service logs), ServerBackup.json (500 entries),
+*					DatabaseBackup.json (500 entries), VMBackup.json (500 entries). Total capacity scales with number of jobs! All operations
+*					comprehensively logged with success/failure tuples. Error handling returns (bool success, string message) for clear user
+*					feedback. Production-ready logging infrastructure with automatic service management - users never need manual service
+*					installation again! mdail 2/27/2026
 * Version 5.13.7.1 UI ENHANCEMENT - RECOVERY ENVIRONMENT CREATOR REDESIGN: Completely redesigned Recovery Environment Creator menu option
 *					with comprehensive Rufus instructions! Replaced programmatic USB creation with professional step-by-step guide for using
 *					Rufus to create bootable USB drives. New window features: 5-step numbered wizard format with styled circles (Download Rufus,
