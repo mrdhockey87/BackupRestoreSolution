@@ -93,11 +93,11 @@ namespace BackupUI
                 var job = jobManager.GetJob(jobId);
                 if (job != null)
                 {
-                    // Check if BackupRestoreService is installed and running
-                    bool serviceOk = CheckBackupService();
+                    // Check if BackupRestoreService is installed and running (async, non-blocking)
+                    bool serviceOk = await CheckBackupServiceAsync();
                     if (!serviceOk)
                     {
-                        return; // CheckBackupService already showed error message
+                        return; // CheckBackupServiceAsync already showed error message
                     }
 
                     var result = MessageBox.Show(
@@ -148,25 +148,17 @@ namespace BackupUI
                 // Check if service is installed
                 if (!Services.ServiceInstaller.IsServiceInstalled())
                 {
-                    BackupLogger.LogServiceError("BackupRestoreService is not installed");
+                    BackupLogger.LogServiceInfo("BackupRestoreService not installed - installing automatically...");
 
-                    var result = MessageBox.Show(
-                        "The BackupRestoreService is not installed.\n\n" +
-                        "Would you like to install and start it now?\n\n" +
-                        "Note: This requires Administrator privileges.",
-                        "Service Not Installed",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Warning);
+                    // Install and start service automatically without confirmation
+                    var (success, message) = await Services.ServiceInstaller.InstallAndStartServiceAsync();
 
-                    if (result == MessageBoxResult.Yes)
+                    if (success)
                     {
-                        // Show installing message
-                        BackupLogger.LogServiceInfo("Installing BackupRestoreService...");
+                        BackupLogger.LogServiceInfo("BackupRestoreService installed and started successfully");
 
-                        // Install and start service
-                        var (success, message) = await Services.ServiceInstaller.InstallAndStartServiceAsync();
-
-                        if (success)
+                        // Show brief non-blocking notification
+                        this.Dispatcher.BeginInvoke(new Action(() =>
                         {
                             MessageBox.Show(
                                 "BackupRestoreService installed and started successfully!\n\n" +
@@ -174,61 +166,59 @@ namespace BackupUI
                                 "Service Installed",
                                 MessageBoxButton.OK,
                                 MessageBoxImage.Information);
-                            return true;
-                        }
-                        else
+                        }), System.Windows.Threading.DispatcherPriority.Background);
+
+                        return true;
+                    }
+                    else
+                    {
+                        BackupLogger.LogServiceError($"Failed to install service: {message}");
+
+                        // Show error on UI thread
+                        this.Dispatcher.BeginInvoke(new Action(() =>
                         {
                             MessageBox.Show(
                                 $"Failed to install service:\n\n{message}\n\n" +
-                                "Please ensure you have Administrator privileges and try again.",
+                                "Please ensure the application has Administrator privileges.",
                                 "Installation Failed",
                                 MessageBoxButton.OK,
                                 MessageBoxImage.Error);
-                            return false;
-                        }
-                    }
+                        }), System.Windows.Threading.DispatcherPriority.Background);
 
-                    return false;
+                        return false;
+                    }
                 }
 
                 // Service is installed - check if running
                 var status = Services.ServiceInstaller.GetServiceStatus();
                 if (status != System.ServiceProcess.ServiceControllerStatus.Running)
                 {
-                    BackupLogger.LogServiceWarning($"BackupRestoreService is not running (Status: {status})");
+                    BackupLogger.LogServiceInfo($"BackupRestoreService not running (Status: {status}) - starting automatically...");
 
-                    var result = MessageBox.Show(
-                        $"The BackupRestoreService is not running.\nCurrent Status: {status}\n\n" +
-                        "Would you like to start it now?",
-                        "Service Not Running",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Warning);
+                    // Start service automatically without confirmation
+                    var (success, message) = await Services.ServiceInstaller.StartServiceAsync();
 
-                    if (result == MessageBoxResult.Yes)
+                    if (success)
                     {
-                        var (success, message) = await Services.ServiceInstaller.StartServiceAsync();
+                        BackupLogger.LogServiceInfo("BackupRestoreService started successfully");
+                        return true;
+                    }
+                    else
+                    {
+                        BackupLogger.LogServiceError($"Failed to start service: {message}");
 
-                        if (success)
-                        {
-                            MessageBox.Show(
-                                "BackupRestoreService started successfully.",
-                                "Service Started",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Information);
-                            return true;
-                        }
-                        else
+                        // Show error on UI thread
+                        this.Dispatcher.BeginInvoke(new Action(() =>
                         {
                             MessageBox.Show(
                                 $"Failed to start service:\n\n{message}",
                                 "Start Failed",
                                 MessageBoxButton.OK,
                                 MessageBoxImage.Error);
-                            return false;
-                        }
-                    }
+                        }), System.Windows.Threading.DispatcherPriority.Background);
 
-                    return false;
+                        return false;
+                    }
                 }
 
                 // Service is running
@@ -237,18 +227,26 @@ namespace BackupUI
             catch (Exception ex)
             {
                 BackupLogger.LogServiceError($"Error checking service status: {ex.Message}");
-                MessageBox.Show(
-                    $"Error checking service status:\n\n{ex.Message}",
-                    "Service Check Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+
+                // Show error on UI thread
+                this.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    MessageBox.Show(
+                        $"Error checking service status:\n\n{ex.Message}",
+                        "Service Check Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }), System.Windows.Threading.DispatcherPriority.Background);
+
                 return false;
             }
         }
 
+        [Obsolete("Use CheckBackupServiceAsync() instead to avoid UI blocking")]
         private bool CheckBackupService()
         {
-            // Synchronous wrapper for backward compatibility
+            // This synchronous wrapper is deprecated - use CheckBackupServiceAsync() instead
+            // Kept for backward compatibility but should not be used in new code
             return CheckBackupServiceAsync().GetAwaiter().GetResult();
         }
 
