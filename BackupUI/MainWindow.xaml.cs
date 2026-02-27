@@ -156,18 +156,6 @@ namespace BackupUI
                     if (success)
                     {
                         BackupLogger.LogServiceInfo("BackupRestoreService installed and started successfully");
-
-                        // Show brief non-blocking notification
-                        this.Dispatcher.BeginInvoke(new Action(() =>
-                        {
-                            MessageBox.Show(
-                                "BackupRestoreService installed and started successfully!\n\n" +
-                                "Backups can now run.",
-                                "Service Installed",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Information);
-                        }), System.Windows.Threading.DispatcherPriority.Background);
-
                         return true;
                     }
                     else
