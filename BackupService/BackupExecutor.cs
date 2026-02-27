@@ -52,9 +52,6 @@ namespace BackupService
         {
             return await Task.Run(() =>
             {
-                string? oldBackupToDelete = null;
-                string? renamedOldBackup = null;
-
                 try
                 {
                     logger?.Invoke($"Starting backup job: {job.Name}");
@@ -66,19 +63,8 @@ namespace BackupService
                         return false;
                     }
 
-                    // Handle full backup retention - rename existing backup before starting new one
-                    if (job.Type == BackupType.Full && Directory.Exists(job.DestinationPath))
-                    {
-                        var existingBackups = GetExistingFullBackups(job.DestinationPath, job.Name);
-                        
-                        if (existingBackups.Count > 0)
-                        {
-                            // Rename the most recent backup as a safety measure
-                            var mostRecentBackup = existingBackups.OrderByDescending(b => Directory.GetCreationTime(b)).First();
-                            renamedOldBackup = RenameBackupAsPending(mostRecentBackup, logger);
-                            logger?.Invoke($"Existing backup renamed to: {Path.GetFileName(renamedOldBackup)}");
-                        }
-                    }
+                    // REMOVED: Backup safety renaming - with single-file approach, we simply overwrite
+                    // Old file is replaced atomically by new file
 
                     // Create native progress callback
                     ProgressCallback nativeCallback = (percentage, message) =>
@@ -89,46 +75,45 @@ namespace BackupService
                     bool backupSuccess = false;
                     string? newBackupPath = null;
 
+                    // NEW ARCHITECTURE: Create direct .ssb file (no folders, no timestamps)
+                    // Determine backup type suffix
+                    string backupTypeSuffix;
+                    if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
+                    {
+                        // Check if we need to do a full backup as the base
+                        string fullBackupFile = Path.Combine(job.DestinationPath, $"{job.Name}_Full.ssb");
+                        if (!File.Exists(fullBackupFile))
+                        {
+                            backupTypeSuffix = "Full"; // Creating full backup as base
+                            logger?.Invoke($"No full backup exists. Creating initial full backup: {job.Name}_Full.ssb");
+                        }
+                        else
+                        {
+                            backupTypeSuffix = job.Type == BackupType.Incremental ? "Incremental" : "Differential";
+                        }
+                    }
+                    else
+                    {
+                        backupTypeSuffix = "Full";
+                    }
+
+                    // Create destination FILE path (no folders, no timestamp)
+                    // Format: JobName_Full.ssb or JobName_Incremental.ssb
+                    newBackupPath = Path.Combine(job.DestinationPath, $"{job.Name}_{backupTypeSuffix}.ssb");
+
+                    // Ensure destination directory exists
+                    Directory.CreateDirectory(job.DestinationPath);
+
+                    logger?.Invoke($"Creating backup file: {Path.GetFileName(newBackupPath)}");
+
+                    // Execute backup for all source paths
+                    // For multiple sources, they'll be added as multiple images in the same WIM file
                     foreach (var sourcePath in job.SourcePaths)
                     {
                         if (cancellationToken.IsCancellationRequested)
                         {
                             logger?.Invoke("Backup cancelled by user");
-                            RestoreRenamedBackup(renamedOldBackup, logger);
                             return false;
-                        }
-
-                        // Determine backup type prefix based on what we're actually creating
-                        string backupTypePrefix;
-                        if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
-                        {
-                            // Check if we need to do a full backup as the base
-                            var existingFull = FindFullBackup(job.DestinationPath, job.Name);
-                            if (string.IsNullOrEmpty(existingFull))
-                            {
-                                backupTypePrefix = "Full"; // Creating full backup as base
-                                logger?.Invoke($"No full backup exists. Creating initial full backup for {job.Name}");
-                            }
-                            else
-                            {
-                                backupTypePrefix = job.Type == BackupType.Incremental ? "Incremental" : "Differential";
-                            }
-                        }
-                        else
-                        {
-                            backupTypePrefix = "Full";
-                        }
-
-                        // Create destination path with backup type and timestamp
-                        if (job.Type == BackupType.Full && job.RetainFullBackupCount > 1)
-                        {
-                            newBackupPath = Path.Combine(job.DestinationPath,
-                                $"{job.Name}_{backupTypePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}");
-                        }
-                        else
-                        {
-                            newBackupPath = Path.Combine(job.DestinationPath,
-                                $"{job.Name}_{backupTypePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}");
                         }
 
                         int result = ExecuteBackup(job, sourcePath, newBackupPath, nativeCallback, logger);
@@ -138,7 +123,6 @@ namespace BackupService
                             var error = new StringBuilder(1024);
                             GetLastErrorMessage(error, error.Capacity);
                             logger?.Invoke($"Backup failed: {error}");
-                            RestoreRenamedBackup(renamedOldBackup, logger);
                             return false;
                         }
 
@@ -152,41 +136,33 @@ namespace BackupService
                             if (cancellationToken.IsCancellationRequested)
                             {
                                 logger?.Invoke("Backup cancelled by user");
-                                RestoreRenamedBackup(renamedOldBackup, logger);
                                 return false;
                             }
 
-                            // Determine backup type prefix for Hyper-V backup
-                            string backupTypePrefix;
+                            // Determine backup type suffix for Hyper-V backup
+                            string vmBackupSuffix;  // Renamed to avoid conflict
+                            string fullBackupFile = Path.Combine(job.DestinationPath, $"{vm}_Full.ssb");
+
                             if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
                             {
-                                // Check if we need to do a full backup as the base
-                                var existingFull = FindFullBackup(job.DestinationPath, vm);
-                                if (string.IsNullOrEmpty(existingFull))
+                                if (!File.Exists(fullBackupFile))
                                 {
-                                    backupTypePrefix = "Full"; // Creating full backup as base
-                                    logger?.Invoke($"No full backup exists. Creating initial full backup for {vm}");
+                                    vmBackupSuffix = "Full"; // Creating full backup as base
+                                    logger?.Invoke($"No full backup exists. Creating initial full backup: {vm}_Full.ssb");
                                 }
                                 else
                                 {
-                                    backupTypePrefix = job.Type == BackupType.Incremental ? "Incremental" : "Differential";
+                                    vmBackupSuffix = job.Type == BackupType.Incremental ? "Incremental" : "Differential";
                                 }
                             }
                             else
                             {
-                                backupTypePrefix = "Full";
+                                vmBackupSuffix = "Full";
                             }
 
-                            if (job.Type == BackupType.Full && job.RetainFullBackupCount > 1)
-                            {
-                                newBackupPath = Path.Combine(job.DestinationPath,
-                                    $"{vm}_{backupTypePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}");
-                            }
-                            else
-                            {
-                                newBackupPath = Path.Combine(job.DestinationPath,
-                                    $"{vm}_{backupTypePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}");
-                            }
+                            // Create destination FILE path (no folders, no timestamp)
+                            newBackupPath = Path.Combine(job.DestinationPath, $"{vm}_{vmBackupSuffix}.ssb");
+                            logger?.Invoke($"Creating Hyper-V backup file: {Path.GetFileName(newBackupPath)}");
 
                             progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {vm}...");
                             int result = BackupHyperVVM(vm, newBackupPath, nativeCallback);
@@ -196,7 +172,6 @@ namespace BackupService
                                 var error = new StringBuilder(1024);
                                 GetLastErrorMessage(error, error.Capacity);
                                 logger?.Invoke($"Hyper-V backup failed: {error}");
-                                RestoreRenamedBackup(renamedOldBackup, logger);
                                 return false;
                             }
 
@@ -209,61 +184,37 @@ namespace BackupService
                     {
                         logger?.Invoke("Verifying backup...");
                         progressCallback?.Invoke(90, "Verifying backup...");
-                        
+
                         string verifyPath = newBackupPath ?? job.DestinationPath;
                         int result = VerifyBackup(verifyPath, nativeCallback);
-                        
+
                         if (result != 0)
                         {
-                            logger?.Invoke("Backup verification failed! Restoring previous backup...");
-                            RestoreRenamedBackup(renamedOldBackup, logger);
-                            
-                            // Delete the failed backup
-                            if (newBackupPath != null && Directory.Exists(newBackupPath))
+                            logger?.Invoke("Backup verification failed!");
+
+                            // Delete the failed backup FILE
+                            if (newBackupPath != null && File.Exists(newBackupPath))
                             {
                                 try
                                 {
-                                    Directory.Delete(newBackupPath, true);
-                                    logger?.Invoke($"Failed backup deleted: {newBackupPath}");
+                                    File.Delete(newBackupPath);
+                                    logger?.Invoke($"Failed backup deleted: {Path.GetFileName(newBackupPath)}");
                                 }
                                 catch (Exception ex)
                                 {
                                     logger?.Invoke($"Warning: Could not delete failed backup: {ex.Message}");
                                 }
                             }
-                            
+
                             return false;
                         }
-                        
+
                         logger?.Invoke("Backup verification successful!");
                     }
 
-                    // Only clean up old backups after successful verification (or if verification disabled)
-                    if (backupSuccess && job.Type == BackupType.Full)
-                    {
-                        // Delete the renamed backup now that the new one is verified
-                        if (renamedOldBackup != null && Directory.Exists(renamedOldBackup))
-                        {
-                            try
-                            {
-                                oldBackupToDelete = renamedOldBackup;
-                                logger?.Invoke($"Deleting old backup: {Path.GetFileName(renamedOldBackup)}");
-                                Directory.Delete(renamedOldBackup, true);
-                                logger?.Invoke("Old backup deleted successfully");
-                                renamedOldBackup = null; // Prevent restore attempt
-                            }
-                            catch (Exception ex)
-                            {
-                                logger?.Invoke($"Warning: Could not delete old backup: {ex.Message}");
-                            }
-                        }
-
-                        // Clean up excess backups based on retention policy
-                        if (job.RetainFullBackupCount > 1)
-                        {
-                            CleanupOldBackups(job.DestinationPath, job.Name, job.RetainFullBackupCount, logger);
-                        }
-                    }
+                    // REMOVED: Retention cleanup - with single-file approach, each backup type 
+                    // (Full/Incremental/Differential) has ONE file that gets overwritten
+                    // No need for retention policy or cleanup
 
                     progressCallback?.Invoke(100, "Backup completed successfully!");
                     logger?.Invoke($"Backup job completed successfully: {job.Name}");
@@ -272,7 +223,6 @@ namespace BackupService
                 catch (Exception ex)
                 {
                     logger?.Invoke($"Backup job failed with exception: {ex.Message}");
-                    RestoreRenamedBackup(renamedOldBackup, logger);
                     return false;
                 }
             }, cancellationToken);
@@ -395,9 +345,12 @@ namespace BackupService
                 if (!Directory.Exists(destPath))
                     return null;
 
-                return Directory.GetDirectories(destPath, $"{jobName}_*")
-                    .OrderByDescending(d => d)
+                // Look for any backup file for this job (Full, Incremental, or Differential)
+                var backupFiles = Directory.GetFiles(destPath, $"{jobName}_*.ssb")
+                    .OrderByDescending(f => File.GetCreationTime(f))
                     .FirstOrDefault();
+
+                return backupFiles;
             }
             catch
             {
@@ -412,13 +365,13 @@ namespace BackupService
                 if (!Directory.Exists(destPath))
                     return null;
 
-                // Look for folders starting with Full_
-                var fullBackups = Directory.GetDirectories(destPath, $"{jobName}_*")
-                    .Where(d => Path.GetFileName(d).Contains("Full_") || !Path.GetFileName(d).Contains("Incremental_") && !Path.GetFileName(d).Contains("Differential_"))
-                    .OrderByDescending(d => Directory.GetCreationTime(d))
-                    .ToList();
+                // Look specifically for the Full backup file
+                string fullBackupFile = Path.Combine(destPath, $"{jobName}_Full.ssb");
 
-                return fullBackups.FirstOrDefault();
+                if (File.Exists(fullBackupFile))
+                    return fullBackupFile;
+
+                return null;
             }
             catch
             {
@@ -426,91 +379,13 @@ namespace BackupService
             }
         }
 
-        private List<string> GetExistingFullBackups(string destPath, string jobName)
-        {
-            try
-            {
-                if (!Directory.Exists(destPath))
-                    return new List<string>();
+        // REMOVED: GetExistingFullBackups - no longer needed with single-file approach
+        // REMOVED: RenameBackupAsPending - overwrite existing files directly  
+        // REMOVED: RestoreRenamedBackup - no backup renaming needed
+        // REMOVED: CleanupOldBackups - single file per backup type, no cleanup needed
 
-                // Find all full backup directories (excluding _PENDING_ and _OLD_)
-                return Directory.GetDirectories(destPath, $"{jobName}_*")
-                    .Where(d =>
-                    {
-                        var fileName = Path.GetFileName(d);
-                        return !fileName.Contains("_PENDING_") && 
-                               !fileName.Contains("_OLD_") &&
-                               !fileName.Contains("Incremental_") && 
-                               !fileName.Contains("Differential_");
-                    })
-                    .ToList();
-            }
-            catch
-            {
-                return new List<string>();
-            }
-        }
-
-        private string? RenameBackupAsPending(string backupPath, Action<string>? logger)
-        {
-            try
-            {
-                var dirInfo = new DirectoryInfo(backupPath);
-                var parentDir = dirInfo.Parent?.FullName;
-                
-                if (parentDir == null)
-                    return null;
-
-                var newName = $"{dirInfo.Name}_PENDING_{DateTime.Now:yyyyMMddHHmmss}";
-                var newPath = Path.Combine(parentDir, newName);
-
-                Directory.Move(backupPath, newPath);
-                logger?.Invoke($"Renamed existing backup for safety: {dirInfo.Name} -> {newName}");
-                
-                return newPath;
-            }
-            catch (Exception ex)
-            {
-                logger?.Invoke($"Warning: Could not rename existing backup: {ex.Message}");
-                return null;
-            }
-        }
-
-        private void RestoreRenamedBackup(string? renamedBackupPath, Action<string>? logger)
-        {
-            if (string.IsNullOrEmpty(renamedBackupPath) || !Directory.Exists(renamedBackupPath))
-                return;
-
-            try
-            {
-                var dirInfo = new DirectoryInfo(renamedBackupPath);
-                var parentDir = dirInfo.Parent?.FullName;
-
-                if (parentDir == null)
-                    return;
-
-                // Remove the _PENDING_timestamp suffix to restore original name
-                var originalName = dirInfo.Name;
-                var pendingIndex = originalName.IndexOf("_PENDING_");
-
-                if (pendingIndex > 0)
-                {
-                    originalName = originalName.Substring(0, pendingIndex);
-                    var restoredPath = Path.Combine(parentDir, originalName);
-
-                    // Only restore if original path doesn't exist
-                    if (!Directory.Exists(restoredPath))
-                    {
-                        Directory.Move(renamedBackupPath, restoredPath);
-                        logger?.Invoke($"Restored previous backup: {originalName}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger?.Invoke($"Warning: Could not restore renamed backup: {ex.Message}");
-            }
-        }
+        // Retention logic simplified: Each backup type (Full/Incremental/Differential) 
+        // overwrites its own file. For multiple versions, implement versioning later.
 
         /// <summary>
         /// Extracts disk number from physical drive device path
@@ -537,47 +412,7 @@ namespace BackupService
             return -1;
         }
 
-        private void CleanupOldBackups(string destPath, string jobName, int retainCount, Action<string>? logger)
-        {
-            try
-            {
-                var existingBackups = GetExistingFullBackups(destPath, jobName);
-                
-                if (existingBackups.Count <= retainCount)
-                {
-                    logger?.Invoke($"Retention policy: Keeping {existingBackups.Count} backup(s) (limit: {retainCount})");
-                    return;
-                }
-
-                // Sort by creation time, newest first
-                var sortedBackups = existingBackups
-                    .OrderByDescending(b => Directory.GetCreationTime(b))
-                    .ToList();
-
-                // Keep the most recent 'retainCount' backups, delete the rest
-                var backupsToDelete = sortedBackups.Skip(retainCount).ToList();
-
-                logger?.Invoke($"Retention policy: Deleting {backupsToDelete.Count} old backup(s), keeping {retainCount} most recent");
-
-                foreach (var oldBackup in backupsToDelete)
-                {
-                    try
-                    {
-                        var backupName = Path.GetFileName(oldBackup);
-                        logger?.Invoke($"Deleting old backup: {backupName}");
-                        Directory.Delete(oldBackup, true);
-                        logger?.Invoke($"Deleted: {backupName}");
-                    }
-                    catch (Exception ex)
-                    {
-                        logger?.Invoke($"Warning: Could not delete backup {Path.GetFileName(oldBackup)}: {ex.Message}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger?.Invoke($"Warning: Error during backup cleanup: {ex.Message}");
-            }
-        }
+        // REMOVED: CleanupOldBackups - not needed with single-file approach
+        // Each backup type overwrites its own file
     }
 }

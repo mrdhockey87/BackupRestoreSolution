@@ -28,6 +28,15 @@ extern "C" {
 #define WIM_FLAG_NO_DIRACL          0x00000010
 #define WIM_FLAG_NO_FILEACL         0x00000020
 #define WIM_FLAG_SHARE_WRITE        0x00000040
+#define WIM_FLAG_REFERENCE          0x00020000  // For incremental backups
+#define WIM_FLAG_COMPRESS_FAST      0x00000001  // Fast compression
+#define WIM_FLAG_COMPRESS_NONE      0x00000000  // No compression
+
+// WIM compression types
+#define WIM_COMPRESS_NONE           0
+#define WIM_COMPRESS_XPRESS         1
+#define WIM_COMPRESS_LZX            2
+#define WIM_COMPRESS_LZMS           3  // Best compression
 
 // WIM messages
 #define WIM_MSG_TEXT                0x00000001
@@ -111,6 +120,11 @@ BOOL WINAPI WIMUnregisterMessageCallback(
 BOOL WINAPI WIMSetTemporaryPath(
     HANDLE hWim,
     LPCWSTR pszPath
+);
+
+BOOL WINAPI WIMSetImageInformation(
+    HANDLE hImage,
+    LPCWSTR pszImageInfo
 );
 
 #ifdef __cplusplus

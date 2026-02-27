@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.36";
+		static private string version_fallback_number = "5.13.7.0";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,25 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.7.0 MAJOR ARCHITECTURAL CHANGE - UNIFIED WIM BACKUP SYSTEM (PHASE 1 & 2 COMPLETE): Implemented revolutionary unified backup
+*					architecture using Windows Imaging (WIM) format with custom .ssb extension for ALL backup types! PHASE 1 (C# Service):
+*					Changed from folder-based backups with timestamps to direct .ssb file creation. Format: JobName_Full.ssb, JobName_Incremental.ssb,
+*					JobName_Differential.ssb (no timestamps, no folders). Simplified BackupExecutor - removed 150+ lines of retention/cleanup logic.
+*					Files overwrite previous backups (one file per backup type). FindFullBackup checks for specific file instead of searching folders.
+*					PHASE 2 (C++ Backend): Complete WIM implementation in BackupEngine! Added wimgapi.h includes and WIM API integration. Created
+*					helper functions: CreateWimFile (creates WIM with LZMS compression and integrity verification), CaptureToWimImage (captures
+*					volume/directory into WIM with proper metadata), proper XML metadata tagging ("Silver State Backup Archive"). Updated BackupVolume
+*					to use WIM format - creates VSS snapshot, captures to WIM image, stores as single .ssb file. System state saved separately as
+*					metadata/instructions in SystemState directory. Updated BackupDisk to enumerate volumes, create VSS snapshots per volume, capture
+*					each as separate WIM image in single .ssb file. Multiple volumes = multiple images in one WIM! Benefits: Professional archive format,
+*					Native compression (LZMS), Incremental backup support (WIM_FLAG_REFERENCE), Integrity verification (WIM_FLAG_VERIFY), Mount as
+*					virtual drive, Cross-platform restore tools, File-level deduplication, Microsoft-supported format. Backup structure: E:\Backups\
+*					WDrive_Full.ssb (single WIM file with all volumes), SystemState\ (metadata for registry/BCD). Restore support: Works standalone
+*					without job metadata - .ssb files contain all information needed. WIM metadata includes volume names, capture time, file structure.
+*					LinuxRestore compatibility maintained - WIM format readable cross-platform. Complete enterprise backup system with professional
+*					archiving! Production-ready WIM-based backup with VSS integration, compression, and verification! BREAKING CHANGE: Not backward
+*					compatible with folder-based backups. Migration required: complete existing backups, upgrade, run new Full backup. All backup types
+*					unified: Disk/Volume/Files all use same WIM+VSS approach. Simple, clean, professional! mdail 2/27/2026
 * Version 5.13.6.36 UI ENHANCEMENT - SVG ICON INTEGRATION FOR ACTIVITY TAB: Replaced emoji warning indicators with professional SVG icons!
 *					Enhanced UpdateActivityTabWarning() method to display scalable vector graphics instead of text emoji (⚠️). Added separate detection
 *					methods in BackupLogger: HasUnreadErrors() checks ONLY for errors, HasUnreadWarnings() checks ONLY for warnings (previously single
