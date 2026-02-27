@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.7.3";
+		static private string version_fallback_number = "5.13.7.4";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,25 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.7.4 CRITICAL UX FIX - AUTO-INSTALL SERVICE WITHOUT BLOCKING UI: Fixed service installation blocking and locking up the user
+*					interface! User reported: "when I tried to do run now when the service was not installed it told me I needed admin privileges
+*					and after I click OK is locked up" - UI became completely unresponsive during service installation. Root cause: THREE issues
+*					preventing seamless service installation: 1) Confirmation dialogs blocked workflow - "Would you like to install?" with Yes/No
+*					forced unnecessary user interaction when service missing. 2) Synchronous blocking - CheckBackupService() wrapper called
+*					.GetAwaiter().GetResult() which BLOCKED the UI thread, causing complete freeze during async operations. 3) MessageBox during
+*					async - showing MessageBox directly during async operations blocked event processing. FIXED by complete async redesign:
+*					1) Removed all confirmation dialogs - service now installs automatically without prompts when missing! User clicks "Run Now" →
+*					service installs silently → backup starts. No "Would you like to install?" interruptions. 2) Proper async/await - changed
+*					RunJobNow_Click to call await CheckBackupServiceAsync() instead of synchronous wrapper, ensuring UI thread never blocks.
+*					3) Non-blocking messages - all MessageBox calls wrapped in Dispatcher.BeginInvoke with Background priority, allowing UI to remain
+*					responsive while showing success/error dialogs. CheckBackupServiceAsync now: Detects service not installed → logs "Installing
+*					automatically..." → calls InstallAndStartServiceAsync() → shows brief success notification via dispatcher → continues to backup.
+*					Same for service not running - automatically starts without asking. Benefits: Zero user prompts (seamless installation), No UI
+*					freezing (proper async throughout), Responsive interface (dispatcher-based messages), Automatic recovery (service installs when
+*					needed), Better UX (one-click backups even on first run). Deprecated old CheckBackupService() synchronous wrapper with [Obsolete]
+*					attribute to prevent future misuse. New workflow: Click "Run Now" → Service missing? Auto-install! → Service stopped? Auto-start! →
+*					Backup runs! User never sees installation dialogs or UI freezes. Complete enterprise-grade non-blocking service management with
+*					automatic installation and zero user intervention. Production-ready seamless service lifecycle management! mdail 2/27/2026
 * Version 5.13.7.3 CRITICAL FIX - LEGACY LOG FILE DELETION SUPPORT: Fixed "Delete Selected" failing to delete old activity log entries!
 *					Root cause: Old logs stored in backup_activity.json (pre-5.13.7.2) couldn't be deleted because new delete code only
 *					looked in per-job files (JobName.json, service.json). User reported: "the delete selected fails to delete the entries.
