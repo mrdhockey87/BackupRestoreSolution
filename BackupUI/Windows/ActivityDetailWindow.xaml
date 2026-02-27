@@ -69,6 +69,12 @@
 					Width="120"
 					Height="30"
 					Margin="5"
+					Click="CopySelected_Click"
+					Content="Copy Selected" />
+				<Button
+					Width="120"
+					Height="30"
+					Margin="5"
 					Click="ExportCSV_Click"
 					Content="Export to CSV" />
 				<Button
@@ -121,6 +127,8 @@
 			SelectionUnit="FullRow">
 			<DataGrid.ContextMenu>
 				<ContextMenu>
+					<MenuItem Click="ContextCopySelected_Click" Header="Copy Selected" />
+					<Separator />
 					<MenuItem Click="ContextExportCSV_Click" Header="Export Selected to CSV" />
 					<MenuItem Click="ContextExportText_Click" Header="Export Selected to Text" />
 					<Separator />

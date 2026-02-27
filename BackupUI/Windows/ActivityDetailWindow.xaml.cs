@@ -265,6 +265,55 @@ namespace BackupUI.Windows
             dgActivities.UnselectAll();
         }
 
+        private void CopySelected_Click(object sender, RoutedEventArgs e)
+        {
+            CopySelectedToClipboard();
+        }
+
+        private void ContextCopySelected_Click(object sender, RoutedEventArgs e)
+        {
+            CopySelectedToClipboard();
+        }
+
+        private void CopySelectedToClipboard()
+        {
+            var selectedLogs = dgActivities.SelectedItems.Cast<BackupLogEntry>().ToList();
+
+            if (selectedLogs.Count == 0)
+            {
+                MessageBox.Show("Please select activities to copy.",
+                    "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            try
+            {
+                var text = new StringBuilder();
+
+                foreach (var log in selectedLogs.OrderBy(l => l.Timestamp))
+                {
+                    text.AppendLine($"[{log.Timestamp:yyyy-MM-dd HH:mm:ss}] [{log.Level}] {log.JobName}");
+                    text.AppendLine($"  Message: {log.Message}");
+                    if (!string.IsNullOrEmpty(log.Details))
+                        text.AppendLine($"  Details: {log.Details}");
+                    if (!string.IsNullOrEmpty(log.BackupPath))
+                        text.AppendLine($"  Backup Path: {log.BackupPath}");
+                    text.AppendLine($"  Validation: {(log.ValidationPassed ? "PASSED" : "FAILED")}");
+                    text.AppendLine();
+                }
+
+                Clipboard.SetText(text.ToString());
+
+                MessageBox.Show($"Copied {selectedLogs.Count} activity log(s) to clipboard.",
+                    "Copy Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error copying to clipboard: {ex.Message}",
+                    "Copy Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void ExportToCSV(List<BackupLogEntry> logs, string filePath)
         {
             var csv = new StringBuilder();
