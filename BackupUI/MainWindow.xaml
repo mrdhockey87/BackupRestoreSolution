@@ -7,8 +7,8 @@
 	MinWidth="800"
 	MinHeight="500"
 	Background="{StaticResource PanelBackground}"
-	Loaded="Window_Loaded"
-	Closing="Window_Closing">
+	Closing="Window_Closing"
+	Loaded="Window_Loaded">
 	<Window.Resources>
 		<local:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
 	</Window.Resources>

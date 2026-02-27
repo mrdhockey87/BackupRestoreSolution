@@ -258,6 +258,18 @@ namespace BackupUI.Services
                 .Count(l => !l.IsRead && (l.Level == BackupLogLevel.Error || l.Level == BackupLogLevel.Warning));
         }
 
+        // NEW: Check if there are unread errors (not warnings)
+        public static bool HasUnreadErrors()
+        {
+            return LoadLogs().Any(l => !l.IsRead && l.Level == BackupLogLevel.Error);
+        }
+
+        // NEW: Check if there are unread warnings (not errors)
+        public static bool HasUnreadWarnings()
+        {
+            return LoadLogs().Any(l => !l.IsRead && l.Level == BackupLogLevel.Warning);
+        }
+
         // NEW: Mark all errors as read
         public static void MarkAllErrorsAsRead()
         {
@@ -280,12 +292,6 @@ namespace BackupUI.Services
                     SaveLogs(logs);
                 }
             }
-        }
-
-        // NEW: Check if there are unread errors
-        public static bool HasUnreadErrors()
-        {
-            return GetUnreadErrorCount() > 0;
         }
 
         // NEW: Delete a specific log entry

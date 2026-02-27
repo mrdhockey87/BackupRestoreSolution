@@ -812,16 +812,92 @@ namespace BackupUI
             if (tabActivity == null)
                 return;
 
-            bool hasUnread = BackupLogger.HasUnreadErrors();
-            
-            if (hasUnread)
+            bool hasUnreadErrors = BackupLogger.HasUnreadErrors();
+            bool hasUnreadWarnings = BackupLogger.HasUnreadWarnings();
+
+            if (hasUnreadErrors || hasUnreadWarnings)
             {
-                tabActivity.Header = "Activity ??";
-                tabActivity.Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(255, 140, 0)); // Orange/Yellow
+                // Create a StackPanel to hold text and icon
+                var headerPanel = new System.Windows.Controls.StackPanel
+                {
+                    Orientation = System.Windows.Controls.Orientation.Horizontal
+                };
+
+                // Add "Activity" text
+                var textBlock = new System.Windows.Controls.TextBlock
+                {
+                    Text = "Activity ",
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                // Set text color based on severity
+                if (hasUnreadErrors)
+                {
+                    textBlock.Foreground = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(139, 0, 0)); // Dark Red
+                }
+                else // hasUnreadWarnings
+                {
+                    textBlock.Foreground = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(255, 140, 0)); // Orange
+                }
+
+                headerPanel.Children.Add(textBlock);
+
+                // Add appropriate SVG icon
+                try
+                {
+                    var iconViewer = new SharpVectors.Converters.SvgViewbox
+                    {
+                        Width = 16,
+                        Height = 16,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(4, 0, 0, 0)
+                    };
+
+                    // Get the path to the Images folder
+                    string baseDir = System.IO.Path.GetDirectoryName(
+                        System.Reflection.Assembly.GetExecutingAssembly().Location) ?? "";
+
+                    string iconFileName = hasUnreadErrors ? "error_icon.svg" : "warning_icon.svg";
+                    string iconPath = System.IO.Path.Combine(baseDir, "Images", iconFileName);
+
+                    if (System.IO.File.Exists(iconPath))
+                    {
+                        iconViewer.Source = new Uri(iconPath, UriKind.Absolute);
+                        headerPanel.Children.Add(iconViewer);
+                    }
+                    else
+                    {
+                        // Fallback to emoji if SVG file not found
+                        System.Diagnostics.Debug.WriteLine($"SVG icon not found: {iconPath}");
+                        var fallbackIcon = new System.Windows.Controls.TextBlock
+                        {
+                            Text = hasUnreadErrors ? "⚠️" : "⚠️",
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Margin = new Thickness(4, 0, 0, 0)
+                        };
+                        headerPanel.Children.Add(fallbackIcon);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error loading SVG icon: {ex.Message}");
+                    // Fallback to emoji if SVG loading fails
+                    var fallbackIcon = new System.Windows.Controls.TextBlock
+                    {
+                        Text = hasUnreadErrors ? "⚠️" : "⚠️",
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(4, 0, 0, 0)
+                    };
+                    headerPanel.Children.Add(fallbackIcon);
+                }
+
+                tabActivity.Header = headerPanel;
             }
             else
             {
+                // No unread errors or warnings - show plain text
                 tabActivity.Header = "Activity";
                 tabActivity.Foreground = System.Windows.Media.Brushes.Black;
             }

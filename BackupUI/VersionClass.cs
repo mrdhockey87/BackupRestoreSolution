@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.6.35";
+		static private string version_fallback_number = "5.13.6.36";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,24 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.6.36 UI ENHANCEMENT - SVG ICON INTEGRATION FOR ACTIVITY TAB: Replaced emoji warning indicators with professional SVG icons!
+*					Enhanced UpdateActivityTabWarning() method to display scalable vector graphics instead of text emoji (⚠️). Added separate detection
+*					methods in BackupLogger: HasUnreadErrors() checks ONLY for errors, HasUnreadWarnings() checks ONLY for warnings (previously single
+*					method checked both). Implemented severity-based icon priority system: error_icon.svg displays for errors (dark red text #8B0000),
+*					warning_icon.svg displays for warnings when no errors exist (orange text #FF8C00), no icon when no unread issues (black text).
+*					Dynamic header construction using StackPanel with TextBlock + SvgViewbox from SharpVectors.WPF NuGet package. Icon specifications:
+*					16x16 pixels, center-aligned, 4px left margin. SVG files resolved from Images folder relative to application directory
+*					({AppDir}\Images\error_icon.svg or warning_icon.svg). Graceful error handling: file existence check before loading, try-catch around
+*					SVG loading, fallback to emoji (⚠️) if SVG file missing or loading fails, debug logging for troubleshooting. Complete user experience:
+*					new error/warning triggers appropriate icon with colored text, user views Activity tab triggers MarkAllErrorsAsRead() to clear unread
+*					status, icon disappears and text returns to black, icon reappears only when new error/warning occurs, unread status persists across
+*					application restarts. Periodic update behavior maintained: timer checks every 30 seconds, updates icon automatically without user
+*					interaction. Priority system ensures errors always override warnings when both exist - highest severity wins. Benefits: professional
+*					vector graphics scale perfectly at any DPI, clear visual hierarchy between severity levels, consistent design matching application
+*					theme, larger/clearer icons than emoji for better accessibility, maintainable (easy SVG file replacement), graceful degradation with
+*					emoji fallback. Color coding: None/black (no issues), Warning/orange (attention needed), Error/dark-red (immediate action required).
+*					Complete integration with existing notification system - complements Windows toast notifications and periodic checking. Production-ready
+*					professional visual indicators that enhance user awareness of backup status! mdail 2/27/2026
 * Version 5.13.6.35 CRITICAL FIX - DEVICE PATH AUTO-DETECTION: Fixed backup jobs failing with "Device paths must be backed up using BackupVolume
 *					or BackupDisk" error! Issue occurred when existing backup jobs had incorrect BackupTarget setting (Files instead of Disk) for
 *					physical drive paths like \\.\PHYSICALDRIVE5. While version 5.13.6.29 added logic to correctly set BackupTarget when creating NEW
