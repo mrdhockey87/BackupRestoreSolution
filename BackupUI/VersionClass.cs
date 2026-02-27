@@ -71,26 +71,23 @@ namespace BackupUI
 
 /*
  * 
-* Version 5.13.7.6 UX ENHANCEMENT - COPY SELECTED TO CLIPBOARD: Added "Copy Selected" feature to Activity Detail window for quick sharing
-*					of activity log entries! User requested: "when on the activity detail page copy selected should copy the selected detail
-*					or details to the clipboard" - users needed easy way to copy log entries for support tickets, documentation, or sharing.
-*					Added dual access methods: 1) "Copy Selected" button in action buttons row (120px wide, positioned first before Export buttons),
-*					2) "Copy Selected" context menu item at top of right-click menu for quick access. Implementation includes three methods:
-*					CopySelected_Click() handles button clicks, ContextCopySelected_Click() handles context menu clicks, both call
-*					CopySelectedToClipboard() which performs the actual work. Formatted output includes: Timestamp [yyyy-MM-dd HH:mm:ss],
-*					Level in brackets [Success/Warning/Error/Info], Job Name, Message with proper indentation (2 spaces), Details (if present),
-*					Backup Path (if present), Validation status (PASSED/FAILED), blank line separator between entries. Uses Clipboard.SetText()
-*					for system clipboard integration. Shows "No Selection" message if nothing selected, shows confirmation with entry count after
-*					successful copy. Multiple entries sorted by timestamp for chronological order. Error handling catches clipboard exceptions with
-*					user-friendly messages. Format example: "[2026-02-27 14:30:15] [Success] ServerBackup\n  Message: Backup completed successfully\n
-*					  Details: Backed up 1.5GB\n  Backup Path: E:\Backups\ServerBackup_Full.ssb\n  Validation: PASSED\n\n". Benefits: Quick sharing
-*					(copy logs for support/documentation), Multiple methods (button or right-click), Full details (all log information included),
-*					Formatted text (easy to read structure), Batch operations (copy multiple entries at once), User-friendly (shows confirmation
-*					with count). Perfect for: Creating support tickets with error details, Documenting backup history, Sharing logs with team members,
-*					Keeping records of specific events, Troubleshooting with detailed context. Users can now: 1) Select entries (Shift+Click for
-*					range, Ctrl+Click for individual), 2) Click "Copy Selected" button OR right-click → "Copy Selected", 3) Paste into any
-*					application (text editor, email, ticket system, documentation). Production-ready clipboard integration for enterprise logging
-*					workflow! Simple feature with big usability impact - eliminates manual transcription of log details. mdail 2/27/2026
+* Version 5.13.7.6 UX ENHANCEMENT - COPY SELECTED TO CLIPBOARD: Added clipboard copy functionality to Activity Detail window! User requested:
+*					"when on the activity detail page copy selected should copy the selected detail or details to the clipboard" - needed quick
+*					way to share activity logs with support or documentation. Added "Copy Selected" button as first action button (120px wide) in
+*					action buttons row, positioned before Export buttons. Added "Copy Selected" context menu item at top of right-click menu.
+*					Implemented CopySelectedToClipboard() method that: 1) Gets selected log entries from DataGrid, 2) Shows friendly message if
+*					nothing selected, 3) Formats entries with full details (timestamp, level, job name, message, details, backup path, validation
+*					status), 4) Uses Clipboard.SetText() to copy formatted text, 5) Shows confirmation message with count of copied entries.
+*					Format includes all log information in readable structure: [2026-02-27 14:30:15] [Success] ServerBackup, Message:, Details:,
+*					Backup Path:, Validation: PASSED/FAILED. Added both CopySelected_Click() button handler and ContextCopySelected_Click() context
+*					menu handler both calling shared CopySelectedToClipboard() implementation. Complete error handling with try-catch showing user-
+*					friendly error messages. Benefits: Quick sharing (copy logs for support tickets), Multiple access methods (button or context menu),
+*					Full details included (all log fields captured), Formatted text (easy to read structure), User-friendly feedback (confirmation
+*					with entry count). Users can now: Select entries (Shift+Click for range, Ctrl+Click for individual), Click "Copy Selected" button
+*					OR Right-click → "Copy Selected", Paste into text editor/email/support ticket/documentation. Perfect for: Sharing error details with
+*					support team, Creating backup operation reports, Documenting system issues, Copying logs to issue trackers. Complete clipboard
+*					integration for activity management - users can easily share backup operation details without exporting to files. Production-ready
+*					clipboard functionality with comprehensive error handling! mdail 2/27/2026
 * Version 5.13.7.5 UX ENHANCEMENT - TRULY SILENT SERVICE INSTALLATION: Removed success MessageBox from automatic service installation for
 *					completely transparent service management! User requested: "when the service is installed automatically when a run now is
 *					clicked it should not give and alert" - even success notifications were interrupting the workflow. Previously version 5.13.7.4
