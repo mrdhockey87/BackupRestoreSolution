@@ -100,42 +100,33 @@ namespace BackupUI
                         return; // CheckBackupServiceAsync already showed error message
                     }
 
-                    var result = MessageBox.Show(
-                        $"Run backup job '{job.Name}' now?\n\nThe backup will run in the background service and continue even if you close this window.",
-                        "Run Backup",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Question);
+                    // Log the manual backup attempt immediately
+                    BackupLogger.LogInfo(job.Name, $"User initiated manual backup (Run Now clicked)");
 
-                    if (result == MessageBoxResult.Yes)
+                    // Send job to service and show progress window (no confirmation needed)
+                    var serviceClient = new Services.BackupServiceClient();
+                    var success = await serviceClient.RunBackupNowAsync(jobId);
+
+                    if (success)
                     {
-                        // Log the manual backup attempt immediately
-                        BackupLogger.LogInfo(job.Name, $"User initiated manual backup (Run Now clicked)");
-                        
-                        // Send job to service and show progress window
-                        var serviceClient = new Services.BackupServiceClient();
-                        var success = await serviceClient.RunBackupNowAsync(jobId);
+                        BackupLogger.LogInfo(job.Name, "Service accepted backup request - backup is starting");
 
-                        if (success)
-                        {
-                            BackupLogger.LogInfo(job.Name, "Service accepted backup request - backup is starting");
+                        // Show non-modal progress window
+                        var progressWindow = new Windows.BackupProgressWindow(jobId, job.Name);
+                        WindowPositionManager.SetChildWindowPosition(progressWindow, this);
+                        progressWindow.Show();
+                    }
+                    else
+                    {
+                        // Log the failure to Activity tab
+                        BackupLogger.LogError(job.Name, "Failed to communicate with BackupRestoreService - backup was not started");
 
-                            // Show non-modal progress window
-                            var progressWindow = new Windows.BackupProgressWindow(jobId, job.Name);
-                            WindowPositionManager.SetChildWindowPosition(progressWindow, this);
-                            progressWindow.Show();
-                        }
-                        else
-                        {
-                            // Log the failure to Activity tab
-                            BackupLogger.LogError(job.Name, "Failed to communicate with BackupRestoreService - backup was not started");
-                            
-                            MessageBox.Show(
-                                "Failed to start backup. The service may be busy or not responding.\n\n" +
-                                "Try again in a few moments, or restart the BackupRestoreService from Windows Services.",
-                                "Service Error",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Error);
-                        }
+                        MessageBox.Show(
+                            "Failed to start backup. The service may be busy or not responding.\n\n" +
+                            "Try again in a few moments, or restart the BackupRestoreService from Windows Services.",
+                            "Service Error",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error);
                     }
                 }
             }

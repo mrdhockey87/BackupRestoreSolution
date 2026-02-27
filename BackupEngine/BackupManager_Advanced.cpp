@@ -406,16 +406,11 @@ extern "C" {
 
         try {
             if (callback) {
-                callback(0, L"Starting disk backup (WIM format)...");
+                callback(0, L"Starting disk backup - enumerating volumes...");
             }
-
-            // For now, create a simple placeholder WIM file
-            // Full multi-volume WIM implementation will be added later
-            // This ensures the build compiles and basic structure works
 
             // Ensure destPath is a file, not a directory
             std::wstring destFile = destPath;
-            // Check if path ends with .ssb (C++17 compatible)
             if (destFile.length() < 4 || destFile.substr(destFile.length() - 4) != L".ssb") {
                 if (fs::exists(destPath) && fs::is_directory(destPath)) {
                     SetLastErrorMessage(L"Destination must be a file path ending in .ssb, not a directory");
@@ -429,29 +424,144 @@ extern "C" {
                 fs::create_directories(parentDir);
             }
 
-            if (callback) {
-                callback(20, L"Creating WIM backup archive for disk...");
-            }
+            // Enumerate volumes on this disk
+            std::vector<std::wstring> volumes;
+            wchar_t volumeName[MAX_PATH];
+            HANDLE hFind = FindFirstVolumeW(volumeName, ARRAYSIZE(volumeName));
 
-            // Create WIM file
-            HANDLE hWim = CreateWimFile(destFile.c_str(), compress, callback);
-            if (!hWim || hWim == INVALID_HANDLE_VALUE) {
+            if (hFind == INVALID_HANDLE_VALUE) {
+                SetLastErrorMessage(L"Failed to enumerate volumes");
                 return -2;
             }
 
-            if (callback) {
-                callback(40, L"Disk backup structure created");
+            do {
+                // volumeName format: \\?\Volume{guid}\
+                // QueryDosDevice expects: Volume{guid} (no \\?\ prefix, no trailing \)
+
+                // Remove trailing backslash for QueryDosDevice
+                size_t len = wcslen(volumeName);
+                if (len > 0 && volumeName[len - 1] == L'\\') {
+                    volumeName[len - 1] = L'\0';
+                    len--;
+                }
+
+                // Skip \\?\ prefix (4 characters) for QueryDosDevice
+                const wchar_t* deviceNameForQuery = volumeName;
+                if (wcslen(volumeName) > 4 && wcsncmp(volumeName, L"\\\\?\\", 4) == 0) {
+                    deviceNameForQuery = volumeName + 4;  // Skip "\\?\"
+                }
+
+                // Get volume device path to check which disk it belongs to
+                wchar_t deviceName[MAX_PATH];
+                DWORD charCount = QueryDosDeviceW(deviceNameForQuery, deviceName, ARRAYSIZE(deviceName));
+
+                if (charCount > 0) {
+                    // Check if this volume is on our target disk
+                    // Device name format: \Device\HarddiskVolumeN or \Device\HarddiskN\PartitionM
+                    std::wstring deviceStr = deviceName;
+                    std::wstring diskPrefix = L"\\Device\\Harddisk" + std::to_wstring(diskNumber);
+
+                    if (deviceStr.find(diskPrefix) == 0) {
+                        // This volume is on our disk!
+                        // Add with trailing backslash for BackupVolume (needs \\?\Volume{guid}\)
+                        std::wstring volPath = volumeName;
+                        volPath += L"\\";  // Add back trailing backslash
+                        volumes.push_back(volPath);
+                    }
+                }
+            } while (FindNextVolumeW(hFind, volumeName, ARRAYSIZE(volumeName)));
+
+            FindVolumeClose(hFind);
+
+            if (volumes.empty()) {
+                SetLastErrorMessage(L"No volumes found on disk");
+                return -3;
             }
 
-            // For Phase 2, we're creating a basic WIM structure
-            // Phase 3 will enumerate volumes and add them as separate images
-            // This allows the system to compile and function
+            if (callback) {
+                std::wstring msg = L"Found " + std::to_wstring(volumes.size()) + L" volume(s) on disk " + std::to_wstring(diskNumber);
+                callback(10, msg.c_str());
+            }
+
+            // Create WIM file for all volumes
+            if (callback) {
+                callback(15, L"Creating WIM backup archive...");
+            }
+
+            HANDLE hWim = CreateWimFile(destFile.c_str(), compress, callback);
+            if (!hWim || hWim == INVALID_HANDLE_VALUE) {
+                return -4;
+            }
+
+            // Backup each volume as a separate image in the WIM file
+            int volumeIndex = 0;
+            for (const auto& volume : volumes) {
+                volumeIndex++;
+                int progressBase = 20 + (volumeIndex - 1) * (60 / volumes.size());
+
+                if (callback) {
+                    std::wstring msg = L"Backing up volume " + std::to_wstring(volumeIndex) + 
+                                      L" of " + std::to_wstring(volumes.size()) + L"...";
+                    callback(progressBase, msg.c_str());
+                }
+
+                // Create VSS snapshot for this volume
+                BackupEngine::VSSSnapshotManager vssManager;
+                HRESULT hr = vssManager.Initialize();
+
+                wchar_t snapshotPath[MAX_PATH] = { 0 };
+                std::wstring actualSourcePath = volume + L"\\";  // Add trailing backslash
+
+                if (SUCCEEDED(hr)) {
+                    hr = vssManager.CreateVolumeSnapshot(actualSourcePath.c_str(), snapshotPath, MAX_PATH);
+                    if (SUCCEEDED(hr)) {
+                        actualSourcePath = snapshotPath;
+                    }
+                }
+
+                // Capture this volume to WIM as a separate image
+                std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + 
+                                        L" Volume " + std::to_wstring(volumeIndex);
+
+                HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), 
+                                                 imageName.c_str(), callback);
+
+                if (!hImage || hImage == INVALID_HANDLE_VALUE) {
+                    WIMCloseHandle(hWim);
+                    std::wstring err = L"Failed to capture volume " + std::to_wstring(volumeIndex);
+                    SetLastErrorMessage(err);
+                    return -5;
+                }
+
+                WIMCloseHandle(hImage);
+            }
+
+            if (callback) {
+                callback(85, L"Finalizing backup archive...");
+            }
 
             // Close WIM file
             WIMCloseHandle(hWim);
 
+            // Handle system state if requested
+            if (includeSystemState) {
+                if (callback) {
+                    callback(90, L"Backing up system state metadata...");
+                }
+
+                std::wstring ssbDir = fs::path(destFile).parent_path().wstring();
+                std::wstring systemStateDir = ssbDir + L"\\SystemState";
+
+                bool systemStateSuccess = BackupSystemState(systemStateDir.c_str(), callback);
+                if (!systemStateSuccess) {
+                    if (callback) {
+                        callback(95, L"Warning: System state backup incomplete");
+                    }
+                }
+            }
+
             if (callback) {
-                callback(100, L"Disk backup complete!");
+                callback(100, L"Disk backup completed successfully!");
             }
 
             return 0;

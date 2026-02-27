@@ -185,7 +185,9 @@ namespace BackupService
                         logger?.Invoke("Verifying backup...");
                         progressCallback?.Invoke(90, "Verifying backup...");
 
-                        string verifyPath = newBackupPath ?? job.DestinationPath;
+                        // VerifyBackup expects a FOLDER path, not a file path
+                        // newBackupPath is the full .ssb file path, so extract the directory
+                        string verifyPath = job.DestinationPath; // Use the folder containing the .ssb file
                         int result = VerifyBackup(verifyPath, nativeCallback);
 
                         if (result != 0)
@@ -284,69 +286,80 @@ namespace BackupService
                     break;
 
             case BackupType.Incremental:
-                // Incremental backups need a full backup as the base
-                var fullBackupBase = FindFullBackup(job.DestinationPath, job.Name);
-                if (string.IsNullOrEmpty(fullBackupBase))
+                // DISK BACKUPS: WIM-based disk backups don't support incremental mode - always create full snapshot
+                if (job.Target == BackupTarget.Disk)
                 {
-                    logger?.Invoke($"No full backup found. Creating initial full backup instead of incremental.");
-                    // Do a full backup if no previous full backup exists
-                    if (job.Target == BackupTarget.Disk)
+                    int diskNumber = ExtractDiskNumber(sourcePath);
+                    if (diskNumber < 0)
                     {
-                        int diskNumber = ExtractDiskNumber(sourcePath);
-                        if (diskNumber < 0)
-                        {
-                            logger?.Invoke($"ERROR: Invalid disk path format: {sourcePath}");
-                            return -11;
-                        }
-                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+                        logger?.Invoke($"ERROR: Invalid disk path format: {sourcePath}");
+                        return -11;
                     }
-                    else if (job.Target == BackupTarget.Volume)
-                    {
-                        result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
-                    }
-                    else
-                    {
-                        result = BackupFiles(sourcePath, destPath, callback);
-                    }
+                    logger?.Invoke($"Creating full disk backup (disk backups don't support incremental mode): {diskNumber}");
+                    result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
                 }
                 else
                 {
-                    // Find the most recent backup (could be full, incremental, or differential) to base the incremental on
-                    var lastBackup = FindLastBackup(job.DestinationPath, job.Name) ?? fullBackupBase;
-                    logger?.Invoke($"Creating incremental backup from: {lastBackup}");
-                    result = CreateIncrementalBackup(sourcePath, destPath, lastBackup, callback);
+                    // FILE/FOLDER/VOLUME BACKUPS: Support true incremental backups
+                    var fullBackupBase = FindFullBackup(job.DestinationPath, job.Name);
+                    if (string.IsNullOrEmpty(fullBackupBase))
+                    {
+                        logger?.Invoke($"No full backup found. Creating initial full backup instead of incremental.");
+                        // Do a full backup if no previous full backup exists
+                        if (job.Target == BackupTarget.Volume)
+                        {
+                            result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
+                        }
+                        else
+                        {
+                            result = BackupFiles(sourcePath, destPath, callback);
+                        }
+                    }
+                    else
+                    {
+                        // Find the most recent backup (could be full, incremental, or differential) to base the incremental on
+                        var lastBackup = FindLastBackup(job.DestinationPath, job.Name) ?? fullBackupBase;
+                        logger?.Invoke($"Creating incremental backup from: {lastBackup}");
+                        result = CreateIncrementalBackup(sourcePath, destPath, lastBackup, callback);
+                    }
                 }
                 break;
 
             case BackupType.Differential:
-                var fullBackup = FindFullBackup(job.DestinationPath, job.Name);
-                if (string.IsNullOrEmpty(fullBackup))
+                // DISK BACKUPS: WIM-based disk backups don't support differential mode - always create full snapshot
+                if (job.Target == BackupTarget.Disk)
                 {
-                    logger?.Invoke($"No full backup found. Creating initial full backup instead of differential.");
-                    // Do a full backup if no base full backup exists
-                    if (job.Target == BackupTarget.Disk)
+                    int diskNumber = ExtractDiskNumber(sourcePath);
+                    if (diskNumber < 0)
                     {
-                        int diskNumber = ExtractDiskNumber(sourcePath);
-                        if (diskNumber < 0)
-                        {
-                            logger?.Invoke($"ERROR: Invalid disk path format: {sourcePath}");
-                            return -11;
-                        }
-                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+                        logger?.Invoke($"ERROR: Invalid disk path format: {sourcePath}");
+                        return -11;
                     }
-                    else if (job.Target == BackupTarget.Volume)
-                    {
-                        result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
-                    }
-                    else
-                    {
-                        result = BackupFiles(sourcePath, destPath, callback);
-                    }
+                    logger?.Invoke($"Creating full disk backup (disk backups don't support differential mode): {diskNumber}");
+                    result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
                 }
                 else
                 {
-                    logger?.Invoke($"Creating differential backup from: {fullBackup}");
-                    result = CreateDifferentialBackup(sourcePath, destPath, fullBackup, callback);
+                    // FILE/FOLDER/VOLUME BACKUPS: Support true differential backups
+                    var fullBackup = FindFullBackup(job.DestinationPath, job.Name);
+                    if (string.IsNullOrEmpty(fullBackup))
+                    {
+                        logger?.Invoke($"No full backup found. Creating initial full backup instead of differential.");
+                        // Do a full backup if no base full backup exists
+                        if (job.Target == BackupTarget.Volume)
+                        {
+                            result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
+                        }
+                        else
+                        {
+                            result = BackupFiles(sourcePath, destPath, callback);
+                        }
+                    }
+                    else
+                    {
+                        logger?.Invoke($"Creating differential backup from: {fullBackup}");
+                        result = CreateDifferentialBackup(sourcePath, destPath, fullBackup, callback);
+                    }
                 }
                 break;
 
