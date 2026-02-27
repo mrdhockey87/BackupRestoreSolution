@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.7.2";
+		static private string version_fallback_number = "5.13.7.3";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,24 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.7.3 CRITICAL FIX - LEGACY LOG FILE DELETION SUPPORT: Fixed "Delete Selected" failing to delete old activity log entries!
+*					Root cause: Old logs stored in backup_activity.json (pre-5.13.7.2) couldn't be deleted because new delete code only
+*					looked in per-job files (JobName.json, service.json). User reported: "the delete selected fails to delete the entries.
+*					note these are the old log entries as there should not be any new entries yet" - after upgrading to 5.13.7.2, old entries
+*					were still loaded and displayed in Activity Management UI but couldn't be deleted! Fixed by adding complete backward
+*					compatibility: 1) Added LegacyLogFile constant pointing to backup_activity.json for pre-5.13.7.2 format. 2) Enhanced
+*					DeleteLogEntry() to try per-job file first (current format), then fallback to legacy file (old format) if not found,
+*					returns true if deleted from either location. 3) Enhanced DeleteLogEntries() to group entries by job name, try per-job
+*					files first, track which entries were successfully deleted, try legacy file for remaining entries, return total count
+*					deleted from all sources. Delete flow: User selects old entries → DeleteLogEntries() tries per-job files → tracks
+*					deleted entries → tries legacy file for remaining → returns total from both sources. Benefits: Full backward compatibility
+*					(handles both old and new formats), No data loss (old logs remain accessible until deleted), Smart fallback (tries current
+*					format first, legacy second), Efficient (groups by job name to minimize file operations), Transparent (users don't need
+*					to know about format changes). File locations: Current format (5.13.7.2+) stores logs in per-job files (service.json,
+*					JobName.json), Legacy format (pre-5.13.7.2) stored all logs mixed in backup_activity.json. Now successfully deletes
+*					old entries from backup_activity.json created before per-job logging was implemented! Complete backward compatibility for
+*					activity log management - users can delete entries regardless of which version created them. Production-ready migration
+*					support with zero user intervention required! mdail 2/27/2026
 * Version 5.13.7.2 MAJOR REFACTORING - PER-JOB ACTIVITY LOGGING + AUTO-SERVICE INSTALL: Completely redesigned logging system for better
 *					organization and diagnostics! Logs now stored in separate files per backup job instead of single monolithic file.
 *					New structure: service.json (service-only messages like startup/shutdown/communication), JobName.json (per-job activity
