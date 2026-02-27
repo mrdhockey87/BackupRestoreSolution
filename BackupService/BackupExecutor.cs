@@ -290,7 +290,18 @@ namespace BackupService
                 {
                     logger?.Invoke($"No full backup found. Creating initial full backup instead of incremental.");
                     // Do a full backup if no previous full backup exists
-                    if (job.Target == BackupTarget.Volume)
+                    if (job.Target == BackupTarget.Disk)
+                    {
+                        // Extract disk number from device path
+                        int diskNumber = ExtractDiskNumber(sourcePath);
+                        if (diskNumber < 0)
+                        {
+                            logger?.Invoke($"ERROR: Invalid disk path format: {sourcePath}");
+                            return -11;
+                        }
+                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+                    }
+                    else if (job.Target == BackupTarget.Volume)
                     {
                         result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
                     }
@@ -314,7 +325,18 @@ namespace BackupService
                 {
                     logger?.Invoke($"No full backup found. Creating initial full backup instead of differential.");
                     // Do a full backup if no base full backup exists
-                    if (job.Target == BackupTarget.Volume)
+                    if (job.Target == BackupTarget.Disk)
+                    {
+                        // Extract disk number from device path
+                        int diskNumber = ExtractDiskNumber(sourcePath);
+                        if (diskNumber < 0)
+                        {
+                            logger?.Invoke($"ERROR: Invalid disk path format: {sourcePath}");
+                            return -11;
+                        }
+                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+                    }
+                    else if (job.Target == BackupTarget.Volume)
                     {
                         result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
                     }
