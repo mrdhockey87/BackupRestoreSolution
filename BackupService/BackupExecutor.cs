@@ -72,7 +72,6 @@ namespace BackupService
                         progressCallback?.Invoke(percentage, message ?? $"Progress: {percentage}%");
                     };
 
-                    bool backupSuccess = false;
                     string? newBackupPath = null;
 
                     // NEW ARCHITECTURE: Create direct .ssb file (no folders, no timestamps)
@@ -125,8 +124,6 @@ namespace BackupService
                             logger?.Invoke($"Backup failed: {error}");
                             return false;
                         }
-
-                        backupSuccess = true;
                     }
 
                     if (job.IsHyperVBackup)
@@ -174,8 +171,6 @@ namespace BackupService
                                 logger?.Invoke($"Hyper-V backup failed: {error}");
                                 return false;
                             }
-
-                            backupSuccess = true;
                         }
                     }
 

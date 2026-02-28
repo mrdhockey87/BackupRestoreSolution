@@ -424,7 +424,7 @@ extern "C" {
                 fs::create_directories(parentDir);
             }
 
-            // Enumerate volumes on this disk
+            // Enumerate volumes on this disk using IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS
             std::vector<std::wstring> volumes;
             wchar_t volumeName[MAX_PATH];
             HANDLE hFind = FindFirstVolumeW(volumeName, ARRAYSIZE(volumeName));
@@ -436,38 +436,52 @@ extern "C" {
 
             do {
                 // volumeName format: \\?\Volume{guid}\
-                // QueryDosDevice expects: Volume{guid} (no \\?\ prefix, no trailing \)
+                // Create a COPY to avoid modifying the FindNextVolumeW buffer
+                std::wstring volumeNameCopy = volumeName;
 
-                // Remove trailing backslash for QueryDosDevice
-                size_t len = wcslen(volumeName);
-                if (len > 0 && volumeName[len - 1] == L'\\') {
-                    volumeName[len - 1] = L'\0';
-                    len--;
+                // Remove trailing backslash to open the volume with CreateFile
+                if (!volumeNameCopy.empty() && volumeNameCopy.back() == L'\\') {
+                    volumeNameCopy.pop_back();
                 }
 
-                // Skip \\?\ prefix (4 characters) for QueryDosDevice
-                const wchar_t* deviceNameForQuery = volumeName;
-                if (wcslen(volumeName) > 4 && wcsncmp(volumeName, L"\\\\?\\", 4) == 0) {
-                    deviceNameForQuery = volumeName + 4;  // Skip "\\?\"
-                }
+                // Open the volume to query disk extents
+                HANDLE hVolume = CreateFileW(
+                    volumeNameCopy.c_str(),
+                    GENERIC_READ,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    NULL,
+                    OPEN_EXISTING,
+                    0,
+                    NULL
+                );
 
-                // Get volume device path to check which disk it belongs to
-                wchar_t deviceName[MAX_PATH];
-                DWORD charCount = QueryDosDeviceW(deviceNameForQuery, deviceName, ARRAYSIZE(deviceName));
+                if (hVolume != INVALID_HANDLE_VALUE) {
+                    // Query which physical disk(s) this volume is on
+                    BYTE buffer[sizeof(VOLUME_DISK_EXTENTS) + 32 * sizeof(DISK_EXTENT)];
+                    PVOLUME_DISK_EXTENTS pExtents = (PVOLUME_DISK_EXTENTS)buffer;
+                    DWORD bytesReturned = 0;
 
-                if (charCount > 0) {
-                    // Check if this volume is on our target disk
-                    // Device name format: \Device\HarddiskVolumeN or \Device\HarddiskN\PartitionM
-                    std::wstring deviceStr = deviceName;
-                    std::wstring diskPrefix = L"\\Device\\Harddisk" + std::to_wstring(diskNumber);
-
-                    if (deviceStr.find(diskPrefix) == 0) {
-                        // This volume is on our disk!
-                        // Add with trailing backslash for BackupVolume (needs \\?\Volume{guid}\)
-                        std::wstring volPath = volumeName;
-                        volPath += L"\\";  // Add back trailing backslash
-                        volumes.push_back(volPath);
+                    if (DeviceIoControl(
+                        hVolume,
+                        IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                        NULL, 0,
+                        pExtents, sizeof(buffer),
+                        &bytesReturned,
+                        NULL))
+                    {
+                        // Check if any extent is on our target disk
+                        for (DWORD i = 0; i < pExtents->NumberOfDiskExtents; i++) {
+                            if (pExtents->Extents[i].DiskNumber == static_cast<DWORD>(diskNumber)) {
+                                // This volume is on our target disk!
+                                // Add with trailing backslash for BackupVolume
+                                std::wstring volPath = volumeNameCopy + L"\\";
+                                volumes.push_back(volPath);
+                                break; // Only add once even if multiple extents
+                            }
+                        }
                     }
+
+                    CloseHandle(hVolume);
                 }
             } while (FindNextVolumeW(hFind, volumeName, ARRAYSIZE(volumeName)));
 
@@ -497,7 +511,7 @@ extern "C" {
             int volumeIndex = 0;
             for (const auto& volume : volumes) {
                 volumeIndex++;
-                int progressBase = 20 + (volumeIndex - 1) * (60 / volumes.size());
+                int progressBase = 20 + (volumeIndex - 1) * (60 / static_cast<int>(volumes.size()));
 
                 if (callback) {
                     std::wstring msg = L"Backing up volume " + std::to_wstring(volumeIndex) + 

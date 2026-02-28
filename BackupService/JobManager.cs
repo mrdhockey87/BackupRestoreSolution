@@ -101,7 +101,11 @@ namespace BackupService
 
                 if (job.Schedule.NextRunTime == null)
                 {
-                    CalculateNextRunTime(job);
+                    // IMPORTANT: When NextRunTime is null (first time or not saved),
+                    // calculate it for the FUTURE - don't trigger immediately!
+                    // Set a flag to indicate this is initial calculation
+                    CalculateNextRunTime(job, isInitialCalculation: true);
+                    SaveJobs(); // Save the calculated NextRunTime so it persists
                 }
 
                 if (job.Schedule.NextRunTime <= now)
@@ -116,11 +120,11 @@ namespace BackupService
         public void UpdateJobAfterExecution(BackupJob job)
         {
             job.LastRunTime = DateTime.Now;
-            CalculateNextRunTime(job);
+            CalculateNextRunTime(job, isInitialCalculation: false);
             SaveJobs();
         }
 
-        private void CalculateNextRunTime(BackupJob job)
+        private void CalculateNextRunTime(BackupJob job, bool isInitialCalculation = false)
         {
             if (job.Schedule == null)
                 return;
@@ -131,9 +135,18 @@ namespace BackupService
             switch (job.Schedule.Frequency)
             {
                 case ScheduleFrequency.Daily:
-                    job.Schedule.NextRunTime = scheduledTime > now
-                        ? scheduledTime
-                        : scheduledTime.AddDays(1);
+                    // If this is initial calculation and scheduledTime is in the past,
+                    // ALWAYS schedule for tomorrow to avoid immediate execution
+                    if (isInitialCalculation && scheduledTime <= now)
+                    {
+                        job.Schedule.NextRunTime = scheduledTime.AddDays(1);
+                    }
+                    else
+                    {
+                        job.Schedule.NextRunTime = scheduledTime > now
+                            ? scheduledTime
+                            : scheduledTime.AddDays(1);
+                    }
                     break;
 
                 case ScheduleFrequency.Weekly:
