@@ -607,14 +607,23 @@ namespace BackupUI
                 System.Diagnostics.Debug.WriteLine("TabControl_SelectionChanged: Event from child control, ignoring");
                 return;
             }
-            
-            if (sender is TabControl tabControl && tabControl.SelectedIndex == 1) // Activity tab is index 1
+
+            if (sender is TabControl tabControl)
             {
-                System.Diagnostics.Debug.WriteLine("TabControl_SelectionChanged: Activity tab selected, loading logs");
-                LoadJobLogsTab();
-                // Mark all errors as read when user views Activity tab
-                BackupLogger.MarkAllErrorsAsRead();
-                UpdateActivityTabWarning();
+                if (tabControl.SelectedIndex == 1) // Activity tab
+                {
+                    System.Diagnostics.Debug.WriteLine("TabControl_SelectionChanged: Activity tab selected, loading logs");
+                    LoadJobLogsTab();
+                    // Mark all errors as read when user views Activity tab
+                    BackupLogger.MarkAllErrorsAsRead();
+                    UpdateActivityTabWarning();
+                }
+                else if (tabControl.SelectedIndex == 2) // Mount Backups tab
+                {
+                    System.Diagnostics.Debug.WriteLine("TabControl_SelectionChanged: Mount Backups tab selected, refreshing");
+                    LoadAvailableBackups();
+                    LoadMountedBackups();
+                }
             }
         }
 
@@ -916,16 +925,80 @@ namespace BackupUI
             LoadMountedBackups();
         }
 
-        private void MountBackup_Click(object sender, RoutedEventArgs e)
+        private void BrowseBackup_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Select Backup File to Mount",
+                Filter = "Silver State Backup Files (*.ssb)|*.ssb|All Files (*.*)|*.*",
+                DefaultExt = ".ssb",
+                Multiselect = false
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                string selectedFile = openFileDialog.FileName;
+                var fileInfo = new System.IO.FileInfo(selectedFile);
+
+                // Add to available backups list
+                var backups = dgAvailableBackups.ItemsSource as System.Collections.Generic.List<AvailableBackupInfo>;
+                if (backups == null)
+                {
+                    backups = new System.Collections.Generic.List<AvailableBackupInfo>();
+                }
+
+                // Check if already in list
+                bool exists = false;
+                foreach (var b in backups)
+                {
+                    if (b.BackupPath.Equals(selectedFile, StringComparison.OrdinalIgnoreCase))
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+
+                if (!exists)
+                {
+                    backups.Add(new AvailableBackupInfo
+                    {
+                        BackupName = System.IO.Path.GetFileNameWithoutExtension(selectedFile),
+                        BackupType = GetBackupTypeFromFilename(System.IO.Path.GetFileNameWithoutExtension(selectedFile)),
+                        BackupDate = fileInfo.LastWriteTime,
+                        BackupPath = selectedFile
+                    });
+
+                    dgAvailableBackups.ItemsSource = null; // Force refresh
+                    dgAvailableBackups.ItemsSource = backups;
+
+                    if (txtNoBackups != null)
+                        txtNoBackups.Visibility = Visibility.Collapsed;
+
+                    MessageBox.Show($"Backup file added: {System.IO.Path.GetFileName(selectedFile)}",
+                                  "Backup Added",
+                                  MessageBoxButton.OK,
+                                  MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show("This backup is already in the list.",
+                                  "Already Added",
+                                  MessageBoxButton.OK,
+                                  MessageBoxImage.Information);
+                }
+            }
+        }
+
+        private async void MountBackup_Click(object sender, RoutedEventArgs e)
         {
             if (sender is System.Windows.Controls.Button btn && btn.Tag is AvailableBackupInfo backup)
             {
                 try
                 {
                     // Get selected backup point if Inc/Diff
-                    string vhdxPath = GetBackupPointPath(backup);
+                    string wimPath = GetBackupPointPath(backup);
 
-                    if (string.IsNullOrEmpty(vhdxPath))
+                    if (string.IsNullOrEmpty(wimPath))
                     {
                         MessageBox.Show("Please select a backup point to mount.",
                                       "No Backup Point Selected",
@@ -934,35 +1007,61 @@ namespace BackupUI
                         return;
                     }
 
-                    var (success, driveLetter, error) = BackupMountManager.MountBackup(
-                        vhdxPath,
-                        backup.BackupName,
-                        backup.BackupType,
-                        backup.BackupDate);
-
-                    if (success)
+                    // Create and show progress window
+                    var progressWindow = new BackupUI.Windows.MountProgressWindow
                     {
-                        MessageBox.Show($"Backup mounted as {driveLetter}:\n\n" +
-                                      $"You can now browse the backup in Windows Explorer.\n" +
-                                      $"Drive is READ-ONLY to prevent modifications.",
-                                      "Backup Mounted",
-                                      MessageBoxButton.OK,
-                                      MessageBoxImage.Information);
+                        Owner = this
+                    };
 
-                        LoadMountedBackups();
-                        OpenExplorer(driveLetter);
+                    progressWindow.SetBackupName(backup.BackupName);
+                    progressWindow.Show();
+
+                    try
+                    {
+                        // Mount asynchronously with progress updates
+                        var (success, mountPath, error) = await NativeBackupMountManager.MountBackupAsync(
+                            wimPath,
+                            backup.BackupName,
+                            backup.BackupType,
+                            1,  // Image index
+                            status => progressWindow.SetStatus(status));
+
+                        // Close progress window
+                        progressWindow.CloseProgress();
+
+                        if (success)
+                        {
+                            MessageBox.Show($"Backup mounted successfully!\n\n" +
+                                          $"Mount Path: {mountPath}\n\n" +
+                                          $"You can now browse the backup in Windows Explorer.\n" +
+                                          $"Backup is READ-ONLY to prevent modifications.",
+                                          "Backup Mounted",
+                                          MessageBoxButton.OK,
+                                          MessageBoxImage.Information);
+
+                            LoadMountedBackups();
+                            OpenExplorer(mountPath);
+                        }
+                        else
+                        {
+                            MessageBox.Show($"Failed to mount backup:\n{error}",
+                                          "Mount Error",
+                                          MessageBoxButton.OK,
+                                          MessageBoxImage.Error);
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        MessageBox.Show($"Failed to mount backup:\n{error}",
-                                      "Mount Error",
+                        progressWindow.CloseProgress();
+                        MessageBox.Show($"Error mounting backup:\n{ex.Message}",
+                                      "Error",
                                       MessageBoxButton.OK,
                                       MessageBoxImage.Error);
                     }
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error mounting backup:\n{ex.Message}",
+                    MessageBox.Show($"Error initializing mount:\n{ex.Message}",
                                   "Error",
                                   MessageBoxButton.OK,
                                   MessageBoxImage.Error);
@@ -972,22 +1071,22 @@ namespace BackupUI
 
         private void UnmountBackup_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.Button btn && btn.Tag is string driveLetter)
+            if (sender is System.Windows.Controls.Button btn && btn.Tag is string mountPath)
             {
                 var result = MessageBox.Show(
-                    $"Unmount backup drive {driveLetter}?",
+                    $"Unmount backup from {mountPath}?",
                     "Unmount Backup",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question);
 
                 if (result == MessageBoxResult.Yes)
                 {
-                    var (success, error) = BackupMountManager.UnmountBackup(driveLetter);
+                    var (success, error) = NativeBackupMountManager.UnmountBackup(mountPath);
 
                     if (success)
                     {
                         LoadMountedBackups();
-                        MessageBox.Show($"Drive {driveLetter} unmounted successfully.",
+                        MessageBox.Show($"Backup unmounted successfully from {mountPath}",
                                       "Success",
                                       MessageBoxButton.OK,
                                       MessageBoxImage.Information);
@@ -1005,7 +1104,7 @@ namespace BackupUI
 
         private void UnmountAll_Click(object sender, RoutedEventArgs e)
         {
-            var mounted = BackupMountManager.GetMountedBackups();
+            var mounted = NativeBackupMountManager.GetMountedBackups();
 
             if (mounted.Count == 0)
             {
@@ -1017,14 +1116,14 @@ namespace BackupUI
             }
 
             var result = MessageBox.Show(
-                $"Unmount all {mounted.Count} mounted backup drive(s)?",
+                $"Unmount all {mounted.Count} mounted backup(s)?",
                 "Unmount All",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
             if (result == MessageBoxResult.Yes)
             {
-                BackupMountManager.UnmountAll();
+                NativeBackupMountManager.UnmountAll();
                 LoadMountedBackups();
                 MessageBox.Show("All backups unmounted successfully.",
                               "Success",
@@ -1061,7 +1160,7 @@ namespace BackupUI
 
             try
             {
-                // Scan backup directories for VHDX files
+                // Scan backup directories for .ssb (WIM) files
                 var jobs = jobManager.GetAllJobs();
 
                 foreach (var job in jobs)
@@ -1070,19 +1169,19 @@ namespace BackupUI
 
                     if (System.IO.Directory.Exists(destPath))
                     {
-                        // Find VHDX files
-                        var vhdxFiles = System.IO.Directory.GetFiles(destPath, "*.vhdx", System.IO.SearchOption.AllDirectories);
+                        // Find .ssb (WIM backup) files
+                        var ssbFiles = System.IO.Directory.GetFiles(destPath, "*.ssb", System.IO.SearchOption.AllDirectories);
 
-                        foreach (var vhdx in vhdxFiles)
+                        foreach (var ssb in ssbFiles)
                         {
-                            var fileInfo = new System.IO.FileInfo(vhdx);
+                            var fileInfo = new System.IO.FileInfo(ssb);
 
                             backups.Add(new AvailableBackupInfo
                             {
                                 BackupName = job.Name,
-                                BackupType = GetBackupTypeFromPath(vhdx),
+                                BackupType = GetBackupTypeFromFilename(System.IO.Path.GetFileNameWithoutExtension(ssb)),
                                 BackupDate = fileInfo.LastWriteTime,
-                                BackupPath = vhdx
+                                BackupPath = ssb
                             });
                         }
                     }
@@ -1104,7 +1203,7 @@ namespace BackupUI
             if (dgMountedBackups == null)
                 return;
 
-            var mounted = BackupMountManager.GetMountedBackups();
+            var mounted = NativeBackupMountManager.GetMountedBackups();
             dgMountedBackups.ItemsSource = mounted;
         }
 
@@ -1147,18 +1246,18 @@ namespace BackupUI
             }
         }
 
-        private string GetBackupTypeFromPath(string path)
+        private string GetBackupTypeFromFilename(string filenameWithoutExt)
         {
-            string filename = System.IO.Path.GetFileName(path).ToLower();
+            string lower = filenameWithoutExt.ToLower();
 
-            if (filename.Contains("full"))
+            if (lower.Contains("full"))
                 return "Full";
-            else if (filename.Contains("incr"))
+            else if (lower.Contains("incremental") || lower.Contains("incr"))
                 return "Incremental";
-            else if (filename.Contains("diff"))
+            else if (lower.Contains("differential") || lower.Contains("diff"))
                 return "Differential";
             else
-                return "Full"; // Default
+                return "Full"; // Default for job name only (WDrive1.ssb = full backup)
         }
 
         private void OpenExplorer(string driveLetter)
@@ -1194,13 +1293,25 @@ namespace BackupUI
                 _ => job.Type.ToString()
             };
 
-            // Source description
+            // Source description - CHECK DISK/VOLUME FIRST before FilesAndFolders
+            // This prevents disk paths from being misidentified as file paths
             if (job.IsHyperVBackup && job.HyperVMachines.Count > 0)
             {
                 SourceDescription = $"Hyper-V: {string.Join(", ", job.HyperVMachines)}";
             }
+            else if (job.Target == BackupTarget.Disk)
+            {
+                // Disk backup - show device paths
+                SourceDescription = $"Disk: {string.Join(", ", job.SourcePaths)}";
+            }
+            else if (job.Target == BackupTarget.Volume)
+            {
+                // Volume backup - show volume paths
+                SourceDescription = $"Volume: {string.Join(", ", job.SourcePaths)}";
+            }
             else if (job.Target == BackupTarget.FilesAndFolders)
             {
+                // Files & Folders backup - extract drive letters and add suffix
                 var volumeLetters = job.SourcePaths
                     .Select(p => System.IO.Path.GetPathRoot(p)?.TrimEnd('\\'))
                     .Distinct()
@@ -1208,16 +1319,9 @@ namespace BackupUI
 
                 SourceDescription = $"{string.Join(", ", volumeLetters)} - Files & Folders";
             }
-            else if (job.Target == BackupTarget.Disk)
-            {
-                SourceDescription = $"Disk: {string.Join(", ", job.SourcePaths)}";
-            }
-            else if (job.Target == BackupTarget.Volume)
-            {
-                SourceDescription = $"Volume: {string.Join(", ", job.SourcePaths)}";
-            }
             else
             {
+                // Unknown/fallback - just show paths
                 SourceDescription = string.Join(", ", job.SourcePaths);
             }
 

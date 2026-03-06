@@ -60,6 +60,92 @@ private:
         return false;
     }
 
+    // NEW: Get number of images in WIM file
+    int GetWimImageCount(const std::string& wimPath) {
+        // Use wimlib-imagex info to get image count
+        std::string cmd = "wimlib-imagex info '" + wimPath + "' 2>/dev/null | grep -c '^Image Count:'";
+
+        FILE* pipe = popen(cmd.c_str(), "r");
+        if (!pipe) {
+            return -1;
+        }
+
+        char buffer[128];
+        std::string result;
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            result += buffer;
+        }
+        pclose(pipe);
+
+        // Parse the count from output
+        try {
+            return std::stoi(result);
+        }
+        catch (...) {
+            return -1;
+        }
+    }
+
+    // NEW: List all images in WIM file with their info
+    bool ListWimImages(const std::string& wimPath) {
+        std::cout << "\n========================================" << std::endl;
+        std::cout << "Available Backup Images" << std::endl;
+        std::cout << "========================================" << std::endl;
+
+        // Use wimlib-imagex info to list all images
+        std::string cmd = "wimlib-imagex info '" + wimPath + "' --detailed 2>&1";
+        int result = system(cmd.c_str());
+
+        if (result != 0) {
+            SetError("Failed to read WIM information");
+            return false;
+        }
+
+        std::cout << "\n========================================" << std::endl;
+        return true;
+    }
+
+    // NEW: Get image information
+    bool GetWimImageInfo(const std::string& wimPath, int imageIndex, 
+                        std::string& name, std::string& description) {
+        // Use wimlib-imagex info to get specific image details
+        std::string cmd = "wimlib-imagex info '" + wimPath + "' " + std::to_string(imageIndex) + " 2>&1";
+
+        FILE* pipe = popen(cmd.c_str(), "r");
+        if (!pipe) {
+            return false;
+        }
+
+        char buffer[1024];
+        std::string output;
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            output += buffer;
+        }
+        pclose(pipe);
+
+        // Parse name and description from output
+        // Look for "Name:" and "Description:" lines
+        size_t namePos = output.find("Name:");
+        if (namePos != std::string::npos) {
+            size_t nameEnd = output.find('\n', namePos);
+            name = output.substr(namePos + 5, nameEnd - namePos - 5);
+            // Trim whitespace
+            name.erase(0, name.find_first_not_of(" \t"));
+            name.erase(name.find_last_not_of(" \t\r\n") + 1);
+        }
+
+        size_t descPos = output.find("Description:");
+        if (descPos != std::string::npos) {
+            size_t descEnd = output.find('\n', descPos);
+            description = output.substr(descPos + 12, descEnd - descPos - 12);
+            // Trim whitespace
+            description.erase(0, description.find_first_not_of(" \t"));
+            description.erase(description.find_last_not_of(" \t\r\n") + 1);
+        }
+
+        return true;
+    }
+
     // NEW: Extract WIM backup using wimlib
     int ExtractWimBackup(const std::string& wimPath, 
                         const std::string& destPath,

@@ -133,10 +133,16 @@ namespace BackupUI.Windows
                     _progressTimer.Stop();
 
                     MessageBox.Show(
-                        "Backup abort requested. The backup has been cancelled.",
-                        "Backup Aborted",
+                        "Backup abort has been requested.\n\n" +
+                        "IMPORTANT: The backup process may continue running in the background " +
+                        "for a short time while it safely stops the current operation.\n\n" +
+                        "The backup file may be incomplete and should be deleted.",
+                        "Backup Abort Requested",
                         MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                        MessageBoxImage.Warning);
+
+                    // Close the progress window
+                    Close();
                 }
                 else
                 {

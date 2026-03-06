@@ -415,6 +415,12 @@
 								Click="RefreshMounts_Click"
 								Content="Refresh" />
 							<Button
+								Width="100"
+								Height="30"
+								Margin="5,5"
+								Click="BrowseBackup_Click"
+								Content="Browse..." />
+							<Button
 								Width="120"
 								Height="30"
 								Margin="5,5"
@@ -501,9 +507,9 @@
 								SelectionMode="Single">
 								<DataGrid.Columns>
 									<DataGridTextColumn
-										Width="60"
-										Binding="{Binding DriveLetter}"
-										Header="Drive" />
+										Width="250"
+										Binding="{Binding MountPath}"
+										Header="Mount Path" />
 									<DataGridTextColumn
 										Width="200"
 										Binding="{Binding BackupName}"
@@ -512,10 +518,6 @@
 										Width="100"
 										Binding="{Binding BackupType}"
 										Header="Type" />
-									<DataGridTextColumn
-										Width="140"
-										Binding="{Binding BackupDate, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
-										Header="Date" />
 									<DataGridTextColumn
 										Width="100"
 										Binding="{Binding MountTime, StringFormat='{}{0:HH:mm:ss}'}"
@@ -540,7 +542,7 @@
 													Click="UnmountBackup_Click"
 													Content="Unmount"
 													Style="{StaticResource DeleteButton}"
-													Tag="{Binding DriveLetter}" />
+													Tag="{Binding MountPath}" />
 											</DataTemplate>
 										</DataGridTemplateColumn.CellTemplate>
 									</DataGridTemplateColumn>

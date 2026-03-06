@@ -30,6 +30,7 @@ namespace BackupEngine {
         const wchar_t* wimPath,
         const wchar_t* backupName,
         const wchar_t* backupType,
+        int imageIndex,  // NEW: Added image index parameter
         wchar_t* mountPath,
         int mountPathSize,
         wchar_t* errorMsg,
@@ -38,8 +39,15 @@ namespace BackupEngine {
         EnterCriticalSection(&cs);
 
         try {
-            // Create unique mount point
-            std::wstring mountPoint = CreateMountPoint(backupName);
+            // Validate image index
+            if (imageIndex < 1) {
+                swprintf_s(errorMsg, errorMsgSize, L"Invalid image index: %d (must be >= 1)", imageIndex);
+                LeaveCriticalSection(&cs);
+                return false;
+            }
+
+            // Create unique mount point (include image index for uniqueness)
+            std::wstring mountPoint = CreateMountPoint(backupName, imageIndex);
 
             // Create the mount directory
             if (!CreateDirectoryW(mountPoint.c_str(), nullptr)) {
@@ -69,8 +77,8 @@ namespace BackupEngine {
                 return false;
             }
 
-            // Get image count (usually 1 for backups)
-            DWORD imageCount = WIMGetImageCount(wimHandle);  // Returns count directly
+            // Get image count to validate index
+            DWORD imageCount = WIMGetImageCount(wimHandle);
             if (imageCount == 0) {
                 swprintf_s(errorMsg, errorMsgSize, L"No images found in WIM file");
                 WIMCloseHandle(wimHandle);
@@ -79,11 +87,51 @@ namespace BackupEngine {
                 return false;
             }
 
+            if (imageIndex > static_cast<int>(imageCount)) {
+                swprintf_s(errorMsg, errorMsgSize, L"Image index %d exceeds available images (%d)", imageIndex, imageCount);
+                WIMCloseHandle(wimHandle);
+                RemoveDirectoryW(mountPoint.c_str());
+                LeaveCriticalSection(&cs);
+                return false;
+            }
 
-            // Mount the first image (index 1) read-only
-            HANDLE imageHandle = WIMLoadImage(wimHandle, 1);
+            // Get WIM information for diagnostics
+            DWORD wimInfoSize = 0;
+            WIMGetImageInformation(wimHandle, nullptr, &wimInfoSize);
+
+            // Log WIM file info for diagnostics
+            std::wstring diagMsg = L"[WimMount] WIM file has " + std::to_wstring(imageCount) + 
+                                   L" image(s), attempting to load image " + std::to_wstring(imageIndex);
+            OutputDebugStringW(diagMsg.c_str());
+
+            // Mount the specified image (read-only)
+            HANDLE imageHandle = WIMLoadImage(wimHandle, imageIndex);
             if (!imageHandle || imageHandle == INVALID_HANDLE_VALUE) {
-                swprintf_s(errorMsg, errorMsgSize, L"Failed to load WIM image: %d", GetLastError());
+                DWORD loadError = GetLastError();
+
+                // Enhanced error message with diagnostics
+                std::wstring detailedError = L"Failed to load WIM image " + std::to_wstring(imageIndex) + 
+                                            L" of " + std::to_wstring(imageCount) + 
+                                            L". Error code: " + std::to_wstring(loadError);
+
+                // Check common error codes
+                if (loadError == 1632) {
+                    detailedError += L" (ERROR_INSTALL_SERVICE_FAILURE/Invalid WIM image)";
+                    detailedError += L"\n\nPossible causes:\n";
+                    detailedError += L"- WIM file is corrupted or incomplete\n";
+                    detailedError += L"- Backup was interrupted during creation\n";
+                    detailedError += L"- Disk space was exhausted during backup\n";
+                    detailedError += L"- File system errors on backup drive\n\n";
+                    detailedError += L"Try running a new Full backup to create a fresh backup file.";
+                } else if (loadError == 5) {
+                    detailedError += L" (ERROR_ACCESS_DENIED)";
+                } else if (loadError == 32) {
+                    detailedError += L" (ERROR_SHARING_VIOLATION - file in use)";
+                }
+
+                swprintf_s(errorMsg, errorMsgSize, L"%s", detailedError.c_str());
+                OutputDebugStringW((L"[WimMount ERROR] " + detailedError).c_str());
+
                 WIMCloseHandle(wimHandle);
                 RemoveDirectoryW(mountPoint.c_str());
                 LeaveCriticalSection(&cs);
@@ -91,7 +139,7 @@ namespace BackupEngine {
             }
 
             // Mount the image (read-only, no admin required)
-            if (!WIMMountImage(mountPoint.c_str(), wimPath, 1, nullptr)) {
+            if (!WIMMountImage(mountPoint.c_str(), wimPath, imageIndex, nullptr)) {
                 DWORD err = GetLastError();
                 swprintf_s(errorMsg, errorMsgSize, L"Failed to mount WIM image: %d", err);
                 WIMCloseHandle(imageHandle);
@@ -219,7 +267,91 @@ namespace BackupEngine {
         return false;
     }
 
-    std::wstring WimMountManager::CreateMountPoint(const wchar_t* backupName) {
+    bool WimMountManager::ValidateWim(
+        const wchar_t* wimPath,
+        int* imageCount,
+        wchar_t* errorMsg,
+        int errorMsgSize
+    ) {
+        OutputDebugStringW(L"[WimMount] Validating WIM file...");
+
+        // Check if file exists
+        if (GetFileAttributesW(wimPath) == INVALID_FILE_ATTRIBUTES) {
+            swprintf_s(errorMsg, errorMsgSize, L"WIM file not found: %s", wimPath);
+            return false;
+        }
+
+        // Get file size
+        WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+        if (!GetFileAttributesExW(wimPath, GetFileExInfoStandard, &fileInfo)) {
+            swprintf_s(errorMsg, errorMsgSize, L"Cannot access WIM file: %d", GetLastError());
+            return false;
+        }
+
+        LARGE_INTEGER fileSize;
+        fileSize.LowPart = fileInfo.nFileSizeLow;
+        fileSize.HighPart = fileInfo.nFileSizeHigh;
+
+        // Check if file is too small to be valid WIM (WIM header is at least 208 bytes)
+        if (fileSize.QuadPart < 208) {
+            swprintf_s(errorMsg, errorMsgSize, 
+                L"WIM file is too small (%lld bytes). File may be incomplete or corrupted.",
+                fileSize.QuadPart);
+            return false;
+        }
+
+        OutputDebugStringW((L"[WimMount] File size: " + std::to_wstring(fileSize.QuadPart) + L" bytes").c_str());
+
+        // Try to open WIM file
+        DWORD creationResult = 0;
+        HANDLE wimHandle = WIMCreateFile(
+            wimPath,
+            WIM_GENERIC_READ,
+            WIM_OPEN_EXISTING,
+            WIM_FLAG_VERIFY,  // Verify integrity
+            0,
+            &creationResult
+        );
+
+        if (!wimHandle || wimHandle == INVALID_HANDLE_VALUE) {
+            DWORD openError = GetLastError();
+            if (openError == 5) {
+                swprintf_s(errorMsg, errorMsgSize, L"Access denied to WIM file");
+            } else if (openError == 32) {
+                swprintf_s(errorMsg, errorMsgSize, L"WIM file is in use by another process");
+            } else if (openError == 1632) {
+                swprintf_s(errorMsg, errorMsgSize, 
+                    L"WIM file is invalid or corrupted (Error 1632).\n\n"
+                    L"This usually means:\n"
+                    L"- Backup was interrupted during creation\n"
+                    L"- Disk space was exhausted\n"
+                    L"- File system errors on backup drive\n\n"
+                    L"Try running a new Full backup.");
+            } else {
+                swprintf_s(errorMsg, errorMsgSize, L"Failed to open WIM file: %d", openError);
+            }
+            return false;
+        }
+
+        // Get image count
+        DWORD count = WIMGetImageCount(wimHandle);
+        if (imageCount) {
+            *imageCount = static_cast<int>(count);
+        }
+
+        OutputDebugStringW((L"[WimMount] Validation successful - " + std::to_wstring(count) + L" image(s) found").c_str());
+
+        WIMCloseHandle(wimHandle);
+
+        if (count == 0) {
+            swprintf_s(errorMsg, errorMsgSize, L"WIM file contains no images");
+            return false;
+        }
+
+        return true;
+    }
+
+    std::wstring WimMountManager::CreateMountPoint(const wchar_t* backupName, int imageIndex) {
         // Get temp directory
         wchar_t tempPath[MAX_PATH];
         GetTempPathW(MAX_PATH, tempPath);
@@ -228,12 +360,12 @@ namespace BackupEngine {
         std::wstring mountsDir = std::wstring(tempPath) + L"BackupMounts\\";
         CreateDirectoryW(mountsDir.c_str(), nullptr);
 
-        // Create unique mount point using backup name + timestamp
+        // Create unique mount point using backup name + image index + timestamp
         SYSTEMTIME st;
         GetSystemTime(&st);
 
         std::wstringstream ss;
-        ss << mountsDir << backupName << L"_"
+        ss << mountsDir << backupName << L"_Image" << imageIndex << L"_"
            << st.wYear << std::setw(2) << std::setfill(L'0') << st.wMonth
            << std::setw(2) << st.wDay << L"_"
            << std::setw(2) << st.wHour << std::setw(2) << st.wMinute
@@ -270,6 +402,7 @@ extern "C" {
         const wchar_t* wimPath,
         const wchar_t* backupName,
         const wchar_t* backupType,
+        int imageIndex,  // NEW: Image index to mount
         wchar_t* mountPath,
         int mountPathSize,
         wchar_t* errorMsg,
@@ -281,7 +414,7 @@ extern "C" {
         }
 
         return WimMountManager::MountWim(
-            wimPath, backupName, backupType,
+            wimPath, backupName, backupType, imageIndex,
             mountPath, mountPathSize,
             errorMsg, errorMsgSize
         );
@@ -335,5 +468,127 @@ extern "C" {
         }
 
         return true;
+    }
+
+    // NEW: Get WIM image count (exported for mount image selection)
+    BACKUPENGINE_API int WimMount_GetImageCount(
+        const wchar_t* wimPath,
+        wchar_t* errorMsg,
+        int errorMsgSize
+    ) {
+        if (!wimPath) {
+            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Invalid WIM path");
+            return -1;
+        }
+
+        // Open WIM to get image count
+        HANDLE hWim = WIMCreateFile(
+            wimPath,
+            WIM_GENERIC_READ,
+            WIM_OPEN_EXISTING,
+            0,
+            WIM_COMPRESS_NONE,
+            NULL
+        );
+
+        if (!hWim || hWim == INVALID_HANDLE_VALUE) {
+            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Failed to open WIM file");
+            return -1;
+        }
+
+        DWORD imageCount = WIMGetImageCount(hWim);
+        WIMCloseHandle(hWim);
+
+        return static_cast<int>(imageCount);
+    }
+
+    // NEW: Get WIM image info by index (exported for mount image selection)
+    BACKUPENGINE_API bool WimMount_GetImageInfo(
+        const wchar_t* wimPath,
+        int imageIndex,
+        wchar_t* imageName,
+        int imageNameSize,
+        wchar_t* imageDescription,
+        int imageDescriptionSize,
+        wchar_t* errorMsg,
+        int errorMsgSize
+    ) {
+        if (!wimPath || imageIndex < 1) {
+            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Invalid parameters");
+            return false;
+        }
+
+        // Open WIM file
+        HANDLE hWim = WIMCreateFile(
+            wimPath,
+            WIM_GENERIC_READ,
+            WIM_OPEN_EXISTING,
+            0,
+            WIM_COMPRESS_NONE,
+            NULL
+        );
+
+        if (!hWim || hWim == INVALID_HANDLE_VALUE) {
+            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Failed to open WIM file");
+            return false;
+        }
+
+        // Load the image
+        HANDLE hImage = WIMLoadImage(hWim, imageIndex);
+        if (!hImage || hImage == INVALID_HANDLE_VALUE) {
+            WIMCloseHandle(hWim);
+            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Failed to load image %d", imageIndex);
+            return false;
+        }
+
+        // Get image information XML
+        wchar_t* xmlInfo = nullptr;
+        DWORD xmlSize = 0;
+
+        if (!WIMGetImageInformation(hImage, (LPVOID*)&xmlInfo, &xmlSize)) {
+            WIMCloseHandle(hImage);
+            WIMCloseHandle(hWim);
+            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Failed to get image information");
+            return false;
+        }
+
+        // Parse XML to extract name and description
+        std::wstring xml(xmlInfo);
+
+        // Extract name
+        size_t nameStart = xml.find(L"<NAME>");
+        size_t nameEnd = xml.find(L"</NAME>");
+        if (nameStart != std::wstring::npos && nameEnd != std::wstring::npos) {
+            nameStart += 6; // Skip "<NAME>"
+            std::wstring name = xml.substr(nameStart, nameEnd - nameStart);
+            wcscpy_s(imageName, imageNameSize, name.c_str());
+        } else {
+            swprintf_s(imageName, imageNameSize, L"Image %d", imageIndex);
+        }
+
+        // Extract description
+        size_t descStart = xml.find(L"<DESCRIPTION>");
+        size_t descEnd = xml.find(L"</DESCRIPTION>");
+        if (descStart != std::wstring::npos && descEnd != std::wstring::npos) {
+            descStart += 13; // Skip "<DESCRIPTION>"
+            std::wstring desc = xml.substr(descStart, descEnd - descStart);
+            wcscpy_s(imageDescription, imageDescriptionSize, desc.c_str());
+        } else {
+            wcscpy_s(imageDescription, imageDescriptionSize, L"No description");
+        }
+
+        WIMCloseHandle(hImage);
+        WIMCloseHandle(hWim);
+        return true;
+    }
+
+    // NEW: Validate WIM file integrity (exported for pre-mount validation)
+    BACKUPENGINE_API bool WimMount_ValidateWim(
+        const wchar_t* wimPath,
+        int* imageCount,
+        wchar_t* errorMsg,
+        int errorMsgSize
+    ) {
+        return WimMountManager::ValidateWim(wimPath, imageCount, errorMsg, errorMsgSize);
     }
 }

@@ -28,6 +28,14 @@ namespace BackupService
             bool compress, ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private static extern int BackupDiskIncremental(int diskNumber, string destPath, bool includeSystemState, 
+            bool compress, ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private static extern int BackupDiskDifferential(int diskNumber, string destPath, bool includeSystemState, 
+            bool compress, ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupHyperVVM(string vmName, string destPath, ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
@@ -74,31 +82,21 @@ namespace BackupService
 
                     string? newBackupPath = null;
 
-                    // NEW ARCHITECTURE: Create direct .ssb file (no folders, no timestamps)
-                    // Determine backup type suffix
-                    string backupTypeSuffix;
+                    // SIMPLIFIED ARCHITECTURE: Create direct .ssb file with NO type suffix
+                    // Each backup overwrites the previous one - single file per job
+                    // Format: JobName.ssb (no Full/Incremental/Differential suffix)
+
+                    // Create destination FILE path (no folders, no timestamp, no type suffix)
+                    newBackupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+
+                    // For incremental/differential, check if base backup exists
                     if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
                     {
-                        // Check if we need to do a full backup as the base
-                        string fullBackupFile = Path.Combine(job.DestinationPath, $"{job.Name}_Full.ssb");
-                        if (!File.Exists(fullBackupFile))
+                        if (!File.Exists(newBackupPath))
                         {
-                            backupTypeSuffix = "Full"; // Creating full backup as base
-                            logger?.Invoke($"No full backup exists. Creating initial full backup: {job.Name}_Full.ssb");
-                        }
-                        else
-                        {
-                            backupTypeSuffix = job.Type == BackupType.Incremental ? "Incremental" : "Differential";
+                            logger?.Invoke($"No base backup exists. Creating initial full backup: {job.Name}.ssb");
                         }
                     }
-                    else
-                    {
-                        backupTypeSuffix = "Full";
-                    }
-
-                    // Create destination FILE path (no folders, no timestamp)
-                    // Format: JobName_Full.ssb or JobName_Incremental.ssb
-                    newBackupPath = Path.Combine(job.DestinationPath, $"{job.Name}_{backupTypeSuffix}.ssb");
 
                     // Ensure destination directory exists
                     Directory.CreateDirectory(job.DestinationPath);
@@ -121,7 +119,15 @@ namespace BackupService
                         {
                             var error = new StringBuilder(1024);
                             GetLastErrorMessage(error, error.Capacity);
-                            logger?.Invoke($"Backup failed: {error}");
+
+                            // DIAGNOSTIC: Show both result code AND error message
+                            string errorMessage = error.ToString();
+                            logger?.Invoke($"[ERROR] Backup failed with code {result}");
+                            logger?.Invoke($"[ERROR] Error message: {(string.IsNullOrEmpty(errorMessage) ? "(empty - C++ didn't set error message)" : errorMessage)}");
+                            logger?.Invoke($"[ERROR] Source path: {sourcePath}");
+                            logger?.Invoke($"[ERROR] Destination path: {newBackupPath}");
+                            logger?.Invoke($"[ERROR] File exists after failure: {(newBackupPath != null && File.Exists(newBackupPath))}");
+
                             return false;
                         }
                     }
@@ -136,29 +142,18 @@ namespace BackupService
                                 return false;
                             }
 
-                            // Determine backup type suffix for Hyper-V backup
-                            string vmBackupSuffix;  // Renamed to avoid conflict
-                            string fullBackupFile = Path.Combine(job.DestinationPath, $"{vm}_Full.ssb");
+                            // SIMPLIFIED: No type suffix for Hyper-V backups either
+                            newBackupPath = Path.Combine(job.DestinationPath, $"{vm}.ssb");
 
+                            // Check if base backup exists for incremental/differential
                             if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
                             {
-                                if (!File.Exists(fullBackupFile))
+                                if (!File.Exists(newBackupPath))
                                 {
-                                    vmBackupSuffix = "Full"; // Creating full backup as base
-                                    logger?.Invoke($"No full backup exists. Creating initial full backup: {vm}_Full.ssb");
+                                    logger?.Invoke($"No base backup exists. Creating initial full backup: {vm}.ssb");
                                 }
-                                else
-                                {
-                                    vmBackupSuffix = job.Type == BackupType.Incremental ? "Incremental" : "Differential";
-                                }
-                            }
-                            else
-                            {
-                                vmBackupSuffix = "Full";
                             }
 
-                            // Create destination FILE path (no folders, no timestamp)
-                            newBackupPath = Path.Combine(job.DestinationPath, $"{vm}_{vmBackupSuffix}.ssb");
                             logger?.Invoke($"Creating Hyper-V backup file: {Path.GetFileName(newBackupPath)}");
 
                             progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {vm}...");
@@ -237,18 +232,22 @@ namespace BackupService
 
             // DEFENSIVE FIX: Auto-detect if sourcePath is actually a device path but job.Target is wrong
             // This handles cases where jobs were created before the fix or with incorrect settings
-            if (sourcePath.StartsWith(@"\\.\PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase) ||
-                sourcePath.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase))
+            // Only log correction message if we're actually CHANGING the target (not when already correct)
+            if (sourcePath.StartsWith(@"\\.\PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase))
             {
-                // Device path detected - correct the job target
-                if (sourcePath.StartsWith(@"\\.\PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase))
+                // Physical drive path detected - should be Disk backup
+                if (job.Target != BackupTarget.Disk)
                 {
-                    logger?.Invoke($"AUTO-CORRECT: Detected device path (PHYSICALDRIVE) - treating as Disk backup instead of {job.Target}");
+                    logger?.Invoke($"AUTO-CORRECT: Detected device path (PHYSICALDRIVE) - changing from {job.Target} to Disk backup");
                     job.Target = BackupTarget.Disk;
                 }
-                else if (sourcePath.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase))
+            }
+            else if (sourcePath.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase))
+            {
+                // Volume GUID path detected - should be Volume backup
+                if (job.Target != BackupTarget.Volume)
                 {
-                    logger?.Invoke($"AUTO-CORRECT: Detected device path (Volume GUID) - treating as Volume backup instead of {job.Target}");
+                    logger?.Invoke($"AUTO-CORRECT: Detected device path (Volume GUID) - changing from {job.Target} to Volume backup");
                     job.Target = BackupTarget.Volume;
                 }
             }
@@ -266,7 +265,20 @@ namespace BackupService
                             return -11;
                         }
                         logger?.Invoke($"Backing up disk: {diskNumber} ({sourcePath})");
+
+                        // DIAGNOSTIC: Log right before calling C++ function
+                        logger?.Invoke($"[DIAGNOSTIC] About to call BackupDisk({diskNumber}, {destPath}, {job.IncludeSystemState}, {job.CompressData})");
+
                         result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+
+                        // DIAGNOSTIC: Log result code immediately
+                        logger?.Invoke($"[DIAGNOSTIC] BackupDisk returned: {result}");
+
+                        if (result != 0)
+                        {
+                            // DIAGNOSTIC: Log that we're getting error message
+                            logger?.Invoke($"[DIAGNOSTIC] BackupDisk failed with code {result}, getting error message...");
+                        }
                     }
                     else if (job.Target == BackupTarget.Volume)
                     {
@@ -281,7 +293,7 @@ namespace BackupService
                     break;
 
             case BackupType.Incremental:
-                // DISK BACKUPS: WIM-based disk backups don't support incremental mode - always create full snapshot
+                // DISK BACKUPS: Now supports true incremental using WIM_FLAG_REFERENCE!
                 if (job.Target == BackupTarget.Disk)
                 {
                     int diskNumber = ExtractDiskNumber(sourcePath);
@@ -290,8 +302,32 @@ namespace BackupService
                         logger?.Invoke($"ERROR: Invalid disk path format: {sourcePath}");
                         return -11;
                     }
-                    logger?.Invoke($"Creating full disk backup (disk backups don't support incremental mode): {diskNumber}");
-                    result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+
+                    // Check if base backup exists
+                    if (File.Exists(destPath))
+                    {
+                        logger?.Invoke($"Creating incremental disk backup (WIM referential): {diskNumber}");
+                        result = BackupDiskIncremental(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+
+                        if (result != 0)
+                        {
+                            logger?.Invoke($"Disk incremental backup failed with code {result}");
+                        }
+                    }
+                    else
+                    {
+                        logger?.Invoke($"No base backup found. Creating initial full backup: {diskNumber}");
+                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+
+                        if (result != 0)
+                        {
+                            logger?.Invoke($"Disk full backup (fallback) failed with code {result}");
+                        }
+                        else
+                        {
+                            logger?.Invoke($"Initial full backup completed successfully (fallback from incremental)");
+                        }
+                    }
                 }
                 else
                 {
@@ -321,7 +357,7 @@ namespace BackupService
                 break;
 
             case BackupType.Differential:
-                // DISK BACKUPS: WIM-based disk backups don't support differential mode - always create full snapshot
+                // DISK BACKUPS: Now supports true differential using WIM_FLAG_REFERENCE!
                 if (job.Target == BackupTarget.Disk)
                 {
                     int diskNumber = ExtractDiskNumber(sourcePath);
@@ -330,8 +366,32 @@ namespace BackupService
                         logger?.Invoke($"ERROR: Invalid disk path format: {sourcePath}");
                         return -11;
                     }
-                    logger?.Invoke($"Creating full disk backup (disk backups don't support differential mode): {diskNumber}");
-                    result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+
+                    // Check if base backup exists
+                    if (File.Exists(destPath))
+                    {
+                        logger?.Invoke($"Creating differential disk backup (WIM referential): {diskNumber}");
+                        result = BackupDiskDifferential(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+
+                        if (result != 0)
+                        {
+                            logger?.Invoke($"Disk differential backup failed with code {result}");
+                        }
+                    }
+                    else
+                    {
+                        logger?.Invoke($"No base backup found. Creating initial full backup: {diskNumber}");
+                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+
+                        if (result != 0)
+                        {
+                            logger?.Invoke($"Disk full backup (fallback) failed with code {result}");
+                        }
+                        else
+                        {
+                            logger?.Invoke($"Initial full backup completed successfully (fallback from differential)");
+                        }
+                    }
                 }
                 else
                 {
@@ -373,12 +433,14 @@ namespace BackupService
                 if (!Directory.Exists(destPath))
                     return null;
 
-                // Look for any backup file for this job (Full, Incremental, or Differential)
-                var backupFiles = Directory.GetFiles(destPath, $"{jobName}_*.ssb")
-                    .OrderByDescending(f => File.GetCreationTime(f))
-                    .FirstOrDefault();
+                // SIMPLIFIED: Look for the single backup file (no suffixes)
+                // With new architecture, there's only ONE file: JobName.ssb
+                string backupFile = Path.Combine(destPath, $"{jobName}.ssb");
 
-                return backupFiles;
+                if (File.Exists(backupFile))
+                    return backupFile;
+
+                return null;
             }
             catch
             {
@@ -393,11 +455,12 @@ namespace BackupService
                 if (!Directory.Exists(destPath))
                     return null;
 
-                // Look specifically for the Full backup file
-                string fullBackupFile = Path.Combine(destPath, $"{jobName}_Full.ssb");
+                // SIMPLIFIED: Look for the single backup file (no suffixes)
+                // With new architecture, full/incremental/differential all use same file: JobName.ssb
+                string backupFile = Path.Combine(destPath, $"{jobName}.ssb");
 
-                if (File.Exists(fullBackupFile))
-                    return fullBackupFile;
+                if (File.Exists(backupFile))
+                    return backupFile;
 
                 return null;
             }

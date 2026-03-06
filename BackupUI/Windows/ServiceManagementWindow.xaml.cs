@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.ServiceProcess;
 using System.Threading.Tasks;
 using System.Windows;
+using BackupUI.Models; // For BackupJob, ScheduleFrequency enums
 using BackupUI.Services;
 
 namespace BackupUI.Windows
@@ -311,6 +313,194 @@ namespace BackupUI.Windows
                     MessageBox.Show($"Failed to uninstall service: {ex.Message}", "Error",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
+            }
+        }
+
+        private async void AbortFailedRetries_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Confirm action with user
+                var result = MessageBox.Show(
+                    "This will cancel all pending retry attempts for failed backups.\n\n" +
+                    "Failed jobs will be rescheduled for their next normal run time.\n\n" +
+                    "Do you want to continue?",
+                    "Abort Failed Retries",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result != MessageBoxResult.Yes)
+                    return;
+
+                // Get the jobs.json file path (same location as service uses)
+                string jobsFilePath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    "BackupRestoreService",
+                    "jobs.json");
+
+                if (!File.Exists(jobsFilePath))
+                {
+                    MessageBox.Show("No backup jobs found.", "Information",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                // Load jobs
+                var json = await File.ReadAllTextAsync(jobsFilePath);
+                var jobs = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<BackupJob>>(json);
+
+                if (jobs == null || jobs.Count == 0)
+                {
+                    MessageBox.Show("No backup jobs found.", "Information",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                int abortedCount = 0;
+                var now = DateTime.Now;
+
+                // Reset NextRunTime for any jobs that are in retry mode
+                // Retry mode detection:
+                // 1) NextRunTime is in the PAST (overdue - keeps auto-starting)
+                // 2) NextRunTime is within next 20 minutes (upcoming retry - likely from failed backup)
+                // Normal scheduled jobs (like tomorrow at 2:00 AM) won't be affected
+                foreach (var job in jobs)
+                {
+                    if (job.Schedule == null || job.Schedule.NextRunTime == null)
+                        continue;
+
+                    // Check if this job is in retry mode:
+                    // - NextRunTime < now means job is OVERDUE (keeps auto-starting every minute)
+                    // - NextRunTime <= now + 20 minutes means upcoming retry (failed backup sets +15 min)
+                    var timeUntilRun = job.Schedule.NextRunTime.Value - now;
+                    bool isInRetryMode = job.Schedule.NextRunTime.Value < now || // Overdue
+                                       timeUntilRun.TotalMinutes <= 20;         // Within 20 min
+
+                    if (isInRetryMode)
+                    {
+                        // Recalculate NextRunTime based on schedule (not retry logic)
+                        RecalculateNextRunTime(job);
+                        abortedCount++;
+                    }
+                }
+
+                if (abortedCount > 0)
+                {
+                    // Save updated jobs back to file
+                    var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+                    json = System.Text.Json.JsonSerializer.Serialize(jobs, options);
+                    await File.WriteAllTextAsync(jobsFilePath, json);
+
+                    // Suggest restarting service to immediately apply changes
+                    var restartResult = MessageBox.Show(
+                        $"Aborted retry attempts for {abortedCount} job(s).\n\n" +
+                        $"Jobs have been rescheduled for their next normal run time.\n\n" +
+                        $"IMPORTANT: If the service is currently running a backup, it might retry once more.\n\n" +
+                        $"Do you want to RESTART the service now to immediately stop all retries?",
+                        "Success - Restart Service?",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (restartResult == MessageBoxResult.Yes)
+                    {
+                        // Restart service
+                        var serviceManager = new BackupServiceManager();
+                        bool stopped = await serviceManager.StopServiceAsync();
+
+                        if (stopped)
+                        {
+                            // Wait a moment
+                            await Task.Delay(2000);
+
+                            bool started = await serviceManager.StartServiceAsync();
+
+                            if (started)
+                            {
+                                MessageBox.Show("Service restarted successfully.\nAll retries have been stopped.",
+                                    "Service Restarted",
+                                    MessageBoxButton.OK,
+                                    MessageBoxImage.Information);
+                            }
+                            else
+                            {
+                                MessageBox.Show("Service stopped but failed to restart.\nPlease start it manually.",
+                                    "Restart Failed",
+                                    MessageBoxButton.OK,
+                                    MessageBoxImage.Warning);
+                            }
+                        }
+                        else
+                        {
+                            MessageBox.Show("Failed to stop service. Changes saved but may take effect on next service restart.",
+                                "Restart Failed",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
+                        }
+                    }
+
+                    await RefreshStatusAsync();
+                }
+                else
+                {
+                    MessageBox.Show(
+                        "No jobs found in retry mode.\n\n" +
+                        "All jobs are already scheduled for their normal run times.",
+                        "Information",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Failed to abort retries: {ex.Message}",
+                    "Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Recalculates NextRunTime based on schedule (not retry logic)
+        /// Mirrors the logic from JobManager.CalculateNextRunTime with isInitialCalculation=false
+        /// </summary>
+        private void RecalculateNextRunTime(BackupJob job)
+        {
+            if (job.Schedule == null)
+                return;
+
+            var now = DateTime.Now;
+            var scheduledTime = now.Date.Add(job.Schedule.Time);
+
+            switch (job.Schedule.Frequency)
+            {
+                case ScheduleFrequency.Daily:
+                    job.Schedule.NextRunTime = scheduledTime > now
+                        ? scheduledTime
+                        : scheduledTime.AddDays(1);
+                    break;
+
+                case ScheduleFrequency.Weekly:
+                    var nextRun = scheduledTime > now ? scheduledTime : scheduledTime.AddDays(1);
+                    while (!job.Schedule.DaysOfWeek.Contains(nextRun.DayOfWeek))
+                    {
+                        nextRun = nextRun.AddDays(1);
+                    }
+                    job.Schedule.NextRunTime = nextRun;
+                    break;
+
+                case ScheduleFrequency.Monthly:
+                    var nextMonth = new DateTime(now.Year, now.Month, job.Schedule.DayOfMonth,
+                        job.Schedule.Time.Hours, job.Schedule.Time.Minutes, 0);
+                    if (nextMonth <= now)
+                        nextMonth = nextMonth.AddMonths(1);
+                    job.Schedule.NextRunTime = nextMonth;
+                    break;
+
+                case ScheduleFrequency.Once:
+                    job.Schedule.NextRunTime = null;
+                    job.Schedule.Enabled = false;
+                    break;
             }
         }
 

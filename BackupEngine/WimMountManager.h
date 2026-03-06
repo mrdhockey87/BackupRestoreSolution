@@ -37,6 +37,7 @@ namespace BackupEngine {
             const wchar_t* wimPath,
             const wchar_t* backupName,
             const wchar_t* backupType,
+            int imageIndex,           // NEW: Which image to mount (1-based)
             wchar_t* mountPath,      // OUT: where it was mounted
             int mountPathSize,
             wchar_t* errorMsg,
@@ -62,9 +63,17 @@ namespace BackupEngine {
         // Get mount info by path
         static bool GetMountInfo(const wchar_t* path, MountedWimInfo& info);
 
+        // Validate WIM file integrity
+        static bool ValidateWim(
+            const wchar_t* wimPath,
+            int* imageCount,
+            wchar_t* errorMsg,
+            int errorMsgSize
+        );
+
     private:
         // Create a unique mount point directory
-        static std::wstring CreateMountPoint(const wchar_t* backupName);
+        static std::wstring CreateMountPoint(const wchar_t* backupName, int imageIndex);
         
         // WIMGAPI callback for progress
         static DWORD WINAPI WimMessageCallback(

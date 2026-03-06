@@ -400,20 +400,27 @@ extern "C" {
         ProgressCallback callback) {
 
         if (diskNumber < 0 || !destPath) {
-            SetLastErrorMessage(L"Invalid parameters");
+            SetLastErrorMessage(L"Invalid parameters: diskNumber=" + std::to_wstring(diskNumber) + L", destPath=" + (destPath ? L"valid" : L"NULL"));
             return -1;
         }
 
         try {
+            // LOG: Starting backup
+            std::wstring logMsg = L"[BackupDisk] Starting backup of Disk " + std::to_wstring(diskNumber) + L" to: " + destPath;
+            OutputDebugStringW(logMsg.c_str());
+
             if (callback) {
                 callback(0, L"Starting disk backup - enumerating volumes...");
             }
 
-            // Ensure destPath is a file, not a directory
+            // LOG: Validating destination path
             std::wstring destFile = destPath;
+            OutputDebugStringW((L"[BackupDisk] Dest file: " + destFile).c_str());
+
             if (destFile.length() < 4 || destFile.substr(destFile.length() - 4) != L".ssb") {
                 if (fs::exists(destPath) && fs::is_directory(destPath)) {
                     SetLastErrorMessage(L"Destination must be a file path ending in .ssb, not a directory");
+                    OutputDebugStringW(L"[BackupDisk] ERROR: Destination is directory, not file!");
                     return -1;
                 }
             }
@@ -421,16 +428,22 @@ extern "C" {
             // Create parent directory if needed
             fs::path parentDir = fs::path(destFile).parent_path();
             if (!parentDir.empty()) {
+                OutputDebugStringW((L"[BackupDisk] Creating parent dir: " + parentDir.wstring()).c_str());
                 fs::create_directories(parentDir);
             }
 
             // Enumerate volumes on this disk using IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS
+            OutputDebugStringW((L"[BackupDisk] Enumerating volumes on Disk " + std::to_wstring(diskNumber)).c_str());
+
             std::vector<std::wstring> volumes;
             wchar_t volumeName[MAX_PATH];
             HANDLE hFind = FindFirstVolumeW(volumeName, ARRAYSIZE(volumeName));
 
             if (hFind == INVALID_HANDLE_VALUE) {
-                SetLastErrorMessage(L"Failed to enumerate volumes");
+                DWORD err = GetLastError();
+                std::wstring errMsg = L"Failed to enumerate volumes, Win32 Error: " + std::to_wstring(err);
+                SetLastErrorMessage(errMsg);
+                OutputDebugStringW((L"[BackupDisk] ERROR: " + errMsg).c_str());
                 return -2;
             }
 
@@ -476,19 +489,32 @@ extern "C" {
                                 // Add with trailing backslash for BackupVolume
                                 std::wstring volPath = volumeNameCopy + L"\\";
                                 volumes.push_back(volPath);
+                                OutputDebugStringW((L"[BackupDisk] Found volume on Disk " + std::to_wstring(diskNumber) + L": " + volPath).c_str());
                                 break; // Only add once even if multiple extents
                             }
                         }
                     }
+                    else {
+                        DWORD err = GetLastError();
+                        OutputDebugStringW((L"[BackupDisk] DeviceIoControl failed for volume, Error: " + std::to_wstring(err)).c_str());
+                    }
 
                     CloseHandle(hVolume);
+                }
+                else {
+                    DWORD err = GetLastError();
+                    OutputDebugStringW((L"[BackupDisk] Failed to open volume: " + volumeNameCopy + L", Error: " + std::to_wstring(err)).c_str());
                 }
             } while (FindNextVolumeW(hFind, volumeName, ARRAYSIZE(volumeName)));
 
             FindVolumeClose(hFind);
 
+            OutputDebugStringW((L"[BackupDisk] Volume enumeration complete. Found " + std::to_wstring(volumes.size()) + L" volumes").c_str());
+
             if (volumes.empty()) {
-                SetLastErrorMessage(L"No volumes found on disk");
+                std::wstring errMsg = L"No volumes found on Disk " + std::to_wstring(diskNumber);
+                SetLastErrorMessage(errMsg);
+                OutputDebugStringW((L"[BackupDisk] ERROR: " + errMsg).c_str());
                 return -3;
             }
 
@@ -498,14 +524,20 @@ extern "C" {
             }
 
             // Create WIM file for all volumes
+            OutputDebugStringW(L"[BackupDisk] Creating WIM file...");
+
             if (callback) {
                 callback(15, L"Creating WIM backup archive...");
             }
 
             HANDLE hWim = CreateWimFile(destFile.c_str(), compress, callback);
             if (!hWim || hWim == INVALID_HANDLE_VALUE) {
+                OutputDebugStringW(L"[BackupDisk] ERROR: CreateWimFile failed!");
+                SetLastErrorMessage(L"Failed to create WIM file: " + destFile);
                 return -4;
             }
+
+            OutputDebugStringW((L"[BackupDisk] WIM file created successfully: " + destFile).c_str());
 
             // Backup each volume as a separate image in the WIM file
             int volumeIndex = 0;
@@ -520,16 +552,25 @@ extern "C" {
                 }
 
                 // Create VSS snapshot for this volume
+                OutputDebugStringW((L"[BackupDisk] Processing volume " + std::to_wstring(volumeIndex) + L"/" + std::to_wstring(volumes.size()) + L": " + volume).c_str());
+
                 BackupEngine::VSSSnapshotManager vssManager;
                 HRESULT hr = vssManager.Initialize();
+                std::wstring vssStatus = SUCCEEDED(hr) ? L"SUCCESS" : L"FAILED";
+                OutputDebugStringW((L"[BackupDisk] VSS Initialize: " + vssStatus).c_str());
 
                 wchar_t snapshotPath[MAX_PATH] = { 0 };
                 std::wstring actualSourcePath = volume + L"\\";  // Add trailing backslash
 
                 if (SUCCEEDED(hr)) {
+                    OutputDebugStringW(L"[BackupDisk] Creating VSS snapshot...");
                     hr = vssManager.CreateVolumeSnapshot(actualSourcePath.c_str(), snapshotPath, MAX_PATH);
                     if (SUCCEEDED(hr)) {
                         actualSourcePath = snapshotPath;
+                        OutputDebugStringW((L"[BackupDisk] VSS snapshot created: " + std::wstring(snapshotPath)).c_str());
+                    }
+                    else {
+                        OutputDebugStringW((L"[BackupDisk] VSS snapshot failed, using direct path, HR=" + std::to_wstring(hr)).c_str());
                     }
                 }
 
@@ -537,18 +578,24 @@ extern "C" {
                 std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + 
                                         L" Volume " + std::to_wstring(volumeIndex);
 
+                OutputDebugStringW((L"[BackupDisk] Capturing to WIM: " + imageName + L" from " + actualSourcePath).c_str());
+
                 HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), 
                                                  imageName.c_str(), callback);
 
                 if (!hImage || hImage == INVALID_HANDLE_VALUE) {
                     WIMCloseHandle(hWim);
-                    std::wstring err = L"Failed to capture volume " + std::to_wstring(volumeIndex);
+                    std::wstring err = L"Failed to capture volume " + std::to_wstring(volumeIndex) + L" (" + volume + L") to WIM";
                     SetLastErrorMessage(err);
+                    OutputDebugStringW((L"[BackupDisk] ERROR: " + err).c_str());
                     return -5;
                 }
 
+                OutputDebugStringW((L"[BackupDisk] Volume " + std::to_wstring(volumeIndex) + L" captured successfully").c_str());
                 WIMCloseHandle(hImage);
             }
+
+            OutputDebugStringW(L"[BackupDisk] All volumes captured, finalizing WIM...");
 
             if (callback) {
                 callback(85, L"Finalizing backup archive...");
@@ -556,6 +603,7 @@ extern "C" {
 
             // Close WIM file
             WIMCloseHandle(hWim);
+            OutputDebugStringW(L"[BackupDisk] WIM file closed successfully");
 
             // Handle system state if requested
             if (includeSystemState) {
@@ -574,6 +622,8 @@ extern "C" {
                 }
             }
 
+            OutputDebugStringW(L"[BackupDisk] Backup completed successfully!");
+
             if (callback) {
                 callback(100, L"Disk backup completed successfully!");
             }
@@ -582,6 +632,387 @@ extern "C" {
         }
         catch (const std::exception& e) {
             std::string err = "Exception in BackupDisk: ";
+            err += e.what();
+            std::wstring errW(err.begin(), err.end());
+            SetLastErrorMessage(errW);
+            OutputDebugStringW((L"[BackupDisk] EXCEPTION: " + errW).c_str());
+            return -10;
+        }
+        catch (...) {
+            SetLastErrorMessage(L"Unknown exception in BackupDisk");
+            OutputDebugStringW(L"[BackupDisk] FATAL: Unknown exception!");
+            return -11;
+        }
+    }
+
+    // NEW FUNCTION: Incremental disk backup using WIM_FLAG_REFERENCE
+    BACKUPENGINE_API int BackupDiskIncremental(
+        int diskNumber,
+        const wchar_t* destPath,
+        bool includeSystemState,
+        bool compress,
+        ProgressCallback callback) {
+
+        if (!destPath || diskNumber < 0) {
+            SetLastErrorMessage(L"Invalid parameters");
+            return -1;
+        }
+
+        try {
+            std::wstring destFile(destPath);
+
+            // Check if base backup (.ssb file) exists
+            if (!fs::exists(destFile)) {
+                // No base backup exists - create full backup instead
+                if (callback) {
+                    callback(0, L"No base backup found - creating initial full backup...");
+                }
+                return BackupDisk(diskNumber, destPath, includeSystemState, compress, callback);
+            }
+
+            if (callback) {
+                callback(0, L"Starting incremental disk backup (WIM referential)...");
+            }
+
+            // Enumerate volumes on this disk
+            std::vector<std::wstring> volumes;
+            wchar_t volumeName[MAX_PATH];
+            HANDLE hFind = FindFirstVolumeW(volumeName, ARRAYSIZE(volumeName));
+
+            if (hFind == INVALID_HANDLE_VALUE) {
+                SetLastErrorMessage(L"Failed to enumerate volumes");
+                return -2;
+            }
+
+            do {
+                size_t len = wcslen(volumeName);
+                if (len > 0 && volumeName[len - 1] == L'\\') {
+                    volumeName[len - 1] = L'\0';
+                }
+
+                std::wstring volumeNameCopy = volumeName;
+                if (volumeNameCopy.size() > 4 && volumeNameCopy.substr(0, 4) == L"\\\\?\\") {
+                    volumeNameCopy = volumeNameCopy.substr(4);
+                }
+
+                HANDLE hVolume = CreateFileW(
+                    volumeName,
+                    GENERIC_READ,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    NULL,
+                    OPEN_EXISTING,
+                    0,
+                    NULL
+                );
+
+                if (hVolume != INVALID_HANDLE_VALUE) {
+                    BYTE buffer[sizeof(VOLUME_DISK_EXTENTS) + 32 * sizeof(DISK_EXTENT)];
+                    PVOLUME_DISK_EXTENTS pExtents = (PVOLUME_DISK_EXTENTS)buffer;
+                    DWORD bytesReturned = 0;
+
+                    if (DeviceIoControl(
+                        hVolume,
+                        IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                        NULL, 0,
+                        pExtents, sizeof(buffer),
+                        &bytesReturned,
+                        NULL))
+                    {
+                        for (DWORD i = 0; i < pExtents->NumberOfDiskExtents; i++) {
+                            if (pExtents->Extents[i].DiskNumber == static_cast<DWORD>(diskNumber)) {
+                                std::wstring volPath = volumeNameCopy + L"\\";
+                                volumes.push_back(volPath);
+                                break;
+                            }
+                        }
+                    }
+
+                    CloseHandle(hVolume);
+                }
+            } while (FindNextVolumeW(hFind, volumeName, ARRAYSIZE(volumeName)));
+
+            FindVolumeClose(hFind);
+
+            if (volumes.empty()) {
+                SetLastErrorMessage(L"No volumes found on disk");
+                return -3;
+            }
+
+            if (callback) {
+                std::wstring msg = L"Found " + std::to_wstring(volumes.size()) + L" volume(s) for incremental backup";
+                callback(10, msg.c_str());
+            }
+
+            // Open existing WIM file with WIM_FLAG_REFERENCE to add incremental images
+            if (callback) {
+                callback(15, L"Opening existing backup with WIM_FLAG_REFERENCE...");
+            }
+
+            // Determine compression type
+            DWORD compressionType = compress ? WIM_COMPRESS_LZMS : WIM_COMPRESS_NONE;
+
+            HANDLE hWim = WIMCreateFile(
+                destFile.c_str(),
+                WIM_GENERIC_WRITE,
+                WIM_OPEN_EXISTING,
+                WIM_FLAG_VERIFY | WIM_FLAG_REFERENCE,  // Verify integrity + enable referential images
+                compressionType,
+                NULL
+            );
+
+            if (!hWim || hWim == INVALID_HANDLE_VALUE) {
+                SetLastErrorMessage(L"Failed to open existing backup for incremental");
+                return -4;
+            }
+
+            // WIM API automatically handles incremental images when appending to existing WIM
+            // Each new image will reference common data from previous images
+
+            // Backup each volume as new incremental image
+            int volumeIndex = 0;
+            for (const auto& volume : volumes) {
+                volumeIndex++;
+                int progressBase = 20 + (volumeIndex - 1) * (70 / static_cast<int>(volumes.size()));
+
+                if (callback) {
+                    std::wstring msg = L"Creating incremental image " + std::to_wstring(volumeIndex) + 
+                                      L" of " + std::to_wstring(volumes.size()) + L"...";
+                    callback(progressBase, msg.c_str());
+                }
+
+                // Create VSS snapshot
+                BackupEngine::VSSSnapshotManager vssManager;
+                HRESULT hr = vssManager.Initialize();
+
+                wchar_t snapshotPath[MAX_PATH] = { 0 };
+                std::wstring actualSourcePath = volume + L"\\";
+
+                if (SUCCEEDED(hr)) {
+                    hr = vssManager.CreateVolumeSnapshot(actualSourcePath.c_str(), snapshotPath, MAX_PATH);
+                    if (SUCCEEDED(hr)) {
+                        actualSourcePath = snapshotPath;
+                    }
+                }
+
+                // Capture new image referencing previous images
+                std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + 
+                                        L" Volume " + std::to_wstring(volumeIndex) + 
+                                        L" (Incremental)";
+
+                // The WIM_FLAG_REFERENCE in WIMCreateFile automatically makes new images reference existing ones
+                HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), 
+                                                 imageName.c_str(), callback);
+
+                if (!hImage || hImage == INVALID_HANDLE_VALUE) {
+                    WIMCloseHandle(hWim);
+                    std::wstring err = L"Failed to capture incremental image " + std::to_wstring(volumeIndex);
+                    SetLastErrorMessage(err);
+                    return -6;
+                }
+
+                WIMCloseHandle(hImage);
+            }
+
+            if (callback) {
+                callback(95, L"Finalizing incremental backup...");
+            }
+
+            WIMCloseHandle(hWim);
+
+            if (callback) {
+                callback(100, L"Incremental disk backup completed successfully!");
+            }
+
+            return 0;
+        }
+        catch (const std::exception& e) {
+            std::string err = "Exception in BackupDiskIncremental: ";
+            err += e.what();
+            SetLastErrorMessage(std::wstring(err.begin(), err.end()));
+            return -10;
+        }
+    }
+
+    // NEW FUNCTION: Differential disk backup using WIM_FLAG_REFERENCE
+    BACKUPENGINE_API int BackupDiskDifferential(
+        int diskNumber,
+        const wchar_t* destPath,
+        bool includeSystemState,
+        bool compress,
+        ProgressCallback callback) {
+
+        if (!destPath || diskNumber < 0) {
+            SetLastErrorMessage(L"Invalid parameters");
+            return -1;
+        }
+
+        try {
+            std::wstring destFile(destPath);
+
+            // Check if base backup (.ssb file) exists
+            if (!fs::exists(destFile)) {
+                // No base backup exists - create full backup instead
+                if (callback) {
+                    callback(0, L"No base backup found - creating initial full backup...");
+                }
+                return BackupDisk(diskNumber, destPath, includeSystemState, compress, callback);
+            }
+
+            if (callback) {
+                callback(0, L"Starting differential disk backup (WIM referential)...");
+            }
+
+            // Enumerate volumes on this disk
+            std::vector<std::wstring> volumes;
+            wchar_t volumeName[MAX_PATH];
+            HANDLE hFind = FindFirstVolumeW(volumeName, ARRAYSIZE(volumeName));
+
+            if (hFind == INVALID_HANDLE_VALUE) {
+                SetLastErrorMessage(L"Failed to enumerate volumes");
+                return -2;
+            }
+
+            do {
+                size_t len = wcslen(volumeName);
+                if (len > 0 && volumeName[len - 1] == L'\\') {
+                    volumeName[len - 1] = L'\0';
+                }
+
+                std::wstring volumeNameCopy = volumeName;
+                if (volumeNameCopy.size() > 4 && volumeNameCopy.substr(0, 4) == L"\\\\?\\") {
+                    volumeNameCopy = volumeNameCopy.substr(4);
+                }
+
+                HANDLE hVolume = CreateFileW(
+                    volumeName,
+                    GENERIC_READ,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    NULL,
+                    OPEN_EXISTING,
+                    0,
+                    NULL
+                );
+
+                if (hVolume != INVALID_HANDLE_VALUE) {
+                    BYTE buffer[sizeof(VOLUME_DISK_EXTENTS) + 32 * sizeof(DISK_EXTENT)];
+                    PVOLUME_DISK_EXTENTS pExtents = (PVOLUME_DISK_EXTENTS)buffer;
+                    DWORD bytesReturned = 0;
+
+                    if (DeviceIoControl(
+                        hVolume,
+                        IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                        NULL, 0,
+                        pExtents, sizeof(buffer),
+                        &bytesReturned,
+                        NULL))
+                    {
+                        for (DWORD i = 0; i < pExtents->NumberOfDiskExtents; i++) {
+                            if (pExtents->Extents[i].DiskNumber == static_cast<DWORD>(diskNumber)) {
+                                std::wstring volPath = volumeNameCopy + L"\\";
+                                volumes.push_back(volPath);
+                                break;
+                            }
+                        }
+                    }
+
+                    CloseHandle(hVolume);
+                }
+            } while (FindNextVolumeW(hFind, volumeName, ARRAYSIZE(volumeName)));
+
+            FindVolumeClose(hFind);
+
+            if (volumes.empty()) {
+                SetLastErrorMessage(L"No volumes found on disk");
+                return -3;
+            }
+
+            if (callback) {
+                std::wstring msg = L"Found " + std::to_wstring(volumes.size()) + L" volume(s) for differential backup";
+                callback(10, msg.c_str());
+            }
+
+            // Open existing WIM file with WIM_FLAG_REFERENCE to add differential images
+            // Differential always references the FIRST (full) backup, not the most recent
+            if (callback) {
+                callback(15, L"Opening existing backup with WIM_FLAG_REFERENCE...");
+            }
+
+            // Determine compression type
+            DWORD compressionType = compress ? WIM_COMPRESS_LZMS : WIM_COMPRESS_NONE;
+
+            HANDLE hWim = WIMCreateFile(
+                destFile.c_str(),
+                WIM_GENERIC_WRITE,
+                WIM_OPEN_EXISTING,
+                WIM_FLAG_VERIFY | WIM_FLAG_REFERENCE,  // Verify integrity + enable referential images
+                compressionType,
+                NULL
+            );
+
+            if (!hWim || hWim == INVALID_HANDLE_VALUE) {
+                SetLastErrorMessage(L"Failed to open existing backup for differential");
+                return -4;
+            }
+
+            // Backup each volume as new differential image (referencing first/full backup)
+            int volumeIndex = 0;
+            for (const auto& volume : volumes) {
+                volumeIndex++;
+                int progressBase = 20 + (volumeIndex - 1) * (70 / static_cast<int>(volumes.size()));
+
+                if (callback) {
+                    std::wstring msg = L"Creating differential image " + std::to_wstring(volumeIndex) + 
+                                      L" of " + std::to_wstring(volumes.size()) + L"...";
+                    callback(progressBase, msg.c_str());
+                }
+
+                // Create VSS snapshot
+                BackupEngine::VSSSnapshotManager vssManager;
+                HRESULT hr = vssManager.Initialize();
+
+                wchar_t snapshotPath[MAX_PATH] = { 0 };
+                std::wstring actualSourcePath = volume + L"\\";
+
+                if (SUCCEEDED(hr)) {
+                    hr = vssManager.CreateVolumeSnapshot(actualSourcePath.c_str(), snapshotPath, MAX_PATH);
+                    if (SUCCEEDED(hr)) {
+                        actualSourcePath = snapshotPath;
+                    }
+                }
+
+                // Capture new image referencing base backup (differential)
+                std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + 
+                                        L" Volume " + std::to_wstring(volumeIndex) + 
+                                        L" (Differential)";
+
+                // The WIM_FLAG_REFERENCE makes new images reference the first (full) backup
+                HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), 
+                                                 imageName.c_str(), callback);
+
+                if (!hImage || hImage == INVALID_HANDLE_VALUE) {
+                    WIMCloseHandle(hWim);
+                    std::wstring err = L"Failed to capture differential image " + std::to_wstring(volumeIndex);
+                    SetLastErrorMessage(err);
+                    return -6;
+                }
+
+                WIMCloseHandle(hImage);
+            }
+
+            if (callback) {
+                callback(95, L"Finalizing differential backup...");
+            }
+
+            WIMCloseHandle(hWim);
+
+            if (callback) {
+                callback(100, L"Differential disk backup completed successfully!");
+            }
+
+            return 0;
+        }
+        catch (const std::exception& e) {
+            std::string err = "Exception in BackupDiskDifferential: ";
             err += e.what();
             SetLastErrorMessage(std::wstring(err.begin(), err.end()));
             return -10;

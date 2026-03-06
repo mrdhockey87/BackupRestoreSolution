@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace BackupUI.Services
 {
@@ -16,6 +17,7 @@ namespace BackupUI.Services
             [MarshalAs(UnmanagedType.LPWStr)] string wimPath,
             [MarshalAs(UnmanagedType.LPWStr)] string backupName,
             [MarshalAs(UnmanagedType.LPWStr)] string backupType,
+            int imageIndex,  // Image index to mount (1-based, use 1 for first image)
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder mountPath,
             int mountPathSize,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
@@ -47,6 +49,14 @@ namespace BackupUI.Services
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder backupType,
             int backupTypeSize,
             out SYSTEMTIME mountTime  // ? NEW: Get mount time from C++
+        );
+
+        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern bool WimMount_ValidateWim(
+            [MarshalAs(UnmanagedType.LPWStr)] string wimPath,
+            out int imageCount,
+            [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
+            int errorMsgSize
         );
 
         // SYSTEMTIME structure for interop
@@ -82,7 +92,8 @@ namespace BackupUI.Services
         public static (bool Success, string MountPath, string Error) MountBackup(
             string wimPath,
             string backupName,
-            string backupType)
+            string backupType,
+            int imageIndex = 1)  // Default to first image
         {
             try
             {
@@ -93,6 +104,7 @@ namespace BackupUI.Services
                     wimPath,
                     backupName,
                     backupType,
+                    imageIndex,  // Pass image index to C++
                     mountPath,
                     260,
                     errorMsg,
@@ -120,6 +132,98 @@ namespace BackupUI.Services
             {
                 BackupLogger.LogError("BackupMount",
                     "Exception mounting backup",
+                    ex.Message);
+
+                return (false, "", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Mount a WIM backup file asynchronously with progress reporting
+        /// </summary>
+        public static async Task<(bool Success, string MountPath, string Error)> MountBackupAsync(
+            string wimPath,
+            string backupName,
+            string backupType,
+            int imageIndex = 1,
+            Action<string>? progressCallback = null)
+        {
+            try
+            {
+                progressCallback?.Invoke("Validating backup file...");
+
+                // Validate WIM file BEFORE attempting to mount
+                var errorMsg = new StringBuilder(512);
+                int imageCount;
+
+                if (!WimMount_ValidateWim(wimPath, out imageCount, errorMsg, 512))
+                {
+                    string validationError = errorMsg.ToString();
+
+                    BackupLogger.LogError("BackupMount",
+                        $"WIM validation failed for {backupName}",
+                        validationError);
+
+                    return (false, "", validationError);
+                }
+
+                progressCallback?.Invoke($"Validation successful - {imageCount} image(s) found");
+                progressCallback?.Invoke("Opening WIM file...");
+
+                // Run the synchronous mount operation on a background thread
+                return await Task.Run(() =>
+                {
+                    try
+                    {
+                        progressCallback?.Invoke("Loading image from WIM...");
+
+                        var mountPath = new StringBuilder(260);
+                        errorMsg.Clear();
+
+                        bool success = WimMount_MountWim(
+                            wimPath,
+                            backupName,
+                            backupType,
+                            imageIndex,
+                            mountPath,
+                            260,
+                            errorMsg,
+                            512
+                        );
+
+                        if (success)
+                        {
+                            progressCallback?.Invoke("Mount completed successfully!");
+
+                            BackupLogger.LogSuccess("BackupMount",
+                                $"Backup mounted successfully: {backupName}",
+                                $"Path: {mountPath}");
+
+                            return (true, mountPath.ToString(), "");
+                        }
+                        else
+                        {
+                            BackupLogger.LogError("BackupMount",
+                                $"Failed to mount backup: {backupName}",
+                                errorMsg.ToString());
+
+                            return (false, "", errorMsg.ToString());
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        BackupLogger.LogError("BackupMount",
+                            "Exception mounting backup",
+                            ex.Message);
+
+                        return (false, "", ex.Message);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                BackupLogger.LogError("BackupMount",
+                    "Exception in async mount operation",
                     ex.Message);
 
                 return (false, "", ex.Message);

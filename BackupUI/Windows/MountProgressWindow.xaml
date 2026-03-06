@@ -1,0 +1,57 @@
+<Window
+    x:Class="BackupUI.Windows.MountProgressWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Mounting Backup"
+    Width="450"
+    Height="200"
+    WindowStartupLocation="CenterOwner"
+    WindowStyle="None"
+    ResizeMode="NoResize"
+    Background="{StaticResource WindowBackground}"
+    BorderBrush="{StaticResource LightBorderBrush}"
+    BorderThickness="1">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock
+            Grid.Row="0"
+            Margin="0,0,0,15"
+            FontSize="16"
+            FontWeight="Bold"
+            Text="Mounting Backup..." />
+
+        <!-- Backup Name -->
+        <TextBlock
+            Grid.Row="1"
+            Name="txtBackupName"
+            Margin="0,0,0,10"
+            FontSize="14"
+            Text="Backup: Loading..." />
+
+        <!-- Progress Bar -->
+        <ProgressBar
+            Grid.Row="2"
+            Name="progressBar"
+            Height="25"
+            Margin="0,0,0,15"
+            IsIndeterminate="True"
+            Foreground="{StaticResource MediumTurquoise}" />
+
+        <!-- Status Message -->
+        <TextBlock
+            Grid.Row="3"
+            Name="txtStatus"
+            VerticalAlignment="Top"
+            FontSize="12"
+            Foreground="{StaticResource SecondaryText}"
+            TextWrapping="Wrap"
+            Text="Opening WIM file..." />
+    </Grid>
+</Window>

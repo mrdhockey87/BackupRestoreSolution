@@ -21,7 +21,10 @@ namespace BackupUI.Models
         
         // Retention settings
         public int RetainFullBackupCount { get; set; } = 1; // Default: keep only 1 full backup
-        
+
+        // Retry tracking
+        public int ConsecutiveFailures { get; set; } = 0; // Track consecutive backup failures for retry limit
+
         // Import support
         public bool IsImported { get; set; } = false; // True if imported from external backup
         public bool UseCompression { get; set; } = true; // True to create .brs (compressed), false for .wim

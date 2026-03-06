@@ -22,6 +22,7 @@ namespace BackupService
         public bool IsHyperVBackup { get; set; }
         public List<string> HyperVMachines { get; set; } = new();
         public int RetainFullBackupCount { get; set; } = 1; // Default: keep only 1 full backup
+        public int ConsecutiveFailures { get; set; } = 0; // Track consecutive backup failures for retry limit
     }
 
     public class BackupSchedule
@@ -106,21 +107,63 @@ namespace BackupService
                     // Set a flag to indicate this is initial calculation
                     CalculateNextRunTime(job, isInitialCalculation: true);
                     SaveJobs(); // Save the calculated NextRunTime so it persists
+
+                    // LOG: Show what we calculated
+                    if (job.Schedule.NextRunTime.HasValue)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[SCHEDULING] Job '{job.Name}' NextRunTime set to {job.Schedule.NextRunTime.Value:yyyy-MM-dd HH:mm:ss} (initial calculation)");
+                    }
+                }
+
+                // LOG: Show comparison
+                if (job.Schedule.NextRunTime.HasValue)
+                {
+                    var timeUntilDue = job.Schedule.NextRunTime.Value - now;
+                    System.Diagnostics.Debug.WriteLine($"[SCHEDULING] Job '{job.Name}': NextRun={job.Schedule.NextRunTime.Value:yyyy-MM-dd HH:mm:ss}, Now={now:yyyy-MM-dd HH:mm:ss}, TimeUntilDue={timeUntilDue.TotalMinutes:F1} minutes, IsDue={job.Schedule.NextRunTime <= now}");
                 }
 
                 if (job.Schedule.NextRunTime <= now)
                 {
                     dueJobs.Add(job);
+                    System.Diagnostics.Debug.WriteLine($"[SCHEDULING] Job '{job.Name}' added to due jobs list");
                 }
             }
 
             return dueJobs;
         }
 
-        public void UpdateJobAfterExecution(BackupJob job)
+        public void UpdateJobAfterExecution(BackupJob job, bool success = true)
         {
             job.LastRunTime = DateTime.Now;
-            CalculateNextRunTime(job, isInitialCalculation: false);
+
+            if (!success)
+            {
+                // Increment consecutive failure counter
+                job.ConsecutiveFailures++;
+
+                // IMPORTANT: Maximum 3 retry attempts, then wait for next scheduled time
+                // This prevents infinite retry loops on persistent failures
+                if (job.ConsecutiveFailures <= 3)
+                {
+                    // Schedule retry for 15 minutes from now (attempts 1-3)
+                    job.Schedule.NextRunTime = DateTime.Now.AddMinutes(15);
+                    System.Diagnostics.Debug.WriteLine($"[RETRY] Job '{job.Name}' failed (attempt {job.ConsecutiveFailures}/3), will retry in 15 minutes at {job.Schedule.NextRunTime:yyyy-MM-dd HH:mm:ss}");
+                }
+                else
+                {
+                    // After 3 failed attempts, wait for next scheduled time
+                    CalculateNextRunTime(job, isInitialCalculation: false);
+                    System.Diagnostics.Debug.WriteLine($"[RETRY LIMIT] Job '{job.Name}' failed 3 times, waiting for next scheduled time: {job.Schedule.NextRunTime:yyyy-MM-dd HH:mm:ss}");
+                    // Don't reset ConsecutiveFailures here - let successful backup reset it
+                }
+            }
+            else
+            {
+                // Backup succeeded - reset failure counter and calculate normal next run time
+                job.ConsecutiveFailures = 0;
+                CalculateNextRunTime(job, isInitialCalculation: false);
+            }
+
             SaveJobs();
         }
 

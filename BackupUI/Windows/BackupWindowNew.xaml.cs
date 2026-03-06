@@ -1831,11 +1831,11 @@ namespace BackupUI.Windows
                     // Execute based on job type
                     if (job.IsHyperVBackup && job.HyperVMachines.Count > 0)
                     {
-                        // Hyper-V VM backup
+                        // Hyper-V VM backup - use job name for .ssb file (matches service behavior)
+                        var vmDestPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+
                         foreach (var vmName in job.HyperVMachines)
                         {
-                            var vmDestPath = Path.Combine(job.DestinationPath, vmName);
-                            
                             Dispatcher.Invoke(() =>
                             {
                                 txtProgress.Text = $"Backing up Hyper-V VM: {vmName}...";
@@ -1856,15 +1856,20 @@ namespace BackupUI.Windows
                     }
                     else if (job.Target == BackupTarget.Disk)
                     {
-                        // Disk backup
+                        // Disk backup - use job name for .ssb file (matches service behavior)
+                        var diskDestPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+
+                        // Extract disk number for logging
                         foreach (var diskPath in job.SourcePaths)
                         {
-                            // Extract disk number from path (e.g., "\\.\PHYSICALDRIVE0" -> 0)
                             var diskNumStr = diskPath.Replace("\\\\?\\PHYSICALDRIVE", "").Replace("\\\\.\\PHYSICALDRIVE", "");
                             if (int.TryParse(diskNumStr, out int diskNum))
                             {
-                                var diskDestPath = Path.Combine(job.DestinationPath, $"Disk{diskNum}");
-                                
+                                Dispatcher.Invoke(() =>
+                                {
+                                    txtProgress.Text = $"Backing up Disk {diskNum}...";
+                                });
+
                                 result = BackupEngineInterop.BackupDisk(
                                     diskNum,
                                     diskDestPath,
@@ -1883,12 +1888,16 @@ namespace BackupUI.Windows
                     }
                     else if (job.Target == BackupTarget.Volume)
                     {
-                        // Volume backup
+                        // Volume backup - use job name for .ssb file (matches service behavior)
+                        var volumeDestPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+
                         foreach (var volumePath in job.SourcePaths)
                         {
-                            var volumeName = volumePath.TrimEnd('\\').Replace(":", "");
-                            var volumeDestPath = Path.Combine(job.DestinationPath, volumeName);
-                            
+                            Dispatcher.Invoke(() =>
+                            {
+                                txtProgress.Text = $"Backing up volume {volumePath}...";
+                            });
+
                             result = BackupEngineInterop.BackupVolume(
                                 volumePath,
                                 volumeDestPath,
@@ -2251,12 +2260,27 @@ namespace BackupUI.Windows
             // Determine target type if not already set
             if (job.Target == 0 && job.SourcePaths.Count > 0)
             {
-                // Check if all sources are drive letters (volumes) or paths (files/folders)
+                // Check if all sources are drive letters (volumes), device paths (disks), or regular paths (files/folders)
                 var firstPath = job.SourcePaths[0];
-                if (firstPath.Length <= 3 && firstPath.EndsWith(":"))
+
+                // Check for PHYSICALDRIVE device paths (e.g., \\.\PHYSICALDRIVE5)
+                if (firstPath.StartsWith(@"\\.\", StringComparison.OrdinalIgnoreCase) &&
+                    firstPath.Contains("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase))
+                {
+                    job.Target = BackupTarget.Disk;
+                }
+                // Check for Volume GUID paths (e.g., \\?\Volume{guid})
+                else if (firstPath.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase) &&
+                         firstPath.Contains("Volume{", StringComparison.OrdinalIgnoreCase))
                 {
                     job.Target = BackupTarget.Volume;
                 }
+                // Check for simple drive letters (e.g., C:, E:, W:)
+                else if (firstPath.Length <= 3 && firstPath.EndsWith(":"))
+                {
+                    job.Target = BackupTarget.Volume;
+                }
+                // Everything else is files/folders
                 else
                 {
                     job.Target = BackupTarget.FilesAndFolders;

@@ -61,6 +61,22 @@ BACKUPENGINE_API void GetLastErrorMessage(wchar_t* buffer, int bufferSize) {
         bool compress,
         ProgressCallback callback);
 
+    // Backup disk incremental - implementation in BackupManager_Advanced.cpp
+    BACKUPENGINE_API int BackupDiskIncremental(
+        int diskNumber,
+        const wchar_t* destPath,
+        bool includeSystemState,
+        bool compress,
+        ProgressCallback callback);
+
+    // Backup disk differential - implementation in BackupManager_Advanced.cpp
+    BACKUPENGINE_API int BackupDiskDifferential(
+        int diskNumber,
+        const wchar_t* destPath,
+        bool includeSystemState,
+        bool compress,
+        ProgressCallback callback);
+
     // Create incremental backup - implementation in BackupManager.cpp
     BACKUPENGINE_API int CreateIncrementalBackup(
         const wchar_t* sourcePath,
@@ -82,9 +98,25 @@ BACKUPENGINE_API void GetLastErrorMessage(wchar_t* buffer, int bufferSize) {
         bool restoreSystemState,
         ProgressCallback callback);
 
+    // Restore volume from specific WIM image - NEW for multi-image support
+    BACKUPENGINE_API int RestoreVolumeFromImage(
+        const wchar_t* wimPath,
+        int imageIndex,
+        const wchar_t* targetVolume,
+        bool restoreSystemState,
+        ProgressCallback callback);
+
     // Restore disk - implementation in RestoreEngine.cpp
     BACKUPENGINE_API int RestoreDisk(
         const wchar_t* backupPath,
+        int targetDiskNumber,
+        bool restoreSystemState,
+        ProgressCallback callback);
+
+    // Restore disk from specific WIM image - NEW for multi-image support
+    BACKUPENGINE_API int RestoreDiskFromImage(
+        const wchar_t* wimPath,
+        int imageIndex,
         int targetDiskNumber,
         bool restoreSystemState,
         ProgressCallback callback);
@@ -102,6 +134,20 @@ BACKUPENGINE_API void GetLastErrorMessage(wchar_t* buffer, int bufferSize) {
         const wchar_t* backupPath,
         wchar_t* buffer,
         int bufferSize);
+
+    // Get WIM image count and info - NEW for multi-image support
+    BACKUPENGINE_API int GetWimImageCount(
+        const wchar_t* wimPath,
+        int* imageCount);
+
+    // Get WIM image info by index - NEW for multi-image support  
+    BACKUPENGINE_API int GetWimImageInfo(
+        const wchar_t* wimPath,
+        int imageIndex,
+        wchar_t* imageName,
+        int imageNameSize,
+        wchar_t* imageDescription,
+        int imageDescriptionSize);
 
     // Enumerate volumes - implementation in VSSManager.cpp
     BACKUPENGINE_API int EnumerateVolumes(
