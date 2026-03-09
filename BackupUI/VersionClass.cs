@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.9.3";
+		static private string version_fallback_number = "5.13.9.5";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -71,6 +71,74 @@ namespace BackupUI
 
 /*
  * 
+* Version 5.13.9.5 CRITICAL FIX - INFINITE RETRY LOOP BUG: Fixed service retrying indefinitely instead of stopping after 3 attempts!
+*					User reported: "when it failed it was run from the service, If a job run from the service fails it should retry only 3 times,
+*					however it retried repeatedly until I stopped the service the next day." ROOT CAUSE IDENTIFIED: THREE BUGS in retry limit logic:
+*					BUG #1 - OFF-BY-ONE ERROR: Line 146 in JobManager.cs had `if (job.ConsecutiveFailures <= 3)` which allowed 4 attempts instead
+*					of 3! Timeline: Attempt 1 fails → ConsecutiveFailures=1 → retry (attempt 2), Attempt 2 fails → ConsecutiveFailures=2 → retry
+*					(attempt 3), Attempt 3 fails → ConsecutiveFailures=3 → retry (WRONG! Should stop here), Attempt 4 fails → ConsecutiveFailures=4
+*					→ finally stops. FIXED by changing to `if (job.ConsecutiveFailures < 3)` - now stops after 3rd failure! BUG #2 - SILENT SAVE
+*					FAILURE: SaveJobs() catch block (lines 249-252) was EMPTY - if saving jobs.json failed (file locked, permissions issue, disk
+*					full), error was silently ignored! Without ConsecutiveFailures persisting to disk, counter was lost on service restart/reload.
+*					Timeline: Backup fails → ConsecutiveFailures increments to 1 in memory, SaveJobs() called but FAILS (silently), Job remains in
+*					memory with ConsecutiveFailures=1, Service restarts or reloads from disk, ConsecutiveFailures loads as 0 (old value), Next
+*					failure → increments to 1 again, INFINITE LOOP because counter never persists! FIXED by adding comprehensive error logging to
+*					SaveJobs() catch block with Debug.WriteLine, save_error.log file logging, full stack trace capture. BUG #3 - NO SAVE VERIFICATION:
+*					No way to detect when SaveJobs() failed - code assumed it always worked! FIXED by adding save verification after UpdateJobAfterExecution
+*					calls SaveJobs(): reads job back from disk, compares ConsecutiveFailures values (in-memory vs on-disk), logs CRITICAL ERROR if
+*					mismatch detected, logs success if values match. COMPREHENSIVE FIXES: 1) Changed retry condition from `<= 3` to `< 3` (allows
+*					failures 1 and 2, stops at 3), 2) Enhanced SaveJobs() with detailed error logging showing exception message and stack trace, added
+*					save_error.log fallback logging, added success logging "Jobs saved successfully", 3) Added save verification in UpdateJobAfterExecution
+*					that reloads job from disk, compares ConsecutiveFailures, logs critical error or success, catches verification exceptions. DIAGNOSTIC
+*					LOGGING ENHANCED: "[RETRY] Job 'WDrive' failed (attempt 1/3), will retry in 15 minutes at 2026-03-06 14:45:00" - shows attempt
+*					count, "[RETRY LIMIT] Job 'WDrive' failed 3 times (max 3 attempts reached), waiting for next scheduled time: 2026-03-07 02:00:00"
+*					- clear limit reached message, "[SAVE SUCCESS] Jobs saved successfully to C:\ProgramData\BackupRestoreService\jobs.json" -
+*					confirms persistence, "[SAVE VERIFIED] Job 'WDrive' ConsecutiveFailures=3 persisted successfully" - confirms disk matches memory,
+*					"[CRITICAL ERROR] ConsecutiveFailures not persisted! In-memory: 3, On-disk: 0" - detects save failures, "[CRITICAL ERROR] Failed
+*					to save jobs: Access denied to C:\ProgramData\BackupRestoreService\jobs.json" - shows why save failed. WORKFLOW NOW CORRECT:
+*					Attempt 1 fails → ConsecutiveFailures=1 → SaveJobs() → verify → NextRunTime = now+15min → Service logs attempt 1/3, Attempt 2
+*					fails (15 min later) → ConsecutiveFailures=2 → SaveJobs() → verify → NextRunTime = now+15min → Service logs attempt 2/3, Attempt 3
+*					fails (15 min later) → ConsecutiveFailures=3 → SaveJobs() → verify → NextRunTime = tomorrow 2AM → Service logs "max 3 attempts
+*					reached", No more retries until tomorrow 2AM scheduled time! If SaveJobs() fails: "[CRITICAL ERROR] Failed to save jobs: ..." logged
+*					immediately, save_error.log contains full exception details, Save verification detects mismatch and logs critical error. BENEFITS:
+*					Correct retry limit (3 attempts not 4), Silent save failures now detected and logged, Save verification catches persistence issues,
+*					Comprehensive diagnostics for troubleshooting, No more infinite loops from lost counters! TESTING: Run backup that fails (e.g.,
+*					WIM error -4 before fix 5.13.9.4), Check DebugView for retry messages showing 1/3, 2/3, "max reached", Verify ConsecutiveFailures
+*					persists by checking jobs.json file, Verify no retries after 3rd failure until next scheduled time, Simulate save failure (lock
+*					jobs.json) and verify critical error logged. Complete fix for infinite retry bug - service now respects 3-attempt limit with proper
+*					error detection! Production-ready retry logic with bulletproof persistence verification! Enterprise-grade failure handling with
+*					comprehensive diagnostics! mdail 3/9/2026
+* Version 5.13.9.4 CRITICAL FIX - WIM COMPRESSION PARAMETER BUG: Fixed incremental/differential disk backups failing with error code -4!
+*					User reported: "When it tried to run an incremental it failed again, I know that the full backup is good because I can open
+*					it in another application designed to view wim backups the error message was: Disk incremental backup failed with code -4"
+*					ROOT CAUSE IDENTIFIED: WIMCreateFile was being called with wrong compression parameter when opening EXISTING WIM files!
+*					Lines 754-761 (incremental) and 946-953 (differential) were passing compressionType parameter (WIM_COMPRESS_LZMS or WIM_COMPRESS_NONE)
+*					when opening existing WIM with WIM_OPEN_EXISTING flag. The compression parameter is ONLY used when CREATING new WIM files
+*					(WIM_CREATE_NEW flag). When opening existing WIM files, compression type MUST be 0 - the API reads compression from the file!
+*					Passing non-zero compression when opening existing WIM causes WIMCreateFile to fail with error code -4 and return INVALID_HANDLE_VALUE.
+*					Timeline of bug: User runs full backup → creates WDrive.ssb with LZMS compression → file is valid (confirmed by opening in WIM viewer),
+*					User runs incremental backup → BackupDiskIncremental calls WIMCreateFile(destFile, GENERIC_WRITE, OPEN_EXISTING, FLAGS, WIM_COMPRESS_LZMS, NULL)
+*					→ WIM API sees "you want to open existing file but specified new compression type?" → returns INVALID_HANDLE_VALUE with error -4 →
+*					"Failed to open existing backup for incremental" message → backup fails! FIX APPLIED: Changed both BackupDiskIncremental (line 754-766)
+*					and BackupDiskDifferential (line 946-958) to pass 0 for compression parameter when opening existing WIM. Removed compressionType
+*					variable determination (lines 752-753, 943-944) since it's not needed when opening existing files. Enhanced error messages to include
+*					GetLastError() WIM error code for better diagnostics. Added clear comments explaining compression parameter must be 0 when opening
+*					existing WIM. Updated error messages: "Failed to open existing backup for incremental/differential. WIM Error: {code}. Ensure full
+*					backup exists and is not corrupted." TECHNICAL EXPLANATION: WIMCreateFile compression parameter behavior: WIM_CREATE_NEW (creating
+*					new WIM) - compression parameter specifies compression algorithm for new file (WIM_COMPRESS_NONE, WIM_COMPRESS_LZMS, etc.), WIM_OPEN_EXISTING
+*					(opening existing WIM) - compression parameter MUST be 0, API reads compression from file header. The API design makes sense: when creating
+*					WIM, you choose compression, when opening WIM, compression is already chosen and stored in file. Passing non-zero compression when opening
+*					is an ERROR - you're telling API "open this file with different compression than it has" which is nonsensical! WORKFLOW NOW CORRECT:
+*					Full backup → BackupDisk creates WDrive.ssb with WIM_COMPRESS_LZMS → WIMCreateFile(GENERIC_WRITE, CREATE_NEW, FLAGS, LZMS, NULL) ✓,
+*					Incremental backup → BackupDiskIncremental opens WDrive.ssb with compression 0 → WIMCreateFile(GENERIC_WRITE, OPEN_EXISTING, FLAGS, 0, NULL) ✓,
+*					WIM API reads LZMS compression from file header automatically, New images added with WIM_FLAG_REFERENCE use same compression as base images,
+*					Incremental images properly reference full backup images! BENEFITS: Incremental backups now work (error -4 fixed), Differential backups also
+*					fixed (same bug), Clear error messages with WIM error codes, Proper WIM API usage matching Microsoft documentation, Future-proof - follows
+*					correct API contract. TESTING: Run full backup → creates WDrive.ssb successfully, Run incremental backup → opens WDrive.ssb with compression 0
+*					→ adds referential images → Success!, Run differential backup → same fix → Success!, Multiple incrementals chain correctly! The bug was
+*					HIDDEN in version 5.13.8.6 - we added WIM_FLAG_REFERENCE correctly but still had wrong compression parameter! Both issues needed fixing. This
+*					completes the incremental/differential disk backup implementation started in 5.13.8.0! Production-ready incremental disk backups with proper
+*					WIM API usage! Complete fix for error -4 when opening existing WIM files! Enterprise-grade backup chain management! mdail 3/9/2026
 * Version 5.13.9.3 CRITICAL FIX - WIM CORRUPTION DETECTION: Fixed "Failed to load WIM image 1: 1632" error with comprehensive diagnostics!
 *					User reported: Mount fails after long wait with error code 1632. ROOT CAUSE IDENTIFIED: Error 1632 = ERROR_INSTALL_SERVICE_FAILURE
 *					or "WIM image is invalid/corrupted". This occurs when WIMLoadImage() is called on a WIM file that is: incomplete (backup

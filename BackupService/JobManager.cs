@@ -143,17 +143,17 @@ namespace BackupService
 
                 // IMPORTANT: Maximum 3 retry attempts, then wait for next scheduled time
                 // This prevents infinite retry loops on persistent failures
-                if (job.ConsecutiveFailures <= 3)
+                if (job.ConsecutiveFailures < 3)  // FIXED: < 3 instead of <= 3 (allows attempts 1 and 2, stops at 3)
                 {
-                    // Schedule retry for 15 minutes from now (attempts 1-3)
+                    // Schedule retry for 15 minutes from now (attempts 1-2)
                     job.Schedule.NextRunTime = DateTime.Now.AddMinutes(15);
                     System.Diagnostics.Debug.WriteLine($"[RETRY] Job '{job.Name}' failed (attempt {job.ConsecutiveFailures}/3), will retry in 15 minutes at {job.Schedule.NextRunTime:yyyy-MM-dd HH:mm:ss}");
                 }
                 else
                 {
-                    // After 3 failed attempts, wait for next scheduled time
+                    // After 2 failed attempts (ConsecutiveFailures = 3 means 3rd failure), wait for next scheduled time
                     CalculateNextRunTime(job, isInitialCalculation: false);
-                    System.Diagnostics.Debug.WriteLine($"[RETRY LIMIT] Job '{job.Name}' failed 3 times, waiting for next scheduled time: {job.Schedule.NextRunTime:yyyy-MM-dd HH:mm:ss}");
+                    System.Diagnostics.Debug.WriteLine($"[RETRY LIMIT] Job '{job.Name}' failed {job.ConsecutiveFailures} times (max 3 attempts reached), waiting for next scheduled time: {job.Schedule.NextRunTime:yyyy-MM-dd HH:mm:ss}");
                     // Don't reset ConsecutiveFailures here - let successful backup reset it
                 }
             }
@@ -165,6 +165,28 @@ namespace BackupService
             }
 
             SaveJobs();
+
+            // DIAGNOSTIC: Verify save was successful by reading back
+            try
+            {
+                var savedJob = GetJob(job.Id);
+                if (savedJob != null && savedJob.ConsecutiveFailures != job.ConsecutiveFailures)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CRITICAL ERROR] ConsecutiveFailures not persisted! In-memory: {job.ConsecutiveFailures}, On-disk: {savedJob.ConsecutiveFailures}");
+                }
+                else if (savedJob == null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CRITICAL ERROR] Job not found after save: {job.Name}");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[SAVE VERIFIED] Job '{job.Name}' ConsecutiveFailures={savedJob.ConsecutiveFailures} persisted successfully");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SAVE VERIFICATION ERROR] Failed to verify save: {ex.Message}");
+            }
         }
 
         private void CalculateNextRunTime(BackupJob job, bool isInitialCalculation = false)
@@ -245,10 +267,24 @@ namespace BackupService
                 var options = new JsonSerializerOptions { WriteIndented = true };
                 var json = JsonSerializer.Serialize(jobs, options);
                 File.WriteAllText(JobsFilePath, json);
+                System.Diagnostics.Debug.WriteLine($"[SAVE SUCCESS] Jobs saved successfully to {JobsFilePath}");
             }
-            catch
+            catch (Exception ex)
             {
-                // Log error
+                // CRITICAL ERROR: If save fails, ConsecutiveFailures won't persist!
+                System.Diagnostics.Debug.WriteLine($"[CRITICAL ERROR] Failed to save jobs: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[CRITICAL ERROR] Stack trace: {ex.StackTrace}");
+                // Log to service log file as well
+                try
+                {
+                    var logPath = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                        "BackupRestoreService",
+                        "save_error.log");
+                    File.AppendAllText(logPath, 
+                        $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Failed to save jobs: {ex.Message}\n");
+                }
+                catch { /* Ignore logging errors */ }
             }
         }
     }

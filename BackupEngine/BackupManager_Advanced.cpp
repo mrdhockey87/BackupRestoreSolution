@@ -748,20 +748,23 @@ extern "C" {
                 callback(15, L"Opening existing backup with WIM_FLAG_REFERENCE...");
             }
 
-            // Determine compression type
-            DWORD compressionType = compress ? WIM_COMPRESS_LZMS : WIM_COMPRESS_NONE;
-
+            // When opening existing WIM, compression type must be 0 (read from file)
+            // Passing WIM_COMPRESS_LZMS/NONE when opening existing WIM causes error -4!
             HANDLE hWim = WIMCreateFile(
                 destFile.c_str(),
                 WIM_GENERIC_WRITE,
                 WIM_OPEN_EXISTING,
                 WIM_FLAG_VERIFY | WIM_FLAG_REFERENCE,  // Verify integrity + enable referential images
-                compressionType,
+                0,  // MUST be 0 when opening existing WIM! Compression read from file.
                 NULL
             );
 
             if (!hWim || hWim == INVALID_HANDLE_VALUE) {
-                SetLastErrorMessage(L"Failed to open existing backup for incremental");
+                DWORD wimError = GetLastError();
+                std::wstring err = L"Failed to open existing backup for incremental. WIM Error: " + 
+                                  std::to_wstring(wimError) + 
+                                  L". Ensure full backup exists and is not corrupted.";
+                SetLastErrorMessage(err);
                 return -4;
             }
 
@@ -937,20 +940,23 @@ extern "C" {
                 callback(15, L"Opening existing backup with WIM_FLAG_REFERENCE...");
             }
 
-            // Determine compression type
-            DWORD compressionType = compress ? WIM_COMPRESS_LZMS : WIM_COMPRESS_NONE;
-
+            // When opening existing WIM, compression type must be 0 (read from file)
+            // Passing WIM_COMPRESS_LZMS/NONE when opening existing WIM causes error -4!
             HANDLE hWim = WIMCreateFile(
                 destFile.c_str(),
                 WIM_GENERIC_WRITE,
                 WIM_OPEN_EXISTING,
                 WIM_FLAG_VERIFY | WIM_FLAG_REFERENCE,  // Verify integrity + enable referential images
-                compressionType,
+                0,  // MUST be 0 when opening existing WIM! Compression read from file.
                 NULL
             );
 
             if (!hWim || hWim == INVALID_HANDLE_VALUE) {
-                SetLastErrorMessage(L"Failed to open existing backup for differential");
+                DWORD wimError = GetLastError();
+                std::wstring err = L"Failed to open existing backup for differential. WIM Error: " + 
+                                  std::to_wstring(wimError) + 
+                                  L". Ensure full backup exists and is not corrupted.";
+                SetLastErrorMessage(err);
                 return -4;
             }
 
