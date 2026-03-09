@@ -195,6 +195,16 @@ namespace BackupUI.Services
                         var mountPath = new StringBuilder(260);
                         errorMsg.Clear();
 
+                        // DIAGNOSTIC: Log the temp path we're about to pass to C++
+                        System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] About to call WimMount_MountWim with tempPath: '{tempPath}'");
+                        System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] tempPath is null: {tempPath == null}");
+                        System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] tempPath is empty: {string.IsNullOrEmpty(tempPath)}");
+                        if (!string.IsNullOrEmpty(tempPath))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] tempPath string length: {tempPath.Length}");
+                            System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] tempPath first 10 chars: '{tempPath.Substring(0, Math.Min(10, tempPath.Length))}'");
+                        }
+
                         // Create native callback that wraps our C# callback
                         ProgressCallback? nativeCallback = null;
                         if (progressCallback != null)
@@ -217,6 +227,16 @@ namespace BackupUI.Services
                             nativeCallback,  // Pass the callback to C++
                             tempPath  // Pass temp path to C++
                         );
+
+                        System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] WimMount_MountWim returned: {success}");
+                        if (!success)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] Error message: {errorMsg}");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] Mount path returned: {mountPath}");
+                        }
 
                         if (success)
                         {

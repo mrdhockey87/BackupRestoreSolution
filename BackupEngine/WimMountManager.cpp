@@ -26,6 +26,65 @@ namespace BackupEngine {
         }
     }
 
+    // Static callback for WIM API that forwards to user callback
+    static DWORD WINAPI WimProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lParam, PVOID pvIgnored) {
+        ProgressCallback userCallback = (ProgressCallback)pvIgnored;
+
+        switch (msgId) {
+            case WIM_MSG_PROCESS:
+            {
+                // WIM_MSG_PROCESS - file being processed
+                // wParam = path to file (LPCWSTR)
+                if (wParam && userCallback) {
+                    const wchar_t* filePath = (const wchar_t*)wParam;
+
+                    // Extract just the filename for cleaner display
+                    const wchar_t* fileName = wcsrchr(filePath, L'\\');
+                    if (fileName) {
+                        fileName++; // Skip the backslash
+                    } else {
+                        fileName = filePath;
+                    }
+
+                    // Report file being processed
+                    std::wstring message = L"Processing: ";
+                    message += fileName;
+                    userCallback(50, message.c_str());
+                }
+                return WIM_MSG_SUCCESS;
+            }
+
+            case WIM_MSG_PROGRESS:
+            {
+                // WIM_MSG_PROGRESS - overall progress
+                // wParam = estimated percentage complete
+                if (userCallback) {
+                    int percentage = (int)wParam;
+                    // Scale to 50-90% range (mount operation is 50-90% of total)
+                    percentage = 50 + (percentage * 40 / 100);
+                    userCallback(percentage, L"Mounting image...");
+                }
+                return WIM_MSG_SUCCESS;
+            }
+
+            case WIM_MSG_SETRANGE:
+            {
+                // WIM_MSG_SETRANGE - total number of files
+                // wParam = estimated total number of files
+                if (userCallback) {
+                    std::wstring message = L"Preparing to mount ";
+                    message += std::to_wstring((DWORD)wParam);
+                    message += L" files...";
+                    userCallback(45, message.c_str());
+                }
+                return WIM_MSG_SUCCESS;
+            }
+
+            default:
+                return WIM_MSG_SUCCESS;
+        }
+    }
+
     bool WimMountManager::MountWim(
         const wchar_t* wimPath,
         const wchar_t* backupName,
@@ -49,7 +108,8 @@ namespace BackupEngine {
             }
 
             // Create unique mount point (include image index for uniqueness)
-            std::wstring mountPoint = CreateMountPoint(backupName, imageIndex);
+            // Pass user temp path so mount point is created under user's selected location
+            std::wstring mountPoint = CreateMountPoint(backupName, imageIndex, userTempPath);
 
             // Create the mount directory
             if (!CreateDirectoryW(mountPoint.c_str(), nullptr)) {
@@ -113,6 +173,16 @@ namespace BackupEngine {
             // Without this, WIMLoadImage can fail with error 1632
             wchar_t tempPath[MAX_PATH];
 
+            OutputDebugStringW(L"[WimMount] About to check userTempPath parameter...");
+            if (userTempPath)
+            {
+                OutputDebugStringW((L"[WimMount] userTempPath is NOT NULL, length: " + std::to_wstring(wcslen(userTempPath))).c_str());
+            }
+            else
+            {
+                OutputDebugStringW(L"[WimMount] userTempPath is NULL!");
+            }
+
             // Use user-provided temp path if available, otherwise get system temp
             if (userTempPath && wcslen(userTempPath) > 0) {
                 wcscpy_s(tempPath, MAX_PATH, userTempPath);
@@ -129,7 +199,7 @@ namespace BackupEngine {
 
             // Register progress callback if provided
             if (callback) {
-                WIMRegisterMessageCallback(wimHandle, (FARPROC)callback, nullptr);
+                WIMRegisterMessageCallback(wimHandle, (FARPROC)WimProgressCallback, callback);
                 callback(0, L"Preparing to load image...");
             }
 
@@ -203,7 +273,7 @@ namespace BackupEngine {
 
             // Unregister callback after successful mount
             if (callback) {
-                WIMUnregisterMessageCallback(wimHandle, (FARPROC)callback);
+                WIMUnregisterMessageCallback(wimHandle, (FARPROC)WimProgressCallback);
                 callback(100, L"Mount completed successfully!");
             }
 
@@ -257,12 +327,37 @@ namespace BackupEngine {
                 callback(25, L"Unmounting WIM image...");
             }
 
-            // Unmount the WIM
-            if (!WIMUnmountImage(mountPath, info.wimPath.c_str(), 1, FALSE)) {
+            // Log mount details for diagnostics
+            OutputDebugStringW((L"[WimMount] Attempting unmount: " + std::wstring(mountPath)).c_str());
+            OutputDebugStringW((L"[WimMount] WIM file: " + info.wimPath).c_str());
+
+            // Check if mount point still exists
+            DWORD attributes = GetFileAttributesW(mountPath);
+            if (attributes == INVALID_FILE_ATTRIBUTES) {
+                DWORD err = GetLastError();
+                OutputDebugStringW((L"[WimMount] Warning: Mount point doesn't exist or is inaccessible (error " + std::to_wstring(err) + L")").c_str());
+                // Continue anyway - WIM API might still need to clean up
+            }
+
+            // Unmount the WIM - use WIM_MOUNT_FLAG_NO_APPLY to prevent errors if already unmounted
+            // First parameter: mount point path
+            // Second parameter: WIM file path (can be NULL if mount point is sufficient)
+            // Third parameter: image index (1-based)
+            // Fourth parameter: flags (0 = normal unmount)
+            if (!WIMUnmountImage(mountPath, NULL, 0, 0)) {
                 DWORD err = GetLastError();
                 // FIXED: Use %u for unsigned DWORD, not %d (which caused negative numbers)
-                swprintf_s(errorMsg, errorMsgSize, L"Failed to unmount WIM: %u (0x%X)", err, err);
+                swprintf_s(errorMsg, errorMsgSize, 
+                    L"Failed to unmount WIM: %u (0x%X)\n\n"
+                    L"Common causes:\n"
+                    L"• Files still open in Explorer (close all windows showing backup)\n"
+                    L"• Another program accessing mounted files\n"
+                    L"• Mount point in use\n\n"
+                    L"Try closing Explorer windows and retry.", 
+                    err, err);
                 OutputDebugStringW((L"[WimMount] Unmount error: " + std::to_wstring(err) + L" (0x" + std::to_wstring(err) + L")").c_str());
+                OutputDebugStringW((L"[WimMount] Mount path: " + std::wstring(mountPath)).c_str());
+                OutputDebugStringW((L"[WimMount] WIM path: " + info.wimPath).c_str());
                 LeaveCriticalSection(&cs);
                 return false;
             }
@@ -278,6 +373,40 @@ namespace BackupEngine {
 
             if (callback) {
                 callback(75, L"Cleaning up mount directory...");
+            }
+
+            // Enumerate and delete files in mount directory with progress
+            WIN32_FIND_DATAW findData;
+            std::wstring searchPath = std::wstring(mountPath) + L"\\*";
+            HANDLE hFind = FindFirstFileW(searchPath.c_str(), &findData);
+
+            if (hFind != INVALID_HANDLE_VALUE) {
+                int fileCount = 0;
+                do {
+                    // Skip . and ..
+                    if (wcscmp(findData.cFileName, L".") != 0 && wcscmp(findData.cFileName, L"..") != 0) {
+                        fileCount++;
+
+                        if (callback && fileCount % 10 == 0) {
+                            // Update progress every 10 files
+                            std::wstring message = L"Cleaning up: ";
+                            message += findData.cFileName;
+                            callback(75 + (fileCount % 100) / 10, message.c_str());
+                        }
+
+                        // Log file being deleted
+                        OutputDebugStringW((L"[WimMount] Deleting: " + std::wstring(findData.cFileName)).c_str());
+                    }
+                } while (FindNextFileW(hFind, &findData));
+
+                FindClose(hFind);
+
+                if (callback && fileCount > 0) {
+                    std::wstring message = L"Removed ";
+                    message += std::to_wstring(fileCount);
+                    message += L" files from mount directory";
+                    callback(85, message.c_str());
+                }
             }
 
             // Remove the mount directory
@@ -437,21 +566,39 @@ namespace BackupEngine {
         return true;
     }
 
-    std::wstring WimMountManager::CreateMountPoint(const wchar_t* backupName, int imageIndex) {
-        // Get temp directory
-        wchar_t tempPath[MAX_PATH];
-        GetTempPathW(MAX_PATH, tempPath);
+    std::wstring WimMountManager::CreateMountPoint(const wchar_t* backupName, int imageIndex, const wchar_t* userTempPath) {
+        std::wstring mountBase;
+
+        // Use user-selected temp path if provided, otherwise system temp
+        if (userTempPath && wcslen(userTempPath) > 0) {
+            // User selected temp path - create mount subfolder under it
+            mountBase = std::wstring(userTempPath);
+
+            // Ensure path ends with backslash
+            if (mountBase.back() != L'\\') {
+                mountBase += L'\\';
+            }
+
+            mountBase += L"BackupMounts\\";
+            OutputDebugStringW((L"[WimMount] Using user-specified mount base: " + mountBase).c_str());
+        }
+        else {
+            // System temp - use old logic
+            wchar_t tempPath[MAX_PATH];
+            GetTempPathW(MAX_PATH, tempPath);
+            mountBase = std::wstring(tempPath) + L"BackupMounts\\";
+            OutputDebugStringW((L"[WimMount] Using system temp mount base: " + mountBase).c_str());
+        }
 
         // Create BackupMounts subdirectory
-        std::wstring mountsDir = std::wstring(tempPath) + L"BackupMounts\\";
-        CreateDirectoryW(mountsDir.c_str(), nullptr);
+        CreateDirectoryW(mountBase.c_str(), nullptr);
 
         // Create unique mount point using backup name + image index + timestamp
         SYSTEMTIME st;
         GetSystemTime(&st);
 
         std::wstringstream ss;
-        ss << mountsDir << backupName << L"_Image" << imageIndex << L"_"
+        ss << mountBase << backupName << L"_Image" << imageIndex << L"_"
            << st.wYear << std::setw(2) << std::setfill(L'0') << st.wMonth
            << std::setw(2) << st.wDay << L"_"
            << std::setw(2) << st.wHour << std::setw(2) << st.wMinute

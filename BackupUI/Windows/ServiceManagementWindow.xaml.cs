@@ -28,7 +28,7 @@ namespace BackupUI.Windows
             btnUninstall.IsEnabled = false;
             
             System.Diagnostics.Debug.WriteLine("ServiceManagement: Window initialized, starting RefreshStatusAsync");
-            _ = RefreshStatusAsync();
+            RefreshStatusAsync();
         }
 
         private async void RefreshStatus_Click(object sender, RoutedEventArgs e)
@@ -58,67 +58,9 @@ namespace BackupUI.Windows
                     {
                         txtServiceVersion.Text = "Checking...";
                         txtVersionWarning.Visibility = Visibility.Collapsed;
-                        
-                        // Run version check in background with timeout
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                var serviceClient = new BackupServiceClient();
-                                
-                                // Add 3-second timeout wrapper
-                                var versionTask = serviceClient.GetServiceVersionAsync();
-                                var timeoutTask = Task.Delay(3000);
-                                var completedTask = await Task.WhenAny(versionTask, timeoutTask);
-                                
-                                string? serviceVersion = null;
-                                if (completedTask == versionTask)
-                                {
-                                    serviceVersion = await versionTask;
-                                }
-                                
-                                // Update UI on UI thread
-                                await Dispatcher.InvokeAsync(() =>
-                                {
-                                    if (serviceVersion != null && !string.IsNullOrWhiteSpace(serviceVersion))
-                                    {
-                                        txtServiceVersion.Text = serviceVersion;
-                                        
-                                        // Check for version mismatch
-                                        var uiVersion = VersionClass.GetAssemblyVersion();
-                                        if (serviceVersion != uiVersion)
-                                        {
-                                            txtVersionWarning.Text = " ? VERSION MISMATCH!";
-                                            txtVersionWarning.Foreground = System.Windows.Media.Brushes.Red;
-                                            txtVersionWarning.Visibility = Visibility.Visible;
-                                        }
-                                        else
-                                        {
-                                            txtVersionWarning.Visibility = Visibility.Collapsed;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // Old service without GetVersion or timeout
-                                        txtServiceVersion.Text = "Unknown (old version)";
-                                        txtVersionWarning.Text = " ?? Reinstall Required";
-                                        txtVersionWarning.Foreground = System.Windows.Media.Brushes.Orange;
-                                        txtVersionWarning.Visibility = Visibility.Visible;
-                                    }
-                                });
-                            }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Version check error: {ex.Message}");
-                                await Dispatcher.InvokeAsync(() =>
-                                {
-                                    txtServiceVersion.Text = "Unknown (check failed)";
-                                    txtVersionWarning.Text = " ?? Check Failed";
-                                    txtVersionWarning.Foreground = System.Windows.Media.Brushes.Orange;
-                                    txtVersionWarning.Visibility = Visibility.Visible;
-                                });
-                            }
-                        });
+
+                        // Start version check in background (fire-and-forget)
+                        CheckServiceVersionAsync();
                     }
                     else
                     {
@@ -507,6 +449,69 @@ namespace BackupUI.Windows
         private void Close_Click(object sender, RoutedEventArgs e)
         {
             Close();
+        }
+
+        /// <summary>
+        /// Checks service version in background without blocking UI
+        /// </summary>
+        private async void CheckServiceVersionAsync()
+        {
+            try
+            {
+                var serviceClient = new BackupServiceClient();
+
+                // Add 3-second timeout wrapper
+                var versionTask = serviceClient.GetServiceVersionAsync();
+                var timeoutTask = Task.Delay(3000);
+                var completedTask = await Task.WhenAny(versionTask, timeoutTask);
+
+                string? serviceVersion = null;
+                if (completedTask == versionTask)
+                {
+                    serviceVersion = await versionTask;
+                }
+
+                // Update UI on UI thread
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (serviceVersion != null && !string.IsNullOrWhiteSpace(serviceVersion))
+                    {
+                        txtServiceVersion.Text = serviceVersion;
+
+                        // Check for version mismatch
+                        var uiVersion = VersionClass.GetAssemblyVersion();
+                        if (serviceVersion != uiVersion)
+                        {
+                            txtVersionWarning.Text = " ? VERSION MISMATCH!";
+                            txtVersionWarning.Foreground = System.Windows.Media.Brushes.Red;
+                            txtVersionWarning.Visibility = Visibility.Visible;
+                        }
+                        else
+                        {
+                            txtVersionWarning.Visibility = Visibility.Collapsed;
+                        }
+                    }
+                    else
+                    {
+                        // Old service without GetVersion or timeout
+                        txtServiceVersion.Text = "Unknown (old version)";
+                        txtVersionWarning.Text = " ?? Reinstall Required";
+                        txtVersionWarning.Foreground = System.Windows.Media.Brushes.Orange;
+                        txtVersionWarning.Visibility = Visibility.Visible;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Version check error: {ex.Message}");
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    txtServiceVersion.Text = "Unknown (check failed)";
+                    txtVersionWarning.Text = " ?? Check Failed";
+                    txtVersionWarning.Foreground = System.Windows.Media.Brushes.Orange;
+                    txtVersionWarning.Visibility = Visibility.Visible;
+                });
+            }
         }
 
         /// <summary>

@@ -11,6 +11,10 @@
   <!-- Version, OutputPath, and Runtime config generation come from Directory.Build.props -->
 </PropertyGroup>
 <ItemGroup>
+  <None Remove="Images\error_icon.svg" />
+  <None Remove="Images\warning_icon.svg" />
+</ItemGroup>
+<ItemGroup>
   <Content Include="SSB_LogoWinIcos.ico" />
 </ItemGroup>
   <ItemGroup>
@@ -19,6 +23,10 @@
     <PackageReference Include="System.Management" Version="10.0.3" />
     <PackageReference Include="Microsoft.VisualBasic" Version="10.3.0" />
     <PackageReference Include="zlib-msvc-x64" Version="1.2.11.8900" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\error_icon.svg" />
+    <Resource Include="Images\warning_icon.svg" />
   </ItemGroup>
   
   <!-- Copy BackupEngine.dll to centralized output directory after C++ build -->

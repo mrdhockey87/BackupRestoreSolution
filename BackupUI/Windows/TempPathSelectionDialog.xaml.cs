@@ -77,24 +77,53 @@ namespace BackupUI.Windows
                 dialog.SelectedPath = SelectedTempPath;
                 dialog.ShowNewFolderButton = true;
 
-                if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                // Create WindowInteropHelper to get proper owner handle for Windows Forms dialog
+                var helper = new System.Windows.Interop.WindowInteropHelper(this);
+
+                // Show dialog with proper WPF window as owner
+                var result = dialog.ShowDialog(new Win32Window(helper.Handle));
+
+                System.Diagnostics.Debug.WriteLine($"[TempPathDialog] Browse dialog result: {result}");
+                System.Diagnostics.Debug.WriteLine($"[TempPathDialog] Selected path from dialog: {dialog.SelectedPath}");
+
+                if (result == System.Windows.Forms.DialogResult.OK)
                 {
                     SelectedTempPath = dialog.SelectedPath;
-                    
+
                     // Ensure path ends with backslash
                     if (!SelectedTempPath.EndsWith("\\"))
                     {
                         SelectedTempPath += "\\";
                     }
-                    
+
                     txtTempPath.Text = SelectedTempPath;
+                    System.Diagnostics.Debug.WriteLine($"[TempPathDialog] SelectedTempPath set to: {SelectedTempPath}");
+                    System.Diagnostics.Debug.WriteLine($"[TempPathDialog] txtTempPath.Text set to: {txtTempPath.Text}");
+
                     UpdateSpaceInfo();
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[TempPathDialog] User cancelled browse dialog");
                 }
             }
         }
 
+        // Helper class to wrap HWND for Windows Forms dialog
+        private class Win32Window : System.Windows.Forms.IWin32Window
+        {
+            private readonly IntPtr _handle;
+            public Win32Window(IntPtr handle)
+            {
+                _handle = handle;
+            }
+            public IntPtr Handle => _handle;
+        }
+
         private void OK_Click(object sender, RoutedEventArgs e)
         {
+            System.Diagnostics.Debug.WriteLine($"[TempPathDialog] OK clicked - SelectedTempPath: {SelectedTempPath}");
+
             // Validate path
             if (string.IsNullOrEmpty(SelectedTempPath))
             {
@@ -115,13 +144,15 @@ namespace BackupUI.Windows
                         "Create Directory",
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Question);
-                    
+
                     if (result == MessageBoxResult.Yes)
                     {
                         Directory.CreateDirectory(SelectedTempPath);
+                        System.Diagnostics.Debug.WriteLine($"[TempPathDialog] Created directory: {SelectedTempPath}");
                     }
                     else
                     {
+                        System.Diagnostics.Debug.WriteLine("[TempPathDialog] User declined directory creation");
                         return;
                     }
                 }
@@ -131,11 +162,15 @@ namespace BackupUI.Windows
                 File.WriteAllText(testFile, "test");
                 File.Delete(testFile);
 
+                System.Diagnostics.Debug.WriteLine($"[TempPathDialog] Write test successful for: {SelectedTempPath}");
+                System.Diagnostics.Debug.WriteLine($"[TempPathDialog] Returning DialogResult=true with path: {SelectedTempPath}");
+
                 DialogResult = true;
                 Close();
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[TempPathDialog] Error during validation: {ex.Message}");
                 System.Windows.MessageBox.Show(
                     $"Cannot use selected path:\n{ex.Message}\n\nPlease select a different location.",
                     "Invalid Path",

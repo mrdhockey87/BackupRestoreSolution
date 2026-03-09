@@ -1013,8 +1013,11 @@ namespace BackupUI
                         Owner = this
                     };
 
+                    System.Diagnostics.Debug.WriteLine("[Mount] Showing TempPathSelectionDialog...");
+
                     if (tempPathDialog.ShowDialog() != true)
                     {
+                        System.Diagnostics.Debug.WriteLine("[Mount] User cancelled temp path selection");
                         // User cancelled
                         return;
                     }
@@ -1022,7 +1025,10 @@ namespace BackupUI
                     string selectedTempPath = tempPathDialog.SelectedTempPath;
 
                     // Diagnostic: Log selected temp path
-                    System.Diagnostics.Debug.WriteLine($"[Mount] User selected temp path: {selectedTempPath}");
+                    System.Diagnostics.Debug.WriteLine($"[Mount] User selected temp path: '{selectedTempPath}'");
+                    System.Diagnostics.Debug.WriteLine($"[Mount] Path length: {selectedTempPath?.Length ?? 0}");
+                    System.Diagnostics.Debug.WriteLine($"[Mount] Path is null or empty: {string.IsNullOrEmpty(selectedTempPath)}");
+                    System.Diagnostics.Debug.WriteLine($"[Mount] About to create progress window...");
 
                     // Create and show progress window
                     var progressWindow = new BackupUI.Windows.MountProgressWindow
@@ -1030,12 +1036,20 @@ namespace BackupUI
                         Owner = this
                     };
 
+                    System.Diagnostics.Debug.WriteLine($"[Mount] Progress window created, setting backup name: {backup.BackupName}");
                     progressWindow.SetBackupName(backup.BackupName);
+
+                    System.Diagnostics.Debug.WriteLine($"[Mount] Showing progress window...");
                     progressWindow.Show();
+
+                    System.Diagnostics.Debug.WriteLine($"[Mount] Progress window shown, about to call MountBackupAsync...");
 
                     try
                     {
                         // Mount asynchronously with progress updates
+                        System.Diagnostics.Debug.WriteLine($"[Mount] Calling NativeBackupMountManager.MountBackupAsync...");
+                        System.Diagnostics.Debug.WriteLine($"[Mount] Parameters: wimPath={wimPath}, backupName={backup.BackupName}, backupType={backup.BackupType}, imageIndex=1, tempPath={selectedTempPath}");
+
                         var (success, mountPath, error) = await NativeBackupMountManager.MountBackupAsync(
                             wimPath,
                             backup.BackupName,

@@ -79,8 +79,8 @@ namespace BackupEngine {
 
     private:
         // Create a unique mount point directory
-        static std::wstring CreateMountPoint(const wchar_t* backupName, int imageIndex);
-        
+        static std::wstring CreateMountPoint(const wchar_t* backupName, int imageIndex, const wchar_t* userTempPath);
+
         // WIMGAPI callback for progress
         static DWORD WINAPI WimMessageCallback(
             DWORD msgId,
