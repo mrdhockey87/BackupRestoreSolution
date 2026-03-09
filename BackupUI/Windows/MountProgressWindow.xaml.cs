@@ -25,13 +25,22 @@ namespace BackupUI.Windows
         }
 
         /// <summary>
-        /// Update status message
+        /// Update status message and optionally progress percentage
         /// </summary>
-        public void SetStatus(string status)
+        public void SetStatus(string status, int percentage = -1)
         {
             if (!_isClosed && txtStatus != null)
             {
-                Dispatcher.Invoke(() => txtStatus.Text = status);
+                Dispatcher.Invoke(() =>
+                {
+                    txtStatus.Text = status;
+
+                    // Update progress if percentage provided
+                    if (percentage >= 0)
+                    {
+                        SetProgress(percentage);
+                    }
+                });
             }
         }
 

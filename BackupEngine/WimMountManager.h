@@ -7,6 +7,9 @@
 
 #pragma comment(lib, "wimgapi.lib")
 
+// Progress callback typedef for C# interop
+typedef void(__cdecl* ProgressCallback)(int percentage, const wchar_t* message);
+
 namespace BackupEngine {
 
     // Mounted WIM information
@@ -37,18 +40,21 @@ namespace BackupEngine {
             const wchar_t* wimPath,
             const wchar_t* backupName,
             const wchar_t* backupType,
-            int imageIndex,           // NEW: Which image to mount (1-based)
+            int imageIndex,           // Which image to mount (1-based)
             wchar_t* mountPath,      // OUT: where it was mounted
             int mountPathSize,
             wchar_t* errorMsg,
-            int errorMsgSize
+            int errorMsgSize,
+            ProgressCallback callback = nullptr,  // Optional progress callback
+            const wchar_t* userTempPath = nullptr  // Optional user-specified temp path
         );
 
         // Unmount a WIM by mount path
         static bool UnmountWim(
             const wchar_t* mountPath,
             wchar_t* errorMsg,
-            int errorMsgSize
+            int errorMsgSize,
+            ProgressCallback callback = nullptr  // Optional progress callback
         );
 
         // Unmount all mounted WIMs

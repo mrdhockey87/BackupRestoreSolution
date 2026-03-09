@@ -1007,6 +1007,23 @@ namespace BackupUI
                         return;
                     }
 
+                    // Show temp path selection dialog
+                    var tempPathDialog = new BackupUI.Windows.TempPathSelectionDialog
+                    {
+                        Owner = this
+                    };
+
+                    if (tempPathDialog.ShowDialog() != true)
+                    {
+                        // User cancelled
+                        return;
+                    }
+
+                    string selectedTempPath = tempPathDialog.SelectedTempPath;
+
+                    // Diagnostic: Log selected temp path
+                    System.Diagnostics.Debug.WriteLine($"[Mount] User selected temp path: {selectedTempPath}");
+
                     // Create and show progress window
                     var progressWindow = new BackupUI.Windows.MountProgressWindow
                     {
@@ -1024,7 +1041,11 @@ namespace BackupUI
                             backup.BackupName,
                             backup.BackupType,
                             1,  // Image index
-                            status => progressWindow.SetStatus(status));
+                            (percentage, message) =>  // Updated to receive percentage and message
+                            {
+                                progressWindow.SetStatus(message, percentage);
+                            },
+                            selectedTempPath);  // Pass user-selected temp path
 
                         // Close progress window
                         progressWindow.CloseProgress();
@@ -1069,7 +1090,7 @@ namespace BackupUI
             }
         }
 
-        private void UnmountBackup_Click(object sender, RoutedEventArgs e)
+        private async void UnmountBackup_Click(object sender, RoutedEventArgs e)
         {
             if (sender is System.Windows.Controls.Button btn && btn.Tag is string mountPath)
             {
@@ -1081,20 +1102,50 @@ namespace BackupUI
 
                 if (result == MessageBoxResult.Yes)
                 {
-                    var (success, error) = NativeBackupMountManager.UnmountBackup(mountPath);
+                    // Create and show progress window
+                    var progressWindow = new BackupUI.Windows.MountProgressWindow
+                    {
+                        Owner = this,
+                        Title = "Unmounting Backup"
+                    };
 
-                    if (success)
+                    progressWindow.SetBackupName("Unmounting...");
+                    progressWindow.Show();
+
+                    try
                     {
-                        LoadMountedBackups();
-                        MessageBox.Show($"Backup unmounted successfully from {mountPath}",
-                                      "Success",
-                                      MessageBoxButton.OK,
-                                      MessageBoxImage.Information);
+                        // Unmount asynchronously with progress updates
+                        var (success, error) = await NativeBackupMountManager.UnmountBackupAsync(
+                            mountPath,
+                            (percentage, message) =>
+                            {
+                                progressWindow.SetStatus(message, percentage);
+                            });
+
+                        // Close progress window
+                        progressWindow.CloseProgress();
+
+                        if (success)
+                        {
+                            LoadMountedBackups();
+                            MessageBox.Show($"Backup unmounted successfully from {mountPath}",
+                                          "Success",
+                                          MessageBoxButton.OK,
+                                          MessageBoxImage.Information);
+                        }
+                        else
+                        {
+                            MessageBox.Show($"Failed to unmount:\n{error}",
+                                          "Unmount Error",
+                                          MessageBoxButton.OK,
+                                          MessageBoxImage.Error);
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        MessageBox.Show($"Failed to unmount:\n{error}",
-                                      "Unmount Error",
+                        progressWindow.CloseProgress();
+                        MessageBox.Show($"Error unmounting backup:\n{ex.Message}",
+                                      "Error",
                                       MessageBoxButton.OK,
                                       MessageBoxImage.Error);
                     }

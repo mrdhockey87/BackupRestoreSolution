@@ -30,11 +30,13 @@ namespace BackupEngine {
         const wchar_t* wimPath,
         const wchar_t* backupName,
         const wchar_t* backupType,
-        int imageIndex,  // NEW: Added image index parameter
+        int imageIndex,  // Image index parameter
         wchar_t* mountPath,
         int mountPathSize,
         wchar_t* errorMsg,
-        int errorMsgSize
+        int errorMsgSize,
+        ProgressCallback callback,  // Progress callback parameter
+        const wchar_t* userTempPath  // User-specified temp path
     ) {
         EnterCriticalSection(&cs);
 
@@ -60,12 +62,14 @@ namespace BackupEngine {
             }
 
             // Open the WIM file
+            // NOTE: Removed WIM_FLAG_VERIFY - can cause issues with some WIM files
+            // Even if file opens in other WIM viewers, VERIFY flag can cause error 1632
             DWORD creationResult = 0;
             HANDLE wimHandle = WIMCreateFile(
                 wimPath,
                 WIM_GENERIC_READ,
                 WIM_OPEN_EXISTING,
-                WIM_FLAG_VERIFY,
+                0,                  // No flags - open for basic read access
                 0,                  // dwCompressionType (not used for opening)
                 &creationResult     // result
             );
@@ -104,6 +108,31 @@ namespace BackupEngine {
                                    L" image(s), attempting to load image " + std::to_wstring(imageIndex);
             OutputDebugStringW(diagMsg.c_str());
 
+            // CRITICAL: Set temporary path for WIM operations
+            // WIM API requires temp directory for extracting/processing image data
+            // Without this, WIMLoadImage can fail with error 1632
+            wchar_t tempPath[MAX_PATH];
+
+            // Use user-provided temp path if available, otherwise get system temp
+            if (userTempPath && wcslen(userTempPath) > 0) {
+                wcscpy_s(tempPath, MAX_PATH, userTempPath);
+                WIMSetTemporaryPath(wimHandle, tempPath);
+                OutputDebugStringW((L"[WimMount] Using user-specified temp path: " + std::wstring(tempPath)).c_str());
+            }
+            else if (GetTempPathW(MAX_PATH, tempPath) > 0) {
+                WIMSetTemporaryPath(wimHandle, tempPath);
+                OutputDebugStringW((L"[WimMount] Using system temp path: " + std::wstring(tempPath)).c_str());
+            }
+            else {
+                OutputDebugStringW(L"[WimMount] Warning: Failed to get temp path, using default");
+            }
+
+            // Register progress callback if provided
+            if (callback) {
+                WIMRegisterMessageCallback(wimHandle, (FARPROC)callback, nullptr);
+                callback(0, L"Preparing to load image...");
+            }
+
             // Mount the specified image (read-only)
             HANDLE imageHandle = WIMLoadImage(wimHandle, imageIndex);
             if (!imageHandle || imageHandle == INVALID_HANDLE_VALUE) {
@@ -132,16 +161,32 @@ namespace BackupEngine {
                 swprintf_s(errorMsg, errorMsgSize, L"%s", detailedError.c_str());
                 OutputDebugStringW((L"[WimMount ERROR] " + detailedError).c_str());
 
+                // Unregister callback on failure
+                if (callback) {
+                    WIMUnregisterMessageCallback(wimHandle, (FARPROC)callback);
+                }
+
                 WIMCloseHandle(wimHandle);
                 RemoveDirectoryW(mountPoint.c_str());
                 LeaveCriticalSection(&cs);
                 return false;
             }
 
+            // Update progress
+            if (callback) {
+                callback(50, L"Mounting image to folder...");
+            }
+
             // Mount the image (read-only, no admin required)
             if (!WIMMountImage(mountPoint.c_str(), wimPath, imageIndex, nullptr)) {
                 DWORD err = GetLastError();
                 swprintf_s(errorMsg, errorMsgSize, L"Failed to mount WIM image: %d", err);
+
+                // Unregister callback on failure
+                if (callback) {
+                    WIMUnregisterMessageCallback(wimHandle, (FARPROC)callback);
+                }
+
                 WIMCloseHandle(imageHandle);
                 WIMCloseHandle(wimHandle);
                 RemoveDirectoryW(mountPoint.c_str());
@@ -149,7 +194,18 @@ namespace BackupEngine {
                 return false;
             }
 
+            // Update progress
+            if (callback) {
+                callback(90, L"Finalizing mount...");
+            }
+
             WIMCloseHandle(imageHandle);
+
+            // Unregister callback after successful mount
+            if (callback) {
+                WIMUnregisterMessageCallback(wimHandle, (FARPROC)callback);
+                callback(100, L"Mount completed successfully!");
+            }
 
             // Store mount information
             MountedWimInfo info;
@@ -178,11 +234,16 @@ namespace BackupEngine {
     bool WimMountManager::UnmountWim(
         const wchar_t* mountPath,
         wchar_t* errorMsg,
-        int errorMsgSize
+        int errorMsgSize,
+        ProgressCallback callback  // Progress callback
     ) {
         EnterCriticalSection(&cs);
 
         try {
+            if (callback) {
+                callback(0, L"Starting unmount operation...");
+            }
+
             auto it = mountedWims.find(mountPath);
             if (it == mountedWims.end()) {
                 swprintf_s(errorMsg, errorMsgSize, L"Mount path not found");
@@ -192,12 +253,22 @@ namespace BackupEngine {
 
             MountedWimInfo& info = it->second;
 
+            if (callback) {
+                callback(25, L"Unmounting WIM image...");
+            }
+
             // Unmount the WIM
             if (!WIMUnmountImage(mountPath, info.wimPath.c_str(), 1, FALSE)) {
                 DWORD err = GetLastError();
-                swprintf_s(errorMsg, errorMsgSize, L"Failed to unmount WIM: %d", err);
+                // FIXED: Use %u for unsigned DWORD, not %d (which caused negative numbers)
+                swprintf_s(errorMsg, errorMsgSize, L"Failed to unmount WIM: %u (0x%X)", err, err);
+                OutputDebugStringW((L"[WimMount] Unmount error: " + std::to_wstring(err) + L" (0x" + std::to_wstring(err) + L")").c_str());
                 LeaveCriticalSection(&cs);
                 return false;
+            }
+
+            if (callback) {
+                callback(50, L"Closing WIM handle...");
             }
 
             // Close the WIM handle
@@ -205,11 +276,19 @@ namespace BackupEngine {
                 WIMCloseHandle(info.wimHandle);
             }
 
+            if (callback) {
+                callback(75, L"Cleaning up mount directory...");
+            }
+
             // Remove the mount directory
             RemoveDirectoryW(mountPath);
 
             // Remove from tracked mounts
             mountedWims.erase(it);
+
+            if (callback) {
+                callback(100, L"Unmount completed successfully!");
+            }
 
             LeaveCriticalSection(&cs);
             return true;
@@ -302,13 +381,14 @@ namespace BackupEngine {
 
         OutputDebugStringW((L"[WimMount] File size: " + std::to_wstring(fileSize.QuadPart) + L" bytes").c_str());
 
-        // Try to open WIM file
+        // Try to open WIM file WITHOUT verification flag
+        // WIM_FLAG_VERIFY can cause error 1632 even with valid WIM files
         DWORD creationResult = 0;
         HANDLE wimHandle = WIMCreateFile(
             wimPath,
             WIM_GENERIC_READ,
             WIM_OPEN_EXISTING,
-            WIM_FLAG_VERIFY,  // Verify integrity
+            0,  // No flags - basic validation only
             0,
             &creationResult
         );
@@ -331,6 +411,12 @@ namespace BackupEngine {
                 swprintf_s(errorMsg, errorMsgSize, L"Failed to open WIM file: %d", openError);
             }
             return false;
+        }
+
+        // Set temporary path for WIM operations (required for some WIM API calls)
+        wchar_t tempPath[MAX_PATH];
+        if (GetTempPathW(MAX_PATH, tempPath) > 0) {
+            WIMSetTemporaryPath(wimHandle, tempPath);
         }
 
         // Get image count
@@ -402,11 +488,13 @@ extern "C" {
         const wchar_t* wimPath,
         const wchar_t* backupName,
         const wchar_t* backupType,
-        int imageIndex,  // NEW: Image index to mount
+        int imageIndex,  // Image index to mount
         wchar_t* mountPath,
         int mountPathSize,
         wchar_t* errorMsg,
-        int errorMsgSize
+        int errorMsgSize,
+        ProgressCallback callback,  // Progress callback from C#
+        const wchar_t* userTempPath  // User-specified temp path
     ) {
         if (!WimMountManager::Initialize()) {
             swprintf_s(errorMsg, errorMsgSize, L"Failed to initialize WimMountManager");
@@ -416,16 +504,19 @@ extern "C" {
         return WimMountManager::MountWim(
             wimPath, backupName, backupType, imageIndex,
             mountPath, mountPathSize,
-            errorMsg, errorMsgSize
+            errorMsg, errorMsgSize,
+            callback,  // Pass callback through
+            userTempPath  // Pass temp path through
         );
     }
 
     BACKUPENGINE_API bool WimMount_UnmountWim(
         const wchar_t* mountPath,
         wchar_t* errorMsg,
-        int errorMsgSize
+        int errorMsgSize,
+        ProgressCallback callback  // Progress callback
     ) {
-        return WimMountManager::UnmountWim(mountPath, errorMsg, errorMsgSize);
+        return WimMountManager::UnmountWim(mountPath, errorMsg, errorMsgSize, callback);
     }
 
     BACKUPENGINE_API void WimMount_UnmountAll() {

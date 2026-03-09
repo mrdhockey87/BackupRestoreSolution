@@ -11,6 +11,10 @@ namespace BackupUI.Services
     /// </summary>
     public class NativeBackupMountManager
     {
+        // Progress callback delegate matching C++ signature
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
+
         // P/Invoke declarations for C++ WimMountManager
         [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern bool WimMount_MountWim(
@@ -21,14 +25,17 @@ namespace BackupUI.Services
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder mountPath,
             int mountPathSize,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
-            int errorMsgSize
+            int errorMsgSize,
+            ProgressCallback? callback = null,  // Optional progress callback
+            [MarshalAs(UnmanagedType.LPWStr)] string? tempPath = null  // Optional temp path
         );
 
         [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern bool WimMount_UnmountWim(
             [MarshalAs(UnmanagedType.LPWStr)] string mountPath,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
-            int errorMsgSize
+            int errorMsgSize,
+            ProgressCallback? callback = null  // Optional progress callback
         );
 
         [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
@@ -146,11 +153,12 @@ namespace BackupUI.Services
             string backupName,
             string backupType,
             int imageIndex = 1,
-            Action<string>? progressCallback = null)
+            Action<int, string>? progressCallback = null,  // Progress callback
+            string? tempPath = null)  // Optional temp path for WIM operations
         {
             try
             {
-                progressCallback?.Invoke("Validating backup file...");
+                progressCallback?.Invoke(0, "Validating backup file...");
 
                 // Validate WIM file BEFORE attempting to mount
                 var errorMsg = new StringBuilder(512);
@@ -167,18 +175,35 @@ namespace BackupUI.Services
                     return (false, "", validationError);
                 }
 
-                progressCallback?.Invoke($"Validation successful - {imageCount} image(s) found");
-                progressCallback?.Invoke("Opening WIM file...");
+                progressCallback?.Invoke(10, $"Validation successful - {imageCount} image(s) found");
+
+                // Set temp path if provided
+                if (!string.IsNullOrEmpty(tempPath))
+                {
+                    progressCallback?.Invoke(15, $"Using temp path: {tempPath}");
+                }
+
+                progressCallback?.Invoke(20, "Opening WIM file...");
 
                 // Run the synchronous mount operation on a background thread
                 return await Task.Run(() =>
                 {
                     try
                     {
-                        progressCallback?.Invoke("Loading image from WIM...");
+                        progressCallback?.Invoke(30, "Loading image from WIM...");
 
                         var mountPath = new StringBuilder(260);
                         errorMsg.Clear();
+
+                        // Create native callback that wraps our C# callback
+                        ProgressCallback? nativeCallback = null;
+                        if (progressCallback != null)
+                        {
+                            nativeCallback = (percentage, message) =>
+                            {
+                                progressCallback?.Invoke(percentage, message ?? "Processing...");
+                            };
+                        }
 
                         bool success = WimMount_MountWim(
                             wimPath,
@@ -188,12 +213,14 @@ namespace BackupUI.Services
                             mountPath,
                             260,
                             errorMsg,
-                            512
+                            512,
+                            nativeCallback,  // Pass the callback to C++
+                            tempPath  // Pass temp path to C++
                         );
 
                         if (success)
                         {
-                            progressCallback?.Invoke("Mount completed successfully!");
+                            progressCallback?.Invoke(100, "Mount completed successfully!");
 
                             BackupLogger.LogSuccess("BackupMount",
                                 $"Backup mounted successfully: {backupName}",
@@ -262,6 +289,77 @@ namespace BackupUI.Services
             {
                 BackupLogger.LogError("BackupMount",
                     "Exception unmounting backup",
+                    ex.Message);
+
+                return (false, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Unmount a backup asynchronously with progress reporting
+        /// </summary>
+        public static async Task<(bool Success, string Error)> UnmountBackupAsync(
+            string mountPath,
+            Action<int, string>? progressCallback = null)
+        {
+            try
+            {
+                progressCallback?.Invoke(0, "Starting unmount operation...");
+
+                // Run the synchronous unmount operation on a background thread
+                return await Task.Run(() =>
+                {
+                    try
+                    {
+                        var errorMsg = new StringBuilder(512);
+
+                        // Create native callback that wraps our C# callback
+                        ProgressCallback? nativeCallback = null;
+                        if (progressCallback != null)
+                        {
+                            nativeCallback = (percentage, message) =>
+                            {
+                                progressCallback?.Invoke(percentage, message ?? "Processing...");
+                            };
+                        }
+
+                        bool success = WimMount_UnmountWim(mountPath, errorMsg, 512, nativeCallback);
+
+                        if (success)
+                        {
+                            progressCallback?.Invoke(100, "Unmount completed successfully!");
+
+                            BackupLogger.LogSuccess("BackupMount",
+                                "Backup unmounted successfully",
+                                mountPath);
+
+                            return (true, "");
+                        }
+                        else
+                        {
+                            string error = errorMsg.ToString();
+
+                            BackupLogger.LogError("BackupMount",
+                                "Failed to unmount backup",
+                                error);
+
+                            return (false, error);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        BackupLogger.LogError("BackupMount",
+                            "Exception unmounting backup",
+                            ex.Message);
+
+                        return (false, ex.Message);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                BackupLogger.LogError("BackupMount",
+                    "Exception in async unmount operation",
                     ex.Message);
 
                 return (false, ex.Message);
