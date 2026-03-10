@@ -23,6 +23,9 @@ namespace BackupService
         public List<string> HyperVMachines { get; set; } = new();
         public int RetainFullBackupCount { get; set; } = 1; // Default: keep only 1 full backup
         public int ConsecutiveFailures { get; set; } = 0; // Track consecutive backup failures for retry limit
+
+        // Auto-recovery: Force full backup on next run if incremental/differential verification fails
+        public bool ForceFullBackupOnNextRun { get; set; } = false;
     }
 
     public class BackupSchedule
@@ -251,6 +254,23 @@ namespace BackupService
             catch
             {
                 jobs = new List<BackupJob>();
+            }
+        }
+
+        public void UpdateJob(BackupJob updatedJob)
+        {
+            var existingJob = jobs.FirstOrDefault(j => j.Id == updatedJob.Id);
+            if (existingJob != null)
+            {
+                // Remove old and add updated
+                jobs.Remove(existingJob);
+                jobs.Add(updatedJob);
+                SaveJobs();
+                System.Diagnostics.Debug.WriteLine($"[UPDATE] Job '{updatedJob.Name}' updated successfully");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[UPDATE ERROR] Job '{updatedJob.Name}' not found");
             }
         }
 

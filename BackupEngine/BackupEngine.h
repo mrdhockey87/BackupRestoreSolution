@@ -132,6 +132,16 @@ extern "C" {
         const wchar_t* backupPath,
         ProgressCallback callback);
 
+    // Verify SSB/WIM archive integrity after creation (enhanced verification)
+    // Returns: 0 = success, negative = error code
+    // errorMsg: receives detailed error message if verification fails
+    BACKUPENGINE_API int VerifyWimArchive(
+        const wchar_t* archivePath,
+        int expectedImageCount,
+        wchar_t* errorMsg,
+        int errorMsgSize,
+        ProgressCallback callback);
+
     // Enumerate all volumes on the system
     BACKUPENGINE_API int EnumerateVolumes(
         wchar_t* buffer,

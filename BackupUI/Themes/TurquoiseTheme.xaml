@@ -198,6 +198,13 @@
 		</Style.Triggers>
 	</Style>
 
+	<!--  Center-aligned DataGrid cell (for numeric columns)  -->
+	<Style x:Key="CenterAlignedCell" TargetType="TextBlock">
+		<Setter Property="TextAlignment" Value="Center" />
+		<Setter Property="VerticalAlignment" Value="Center" />
+		<Setter Property="HorizontalAlignment" Value="Center" />
+	</Style>
+
 	<!--
 		================================================================
 		MENU STYLE

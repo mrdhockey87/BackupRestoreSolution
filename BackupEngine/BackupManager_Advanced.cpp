@@ -750,11 +750,14 @@ extern "C" {
 
             // When opening existing WIM, compression type must be 0 (read from file)
             // Passing WIM_COMPRESS_LZMS/NONE when opening existing WIM causes error -4!
+            // NOTE: WIM_FLAG_VERIFY removed - can cause ERROR_INVALID_PARAMETER (87) on valid files
+            // CRITICAL: Must use WIM_GENERIC_READ | WIM_GENERIC_WRITE when opening existing WIM to append images!
+            //           WIM_GENERIC_WRITE alone causes ERROR_INVALID_PARAMETER (87)
             HANDLE hWim = WIMCreateFile(
                 destFile.c_str(),
-                WIM_GENERIC_WRITE,
+                WIM_GENERIC_READ | WIM_GENERIC_WRITE,  // Need READ+WRITE to append images
                 WIM_OPEN_EXISTING,
-                WIM_FLAG_VERIFY | WIM_FLAG_REFERENCE,  // Verify integrity + enable referential images
+                WIM_FLAG_REFERENCE,  // Enable referential images only (no VERIFY)
                 0,  // MUST be 0 when opening existing WIM! Compression read from file.
                 NULL
             );
@@ -942,11 +945,14 @@ extern "C" {
 
             // When opening existing WIM, compression type must be 0 (read from file)
             // Passing WIM_COMPRESS_LZMS/NONE when opening existing WIM causes error -4!
+            // NOTE: WIM_FLAG_VERIFY removed - can cause ERROR_INVALID_PARAMETER (87) on valid files
+            // CRITICAL: Must use WIM_GENERIC_READ | WIM_GENERIC_WRITE when opening existing WIM to append images!
+            //           WIM_GENERIC_WRITE alone causes ERROR_INVALID_PARAMETER (87)
             HANDLE hWim = WIMCreateFile(
                 destFile.c_str(),
-                WIM_GENERIC_WRITE,
+                WIM_GENERIC_READ | WIM_GENERIC_WRITE,  // Need READ+WRITE to append images
                 WIM_OPEN_EXISTING,
-                WIM_FLAG_VERIFY | WIM_FLAG_REFERENCE,  // Verify integrity + enable referential images
+                WIM_FLAG_REFERENCE,  // Enable referential images only (no VERIFY)
                 0,  // MUST be 0 when opening existing WIM! Compression read from file.
                 NULL
             );

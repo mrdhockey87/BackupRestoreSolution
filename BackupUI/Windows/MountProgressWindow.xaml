@@ -52,6 +52,6 @@
             FontSize="12"
             Foreground="{StaticResource SecondaryText}"
             TextWrapping="Wrap"
-            Text="Opening WIM file..." />
+            Text="Opening SSB archive..." />
     </Grid>
 </Window>

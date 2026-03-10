@@ -135,7 +135,7 @@ namespace BackupEngine {
             );
 
             if (!wimHandle || wimHandle == INVALID_HANDLE_VALUE) {
-                swprintf_s(errorMsg, errorMsgSize, L"Failed to open WIM file: %d", GetLastError());
+                swprintf_s(errorMsg, errorMsgSize, L"Failed to open SSB archive: %d", GetLastError());
                 RemoveDirectoryW(mountPoint.c_str());
                 LeaveCriticalSection(&cs);
                 return false;
@@ -144,7 +144,7 @@ namespace BackupEngine {
             // Get image count to validate index
             DWORD imageCount = WIMGetImageCount(wimHandle);
             if (imageCount == 0) {
-                swprintf_s(errorMsg, errorMsgSize, L"No images found in WIM file");
+                swprintf_s(errorMsg, errorMsgSize, L"No images found in SSB archive");
                 WIMCloseHandle(wimHandle);
                 RemoveDirectoryW(mountPoint.c_str());
                 LeaveCriticalSection(&cs);
@@ -163,8 +163,8 @@ namespace BackupEngine {
             DWORD wimInfoSize = 0;
             WIMGetImageInformation(wimHandle, nullptr, &wimInfoSize);
 
-            // Log WIM file info for diagnostics
-            std::wstring diagMsg = L"[WimMount] WIM file has " + std::to_wstring(imageCount) + 
+            // Log SSB archive info for diagnostics
+            std::wstring diagMsg = L"[WimMount] SSB archive has " + std::to_wstring(imageCount) + 
                                    L" image(s), attempting to load image " + std::to_wstring(imageIndex);
             OutputDebugStringW(diagMsg.c_str());
 
@@ -209,15 +209,15 @@ namespace BackupEngine {
                 DWORD loadError = GetLastError();
 
                 // Enhanced error message with diagnostics
-                std::wstring detailedError = L"Failed to load WIM image " + std::to_wstring(imageIndex) + 
+                std::wstring detailedError = L"Failed to load SSB archive image " + std::to_wstring(imageIndex) + 
                                             L" of " + std::to_wstring(imageCount) + 
                                             L". Error code: " + std::to_wstring(loadError);
 
                 // Check common error codes
                 if (loadError == 1632) {
-                    detailedError += L" (ERROR_INSTALL_SERVICE_FAILURE/Invalid WIM image)";
+                    detailedError += L" (ERROR_INSTALL_SERVICE_FAILURE/Invalid SSB archive)";
                     detailedError += L"\n\nPossible causes:\n";
-                    detailedError += L"- WIM file is corrupted or incomplete\n";
+                    detailedError += L"- SSB archive is corrupted or incomplete\n";
                     detailedError += L"- Backup was interrupted during creation\n";
                     detailedError += L"- Disk space was exhausted during backup\n";
                     detailedError += L"- File system errors on backup drive\n\n";
@@ -590,7 +590,8 @@ namespace BackupEngine {
             OutputDebugStringW((L"[WimMount] Using system temp mount base: " + mountBase).c_str());
         }
 
-        // Create BackupMounts subdirectory
+        // Create BackupMounts subdirectory - CreateDirectoryW returns TRUE if created, FALSE if already exists
+        // We don't care about the result - if it already exists, that's fine
         CreateDirectoryW(mountBase.c_str(), nullptr);
 
         // Create unique mount point using backup name + image index + timestamp

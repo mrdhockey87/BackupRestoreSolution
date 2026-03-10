@@ -25,6 +25,9 @@ namespace BackupUI.Models
         // Retry tracking
         public int ConsecutiveFailures { get; set; } = 0; // Track consecutive backup failures for retry limit
 
+        // Auto-recovery: Force full backup on next run if incremental/differential verification fails
+        public bool ForceFullBackupOnNextRun { get; set; } = false;
+
         // Import support
         public bool IsImported { get; set; } = false; // True if imported from external backup
         public bool UseCompression { get; set; } = true; // True to create .brs (compressed), false for .wim

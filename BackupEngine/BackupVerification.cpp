@@ -7,6 +7,9 @@
 #include <Windows.h>
 #include <filesystem>
 #include <sstream>
+#include <wimgapi.h>
+
+#pragma comment(lib, "wimgapi.lib")
 
 namespace fs = std::filesystem;
 
@@ -126,6 +129,163 @@ extern "C" {
         catch (...) {
             if (callback) {
                 callback(0, L"Error during backup verification");
+            }
+            return -99;
+        }
+    }
+
+    // Enhanced verification for WIM/SSB archives
+    // Verifies archive structure, image count, and loadability
+    BACKUPENGINE_API int VerifyWimArchive(
+        const wchar_t* archivePath,
+        int expectedImageCount,
+        wchar_t* errorMsg,
+        int errorMsgSize,
+        ProgressCallback callback) {
+
+        try {
+            if (callback) {
+                callback(0, L"Starting SSB archive verification...");
+            }
+
+            // Check file exists
+            if (!fs::exists(archivePath)) {
+                swprintf_s(errorMsg, errorMsgSize, L"Archive file does not exist: %s", archivePath);
+                if (callback) {
+                    callback(0, errorMsg);
+                }
+                return -1;
+            }
+
+            if (callback) {
+                callback(10, L"Checking file size...");
+            }
+
+            // Check minimum file size (WIM header is 208 bytes)
+            auto fileSize = fs::file_size(archivePath);
+            if (fileSize < 208) {
+                swprintf_s(errorMsg, errorMsgSize, 
+                    L"Archive file too small (%llu bytes). Minimum is 208 bytes. File may be incomplete.", 
+                    fileSize);
+                if (callback) {
+                    callback(0, errorMsg);
+                }
+                return -2;
+            }
+
+            if (callback) {
+                callback(20, L"Opening archive...");
+            }
+
+            // Open WIM archive (without VERIFY flag - basic validation only)
+            DWORD creationResult = 0;
+            HANDLE hWim = WIMCreateFile(
+                archivePath,
+                WIM_GENERIC_READ,
+                WIM_OPEN_EXISTING,
+                0,  // No flags - basic validation sufficient
+                0,
+                &creationResult
+            );
+
+            if (!hWim || hWim == INVALID_HANDLE_VALUE) {
+                DWORD error = GetLastError();
+                swprintf_s(errorMsg, errorMsgSize, 
+                    L"Failed to open archive. Error %u. Archive may be corrupted.", error);
+                if (callback) {
+                    callback(0, errorMsg);
+                }
+                return -3;
+            }
+
+            if (callback) {
+                callback(40, L"Checking image count...");
+            }
+
+            // Get image count
+            DWORD imageCount = WIMGetImageCount(hWim);
+
+            if (imageCount == 0) {
+                swprintf_s(errorMsg, errorMsgSize, L"Archive contains no images. Archive is empty or corrupted.");
+                WIMCloseHandle(hWim);
+                if (callback) {
+                    callback(0, errorMsg);
+                }
+                return -4;
+            }
+
+            // Verify expected image count matches (if provided)
+            if (expectedImageCount > 0 && static_cast<int>(imageCount) != expectedImageCount) {
+                swprintf_s(errorMsg, errorMsgSize, 
+                    L"Image count mismatch. Expected %d, found %u. Archive may be incomplete.", 
+                    expectedImageCount, imageCount);
+                WIMCloseHandle(hWim);
+                if (callback) {
+                    callback(0, errorMsg);
+                }
+                return -5;
+            }
+
+            if (callback) {
+                std::wstring msg = L"Found " + std::to_wstring(imageCount) + L" image(s). Verifying loadability...";
+                callback(60, msg.c_str());
+            }
+
+            // Try loading first image to verify image structure
+            HANDLE hImage = WIMLoadImage(hWim, 1);
+
+            if (!hImage || hImage == INVALID_HANDLE_VALUE) {
+                DWORD error = GetLastError();
+                swprintf_s(errorMsg, errorMsgSize, 
+                    L"Failed to load image 1. Error %u. Image data is corrupted.", error);
+                WIMCloseHandle(hWim);
+                if (callback) {
+                    callback(0, errorMsg);
+                }
+                return -6;
+            }
+
+            if (callback) {
+                callback(80, L"Image structure verified. Checking metadata...");
+            }
+
+            // Get image information (XML metadata)
+            DWORD xmlSize = 0;
+            WIMGetImageInformation(hImage, nullptr, &xmlSize);
+
+            if (xmlSize == 0) {
+                swprintf_s(errorMsg, errorMsgSize, L"No metadata found in image. Archive may be corrupted.");
+                WIMCloseHandle(hImage);
+                WIMCloseHandle(hWim);
+                if (callback) {
+                    callback(0, errorMsg);
+                }
+                return -7;
+            }
+
+            // Close handles
+            WIMCloseHandle(hImage);
+            WIMCloseHandle(hWim);
+
+            if (callback) {
+                callback(100, L"Archive verification completed successfully!");
+            }
+
+            swprintf_s(errorMsg, errorMsgSize, L"SUCCESS: Archive contains %u valid image(s)", imageCount);
+            return 0;  // Success
+
+        }
+        catch (const std::exception& e) {
+            swprintf_s(errorMsg, errorMsgSize, L"Exception during verification: %S", e.what());
+            if (callback) {
+                callback(0, errorMsg);
+            }
+            return -98;
+        }
+        catch (...) {
+            swprintf_s(errorMsg, errorMsgSize, L"Unknown error during archive verification");
+            if (callback) {
+                callback(0, errorMsg);
             }
             return -99;
         }

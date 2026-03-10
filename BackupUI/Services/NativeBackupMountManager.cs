@@ -66,6 +66,25 @@ namespace BackupUI.Services
             int errorMsgSize
         );
 
+        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int WimMount_GetImageCount(
+            [MarshalAs(UnmanagedType.LPWStr)] string wimPath,
+            [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
+            int errorMsgSize
+        );
+
+        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern bool WimMount_GetImageInfo(
+            [MarshalAs(UnmanagedType.LPWStr)] string wimPath,
+            int imageIndex,
+            [MarshalAs(UnmanagedType.LPWStr)] StringBuilder name,
+            int nameSize,
+            [MarshalAs(UnmanagedType.LPWStr)] StringBuilder description,
+            int descSize,
+            [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
+            int errorMsgSize
+        );
+
         // SYSTEMTIME structure for interop
         [StructLayout(LayoutKind.Sequential)]
         private struct SYSTEMTIME
@@ -183,14 +202,14 @@ namespace BackupUI.Services
                     progressCallback?.Invoke(15, $"Using temp path: {tempPath}");
                 }
 
-                progressCallback?.Invoke(20, "Opening WIM file...");
+                progressCallback?.Invoke(20, "Opening SSB archive...");
 
                 // Run the synchronous mount operation on a background thread
                 return await Task.Run(() =>
                 {
                     try
                     {
-                        progressCallback?.Invoke(30, "Loading image from WIM...");
+                        progressCallback?.Invoke(30, "Loading image from SSB archive...");
 
                         var mountPath = new StringBuilder(260);
                         errorMsg.Clear();
@@ -469,6 +488,112 @@ namespace BackupUI.Services
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Get number of images in a WIM backup file
+        /// </summary>
+        public static (bool Success, int ImageCount, string Error) GetImageCount(string wimPath)
+        {
+            try
+            {
+                var errorMsg = new StringBuilder(512);
+                int imageCount = WimMount_GetImageCount(wimPath, errorMsg, 512);
+
+                if (imageCount > 0)
+                {
+                    return (true, imageCount, "");
+                }
+                else if (imageCount == 0)
+                {
+                    return (false, 0, "No images found in backup file");
+                }
+                else
+                {
+                    return (false, 0, errorMsg.ToString());
+                }
+            }
+            catch (Exception ex)
+            {
+                return (false, 0, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Get detailed information about all images in a WIM backup file
+        /// </summary>
+        public static (bool Success, List<Windows.BackupImageInfo> Images, string Error) GetImageInfo(string wimPath)
+        {
+            try
+            {
+                // First get image count
+                var (success, imageCount, error) = GetImageCount(wimPath);
+                if (!success)
+                {
+                    return (false, new List<Windows.BackupImageInfo>(), error);
+                }
+
+                var images = new List<Windows.BackupImageInfo>();
+
+                // Get info for each image (1-based indexing)
+                for (int i = 1; i <= imageCount; i++)
+                {
+                    var name = new StringBuilder(256);
+                    var description = new StringBuilder(1024);
+                    var errorMsg = new StringBuilder(512);
+
+                    if (WimMount_GetImageInfo(wimPath, i, name, 256, description, 1024, errorMsg, 512))
+                    {
+                        // Parse description for date and type
+                        // Description format from C++: "Disk 5 Volume 1 (Full)" or "Disk 5 Volume 1 (Incremental)"
+                        string desc = description.ToString();
+                        string type = "Full"; // Default
+                        DateTime imageDate = DateTime.Now; // Default to now if can't parse
+
+                        // Extract backup type from description (text in parentheses)
+                        if (desc.Contains("(") && desc.Contains(")"))
+                        {
+                            int start = desc.LastIndexOf('(') + 1;
+                            int end = desc.LastIndexOf(')');
+                            if (end > start)
+                            {
+                                type = desc.Substring(start, end - start).Trim();
+                            }
+                        }
+
+                        // Try to extract date from name if it contains timestamp
+                        // Name format might be like "Disk 5 Volume 1 - 2026-03-10 15:30:45"
+                        if (name.ToString().Contains("-") && name.ToString().Contains(":"))
+                        {
+                            // Attempt to parse datetime from name
+                            string nameParts = name.ToString();
+                            int dashIndex = nameParts.LastIndexOf(" - ");
+                            if (dashIndex > 0 && dashIndex + 3 < nameParts.Length)
+                            {
+                                string dateStr = nameParts.Substring(dashIndex + 3);
+                                if (DateTime.TryParse(dateStr, out DateTime parsed))
+                                {
+                                    imageDate = parsed;
+                                }
+                            }
+                        }
+
+                        images.Add(new Windows.BackupImageInfo
+                        {
+                            ImageIndex = i,
+                            ImageDate = imageDate,
+                            ImageType = type,
+                            Description = desc
+                        });
+                    }
+                }
+
+                return (true, images, "");
+            }
+            catch (Exception ex)
+            {
+                return (false, new List<Windows.BackupImageInfo>(), ex.Message);
+            }
         }
     }
 }

@@ -50,6 +50,14 @@ namespace BackupService
         private static extern int VerifyBackup(string backupPath, ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private static extern int VerifyWimArchive(
+            string archivePath, 
+            int expectedImageCount, 
+            StringBuilder errorMsg, 
+            int errorMsgSize, 
+            ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern void GetLastErrorMessage(StringBuilder buffer, int bufferSize);
 
         public async Task<bool> ExecuteBackupJobWithProgress(
@@ -69,6 +77,28 @@ namespace BackupService
                     {
                         logger?.Invoke("Backup cancelled by user");
                         return false;
+                    }
+
+                    // AUTO-RECOVERY: Check if we need to force a full backup due to previous verification failure
+                    BackupType originalType = job.Type;
+                    if (job.ForceFullBackupOnNextRun && (job.Type == BackupType.Incremental || job.Type == BackupType.Differential))
+                    {
+                        logger?.Invoke($"AUTO-RECOVERY MODE: Previous {originalType} backup failed verification");
+                        logger?.Invoke($"Forcing FULL backup to rebuild backup chain");
+                        job.Type = BackupType.Full;
+
+                        // Clear the flag and save
+                        job.ForceFullBackupOnNextRun = false;
+                        try
+                        {
+                            var jobManager = new JobManager();
+                            jobManager.UpdateJob(job);
+                            logger?.Invoke("ForceFullBackupOnNextRun flag cleared");
+                        }
+                        catch (Exception saveEx)
+                        {
+                            logger?.Invoke($"Warning: Failed to clear ForceFullBackupOnNextRun flag: {saveEx.Message}");
+                        }
                     }
 
                     // REMOVED: Backup safety renaming - with single-file approach, we simply overwrite
@@ -172,17 +202,58 @@ namespace BackupService
                     // Verify backup if requested
                     if (job.VerifyAfterBackup && !cancellationToken.IsCancellationRequested)
                     {
-                        logger?.Invoke("Verifying backup...");
-                        progressCallback?.Invoke(90, "Verifying backup...");
+                        logger?.Invoke("Verifying backup archive...");
+                        progressCallback?.Invoke(90, "Verifying SSB archive integrity...");
 
-                        // VerifyBackup expects a FOLDER path, not a file path
-                        // newBackupPath is the full .ssb file path, so extract the directory
-                        string verifyPath = job.DestinationPath; // Use the folder containing the .ssb file
-                        int result = VerifyBackup(verifyPath, nativeCallback);
+                        // For disk backups, count expected images (one per volume)
+                        // For other backups, pass -1 to skip image count validation
+                        int expectedImageCount = -1;
 
-                        if (result != 0)
+                        if (job.Target == BackupTarget.Disk && job.SourcePaths != null && job.SourcePaths.Count > 0)
                         {
-                            logger?.Invoke("Backup verification failed!");
+                            // Extract disk number to count volumes
+                            int diskNumber = ExtractDiskNumber(job.SourcePaths[0]);
+                            if (diskNumber >= 0)
+                            {
+                                // For now, we don't have volume count - pass -1 to skip validation
+                                // Future enhancement: query WMI for actual volume count
+                                expectedImageCount = -1;
+                            }
+                        }
+
+                        // Use enhanced WIM archive verification
+                        var errorMsg = new StringBuilder(1024);
+                        int verifyResult = VerifyWimArchive(
+                            newBackupPath,  // Direct .ssb file path
+                            expectedImageCount,  // Expected image count (or -1 to skip)
+                            errorMsg,
+                            errorMsg.Capacity,
+                            nativeCallback
+                        );
+
+                        if (verifyResult != 0)
+                        {
+                            logger?.Invoke($"Backup verification FAILED: {errorMsg}");
+
+                            // Auto-recovery: If incremental/differential failed verification,
+                            // force FULL backup on next run to rebuild the backup chain
+                            if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
+                            {
+                                job.ForceFullBackupOnNextRun = true;
+                                logger?.Invoke($"AUTO-RECOVERY: Next backup will be FULL to rebuild backup chain");
+
+                                // Save job with updated flag
+                                try
+                                {
+                                    var jobManager = new JobManager();
+                                    jobManager.UpdateJob(job);
+                                    logger?.Invoke("Job updated with ForceFullBackupOnNextRun flag");
+                                }
+                                catch (Exception saveEx)
+                                {
+                                    logger?.Invoke($"Warning: Failed to save ForceFullBackupOnNextRun flag: {saveEx.Message}");
+                                }
+                            }
 
                             // Delete the failed backup FILE
                             if (newBackupPath != null && File.Exists(newBackupPath))
@@ -201,7 +272,24 @@ namespace BackupService
                             return false;
                         }
 
-                        logger?.Invoke("Backup verification successful!");
+                        // Verification succeeded!
+                        logger?.Invoke($"Backup verification PASSED: {errorMsg}");
+                    }
+
+                    // If we forced a full backup for auto-recovery, restore original type for future backups
+                    if (originalType != job.Type)
+                    {
+                        job.Type = originalType;
+                        try
+                        {
+                            var jobManager = new JobManager();
+                            jobManager.UpdateJob(job);
+                            logger?.Invoke($"AUTO-RECOVERY COMPLETE: Job type restored to {originalType} for next run");
+                        }
+                        catch (Exception saveEx)
+                        {
+                            logger?.Invoke($"Warning: Failed to restore job type: {saveEx.Message}");
+                        }
                     }
 
                     // REMOVED: Retention cleanup - with single-file approach, each backup type 

@@ -860,22 +860,22 @@ namespace BackupUI
                         Margin = new Thickness(4, 0, 0, 0)
                     };
 
-                    // Get the path to the Images folder
-                    string baseDir = System.IO.Path.GetDirectoryName(
-                        System.Reflection.Assembly.GetExecutingAssembly().Location) ?? "";
+                    // Use pack:// URI for embedded resources
+                    Uri iconUri = new Uri(
+                        hasUnreadErrors ? "pack://application:,,,/Images/error_icon.svg" : 
+                                        "pack://application:,,,/Images/warning_icon.svg", 
+                        UriKind.Absolute);
 
-                    string iconFileName = hasUnreadErrors ? "error_icon.svg" : "warning_icon.svg";
-                    string iconPath = System.IO.Path.Combine(baseDir, "Images", iconFileName);
-
-                    if (System.IO.File.Exists(iconPath))
+                    try
                     {
-                        iconViewer.Source = new Uri(iconPath, UriKind.Absolute);
+                        // Try to load the SVG resource
+                        iconViewer.Source = iconUri;
                         headerPanel.Children.Add(iconViewer);
                     }
-                    else
+                    catch (Exception svgEx)
                     {
-                        // Fallback to emoji if SVG file not found
-                        System.Diagnostics.Debug.WriteLine($"SVG icon not found: {iconPath}");
+                        // Resource not found - fallback to emoji
+                        System.Diagnostics.Debug.WriteLine($"SVG resource not found: {iconUri}, Error: {svgEx.Message}");
                         var fallbackIcon = new System.Windows.Controls.TextBlock
                         {
                             Text = hasUnreadErrors ? "⚠️" : "⚠️",
@@ -1007,6 +1007,58 @@ namespace BackupUI
                         return;
                     }
 
+                    // Check if backup has multiple images/restore points
+                    System.Diagnostics.Debug.WriteLine($"[Mount] Checking image count for: {wimPath}");
+                    var (countSuccess, imageCount, countError) = NativeBackupMountManager.GetImageCount(wimPath);
+
+                    int selectedImageIndex = 1; // Default to first image
+
+                    if (!countSuccess)
+                    {
+                        MessageBox.Show($"Failed to check backup images:\n{countError}",
+                                      "Error",
+                                      MessageBoxButton.OK,
+                                      MessageBoxImage.Error);
+                        return;
+                    }
+
+                    // If backup has multiple images, show selection dialog
+                    if (imageCount > 1)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Mount] Backup has {imageCount} images - showing selection dialog");
+
+                        // Get detailed image information
+                        var (infoSuccess, images, infoError) = NativeBackupMountManager.GetImageInfo(wimPath);
+
+                        if (!infoSuccess || images.Count == 0)
+                        {
+                            MessageBox.Show($"Failed to get image details:\n{infoError}",
+                                          "Error",
+                                          MessageBoxButton.OK,
+                                          MessageBoxImage.Error);
+                            return;
+                        }
+
+                        // Show image selection dialog
+                        var imageDialog = new BackupUI.Windows.ImageSelectionDialog(images)
+                        {
+                            Owner = this
+                        };
+
+                        if (imageDialog.ShowDialog() != true)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[Mount] User cancelled image selection");
+                            return;
+                        }
+
+                        selectedImageIndex = imageDialog.SelectedImageIndex;
+                        System.Diagnostics.Debug.WriteLine($"[Mount] User selected image index: {selectedImageIndex}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Mount] Backup has {imageCount} image(s) - using first image");
+                    }
+
                     // Show temp path selection dialog
                     var tempPathDialog = new BackupUI.Windows.TempPathSelectionDialog
                     {
@@ -1048,13 +1100,13 @@ namespace BackupUI
                     {
                         // Mount asynchronously with progress updates
                         System.Diagnostics.Debug.WriteLine($"[Mount] Calling NativeBackupMountManager.MountBackupAsync...");
-                        System.Diagnostics.Debug.WriteLine($"[Mount] Parameters: wimPath={wimPath}, backupName={backup.BackupName}, backupType={backup.BackupType}, imageIndex=1, tempPath={selectedTempPath}");
+                        System.Diagnostics.Debug.WriteLine($"[Mount] Parameters: wimPath={wimPath}, backupName={backup.BackupName}, backupType={backup.BackupType}, imageIndex={selectedImageIndex}, tempPath={selectedTempPath}");
 
                         var (success, mountPath, error) = await NativeBackupMountManager.MountBackupAsync(
                             wimPath,
                             backup.BackupName,
                             backup.BackupType,
-                            1,  // Image index
+                            selectedImageIndex,  // Use selected image index
                             (percentage, message) =>  // Updated to receive percentage and message
                             {
                                 progressWindow.SetStatus(message, percentage);

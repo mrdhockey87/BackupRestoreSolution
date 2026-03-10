@@ -2,13 +2,14 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Principal;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace BackupUI
 {
     public partial class App : Application
     {
-        protected override void OnStartup(StartupEventArgs e)
+        protected override async void OnStartup(StartupEventArgs e)
         {
             // Check if running as administrator
             if (!IsRunningAsAdministrator())
@@ -41,10 +42,70 @@ namespace BackupUI
                 return;
             }
 
-            // Check if BackupEngine.dll exists
-            CheckBackupEngineDll();
+            // Show splash screen and perform initialization
+            await ShowSplashScreenAndInitialize(e);
 
             base.OnStartup(e);
+        }
+
+        /// <summary>
+        /// Shows splash screen and performs application initialization
+        /// </summary>
+        private async Task ShowSplashScreenAndInitialize(StartupEventArgs e)
+        {
+            BackupUI.Windows.SplashScreen? splash = null;
+
+            try
+            {
+                // Show splash screen
+                splash = await BackupUI.Windows.SplashScreen.ShowAsync();
+
+                // Perform initialization tasks
+                splash.UpdateStatus("Checking components...");
+                await Task.Delay(500); // Brief delay to show status
+
+                // Check if BackupEngine.dll exists
+                splash.UpdateStatus("Verifying BackupEngine.dll...");
+                CheckBackupEngineDll();
+                await Task.Delay(300);
+
+                // Initialize services
+                splash.UpdateStatus("Initializing services...");
+                await Task.Delay(500);
+
+                // Load main window (but don't show yet)
+                splash.UpdateStatus("Loading main window...");
+                var mainWindow = new MainWindow();
+                await Task.Delay(300);
+
+                // Close splash screen with fade
+                splash.UpdateStatus("Ready!");
+                await Task.Delay(200);
+                await splash.CloseAsync();
+
+                // Show main window
+                mainWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                // Close splash if there's an error
+                if (splash != null)
+                {
+                    try
+                    {
+                        await splash.CloseAsync();
+                    }
+                    catch { }
+                }
+
+                MessageBox.Show(
+                    $"Error during application startup: {ex.Message}",
+                    "Startup Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+
+                Shutdown();
+            }
         }
 
         private void CheckBackupEngineDll()
