@@ -12,7 +12,7 @@
         Topmost="True"
         ShowInTaskbar="False">
     
-    <Border Background="{DynamicResource WindowBackground}"
+    <Border Background="{DynamicResource LightTurquoise}"
             BorderBrush="{DynamicResource PrimaryTurquoise}"
             BorderThickness="2"
             CornerRadius="10">

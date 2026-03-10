@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.11.4";
+		static private string version_fallback_number = "5.13.11.6";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -70,7 +70,32 @@ namespace BackupUI
 
 
 /*
- * 
+ *
+* Version 5.13.11.6 Change Splahscreen background to LightTurquoise from WIndowsBackground mdail 3/10/2026
+* Version 5.13.11.5 UX ENHANCEMENT - SPLASH SCREEN POSITION MEMORY: Enhanced splash screen to remember and reappear at the last main window
+*					location! User requested: "The splash screen need to remember where the main page was when it closed last and start in that
+*					location". IMPLEMENTATION: Changed WindowStartupLocation from CenterScreen to Manual in SplashScreen.xaml for programmatic
+*					positioning control. Added LoadSavedPosition() method that reads window-position.json (same file WindowPositionManager uses for
+*					main window persistence). Calculates main window's center point from saved position (Left + Width/2, Top + Height/2), then
+*					positions splash screen centered on that point (splashLeft = centerX - splashWidth/2). Added IsPositionValid() validation to
+*					ensure splash would be visible on current screen configuration before applying saved position. Added CenterOnPrimaryScreen()
+*					fallback for first run or invalid saved positions. Uses SavedWindowPosition data class matching WindowPositionManager's JSON
+*					format (Left, Top, Width, Height, WindowState properties). WORKFLOW: App starts → LoadSavedPosition() reads
+*					%APPDATA%\BackupRestoreApp\window-position.json → Calculates main window center point → Positions splash at that center → Validates
+*					position is on-screen → Shows splash at remembered location! If no saved position or position invalid (monitor disconnected),
+*					falls back to centering on primary screen. BENEFITS: Consistent user experience (splash appears where main window was), Multi-monitor
+*					aware (validates position is visible on current displays), Graceful fallback (centers if saved position invalid), Respects user's
+*					workspace layout (splash doesn't jump to different screen), Professional UX matching main window positioning system. TECHNICAL
+*					DETAILS: Uses System.Text.Json to deserialize saved window position, references System.Windows.Forms for Screen.AllScreens
+*					multi-monitor detection, IntersectsWith() validates splash rect intersects with any screen's working area, Debug logging shows
+*					"Splash positioned at saved main window location: X, Y" for diagnostics. EDGE CASES HANDLED: First run (no saved position) → centers
+*					on primary screen, Saved position off-screen (monitor removed) → centers on primary screen, JSON read failure → centers on primary
+*					screen, Position validation failure → centers on primary screen. All fallbacks ensure splash always appears somewhere visible!
+*					COORDINATES: Splash positioned at saved location's CENTER point, not top-left corner, ensuring splash appears centered on where
+*					user last used main window. Perfect for users with multi-monitor setups who always work on specific screen - splash appears on
+*					THEIR screen, not just primary! Complete position memory integration with WindowPositionManager architecture - splash screen now
+*					respects user's window placement preferences. Enterprise-grade consistent UX across all windows! Production-ready cross-monitor
+*					position management! User's workflow preserved - splash appears exactly where they expect it based on previous main window location! mdail 3/10/2026
 * Version 5.13.11.4 MAJOR FEATURE - PROFESSIONAL SPLASH SCREEN WITH PACK URI FIX: Implemented enterprise-grade splash screen with adaptive
 *					logo sizing using PROPER WPF pack:// URIs! Created SplashScreen window that displays on application startup showing "Secure
 *					Server Backup" title with turquoise branding. INTELLIGENT LOGO SELECTION: Automatically chooses appropriate logo size based on

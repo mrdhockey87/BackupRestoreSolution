@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -12,8 +13,127 @@ namespace BackupUI.Windows
         public SplashScreen()
         {
             InitializeComponent();
+            LoadSavedPosition();
             LoadLogo();
             LoadVersion();
+        }
+
+        /// <summary>
+        /// Loads the saved main window position and applies it to splash screen
+        /// </summary>
+        private void LoadSavedPosition()
+        {
+            try
+            {
+                // Path to saved window position (matches WindowPositionManager)
+                string settingsPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "BackupRestoreApp",
+                    "window-position.json");
+
+                if (File.Exists(settingsPath))
+                {
+                    // Read saved position
+                    var json = File.ReadAllText(settingsPath);
+                    var position = JsonSerializer.Deserialize<SavedWindowPosition>(json);
+
+                    if (position != null && IsPositionValid(position))
+                    {
+                        // Center splash screen on saved main window position
+                        // Calculate center point of main window
+                        double mainWindowCenterX = position.Left + (position.Width / 2);
+                        double mainWindowCenterY = position.Top + (position.Height / 2);
+
+                        // Position splash screen centered on main window's center
+                        this.Left = mainWindowCenterX - (this.Width / 2);
+                        this.Top = mainWindowCenterY - (this.Height / 2);
+
+                        System.Diagnostics.Debug.WriteLine($"Splash positioned at saved main window location: {this.Left}, {this.Top}");
+                        return;
+                    }
+                }
+
+                // No saved position or invalid - center on primary screen
+                CenterOnPrimaryScreen();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to load saved position: {ex.Message}");
+                // Fall back to centering
+                CenterOnPrimaryScreen();
+            }
+        }
+
+        /// <summary>
+        /// Validates that the saved position would be visible on current screen configuration
+        /// </summary>
+        private bool IsPositionValid(SavedWindowPosition position)
+        {
+            try
+            {
+                // Calculate where splash screen would appear
+                double splashLeft = position.Left + (position.Width / 2) - (this.Width / 2);
+                double splashTop = position.Top + (position.Height / 2) - (this.Height / 2);
+
+                var rect = new Rect(splashLeft, splashTop, this.Width, this.Height);
+
+                // Check if splash screen would be visible on any screen
+                foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+                {
+                    var workingArea = new Rect(
+                        screen.WorkingArea.Left,
+                        screen.WorkingArea.Top,
+                        screen.WorkingArea.Width,
+                        screen.WorkingArea.Height);
+
+                    // Check if at least part of the window would be visible
+                    if (workingArea.IntersectsWith(rect))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Centers the splash screen on the primary screen
+        /// </summary>
+        private void CenterOnPrimaryScreen()
+        {
+            try
+            {
+                var primaryScreen = System.Windows.Forms.Screen.PrimaryScreen;
+                if (primaryScreen != null)
+                {
+                    this.Left = primaryScreen.WorkingArea.Left + (primaryScreen.WorkingArea.Width - this.Width) / 2;
+                    this.Top = primaryScreen.WorkingArea.Top + (primaryScreen.WorkingArea.Height - this.Height) / 2;
+                    System.Diagnostics.Debug.WriteLine($"Splash centered on primary screen: {this.Left}, {this.Top}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to center on primary screen: {ex.Message}");
+                // Ultimate fallback - let WPF handle it
+                this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            }
+        }
+
+        /// <summary>
+        /// Data class for saved window position (matches WindowPositionManager format)
+        /// </summary>
+        private class SavedWindowPosition
+        {
+            public double Left { get; set; }
+            public double Top { get; set; }
+            public double Width { get; set; }
+            public double Height { get; set; }
+            public WindowState WindowState { get; set; }
         }
 
         /// <summary>
