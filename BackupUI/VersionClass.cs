@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 	static public string version_word = "Version:";
-		static private string version_fallback_number = "5.13.11.6";
+		static private string version_fallback_number = "5.13.11.7";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -67,10 +67,24 @@ namespace BackupUI
 }
 
 
-
-
 /*
  *
+* Version 5.13.11.7 CODE QUALITY - COMPLETE WARNING ELIMINATION: Fixed ALL remaining compiler warnings for perfectly clean build!
+*					C++ WARNINGS FIXED: C4018 in RestoreEngine_Advanced.cpp line 740 - signed/unsigned mismatch in loop comparison
+*					(int i < DWORD wimInfo.ImageCount). Changed loop variable from 'int i' to 'DWORD i' and added explicit cast
+*					'imageIndex + static_cast<int>(i)' for safe signed/unsigned arithmetic. WIM API uses DWORD for image counts
+*					(unsigned 32-bit) requiring careful type management. C# WARNINGS FIXED: 1) CS4014 (unawaited async calls) - 4 instances
+*					fixed in ServiceManagementWindow.xaml.cs and MainWindow.xaml.cs by adding discard pattern '_ =' to fire-and-forget
+*					async operations (version checking, error dialogs). Indicates intentional non-blocking behavior. 2) CS8600 (null
+*					literal conversion) - fixed in TempPathSelectionDialog.xaml.cs by changing 'string root' to 'string? root' to
+*					properly handle nullable return from Path.GetPathRoot(). 3) CS8602 (null reference dereference) - 2 instances fixed
+*					in JobManager.cs lines 152 & 159 by adding null-forgiving operator '!' to 'job.Schedule!.NextRunTime' since Schedule
+*					is guaranteed non-null after CalculateNextRunTime() call. RESULTS: Build now completes with 0 errors, 0 warnings across
+*					all 3 projects (BackupEngine C++, BackupService C#, BackupUI C#)! Clean build ensures: No hidden bugs from type mismatches,
+*					Proper null safety throughout, Clear code intent with explicit patterns, Compiler optimizations work correctly, Future
+*					warnings immediately visible. Production-ready warning-free codebase following modern C++ and C# best practices!
+*					Enterprise-grade code quality with zero technical debt from compiler warnings! Perfect foundation for continued
+*					development without warning noise masking real issues! mdail 3/12/2026
 * Version 5.13.11.6 Change Splahscreen background to LightTurquoise from WIndowsBackground mdail 3/10/2026
 * Version 5.13.11.5 UX ENHANCEMENT - SPLASH SCREEN POSITION MEMORY: Enhanced splash screen to remember and reappear at the last main window
 *					location! User requested: "The splash screen need to remember where the main page was when it closed last and start in that

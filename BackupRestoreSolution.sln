@@ -1,7 +1,6 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.14.36915.13
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11520.95 d18.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BackupEngine", "BackupEngine\BackupEngine.vcxproj", "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}"
 EndProject
@@ -26,7 +25,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LinuxRestore", "LinuxRestor
 		LinuxRestore\restore_engine.cpp = LinuxRestore\restore_engine.cpp
 		LinuxRestore\restore_gui_gtk.cpp = LinuxRestore\restore_gui_gtk.cpp
 		LinuxRestore\restore_tui.cpp = LinuxRestore\restore_tui.cpp
-		LinuxRestore\UPDATE_5.11.0.7.md = LinuxRestore\UPDATE_5.11.0.7.md
 	EndProjectSection
 EndProject
 Global
@@ -55,4 +53,3 @@ Global
 		SolutionGuid = {A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 	EndGlobalSection
 EndGlobal
-

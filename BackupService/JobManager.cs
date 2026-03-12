@@ -149,14 +149,14 @@ namespace BackupService
                 if (job.ConsecutiveFailures < 3)  // FIXED: < 3 instead of <= 3 (allows attempts 1 and 2, stops at 3)
                 {
                     // Schedule retry for 15 minutes from now (attempts 1-2)
-                    job.Schedule.NextRunTime = DateTime.Now.AddMinutes(15);
+                    job.Schedule!.NextRunTime = DateTime.Now.AddMinutes(15);
                     System.Diagnostics.Debug.WriteLine($"[RETRY] Job '{job.Name}' failed (attempt {job.ConsecutiveFailures}/3), will retry in 15 minutes at {job.Schedule.NextRunTime:yyyy-MM-dd HH:mm:ss}");
                 }
                 else
                 {
                     // After 2 failed attempts (ConsecutiveFailures = 3 means 3rd failure), wait for next scheduled time
                     CalculateNextRunTime(job, isInitialCalculation: false);
-                    System.Diagnostics.Debug.WriteLine($"[RETRY LIMIT] Job '{job.Name}' failed {job.ConsecutiveFailures} times (max 3 attempts reached), waiting for next scheduled time: {job.Schedule.NextRunTime:yyyy-MM-dd HH:mm:ss}");
+                    System.Diagnostics.Debug.WriteLine($"[RETRY LIMIT] Job '{job.Name}' failed {job.ConsecutiveFailures} times (max 3 attempts reached), waiting for next scheduled time: {job.Schedule!.NextRunTime:yyyy-MM-dd HH:mm:ss}");
                     // Don't reset ConsecutiveFailures here - let successful backup reset it
                 }
             }

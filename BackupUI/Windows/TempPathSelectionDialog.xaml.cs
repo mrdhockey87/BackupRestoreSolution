@@ -32,7 +32,7 @@ namespace BackupUI.Windows
                 }
 
                 // Get drive info
-                string root = Path.GetPathRoot(SelectedTempPath);
+                string? root = Path.GetPathRoot(SelectedTempPath);
                 if (string.IsNullOrEmpty(root))
                 {
                     txtSpaceInfo.Text = "Cannot determine drive";

@@ -154,7 +154,7 @@ namespace BackupUI
                         BackupLogger.LogServiceError($"Failed to install service: {message}");
 
                         // Show error on UI thread
-                        this.Dispatcher.BeginInvoke(new Action(() =>
+                        _ = this.Dispatcher.BeginInvoke(new Action(() =>
                         {
                             MessageBox.Show(
                                 $"Failed to install service:\n\n{message}\n\n" +
@@ -187,7 +187,7 @@ namespace BackupUI
                         BackupLogger.LogServiceError($"Failed to start service: {message}");
 
                         // Show error on UI thread
-                        this.Dispatcher.BeginInvoke(new Action(() =>
+                        _ = this.Dispatcher.BeginInvoke(new Action(() =>
                         {
                             MessageBox.Show(
                                 $"Failed to start service:\n\n{message}",
@@ -208,7 +208,7 @@ namespace BackupUI
                 BackupLogger.LogServiceError($"Error checking service status: {ex.Message}");
 
                 // Show error on UI thread
-                this.Dispatcher.BeginInvoke(new Action(() =>
+                _ = this.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     MessageBox.Show(
                         $"Error checking service status:\n\n{ex.Message}",

@@ -26,9 +26,9 @@ namespace BackupUI.Windows
             btnRestart.IsEnabled = false;
             btnInstall.IsEnabled = false;
             btnUninstall.IsEnabled = false;
-            
+
             System.Diagnostics.Debug.WriteLine("ServiceManagement: Window initialized, starting RefreshStatusAsync");
-            RefreshStatusAsync();
+            _ = RefreshStatusAsync();
         }
 
         private async void RefreshStatus_Click(object sender, RoutedEventArgs e)

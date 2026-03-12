@@ -737,8 +737,8 @@ extern "C" {
             // For now, restore starting from the specified image index
             // (UI should select the first image of the backup set)
 
-            for (int i = 0; i < wimInfo.ImageCount; i++) {
-                int currentIndex = imageIndex + i;
+            for (DWORD i = 0; i < wimInfo.ImageCount; i++) {
+                int currentIndex = imageIndex + static_cast<int>(i);
                 if (currentIndex > static_cast<int>(wimInfo.ImageCount)) break;
 
                 HANDLE hImage = WIMLoadImage(hWim, currentIndex);
