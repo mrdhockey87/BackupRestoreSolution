@@ -46,59 +46,162 @@
   </Target>
 
   <!-- ================================================================
+       CLEAN RUNTIME CONFIG FILES
+       ================================================================
+       Removes runtime config files during Clean operation
+       This ensures Rebuild always generates fresh configs
+       ================================================================ -->
+  <Target Name="CleanRuntimeConfigFiles"
+          AfterTargets="Clean"
+          Condition="'$(MSBuildProjectExtension)' != '.vcxproj' AND ('$(OutputType)' == 'Exe' OR '$(OutputType)' == 'WinExe')">
+
+    <PropertyGroup>
+      <_RuntimeConfigInOutput>$(OutputPath)$(TargetName).runtimeconfig.json</_RuntimeConfigInOutput>
+      <_RuntimeConfigInIntermediate>$(IntermediateOutputPath)$(TargetName).runtimeconfig.json</_RuntimeConfigInIntermediate>
+      <_DepsInOutput>$(OutputPath)$(TargetName).deps.json</_DepsInOutput>
+      <_DepsInIntermediate>$(IntermediateOutputPath)$(TargetName).deps.json</_DepsInIntermediate>
+    </PropertyGroup>
+
+    <Message Importance="High" Text="[CLEAN] Removing runtime config files for $(MSBuildProjectName)..." />
+
+    <!-- Delete runtime config from output -->
+    <Delete Files="$(_RuntimeConfigInOutput)" Condition="Exists('$(_RuntimeConfigInOutput)')" />
+    <Message Importance="High" Text="  Deleted: $(_RuntimeConfigInOutput)" Condition="Exists('$(_RuntimeConfigInOutput)')" />
+
+    <!-- Delete runtime config from intermediate -->
+    <Delete Files="$(_RuntimeConfigInIntermediate)" Condition="Exists('$(_RuntimeConfigInIntermediate)')" />
+    <Message Importance="High" Text="  Deleted: $(_RuntimeConfigInIntermediate)" Condition="Exists('$(_RuntimeConfigInIntermediate)')" />
+
+    <!-- Delete deps.json from output -->
+    <Delete Files="$(_DepsInOutput)" Condition="Exists('$(_DepsInOutput)')" />
+    <Message Importance="High" Text="  Deleted: $(_DepsInOutput)" Condition="Exists('$(_DepsInOutput)')" />
+
+    <!-- Delete deps.json from intermediate -->
+    <Delete Files="$(_DepsInIntermediate)" Condition="Exists('$(_DepsInIntermediate)')" />
+    <Message Importance="High" Text="  Deleted: $(_DepsInIntermediate)" Condition="Exists('$(_DepsInIntermediate)')" />
+
+    <Message Importance="High" Text="[CLEAN] Runtime config cleanup complete" />
+  </Target>
+
+  <!-- ================================================================
+       FORCE RUNTIME CONFIG GENERATION
+       ================================================================
+       Ensures GenerateBuildRuntimeConfigurationFiles target ALWAYS runs for executables
+       Works with Visual Studio Build/Rebuild and command-line builds
+       ================================================================ -->
+  <Target Name="ForceRuntimeConfigGeneration" 
+          BeforeTargets="GenerateBuildRuntimeConfigurationFiles"
+          Condition="'$(MSBuildProjectExtension)' != '.vcxproj' AND ('$(OutputType)' == 'Exe' OR '$(OutputType)' == 'WinExe')">
+
+    <Message Importance="High" Text="[$(MSBuildProjectName)] Forcing runtime config generation..." />
+    <Message Importance="High" Text="  OutputType: $(OutputType)" />
+    <Message Importance="High" Text="  GenerateRuntimeConfigurationFiles: $(GenerateRuntimeConfigurationFiles)" />
+    <Message Importance="High" Text="  ProduceReferenceAssembly: $(ProduceReferenceAssembly)" />
+    <Message Importance="High" Text="  OutputPath: $(OutputPath)" />
+    <Message Importance="High" Text="  IntermediateOutputPath: $(IntermediateOutputPath)" />
+
+    <PropertyGroup>
+      <_RuntimeConfigTarget>$(IntermediateOutputPath)$(TargetName).runtimeconfig.json</_RuntimeConfigTarget>
+      <_DepsTarget>$(IntermediateOutputPath)$(TargetName).deps.json</_DepsTarget>
+    </PropertyGroup>
+
+    <!-- Delete existing configs to force MSBuild regeneration -->
+    <Delete Files="$(_RuntimeConfigTarget)" Condition="Exists('$(_RuntimeConfigTarget)')" />
+    <Delete Files="$(_DepsTarget)" Condition="Exists('$(_DepsTarget)')" />
+
+    <Message Importance="High" Text="  Deleted old configs to force regeneration" 
+             Condition="Exists('$(_RuntimeConfigTarget)') OR Exists('$(_DepsTarget)')" />
+  </Target>
+
+  <!-- ================================================================
        VERIFY AND COPY RUNTIME CONFIG FILES TO OUTPUT
        ================================================================
-       MSBuild generates runtime config to different locations depending on project type
-       This target ensures they end up in the correct OutputPath for both Debug and Release
+       Ensures runtime configs end up in OutputPath for all build scenarios:
+       - Visual Studio Build (F6)
+       - Visual Studio Rebuild (Ctrl+Shift+B)
+       - Visual Studio Run (F5)
+       - Command-line: dotnet build
+       - Command-line: msbuild
        ================================================================ -->
   <Target Name="EnsureRuntimeConfigInOutput" 
           AfterTargets="GenerateBuildRuntimeConfigurationFiles;Build" 
           Condition="'$(MSBuildProjectExtension)' != '.vcxproj' AND ('$(OutputType)' == 'Exe' OR '$(OutputType)' == 'WinExe')">
 
     <PropertyGroup>
-      <!-- Diagnostic: Show all paths being checked -->
+      <!-- All possible locations where runtime config might exist -->
       <RuntimeConfigInOutput>$(OutputPath)$(TargetName).runtimeconfig.json</RuntimeConfigInOutput>
       <RuntimeConfigInBin>$(ArtifactsBin)$(TargetName).runtimeconfig.json</RuntimeConfigInBin>
       <RuntimeConfigInBase>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetName).runtimeconfig.json</RuntimeConfigInBase>
       <RuntimeConfigInObj>$(IntermediateOutputPath)$(TargetName).runtimeconfig.json</RuntimeConfigInObj>
+
+      <!-- Same for deps.json -->
+      <DepsInOutput>$(OutputPath)$(TargetName).deps.json</DepsInOutput>
+      <DepsInObj>$(IntermediateOutputPath)$(TargetName).deps.json</DepsInObj>
     </PropertyGroup>
 
-    <Message Importance="High" Text="[$(MSBuildProjectName) $(Configuration)] Ensuring runtime config in correct location..." />
+    <Message Importance="High" Text="[$(MSBuildProjectName) $(Configuration)] Verifying runtime config in output..." />
     <Message Importance="High" Text="  Target: $(RuntimeConfigInOutput)" />
-    <Message Importance="High" Text="  Checking: $(RuntimeConfigInBin) - Exists: $([System.IO.File]::Exists('$(RuntimeConfigInBin)'))" />
-    <Message Importance="High" Text="  Checking: $(RuntimeConfigInBase) - Exists: $([System.IO.File]::Exists('$(RuntimeConfigInBase)'))" />
-    <Message Importance="High" Text="  Checking: $(RuntimeConfigInObj) - Exists: $([System.IO.File]::Exists('$(RuntimeConfigInObj)'))" />
+    <Message Importance="High" Text="  OutputPath: $(OutputPath)" />
+    <Message Importance="High" Text="  IntermediateOutputPath: $(IntermediateOutputPath)" />
 
-    <!-- Copy from artifacts\bin\ if it exists there -->
-    <Copy SourceFiles="$(RuntimeConfigInBin)" 
-          DestinationFiles="$(RuntimeConfigInOutput)" 
-          SkipUnchangedFiles="false"
-          Condition="Exists('$(RuntimeConfigInBin)') AND !Exists('$(RuntimeConfigInOutput)')">
-      <Output TaskParameter="CopiedFiles" ItemName="RuntimeConfigCopied"/>
-    </Copy>
+    <!-- Check all possible locations -->
+    <Message Importance="High" Text="  Checking locations:" />
+    <Message Importance="High" Text="    Output:       $(RuntimeConfigInOutput) - $([System.IO.File]::Exists('$(RuntimeConfigInOutput)'))" />
+    <Message Importance="High" Text="    Intermediate: $(RuntimeConfigInObj) - $([System.IO.File]::Exists('$(RuntimeConfigInObj)'))" />
+    <Message Importance="High" Text="    Base:         $(RuntimeConfigInBase) - $([System.IO.File]::Exists('$(RuntimeConfigInBase)'))" />
+    <Message Importance="High" Text="    Bin:          $(RuntimeConfigInBin) - $([System.IO.File]::Exists('$(RuntimeConfigInBin)'))" />
 
-    <!-- Copy from base intermediate if it exists there -->
-    <Copy SourceFiles="$(RuntimeConfigInBase)" 
-          DestinationFiles="$(RuntimeConfigInOutput)" 
-          SkipUnchangedFiles="false"
-          Condition="Exists('$(RuntimeConfigInBase)') AND !Exists('$(RuntimeConfigInOutput)')">
-      <Output TaskParameter="CopiedFiles" ItemName="RuntimeConfigCopied2"/>
-    </Copy>
-
-    <!-- Copy from obj folder if it exists there -->
+    <!-- Priority 1: Copy from intermediate (most common location after generation) -->
     <Copy SourceFiles="$(RuntimeConfigInObj)" 
           DestinationFiles="$(RuntimeConfigInOutput)" 
           SkipUnchangedFiles="false"
+          OverwriteReadOnlyFiles="true"
           Condition="Exists('$(RuntimeConfigInObj)') AND !Exists('$(RuntimeConfigInOutput)')">
+      <Output TaskParameter="CopiedFiles" ItemName="RuntimeConfigCopied1"/>
+    </Copy>
+    <Message Importance="High" Text="  OK Copied runtime config from intermediate" Condition="'@(RuntimeConfigCopied1)' != ''" />
+
+    <!-- Priority 2: Copy from base intermediate -->
+    <Copy SourceFiles="$(RuntimeConfigInBase)" 
+          DestinationFiles="$(RuntimeConfigInOutput)" 
+          SkipUnchangedFiles="false"
+          OverwriteReadOnlyFiles="true"
+          Condition="Exists('$(RuntimeConfigInBase)') AND !Exists('$(RuntimeConfigInOutput)')">
+      <Output TaskParameter="CopiedFiles" ItemName="RuntimeConfigCopied2"/>
+    </Copy>
+    <Message Importance="High" Text="  OK Copied runtime config from base intermediate" Condition="'@(RuntimeConfigCopied2)' != ''" />
+
+    <!-- Priority 3: Copy from artifacts bin (fallback) -->
+    <Copy SourceFiles="$(RuntimeConfigInBin)" 
+          DestinationFiles="$(RuntimeConfigInOutput)" 
+          SkipUnchangedFiles="false"
+          OverwriteReadOnlyFiles="true"
+          Condition="Exists('$(RuntimeConfigInBin)') AND !Exists('$(RuntimeConfigInOutput)')">
       <Output TaskParameter="CopiedFiles" ItemName="RuntimeConfigCopied3"/>
     </Copy>
+    <Message Importance="High" Text="  OK Copied runtime config from bin" Condition="'@(RuntimeConfigCopied3)' != ''" />
 
-    <Message Importance="High" Text="  ✓ Runtime config exists: $(RuntimeConfigInOutput)" Condition="Exists('$(RuntimeConfigInOutput)')" />
-    <Message Importance="High" Text="  ✓ Copied from $(RuntimeConfigInBin)" Condition="'@(RuntimeConfigCopied)' != ''" />
-    <Message Importance="High" Text="  ✓ Copied from $(RuntimeConfigInBase)" Condition="'@(RuntimeConfigCopied2)' != ''" />
-    <Message Importance="High" Text="  ✓ Copied from $(RuntimeConfigInObj)" Condition="'@(RuntimeConfigCopied3)' != ''" />
-    <Warning Text="  ⚠️ Runtime config NOT FOUND in any location - Application will fail to launch! Run 'dotnet build' to regenerate." 
-             Condition="!Exists('$(RuntimeConfigInOutput)') AND !Exists('$(RuntimeConfigInBin)') AND !Exists('$(RuntimeConfigInBase)') AND !Exists('$(RuntimeConfigInObj)')" />
+    <!-- Copy deps.json if it exists -->
+    <Copy SourceFiles="$(DepsInObj)" 
+          DestinationFiles="$(DepsInOutput)" 
+          SkipUnchangedFiles="false"
+          OverwriteReadOnlyFiles="true"
+          Condition="Exists('$(DepsInObj)') AND !Exists('$(DepsInOutput)')">
+      <Output TaskParameter="CopiedFiles" ItemName="DepsCopied"/>
+    </Copy>
+    <Message Importance="High" Text="  OK Copied deps.json from intermediate" Condition="'@(DepsCopied)' != ''" />
+
+    <!-- Final verification -->
+    <Message Importance="High" Text="  OK Runtime config exists in output!" Condition="Exists('$(RuntimeConfigInOutput)')" />
+    <Message Importance="High" Text="  OK Deps file exists in output!" Condition="Exists('$(DepsInOutput)')" />
+
+    <!-- ERROR if still not found -->
+    <Error Text="CRITICAL: Runtime config NOT FOUND after generation! Checked all locations. Application will fail to launch!" 
+           Condition="!Exists('$(RuntimeConfigInOutput)') AND !Exists('$(RuntimeConfigInBin)') AND !Exists('$(RuntimeConfigInBase)') AND !Exists('$(RuntimeConfigInObj)')" />
+
+    <!-- WARNING if found but not in output -->
+    <Warning Text="Runtime config exists in intermediate but failed to copy to output: $(RuntimeConfigInOutput)" 
+             Condition="!Exists('$(RuntimeConfigInOutput)') AND (Exists('$(RuntimeConfigInObj)') OR Exists('$(RuntimeConfigInBase)') OR Exists('$(RuntimeConfigInBin)'))" />
   </Target>
 
 </Project>

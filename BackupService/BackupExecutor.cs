@@ -120,11 +120,13 @@ namespace BackupService
                     newBackupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
 
                     // For incremental/differential, check if base backup exists
+                    // If no base exists, automatically switch to Full backup
                     if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
                     {
                         if (!File.Exists(newBackupPath))
                         {
-                            logger?.Invoke($"No base backup exists. Creating initial full backup: {job.Name}.ssb");
+                            logger?.Invoke($"No base backup exists. Automatically switching from {job.Type} to Full backup: {job.Name}.ssb");
+                            job.Type = BackupType.Full;
                         }
                     }
 
@@ -156,7 +158,23 @@ namespace BackupService
                             logger?.Invoke($"[ERROR] Error message: {(string.IsNullOrEmpty(errorMessage) ? "(empty - C++ didn't set error message)" : errorMessage)}");
                             logger?.Invoke($"[ERROR] Source path: {sourcePath}");
                             logger?.Invoke($"[ERROR] Destination path: {newBackupPath}");
-                            logger?.Invoke($"[ERROR] File exists after failure: {(newBackupPath != null && File.Exists(newBackupPath))}");
+
+                            // CRITICAL: Delete failed backup file for incremental/differential
+                            // This ensures next attempt will start fresh instead of trying to open corrupt file
+                            if ((job.Type == BackupType.Incremental || job.Type == BackupType.Differential) && 
+                                newBackupPath != null && File.Exists(newBackupPath))
+                            {
+                                try
+                                {
+                                    logger?.Invoke($"[CLEANUP] Deleting failed backup file: {Path.GetFileName(newBackupPath)}");
+                                    File.Delete(newBackupPath);
+                                    logger?.Invoke($"[CLEANUP] Failed backup file deleted successfully");
+                                }
+                                catch (Exception ex)
+                                {
+                                    logger?.Invoke($"[WARNING] Could not delete failed backup file: {ex.Message}");
+                                }
+                            }
 
                             return false;
                         }

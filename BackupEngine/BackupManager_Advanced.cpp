@@ -49,6 +49,20 @@ HANDLE CreateWimFile(const wchar_t* wimPath, bool compress, ProgressCallback cal
         callback(5, L"Creating backup archive...");
     }
 
+    // Delete existing file if present to avoid WIM_CREATE_ALWAYS locking issues
+    if (GetFileAttributesW(wimPath) != INVALID_FILE_ATTRIBUTES) {
+        OutputDebugStringW(L"[CreateWimFile] Deleting existing WIM file...");
+        if (!DeleteFileW(wimPath)) {
+            DWORD deleteError = GetLastError();
+            std::wstring errMsg = L"Failed to delete existing WIM file (Error " + std::to_wstring(deleteError) + L"): ";
+            errMsg += wimPath;
+            SetLastErrorMessage(errMsg);
+            OutputDebugStringW((L"[CreateWimFile] ERROR: " + errMsg).c_str());
+            return INVALID_HANDLE_VALUE;
+        }
+        OutputDebugStringW(L"[CreateWimFile] Existing file deleted successfully");
+    }
+
     // Create WIM file
     HANDLE hWim = WIMCreateFile(
         wimPath,
@@ -60,7 +74,10 @@ HANDLE CreateWimFile(const wchar_t* wimPath, bool compress, ProgressCallback cal
     );
 
     if (!hWim || hWim == INVALID_HANDLE_VALUE) {
-        SetLastErrorMessage(L"Failed to create WIM archive");
+        DWORD wimError = GetLastError();
+        std::wstring errMsg = L"Failed to create WIM archive (WIM Error " + std::to_wstring(wimError) + L")";
+        SetLastErrorMessage(errMsg);
+        OutputDebugStringW((L"[CreateWimFile] ERROR: " + errMsg).c_str());
         return INVALID_HANDLE_VALUE;
     }
 
