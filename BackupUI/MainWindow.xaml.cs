@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using BackupCommon;
 using BackupUI.Models;
 using BackupUI.Services;
 using BackupUI.Windows;
@@ -84,6 +85,51 @@ namespace BackupUI
         private void RefreshJobs_Click(object sender, RoutedEventArgs e)
         {
             LoadBackupJobs();
+        }
+
+        private void ResetRunningFlag_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button btn && btn.Tag is System.Guid jobId)
+            {
+                var result = MessageBox.Show(
+                    "Are you sure you want to reset the 'IsCurrentlyRunning' flag for this job?\n\n" +
+                    "This should only be done if the job is stuck in a 'Running' state when it's not actually running.\n\n" +
+                    "If a backup is currently running, resetting this flag could cause issues.",
+                    "Reset Running Flag",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    var job = jobManager.GetJob(jobId);
+                    if (job != null)
+                    {
+                        job.IsCurrentlyRunning = false;
+                        jobManager.UpdateJob(job);
+
+                        // Log the reset action
+                        BackupLogger.LogInfo(job.Name, "IsCurrentlyRunning flag manually reset by user");
+
+                        MessageBox.Show(
+                            $"The 'IsCurrentlyRunning' flag for job '{job.Name}' has been reset.\n\n" +
+                            "The job should now show as 'Idle' and can run again.",
+                            "Flag Reset",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+
+                        // Refresh the job list to show updated status
+                        LoadBackupJobs();
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            "Could not find the specified job.",
+                            "Error",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error);
+                    }
+                }
+            }
         }
 
         private async void RunJobNow_Click(object sender, RoutedEventArgs e)
@@ -1458,6 +1504,19 @@ namespace BackupUI
                 };
                 ScheduleDescription = $"{freq} at {job.Schedule.Time:hh\\:mm}";
             }
+
+            // Execution status - show NextScheduledRun and IsCurrentlyRunning
+            if (job.NextScheduledRun.HasValue)
+            {
+                NextScheduledRun = job.NextScheduledRun.Value.ToString("MM/dd/yyyy hh:mm tt");
+            }
+            else
+            {
+                NextScheduledRun = "Not scheduled";
+            }
+
+            IsCurrentlyRunning = job.IsCurrentlyRunning ? "✓ Running" : "○ Idle";
+            IsRunning = job.IsCurrentlyRunning; // Store boolean for button visibility
         }
 
         public System.Guid Id { get; set; }
@@ -1466,6 +1525,9 @@ namespace BackupUI
         public string SourceDescription { get; set; }
         public string DestinationPath { get; set; }
         public string ScheduleDescription { get; set; }
+        public string NextScheduledRun { get; set; } = string.Empty;
+        public string IsCurrentlyRunning { get; set; } = string.Empty;
+        public bool IsRunning { get; set; } // Boolean for conditional visibility
     }
 
     // Job log summary for Activity tab

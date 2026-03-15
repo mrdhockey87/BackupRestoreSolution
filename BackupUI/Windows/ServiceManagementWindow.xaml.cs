@@ -4,7 +4,8 @@ using System.IO;
 using System.ServiceProcess;
 using System.Threading.Tasks;
 using System.Windows;
-using BackupUI.Models; // For BackupJob, ScheduleFrequency enums
+using BackupCommon;
+using BackupUI.Models;
 using BackupUI.Services;
 
 namespace BackupUI.Windows

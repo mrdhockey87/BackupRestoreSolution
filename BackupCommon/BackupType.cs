@@ -1,4 +1,4 @@
-namespace BackupUI.Models
+namespace BackupCommon
 {
     public enum BackupType
     {
@@ -10,4 +10,3 @@ namespace BackupUI.Models
         CloneHyperVSystem
     }
 }
-

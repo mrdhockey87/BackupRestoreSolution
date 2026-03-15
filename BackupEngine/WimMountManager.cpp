@@ -203,6 +203,11 @@ namespace BackupEngine {
                 callback(0, L"Preparing to load image...");
             }
 
+            // Update progress - starting image load
+            if (callback) {
+                callback(10, L"Opening SSB archive...");
+            }
+
             // Mount the specified image (read-only)
             HANDLE imageHandle = WIMLoadImage(wimHandle, imageIndex);
             if (!imageHandle || imageHandle == INVALID_HANDLE_VALUE) {
@@ -242,12 +247,19 @@ namespace BackupEngine {
                 return false;
             }
 
-            // Update progress
+            // Update progress - image loaded successfully
+            if (callback) {
+                callback(30, L"Image loaded successfully...");
+            }
+
+            // Update progress - preparing to mount
             if (callback) {
                 callback(50, L"Mounting image to folder...");
             }
 
             // Mount the image (read-only, no admin required)
+            // NOTE: WIMMountImage is synchronous and does NOT support callbacks
+            // This operation can take 30-60 seconds with no progress feedback
             if (!WIMMountImage(mountPoint.c_str(), wimPath, imageIndex, nullptr)) {
                 DWORD err = GetLastError();
                 swprintf_s(errorMsg, errorMsgSize, L"Failed to mount WIM image: %d", err);

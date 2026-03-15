@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using BackupCommon;
 using BackupUI.Models;
 using BackupUI.Services;
 using Microsoft.Win32;

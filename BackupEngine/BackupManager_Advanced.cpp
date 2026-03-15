@@ -64,11 +64,14 @@ HANDLE CreateWimFile(const wchar_t* wimPath, bool compress, ProgressCallback cal
     }
 
     // Create WIM file
+    // NOTE: Use READ+WRITE access (not just WRITE) so incremental/differential backups can open this file later
+    // NOTE: WIM_FLAG_VERIFY removed - can cause compatibility issues with incremental/differential backups (version 5.13.10.8)
+    // NOTE: flags=0 for initial creation - WIM_FLAG_REFERENCE is ONLY used when OPENING existing WIM for incremental/differential
     HANDLE hWim = WIMCreateFile(
         wimPath,
-        WIM_GENERIC_WRITE,
+        WIM_GENERIC_READ | WIM_GENERIC_WRITE,  // READ+WRITE allows future opens for appending
         WIM_CREATE_ALWAYS,
-        WIM_FLAG_VERIFY,  // Always verify integrity
+        0,  // No flags needed when creating - WIM_FLAG_REFERENCE is for opening existing WIMs
         compressionType,
         NULL
     );
@@ -84,6 +87,65 @@ HANDLE CreateWimFile(const wchar_t* wimPath, bool compress, ProgressCallback cal
     return hWim;
 }
 
+// Static callback for WIM API during backup capture that forwards to user callback
+static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lParam, PVOID pvIgnored) {
+    ProgressCallback userCallback = (ProgressCallback)pvIgnored;
+
+    switch (msgId) {
+        case WIM_MSG_PROCESS:
+        {
+            // WIM_MSG_PROCESS - file being processed during capture
+            // wParam = path to file (LPCWSTR)
+            if (wParam && userCallback) {
+                const wchar_t* filePath = (const wchar_t*)wParam;
+
+                // Extract just the filename for cleaner display
+                const wchar_t* fileName = wcsrchr(filePath, L'\\');
+                if (fileName) {
+                    fileName++; // Skip the backslash
+                } else {
+                    fileName = filePath;
+                }
+
+                // Report file being processed
+                std::wstring message = L"Backing up: ";
+                message += fileName;
+                userCallback(50, message.c_str());
+            }
+            return WIM_MSG_SUCCESS;
+        }
+
+        case WIM_MSG_PROGRESS:
+        {
+            // WIM_MSG_PROGRESS - overall progress during capture
+            // wParam = estimated percentage complete
+            if (userCallback) {
+                int percentage = (int)wParam;
+                // Scale to 30-80% range (capture operation is 30-80% of total backup)
+                percentage = 30 + (percentage * 50 / 100);
+                userCallback(percentage, L"Capturing files...");
+            }
+            return WIM_MSG_SUCCESS;
+        }
+
+        case WIM_MSG_SETRANGE:
+        {
+            // WIM_MSG_SETRANGE - total number of files to capture
+            // wParam = estimated total number of files
+            if (userCallback) {
+                std::wstring message = L"Preparing to backup ";
+                message += std::to_wstring((DWORD)wParam);
+                message += L" files...";
+                userCallback(25, message.c_str());
+            }
+            return WIM_MSG_SUCCESS;
+        }
+
+        default:
+            return WIM_MSG_SUCCESS;
+    }
+}
+
 // Helper to capture path into WIM image
 // Adds image metadata and returns image handle (must be closed by caller)
 HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* imageName, ProgressCallback callback) {
@@ -96,13 +158,30 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         callback(30, L"Capturing files to backup archive...");
     }
 
+    // Register progress callback to get file-level feedback during capture
+    if (callback) {
+        WIMRegisterMessageCallback(hWim, BackupProgressCallback, callback);
+        callback(25, L"Starting backup capture...");
+    }
+
     // Capture the volume/directory into WIM
     HANDLE hImage = WIMCaptureImage(hWim, sourcePath, WIM_FLAG_VERIFY);
 
+    // Unregister callback after capture completes
+    if (callback) {
+        WIMUnregisterMessageCallback(hWim, BackupProgressCallback);
+    }
+
     if (!hImage || hImage == INVALID_HANDLE_VALUE) {
-        SetLastErrorMessage(L"Failed to capture files to archive");
+        DWORD captureError = GetLastError();
+        std::wstring errMsg = L"Failed to capture files to archive. WIM Error: " + std::to_wstring(captureError);
+        SetLastErrorMessage(errMsg);
+        OutputDebugStringW((L"[CaptureToWimImage] ERROR: " + errMsg).c_str());
+        OutputDebugStringW((L"[CaptureToWimImage] Source: " + std::wstring(sourcePath)).c_str());
         return INVALID_HANDLE_VALUE;
     }
+
+    OutputDebugStringW(L"[CaptureToWimImage] Capture successful, setting metadata...");
 
     // Build XML metadata for the image
     std::wstring xmlMetadata = L"<WIM><IMAGE><NAME>";

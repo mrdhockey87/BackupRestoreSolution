@@ -11,6 +11,7 @@
 	Loaded="Window_Loaded">
 	<Window.Resources>
 		<local:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
+		<BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
 	</Window.Resources>
 	<DockPanel>
 		<Menu DockPanel.Dock="Top">
@@ -105,6 +106,7 @@
 													<RowDefinition Height="Auto" />
 													<RowDefinition Height="Auto" />
 													<RowDefinition Height="Auto" />
+													<RowDefinition Height="Auto" />
 												</Grid.RowDefinitions>
 												<Grid.ColumnDefinitions>
 													<ColumnDefinition Width="150" />
@@ -170,30 +172,61 @@
 													Grid.Column="1"
 													Margin="0,5"
 													Text="{Binding ScheduleDescription}" />
+												<!--  Next Scheduled Run & Status  -->
+												<TextBlock
+													Grid.Row="5"
+													Grid.Column="0"
+													Margin="0,5"
+													FontWeight="SemiBold"
+													Text="Next Run:" />
+												<StackPanel
+													Grid.Row="5"
+													Grid.Column="1"
+													Margin="0,5"
+													Orientation="Horizontal">
+													<TextBlock
+														Margin="0,0,15,0"
+														Text="{Binding NextScheduledRun}" />
+													<TextBlock
+														Margin="0,0,10,0"
+														FontWeight="SemiBold"
+														Text="Status:" />
+													<TextBlock Text="{Binding IsCurrentlyRunning}" />
+												</StackPanel>
 												<!--  Buttons  -->
 												<StackPanel
 													Grid.Row="0"
-													Grid.RowSpan="5"
+													Grid.RowSpan="6"
 													Grid.Column="2"
 													Margin="20,0,0,0"
 													VerticalAlignment="Center"
 													Orientation="Vertical">
 													<Button
-														Width="100"
+														Width="130"
 														Height="35"
 														Margin="0,5"
 														Click="RunJobNow_Click"
 														Content="Run Now"
 														Tag="{Binding Id}" />
 													<Button
-														Width="100"
+														Width="130"
 														Height="35"
 														Margin="0,5"
 														Click="EditJob_Click"
 														Content="Edit"
 														Tag="{Binding Id}" />
 													<Button
-														Width="100"
+														Width="130"
+														Height="35"
+														Margin="0,5"
+														Click="ResetRunningFlag_Click"
+														Content="Reset Running"
+														Style="{StaticResource WarningButton}"
+														Tag="{Binding Id}"
+														ToolTip="Reset the IsCurrentlyRunning flag if stuck"
+														Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}" />
+													<Button
+														Width="130"
 														Height="35"
 														Margin="0,5"
 														Click="DeleteJob_Click"

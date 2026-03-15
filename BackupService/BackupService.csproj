@@ -14,9 +14,9 @@
     <PackageReference Include="System.Management" Version="10.0.4" />
   </ItemGroup>
 
-  <!-- Reference to BackupUI for shared models and services -->
+  <!-- Reference to BackupCommon for shared models and logging -->
   <ItemGroup>
-    <ProjectReference Include="..\BackupUI\BackupUI.csproj" />
+    <ProjectReference Include="..\BackupCommon\BackupCommon.csproj" />
   </ItemGroup>
   
   <!-- BackupEngine.dll will be copied by BackupUI project to centralized output -->

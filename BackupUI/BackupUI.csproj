@@ -28,6 +28,9 @@
     <PackageReference Include="zlib-msvc-x64" Version="1.2.11.8900" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\BackupCommon\BackupCommon.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <Resource Include="Assets\logo_large.png" />
     <Resource Include="Assets\logo_small.png" />
     <Resource Include="Images\error_icon.svg" />

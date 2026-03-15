@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
+using BackupCommon;
 using BackupUI.Models;
 using BackupUI.Services;
 using MessageBox = System.Windows.MessageBox;

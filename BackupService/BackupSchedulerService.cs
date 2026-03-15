@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using BackupUI.Services; // For BackupLogger
+using BackupCommon;
 
 namespace BackupService
 {
@@ -135,6 +135,10 @@ namespace BackupService
         {
             try
             {
+                // Mark job as running (prevents concurrent execution)
+                job.IsCurrentlyRunning = true;
+                _jobManager.SaveJob(job); // Persist the running state
+
                 // Only call StartJob if not already started (manual runs call StartJob in OnCommandReceived)
                 if (!_progressTracker.IsJobRunning(job.Id))
                 {
@@ -173,31 +177,15 @@ namespace BackupService
                     _logger.LogInformation("Job completed successfully: {jobName}", job.Name);
                     LogToFile($"Job completed successfully: {job.Name}");
                     BackupLogger.LogSuccess(job.Name, "Backup completed successfully", job.DestinationPath);
-
-                    // Send success notification
-                    try
-                    {
-                        BackupUI.Services.NotificationService.ShowBackupSuccessNotification(job.Name);
-                    }
-                    catch { /* Ignore notification errors in service */ }
                 }
                 else
                 {
                     _logger.LogError("Job failed: {jobName}", job.Name);
                     LogToFile($"Job failed: {job.Name}");
                     BackupLogger.LogError(job.Name, "Backup failed");
-
-                    // DIAGNOSTIC: Log retry scheduling
-                    LogToFile($"[SCHEDULING] Job '{job.Name}' failed, will retry in 15 minutes at {DateTime.Now.AddMinutes(15):yyyy-MM-dd HH:mm:ss}");
-
-                    // Send failure notification
-                    try
-                    {
-                        BackupUI.Services.NotificationService.ShowBackupFailureNotification(job.Name, "Backup failed");
-                    }
-                    catch { /* Ignore notification errors in service */ }
                 }
 
+                // UpdateJobAfterExecution will clear IsCurrentlyRunning flag
                 _jobManager.UpdateJobAfterExecution(job, success);
             }
             catch (Exception ex)
@@ -208,10 +196,8 @@ namespace BackupService
                 BackupLogger.LogError(job.Name, "Error executing backup job", ex.Message);
                 _progressTracker.CompleteJob(job.Id, false, ex.Message);
 
-                // CRITICAL: Update NextRunTime even on exception to prevent infinite loop!
-                // DIAGNOSTIC: Log retry scheduling
-                LogToFile($"[SCHEDULING] Job '{job.Name}' exception, will retry in 15 minutes at {DateTime.Now.AddMinutes(15):yyyy-MM-dd HH:mm:ss}");
-
+                // CRITICAL: Update job state even on exception to prevent infinite loop
+                // UpdateJobAfterExecution will clear IsCurrentlyRunning flag
                 _jobManager.UpdateJobAfterExecution(job, success: false);
             }
         }

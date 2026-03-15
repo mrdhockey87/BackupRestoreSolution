@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 
-namespace BackupUI.Services
+namespace BackupCommon
 {
     public enum BackupLogLevel
     {
@@ -45,7 +45,7 @@ namespace BackupUI.Services
         private static readonly string LegacyLogFile = Path.Combine(LogDirectory, "backup_activity.json");
 
         private static readonly object lockObject = new object();
-        private static readonly int MaxLogEntriesPerFile = 500; // Keep last 500 entries per job
+        private static readonly int MaxLogEntriesPerFile = 2000; // Keep last 2000 entries per job (increased from 500 to prevent log loss)
 
         static BackupLogger()
         {

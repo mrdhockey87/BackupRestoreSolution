@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace BackupUI.Models
+namespace BackupCommon
 {
     public class BackupJob
     {
@@ -24,6 +24,10 @@ namespace BackupUI.Models
 
         // Retry tracking
         public int ConsecutiveFailures { get; set; } = 0; // Track consecutive backup failures for retry limit
+
+        // Scheduling and execution tracking
+        public DateTime? NextScheduledRun { get; set; } // When this job should next execute (replaces Schedule.NextRunTime)
+        public bool IsCurrentlyRunning { get; set; } = false; // True if backup is currently executing (prevents concurrent runs)
 
         // Auto-recovery: Force full backup on next run if incremental/differential verification fails
         public bool ForceFullBackupOnNextRun { get; set; } = false;

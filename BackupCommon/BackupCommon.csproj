@@ -1,0 +1,10 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+    <!-- Version, OutputPath, and Runtime config generation come from Directory.Build.props -->
+  </PropertyGroup>
+
+</Project>

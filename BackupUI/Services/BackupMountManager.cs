@@ -6,6 +6,7 @@ using System.Linq;
 using System.Management;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using BackupCommon;
 
 namespace BackupUI.Services
 {

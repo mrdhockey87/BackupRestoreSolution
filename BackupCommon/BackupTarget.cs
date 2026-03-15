@@ -1,4 +1,4 @@
-namespace BackupUI.Models
+namespace BackupCommon
 {
     public enum BackupTarget
     {
