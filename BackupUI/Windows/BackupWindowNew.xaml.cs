@@ -21,7 +21,9 @@ namespace BackupUI.Windows
         private ObservableCollection<DriveTreeItem> driveItems = new();
         private readonly JobManager jobManager = new();
         private BackupJob? existingJob = null;
+        private BackupJob? _editingJob = null;  // Track job being edited
         private List<string>? _pathsToPreselect = null;  // Paths to pre-select after tree loads
+        private List<string>? _tempUserExclusions = null;  // Temporary storage for exclusions before job created
 
         // Volume configuration tracking
         private bool hasSourceSelected = false;
@@ -64,9 +66,18 @@ namespace BackupUI.Windows
             // Set window title
             this.Title = $"Edit Backup - {job.Name}";
 
+            // Store reference to job being edited
+            _editingJob = job;
+
             // Load basic info
             txtBackupName.Text = job.Name;
             txtDestination.Text = job.DestinationPath;
+
+            // Update exclusions button text if exclusions exist
+            if (job.UserExclusions != null && job.UserExclusions.Count > 0)
+            {
+                btnManageExclusions.Content = $"Manage Exclusions... ({job.UserExclusions.Count})";
+            }
 
             // Set backup type
             switch (job.Type)
@@ -1404,6 +1415,50 @@ namespace BackupUI.Windows
             }
         }
 
+        private void ManageExclusions_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Get current job's exclusions (or empty list for new jobs)
+                var currentExclusions = _editingJob?.UserExclusions ?? new List<string>();
+
+                // Open exclusions management window
+                var exclusionsWindow = new ExclusionsManagementWindow(currentExclusions);
+                exclusionsWindow.Owner = this;
+
+                if (exclusionsWindow.ShowDialog() == true)
+                {
+                    // User clicked OK - save exclusions
+                    if (_editingJob != null)
+                    {
+                        _editingJob.UserExclusions = exclusionsWindow.Exclusions;
+                    }
+                    else
+                    {
+                        // For new jobs, store exclusions temporarily until job is created
+                        _tempUserExclusions = exclusionsWindow.Exclusions;
+                    }
+
+                    // Update button text to show exclusion count
+                    if (exclusionsWindow.Exclusions.Count > 0)
+                    {
+                        btnManageExclusions.Content = $"Manage Exclusions... ({exclusionsWindow.Exclusions.Count})";
+                    }
+                    else
+                    {
+                        btnManageExclusions.Content = "Manage Exclusions...";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error managing exclusions: {ex.Message}",
+                    "Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
         /// <summary>
         /// Gets the disk indexes of selected source volumes
         /// </summary>
@@ -2205,6 +2260,23 @@ namespace BackupUI.Windows
                 {
                     job.Schedule.DayOfMonth = int.Parse(cmbDayOfMonth.SelectedItem?.ToString() ?? "1");
                 }
+            }
+
+            // Assign user exclusions
+            if (_editingJob != null && _editingJob.UserExclusions != null)
+            {
+                // Editing existing job - use its exclusions
+                job.UserExclusions = new List<string>(_editingJob.UserExclusions);
+            }
+            else if (_tempUserExclusions != null)
+            {
+                // New job - use temporary exclusions from "Manage Exclusions" button
+                job.UserExclusions = new List<string>(_tempUserExclusions);
+            }
+            else
+            {
+                // No exclusions defined
+                job.UserExclusions = new List<string>();
             }
 
             return job;

@@ -133,8 +133,13 @@ WindowStartupLocation="CenterOwner">
                         <CheckBox Name="chkCompress" Content="Compress backup data" IsChecked="True" Margin="0,0,0,10"/>
                         <CheckBox Name="chkSplitFiles" Content="Split into 4.7GB files (DVD size)" 
                                   IsChecked="True" Margin="0,0,0,10"/>
-                        <CheckBox Name="chkVerify" Content="Verify backup after completion" IsChecked="True" Margin="0,0,0,15"/>
-                        
+                        <CheckBox Name="chkVerify" Content="Verify backup after completion" IsChecked="True" Margin="0,0,0,10"/>
+
+                        <Button Name="btnManageExclusions" Content="Manage Exclusions..." Width="150" 
+                                HorizontalAlignment="Left" Margin="0,0,0,15" 
+                                Click="ManageExclusions_Click"
+                                ToolTip="Configure files, folders, and patterns to exclude from backup"/>
+
                         <StackPanel Name="pnlRetentionSettings" Visibility="Collapsed">
                             <TextBlock Text="Full Backup Retention:" Margin="0,0,0,5" FontWeight="SemiBold"/>
                             <TextBlock Text="Specify how many full backups to keep (applies to Full backup type only)" 

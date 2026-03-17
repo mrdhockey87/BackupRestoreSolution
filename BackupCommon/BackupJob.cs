@@ -35,5 +35,8 @@ namespace BackupCommon
         // Import support
         public bool IsImported { get; set; } = false; // True if imported from external backup
         public bool UseCompression { get; set; } = true; // True to create .brs (compressed), false for .wim
+
+        // User-defined exclusions (editable by user)
+        public List<string> UserExclusions { get; set; } = new(); // Files, folders, or patterns (*.tmp) to exclude from backup
     }
 }

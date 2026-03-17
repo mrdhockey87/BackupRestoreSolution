@@ -7,6 +7,7 @@
 #include <fstream>
 #include <map>
 #include <vector>
+#include <algorithm>  // For std::transform (lowercase conversion)
 #include "wimgapi.h"  // Windows Imaging API for WIM file creation
 
 #pragma comment(lib, "wimgapi.lib")
@@ -96,21 +97,50 @@ static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lP
         {
             // WIM_MSG_PROCESS - file being processed during capture
             // wParam = path to file (LPCWSTR)
-            if (wParam && userCallback) {
+            if (wParam) {
                 const wchar_t* filePath = (const wchar_t*)wParam;
+                std::wstring path(filePath);
 
-                // Extract just the filename for cleaner display
-                const wchar_t* fileName = wcsrchr(filePath, L'\\');
-                if (fileName) {
-                    fileName++; // Skip the backslash
-                } else {
-                    fileName = filePath;
+                // **SYSTEM EXCLUSIONS - NON-EDITABLE (prevent backup failures)**
+
+                // Exclude protected Windows folders that cause ERROR_ACCESS_DENIED
+                if (path.find(L"System Volume Information") != std::wstring::npos ||
+                    path.find(L"$RECYCLE.BIN") != std::wstring::npos) {
+
+                    OutputDebugStringW((L"[BackupProgress] SKIPPING system folder: " + path).c_str());
+                    return WIM_MSG_SKIP_ERROR;  // Tell WIM API to skip this folder
                 }
 
-                // Report file being processed
-                std::wstring message = L"Backing up: ";
-                message += fileName;
-                userCallback(50, message.c_str());
+                // Exclude system page/swap files that are always locked
+                std::wstring lowerPath = path;
+                std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), ::tolower);
+
+                if (lowerPath.find(L"\\pagefile.sys") != std::wstring::npos ||
+                    lowerPath.find(L"\\swapfile.sys") != std::wstring::npos ||
+                    lowerPath.find(L"\\hiberfil.sys") != std::wstring::npos) {
+
+                    OutputDebugStringW((L"[BackupProgress] SKIPPING system file: " + path).c_str());
+                    return WIM_MSG_SKIP_ERROR;  // Skip locked system files
+                }
+
+                // TODO: Add user-defined exclusion filtering here
+                // This will be implemented when user exclusions are passed from C# to C++
+
+                // File is not excluded - report progress
+                if (userCallback) {
+                    // Extract just the filename for cleaner display
+                    const wchar_t* fileName = wcsrchr(filePath, L'\\');
+                    if (fileName) {
+                        fileName++; // Skip the backslash
+                    } else {
+                        fileName = filePath;
+                    }
+
+                    // Report file being processed
+                    std::wstring message = L"Backing up: ";
+                    message += fileName;
+                    userCallback(50, message.c_str());
+                }
             }
             return WIM_MSG_SUCCESS;
         }
@@ -681,9 +711,19 @@ extern "C" {
 
                 if (!hImage || hImage == INVALID_HANDLE_VALUE) {
                     WIMCloseHandle(hWim);
-                    std::wstring err = L"Failed to capture volume " + std::to_wstring(volumeIndex) + L" (" + volume + L") to WIM";
-                    SetLastErrorMessage(err);
-                    OutputDebugStringW((L"[BackupDisk] ERROR: " + err).c_str());
+                    // Get the detailed error message that was set by CaptureToWimImage
+                    wchar_t detailedError[512] = { 0 };
+                    GetLastErrorMessage(detailedError, 512);
+
+                    // Append volume context to the detailed error (don't replace it!)
+                    std::wstring contextualError = std::wstring(detailedError) + 
+                        L" [Volume " + std::to_wstring(volumeIndex) + L" of " + std::to_wstring(volumes.size()) + 
+                        L": " + volume + L"]";
+                    SetLastErrorMessage(contextualError);
+
+                    OutputDebugStringW((L"[BackupDisk] ERROR: Capture failed for volume " + std::to_wstring(volumeIndex)).c_str());
+                    OutputDebugStringW((L"[BackupDisk] ERROR: Detailed message: " + std::wstring(detailedError)).c_str());
+                    OutputDebugStringW((L"[BackupDisk] ERROR: Volume path: " + volume).c_str());
                     return -5;
                 }
 
