@@ -19,6 +19,8 @@ extern void SetLastErrorMessage(const std::wstring& error);
 extern "C" BACKUPENGINE_API int BackupFiles(
     const wchar_t* sourcePath,
     const wchar_t* destPath,
+    const wchar_t** userExclusions,
+    int userExclusionCount,
     ProgressCallback callback);
 
 namespace {
@@ -1037,6 +1039,8 @@ extern "C" {
         const wchar_t* destPath,
         bool includeSystemState,
         bool compress,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
         ProgressCallback callback) {
 
         if (!destPath || diskNumber < 0) {
@@ -1053,7 +1057,7 @@ extern "C" {
                 if (callback) {
                     callback(0, L"No base backup found - creating initial full backup...");
                 }
-                return BackupDisk(diskNumber, destPath, includeSystemState, compress, callback);
+                return BackupDisk(diskNumber, destPath, includeSystemState, compress, userExclusions, userExclusionCount, callback);
             }
 
             if (callback) {
@@ -1231,6 +1235,8 @@ extern "C" {
         const wchar_t* destPath,
         bool includeSystemState,
         bool compress,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
         ProgressCallback callback) {
 
         if (!destPath || diskNumber < 0) {
@@ -1247,7 +1253,7 @@ extern "C" {
                 if (callback) {
                     callback(0, L"No base backup found - creating initial full backup...");
                 }
-                return BackupDisk(diskNumber, destPath, includeSystemState, compress, callback);
+                return BackupDisk(diskNumber, destPath, includeSystemState, compress, userExclusions, userExclusionCount, callback);
             }
 
             if (callback) {

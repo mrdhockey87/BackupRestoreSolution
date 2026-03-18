@@ -51,6 +51,8 @@ BACKUPENGINE_API void GetLastErrorMessage(wchar_t* buffer, int bufferSize) {
         const wchar_t* destPath,
         bool includeSystemState,
         bool compress,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
         ProgressCallback callback);
 
     // Backup disk - implementation in BackupManager.cpp
@@ -59,6 +61,8 @@ BACKUPENGINE_API void GetLastErrorMessage(wchar_t* buffer, int bufferSize) {
         const wchar_t* destPath,
         bool includeSystemState,
         bool compress,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
         ProgressCallback callback);
 
     // Backup disk incremental - implementation in BackupManager_Advanced.cpp

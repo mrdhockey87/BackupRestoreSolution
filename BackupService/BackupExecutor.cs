@@ -443,7 +443,8 @@ namespace BackupService
                     else
                     {
                         logger?.Invoke($"No base backup found. Creating initial full backup: {diskNumber}");
-                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
+                                          exclusionsArray, exclusionCount, callback);
 
                         if (result != 0)
                         {
@@ -465,11 +466,12 @@ namespace BackupService
                         // Do a full backup if no previous full backup exists
                         if (job.Target == BackupTarget.Volume)
                         {
-                            result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
+                            result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
+                                                exclusionsArray, exclusionCount, callback);
                         }
                         else
                         {
-                            result = BackupFiles(sourcePath, destPath, callback);
+                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback);
                         }
                     }
                     else
@@ -507,7 +509,8 @@ namespace BackupService
                     else
                     {
                         logger?.Invoke($"No base backup found. Creating initial full backup: {diskNumber}");
-                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
+                                          exclusionsArray, exclusionCount, callback);
 
                         if (result != 0)
                         {
@@ -529,11 +532,12 @@ namespace BackupService
                         // Do a full backup if no base full backup exists
                         if (job.Target == BackupTarget.Volume)
                         {
-                            result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
+                            result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
+                                                exclusionsArray, exclusionCount, callback);
                         }
                         else
                         {
-                            result = BackupFiles(sourcePath, destPath, callback);
+                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback);
                         }
                     }
                     else
