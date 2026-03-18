@@ -18,15 +18,23 @@ namespace BackupService
         private delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        private static extern int BackupFiles(string sourcePath, string destPath, ProgressCallback? callback);
+        private static extern int BackupFiles(string sourcePath, string destPath,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
+            int userExclusionCount, ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupVolume(string volumePath, string destPath, bool includeSystemState, 
-            bool compress, ProgressCallback? callback);
+            bool compress,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
+            int userExclusionCount,
+            ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupDisk(int diskNumber, string destPath, bool includeSystemState, 
-            bool compress, ProgressCallback? callback);
+            bool compress,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
+            int userExclusionCount,
+            ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupDiskIncremental(int diskNumber, string destPath, bool includeSystemState, 
@@ -337,6 +345,15 @@ namespace BackupService
         {
             int result;
 
+            // Convert user exclusions to array for P/Invoke (empty array if null)
+            string[] exclusionsArray = job.UserExclusions?.ToArray() ?? Array.Empty<string>();
+            int exclusionCount = exclusionsArray.Length;
+
+            if (exclusionCount > 0)
+            {
+                logger?.Invoke($"Applying {exclusionCount} user-defined exclusion(s) to backup");
+            }
+
             // DEFENSIVE FIX: Auto-detect if sourcePath is actually a device path but job.Target is wrong
             // This handles cases where jobs were created before the fix or with incorrect settings
             // Only log correction message if we're actually CHANGING the target (not when already correct)
@@ -374,9 +391,10 @@ namespace BackupService
                         logger?.Invoke($"Backing up disk: {diskNumber} ({sourcePath})");
 
                         // DIAGNOSTIC: Log right before calling C++ function
-                        logger?.Invoke($"[DIAGNOSTIC] About to call BackupDisk({diskNumber}, {destPath}, {job.IncludeSystemState}, {job.CompressData})");
+                        logger?.Invoke($"[DIAGNOSTIC] About to call BackupDisk({diskNumber}, {destPath}, {job.IncludeSystemState}, {job.CompressData}, exclusions: {exclusionCount})");
 
-                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+                        result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
+                                          exclusionsArray, exclusionCount, callback);
 
                         // DIAGNOSTIC: Log result code immediately
                         logger?.Invoke($"[DIAGNOSTIC] BackupDisk returned: {result}");
@@ -390,12 +408,13 @@ namespace BackupService
                     else if (job.Target == BackupTarget.Volume)
                     {
                         logger?.Invoke($"Backing up volume: {sourcePath}");
-                        result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData, callback);
+                        result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
+                                            exclusionsArray, exclusionCount, callback);
                     }
                     else
                     {
                         logger?.Invoke($"Backing up files: {sourcePath}");
-                        result = BackupFiles(sourcePath, destPath, callback);
+                        result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback);
                     }
                     break;
 

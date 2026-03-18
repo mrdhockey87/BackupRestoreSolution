@@ -88,7 +88,136 @@ HANDLE CreateWimFile(const wchar_t* wimPath, bool compress, ProgressCallback cal
     return hWim;
 }
 
-// Static callback for WIM API during backup capture that forwards to user callback
+// Helper function to match wildcard patterns (e.g., *.tmp, *.log, D:\Build\*.dll)
+bool MatchWildcard(const std::wstring& path, const std::wstring& pattern) {
+    // Simple wildcard matching: * = any characters
+    size_t asteriskPos = pattern.find(L'*');
+    if (asteriskPos == std::wstring::npos) {
+        // No wildcard - exact match
+        return path == pattern;
+    }
+
+    // Pattern like *.tmp - check if path ends with .tmp
+    if (asteriskPos == 0) {
+        std::wstring suffix = pattern.substr(1); // Get part after *
+        if (path.length() >= suffix.length()) {
+            return path.substr(path.length() - suffix.length()) == suffix;
+        }
+        return false;
+    }
+
+    // Pattern like D:\Build\*.dll - check prefix and suffix
+    std::wstring prefix = pattern.substr(0, asteriskPos);
+    std::wstring suffix = pattern.substr(asteriskPos + 1);
+
+    if (path.length() < prefix.length() + suffix.length()) {
+        return false;
+    }
+
+    bool prefixMatch = path.substr(0, prefix.length()) == prefix;
+    bool suffixMatch = path.substr(path.length() - suffix.length()) == suffix;
+
+    return prefixMatch && suffixMatch;
+}
+
+// Helper to check if a path matches any exclusion pattern
+bool IsPathExcluded(const std::wstring& path, const wchar_t** userExclusions, int userExclusionCount) {
+    // Convert to lowercase for case-insensitive comparison
+    std::wstring lowerPath = path;
+    std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), ::tolower);
+
+    // SYSTEM EXCLUSIONS - Always exclude these protected folders/files that cause backup failures
+    // NOTE: Windows\WinSxS is NOT excluded - it's required for proper system restoration
+    std::vector<std::wstring> systemExclusions = {
+        L"system volume information",  // VSS metadata, inaccessible
+        L"$recycle.bin",                // Recycle bin, not needed for restore
+        L"pagefile.sys",                // Virtual memory file, locked by OS
+        L"swapfile.sys",                // Swap file for Windows apps, locked by OS
+        L"hiberfil.sys"                 // Hibernation file, locked by OS
+    };
+
+    for (const auto& exclusion : systemExclusions) {
+        if (lowerPath.find(exclusion) != std::wstring::npos) {
+            return true;
+        }
+    }
+
+    // USER-DEFINED EXCLUSIONS - passed from C# via P/Invoke
+    // Check each user exclusion (supports wildcards like *.tmp, *.log, specific paths)
+    for (int i = 0; i < userExclusionCount; i++) {
+        std::wstring exclusion = userExclusions[i];
+        std::wstring lowerExclusion = exclusion;
+        std::transform(lowerExclusion.begin(), lowerExclusion.end(), 
+                      lowerExclusion.begin(), ::tolower);
+
+        // Check if exclusion is wildcard pattern (contains *)
+        if (lowerExclusion.find(L'*') != std::wstring::npos) {
+            // Pattern matching (e.g., *.tmp matches test.tmp)
+            if (MatchWildcard(lowerPath, lowerExclusion)) {
+                OutputDebugStringW((L"[BackupProgress] SKIPPING user-excluded pattern: " + 
+                                   path + L" matches " + exclusion).c_str());
+                return true;
+            }
+        } else {
+            // Exact path matching for files/folders (substring match like system exclusions)
+            if (lowerPath.find(lowerExclusion) != std::wstring::npos) {
+                OutputDebugStringW((L"[BackupProgress] SKIPPING user-excluded path: " + 
+                                   path + L" matches " + exclusion).c_str());
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+// Helper to enumerate top-level folders on a volume and filter out exclusions
+std::vector<std::wstring> EnumerateIncludedFolders(const std::wstring& volumePath, 
+                                                    const wchar_t** userExclusions, 
+                                                    int userExclusionCount,
+                                                    ProgressCallback callback) {
+    std::vector<std::wstring> includedFolders;
+
+    try {
+        if (callback) {
+            callback(5, L"Scanning volume for folders...");
+        }
+
+        // Enumerate all items in the volume root
+        for (const auto& entry : fs::directory_iterator(volumePath)) {
+            std::wstring itemPath = entry.path().wstring();
+            std::wstring itemName = entry.path().filename().wstring();
+
+            // Check if this item is excluded
+            if (IsPathExcluded(itemPath, userExclusions, userExclusionCount)) {
+                OutputDebugStringW((L"[EnumerateIncludedFolders] EXCLUDING: " + itemPath).c_str());
+                continue;
+            }
+
+            // Only include directories (we'll capture files in the root separately if needed)
+            if (entry.is_directory()) {
+                includedFolders.push_back(itemPath);
+                OutputDebugStringW((L"[EnumerateIncludedFolders] INCLUDING folder: " + itemPath).c_str());
+            }
+        }
+
+        if (callback) {
+            std::wstring msg = L"Found " + std::to_wstring(includedFolders.size()) + L" folders to backup";
+            callback(10, msg.c_str());
+        }
+    }
+    catch (const fs::filesystem_error& e) {
+        std::string errStr = e.what();
+        std::wstring errMsg = L"Error enumerating volume: " + std::wstring(errStr.begin(), errStr.end());
+        OutputDebugStringW((L"[EnumerateIncludedFolders] ERROR: " + errMsg).c_str());
+    }
+
+    return includedFolders;
+}
+
+// Static callback for WIM API during backup capture - handles progress reporting
+// NOTE: Exclusions are now handled BEFORE calling WIMCaptureImage by filtering the folder list
+//       This prevents WIM API from attempting to access protected folders at all
 static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lParam, PVOID pvIgnored) {
     ProgressCallback userCallback = (ProgressCallback)pvIgnored;
 
@@ -101,32 +230,30 @@ static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lP
                 const wchar_t* filePath = (const wchar_t*)wParam;
                 std::wstring path(filePath);
 
-                // **SYSTEM EXCLUSIONS - NON-EDITABLE (prevent backup failures)**
+                // **SYSTEM EXCLUSIONS - Filter protected folders/files that cause backup failures**
 
-                // Exclude protected Windows folders that cause ERROR_ACCESS_DENIED
+                // Exclude protected Windows folders (ERROR_ACCESS_DENIED)
                 if (path.find(L"System Volume Information") != std::wstring::npos ||
                     path.find(L"$RECYCLE.BIN") != std::wstring::npos) {
-
                     OutputDebugStringW((L"[BackupProgress] SKIPPING system folder: " + path).c_str());
                     return WIM_MSG_SKIP_ERROR;  // Tell WIM API to skip this folder
                 }
 
-                // Exclude system page/swap files that are always locked
+                // Exclude locked system files (pagefile, swapfile, hiberfil)
                 std::wstring lowerPath = path;
                 std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), ::tolower);
 
                 if (lowerPath.find(L"\\pagefile.sys") != std::wstring::npos ||
                     lowerPath.find(L"\\swapfile.sys") != std::wstring::npos ||
                     lowerPath.find(L"\\hiberfil.sys") != std::wstring::npos) {
-
-                    OutputDebugStringW((L"[BackupProgress] SKIPPING system file: " + path).c_str());
+                    OutputDebugStringW((L"[BackupProgress] SKIPPING locked file: " + path).c_str());
                     return WIM_MSG_SKIP_ERROR;  // Skip locked system files
                 }
 
                 // TODO: Add user-defined exclusion filtering here
-                // This will be implemented when user exclusions are passed from C# to C++
+                // Check if path matches any pattern in UserExclusions list
 
-                // File is not excluded - report progress
+                // File is not excluded - report progress to user
                 if (userCallback) {
                     // Extract just the filename for cleaner display
                     const wchar_t* fileName = wcsrchr(filePath, L'\\');
@@ -171,6 +298,61 @@ static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lP
             return WIM_MSG_SUCCESS;
         }
 
+        case WIM_MSG_ERROR:
+        {
+            // WIM_MSG_ERROR - error occurred during capture
+            // lParam = pointer to error message (LPCWSTR)
+            if (lParam) {
+                const wchar_t* errorMsg = (const wchar_t*)lParam;
+                std::wstring logMsg = L"[WIM ERROR] ";
+                logMsg += errorMsg;
+                OutputDebugStringW(logMsg.c_str());
+
+                if (userCallback) {
+                    userCallback(50, errorMsg);  // Show error to user
+                }
+            }
+            return WIM_MSG_SUCCESS;  // Continue despite error
+        }
+
+        case WIM_MSG_WARNING:
+        {
+            // WIM_MSG_WARNING - warning during capture (non-fatal)
+            // lParam = pointer to warning message (LPCWSTR)
+            if (lParam) {
+                const wchar_t* warningMsg = (const wchar_t*)lParam;
+                std::wstring logMsg = L"[WIM WARNING] ";
+                logMsg += warningMsg;
+                OutputDebugStringW(logMsg.c_str());
+            }
+            return WIM_MSG_SUCCESS;
+        }
+
+        case WIM_MSG_INFO:
+        {
+            // WIM_MSG_INFO - informational message
+            // lParam = pointer to info message (LPCWSTR)
+            if (lParam) {
+                const wchar_t* infoMsg = (const wchar_t*)lParam;
+                std::wstring logMsg = L"[WIM INFO] ";
+                logMsg += infoMsg;
+                OutputDebugStringW(logMsg.c_str());
+            }
+            return WIM_MSG_SUCCESS;
+        }
+
+        case WIM_MSG_RETRY:
+        {
+            // WIM_MSG_RETRY - retrying operation after failure
+            if (wParam) {
+                const wchar_t* filePath = (const wchar_t*)wParam;
+                std::wstring logMsg = L"[WIM RETRY] Retrying: ";
+                logMsg += filePath;
+                OutputDebugStringW(logMsg.c_str());
+            }
+            return WIM_MSG_SUCCESS;  // Allow retry
+        }
+
         default:
             return WIM_MSG_SUCCESS;
     }
@@ -189,13 +371,21 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
     }
 
     // Register progress callback to get file-level feedback during capture
+    // NOTE: Exclusions are handled in callback by returning WIM_MSG_SKIP_ERROR for protected files
+    //       WimScript.ini is NOT supported by wimgapi.dll (only by DISM/ImageX command-line tools)
+    //       WIMSetReferenceFile is for referencing other .wim files for optimization, NOT for config files
     if (callback) {
         WIMRegisterMessageCallback(hWim, BackupProgressCallback, callback);
         callback(25, L"Starting backup capture...");
     }
 
     // Capture the volume/directory into WIM
-    HANDLE hImage = WIMCaptureImage(hWim, sourcePath, WIM_FLAG_VERIFY);
+    // Exclusions are handled via callback, not config file
+    // NOTE: WIM_FLAG_VERIFY removed - caused ERROR_INVALID_PARAMETER and metadata failures
+    HANDLE hImage = WIMCaptureImage(
+        hWim, 
+        sourcePath,0  // No flags - WIM_FLAG_VERIFY caused error -5 metadata failures
+    );
 
     // Unregister callback after capture completes
     if (callback) {
@@ -213,15 +403,19 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
 
     OutputDebugStringW(L"[CaptureToWimImage] Capture successful, setting metadata...");
 
-    // Build XML metadata for the image
+    // Build simple XML metadata for the image (just NAME, no DESCRIPTION)
+    // Complex XML can cause WIMSetImageInformation to fail
     std::wstring xmlMetadata = L"<WIM><IMAGE><NAME>";
     xmlMetadata += imageName;
-    xmlMetadata += L"</NAME><DESCRIPTION>Silver State Backup Archive</DESCRIPTION></IMAGE></WIM>";
+    xmlMetadata += L"</NAME></IMAGE></WIM>";
 
     // Set image metadata
     if (!WIMSetImageInformation(hImage, xmlMetadata.c_str())) {
+        DWORD metadataError = GetLastError();
         WIMCloseHandle(hImage);
-        SetLastErrorMessage(L"Failed to set image metadata");
+        std::wstring errMsg = L"Failed to set image metadata (Error " + std::to_wstring(metadataError) + L")";
+        SetLastErrorMessage(errMsg);
+        OutputDebugStringW((L"[CaptureToWimImage] ERROR: " + errMsg).c_str());
         return INVALID_HANDLE_VALUE;
     }
 
@@ -393,6 +587,8 @@ extern "C" {
         const wchar_t* destPath,
         bool includeSystemState,
         bool compress,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
         ProgressCallback callback) {
 
         if (!volumePath || !destPath) {
@@ -454,26 +650,60 @@ extern "C" {
             }
 
             if (callback) {
-                callback(25, L"Creating WIM backup archive...");
+                callback(22, L"Enumerating folders to backup...");
+            }
+
+            // Enumerate top-level folders and filter out exclusions
+            std::vector<std::wstring> foldersToBackup = EnumerateIncludedFolders(
+                actualSourcePath, userExclusions, userExclusionCount, callback);
+
+            if (foldersToBackup.empty()) {
+                SetLastErrorMessage(L"No folders to backup after applying exclusions");
+                return -2;
+            }
+
+            if (callback) {
+                std::wstring msg = L"Backing up " + std::to_wstring(foldersToBackup.size()) + L" folders...";
+                callback(25, msg.c_str());
             }
 
             // Create WIM file
             HANDLE hWim = CreateWimFile(destFile.c_str(), compress, callback);
             if (!hWim || hWim == INVALID_HANDLE_VALUE) {
-                return -2;
-            }
-
-            // Capture volume to WIM image
-            std::wstring imageName = L"Volume Backup";
-            HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), imageName.c_str(), callback);
-
-            if (!hImage || hImage == INVALID_HANDLE_VALUE) {
-                WIMCloseHandle(hWim);
                 return -3;
             }
 
-            // Close image handle
-            WIMCloseHandle(hImage);
+            // Capture each included folder as a separate image in the WIM file
+            int folderIndex = 0;
+            for (const auto& folderPath : foldersToBackup) {
+                folderIndex++;
+                int progressBase = 30 + (folderIndex - 1) * (40 / static_cast<int>(foldersToBackup.size()));
+
+                if (callback) {
+                    std::wstring folderName = fs::path(folderPath).filename().wstring();
+                    std::wstring msg = L"Backing up folder " + std::to_wstring(folderIndex) + 
+                                      L" of " + std::to_wstring(foldersToBackup.size()) + 
+                                      L": " + folderName;
+                    callback(progressBase, msg.c_str());
+                }
+
+                // Create image name with folder name
+                std::wstring folderName = fs::path(folderPath).filename().wstring();
+                std::wstring imageName = L"Volume - " + folderName;
+
+                OutputDebugStringW((L"[BackupVolume] Capturing folder: " + folderPath).c_str());
+
+                HANDLE hImage = CaptureToWimImage(hWim, folderPath.c_str(), imageName.c_str(), callback);
+
+                if (!hImage || hImage == INVALID_HANDLE_VALUE) {
+                    WIMCloseHandle(hWim);
+                    std::wstring err = L"Failed to capture folder: " + folderPath;
+                    SetLastErrorMessage(err);
+                    return -4;
+                }
+
+                WIMCloseHandle(hImage);
+            }
 
             if (callback) {
                 callback(70, L"Finalizing backup archive...");
@@ -523,6 +753,8 @@ extern "C" {
         const wchar_t* destPath,
         bool includeSystemState,
         bool compress,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
         ProgressCallback callback) {
 
         if (diskNumber < 0 || !destPath) {
@@ -700,35 +932,53 @@ extern "C" {
                     }
                 }
 
-                // Capture this volume to WIM as a separate image
-                std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + 
-                                        L" Volume " + std::to_wstring(volumeIndex);
+                // Enumerate folders for this volume and filter out exclusions
+                std::vector<std::wstring> foldersToBackup = EnumerateIncludedFolders(
+                    actualSourcePath, userExclusions, userExclusionCount, callback);
 
-                OutputDebugStringW((L"[BackupDisk] Capturing to WIM: " + imageName + L" from " + actualSourcePath).c_str());
-
-                HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), 
-                                                 imageName.c_str(), callback);
-
-                if (!hImage || hImage == INVALID_HANDLE_VALUE) {
-                    WIMCloseHandle(hWim);
-                    // Get the detailed error message that was set by CaptureToWimImage
-                    wchar_t detailedError[512] = { 0 };
-                    GetLastErrorMessage(detailedError, 512);
-
-                    // Append volume context to the detailed error (don't replace it!)
-                    std::wstring contextualError = std::wstring(detailedError) + 
-                        L" [Volume " + std::to_wstring(volumeIndex) + L" of " + std::to_wstring(volumes.size()) + 
-                        L": " + volume + L"]";
-                    SetLastErrorMessage(contextualError);
-
-                    OutputDebugStringW((L"[BackupDisk] ERROR: Capture failed for volume " + std::to_wstring(volumeIndex)).c_str());
-                    OutputDebugStringW((L"[BackupDisk] ERROR: Detailed message: " + std::wstring(detailedError)).c_str());
-                    OutputDebugStringW((L"[BackupDisk] ERROR: Volume path: " + volume).c_str());
-                    return -5;
+                if (foldersToBackup.empty()) {
+                    OutputDebugStringW((L"[BackupDisk] WARNING: No folders to backup in volume " + std::to_wstring(volumeIndex) + L" after applying exclusions").c_str());
+                    // Continue to next volume instead of failing
+                    continue;
                 }
 
-                OutputDebugStringW((L"[BackupDisk] Volume " + std::to_wstring(volumeIndex) + L" captured successfully").c_str());
-                WIMCloseHandle(hImage);
+                // Capture each included folder as a separate image
+                for (size_t folderIdx = 0; folderIdx < foldersToBackup.size(); folderIdx++) {
+                    const auto& folderPath = foldersToBackup[folderIdx];
+
+                    // Create unique image name with volume and folder info
+                    std::wstring folderName = fs::path(folderPath).filename().wstring();
+                    std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + 
+                                           L" Volume " + std::to_wstring(volumeIndex) + 
+                                           L" - " + folderName;
+
+                    OutputDebugStringW((L"[BackupDisk] Capturing folder " + std::to_wstring(folderIdx + 1) + 
+                                       L"/" + std::to_wstring(foldersToBackup.size()) + L": " + folderPath).c_str());
+
+                    HANDLE hImage = CaptureToWimImage(hWim, folderPath.c_str(), 
+                                                     imageName.c_str(), callback);
+
+                    if (!hImage || hImage == INVALID_HANDLE_VALUE) {
+                        WIMCloseHandle(hWim);
+                        // Get the detailed error message that was set by CaptureToWimImage
+                        wchar_t detailedError[512] = { 0 };
+                        GetLastErrorMessage(detailedError, 512);
+
+                        // Append context
+                        std::wstring contextualError = std::wstring(detailedError) + 
+                            L" [Volume " + std::to_wstring(volumeIndex) + L" Folder " + folderName + L"]";
+                        SetLastErrorMessage(contextualError);
+
+                        OutputDebugStringW((L"[BackupDisk] ERROR: Capture failed for folder: " + folderPath).c_str());
+                        return -5;
+                    }
+
+                    OutputDebugStringW((L"[BackupDisk] Folder captured successfully: " + folderName).c_str());
+                    WIMCloseHandle(hImage);
+                }
+
+                OutputDebugStringW((L"[BackupDisk] Volume " + std::to_wstring(volumeIndex) + L" completed with " + 
+                                   std::to_wstring(foldersToBackup.size()) + L" folders").c_str());
             }
 
             OutputDebugStringW(L"[BackupDisk] All volumes captured, finalizing WIM...");

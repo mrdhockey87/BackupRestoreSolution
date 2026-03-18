@@ -28,6 +28,8 @@ extern "C" {
     BACKUPENGINE_API int BackupFiles(
         const wchar_t* sourcePath,
         const wchar_t* destPath,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
         ProgressCallback callback);
 
     // Backup an entire volume (with optional system state)
@@ -36,6 +38,8 @@ extern "C" {
         const wchar_t* destPath,
         bool includeSystemState,
         bool compress,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
         ProgressCallback callback);
 
     // Backup an entire disk by disk number
@@ -44,6 +48,8 @@ extern "C" {
         const wchar_t* destPath,
         bool includeSystemState,
         bool compress,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
         ProgressCallback callback);
 
     // Create incremental backup (only changed files since last backup)

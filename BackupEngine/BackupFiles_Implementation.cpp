@@ -85,6 +85,8 @@ extern "C" {
     BACKUPENGINE_API int BackupFiles(
         const wchar_t* sourcePath,
         const wchar_t* destPath,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
         ProgressCallback callback) {
 
         if (!sourcePath || !destPath) {
@@ -136,6 +138,67 @@ extern "C" {
                         try {
                             FileBackupEntry fileEntry;
                             fileEntry.sourcePath = entry.path().wstring();
+
+                            // Check exclusions (both system and user-defined)
+                            bool isExcluded = false;
+
+                            // TIER 1: System exclusions (hardcoded)
+                            std::wstring lowerPath = fileEntry.sourcePath;
+                            std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), ::tolower);
+
+                            if (lowerPath.find(L"system volume information") != std::wstring::npos ||
+                                lowerPath.find(L"$recycle.bin") != std::wstring::npos ||
+                                lowerPath.find(L"\\pagefile.sys") != std::wstring::npos ||
+                                lowerPath.find(L"\\swapfile.sys") != std::wstring::npos ||
+                                lowerPath.find(L"\\hiberfil.sys") != std::wstring::npos) {
+                                isExcluded = true;
+                            }
+
+                            // TIER 2: User exclusions (from UI)
+                            if (!isExcluded && userExclusions && userExclusionCount > 0) {
+                                for (int i = 0; i < userExclusionCount; i++) {
+                                    std::wstring exclusion = userExclusions[i];
+                                    std::wstring lowerExclusion = exclusion;
+                                    std::transform(lowerExclusion.begin(), lowerExclusion.end(), lowerExclusion.begin(), ::tolower);
+
+                                    // Check for pattern match
+                                    if (lowerExclusion.find(L'*') != std::wstring::npos) {
+                                        // Wildcard pattern - check suffix or prefix+suffix
+                                        size_t starPos = lowerExclusion.find(L'*');
+                                        if (starPos == 0) {
+                                            // Pattern like *.tmp - check suffix
+                                            std::wstring suffix = lowerExclusion.substr(1);
+                                            if (lowerPath.length() >= suffix.length() &&
+                                                lowerPath.compare(lowerPath.length() - suffix.length(), suffix.length(), suffix) == 0) {
+                                                isExcluded = true;
+                                                break;
+                                            }
+                                        }
+                                        else {
+                                            // Pattern like D:\Build\*.dll - check prefix and suffix
+                                            std::wstring prefix = lowerExclusion.substr(0, starPos);
+                                            std::wstring suffix = lowerExclusion.substr(starPos + 1);
+                                            if (lowerPath.find(prefix) == 0 &&
+                                                lowerPath.length() >= suffix.length() &&
+                                                lowerPath.compare(lowerPath.length() - suffix.length(), suffix.length(), suffix) == 0) {
+                                                isExcluded = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        // Exact path match (file or folder)
+                                        if (lowerPath.find(lowerExclusion) != std::wstring::npos) {
+                                            isExcluded = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (isExcluded) {
+                                continue; // Skip this file
+                            }
                             fileEntry.size = entry.file_size();
                             fileEntry.attributes = GetFileAttributesW(fileEntry.sourcePath.c_str());
 
