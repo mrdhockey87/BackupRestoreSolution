@@ -69,6 +69,7 @@ namespace BackupUI
 
 /*
  *
+* Version 6.0.1.21 Changed the Splash scree logo & icon to better quality images. mdail 3/30/2026
 * Version 6.0.1.20 Fix this file as the AI's last set of updates wiped out most of the file. It only had down through version 1.13 and 
 *				   the last commited was 1.11. the update for 1.12 got lost so I could retrieve the rest of the history.  6.0.1.12 fix
 *				   was when the AI thought the problem as in the XML caused by invalid directory names.  mdail 3/20/2026

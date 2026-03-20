@@ -4,6 +4,7 @@
   <Nullable>enable</Nullable>
   <OutputType>Exe</OutputType>
   <Platforms>x64</Platforms>
+  <Win32Resource>E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\SSB_LogoWinIcosM.res</Win32Resource>
   <!-- Version, OutputPath, and Runtime config generation come from Directory.Build.props -->
 </PropertyGroup>
 
