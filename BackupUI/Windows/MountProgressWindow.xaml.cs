@@ -33,7 +33,30 @@ namespace BackupUI.Windows
             {
                 Dispatcher.Invoke(() =>
                 {
-                    txtStatus.Text = status;
+                    // Parse message to distinguish file-level vs general progress (v6.0.1.19)
+                    // File-level messages contain "Processing:" or "Backing up:"
+                    if (status.Contains("Processing:") || status.Contains("Backing up:"))
+                    {
+                        // This is a file-level message - display in txtCurrentFile
+                        if (txtCurrentFile != null)
+                        {
+                            txtCurrentFile.Text = status;
+                        }
+                    }
+                    else
+                    {
+                        // This is a general progress message - display in txtStatus
+                        txtStatus.Text = status;
+
+                        // Clear current file when phase changes
+                        if (txtCurrentFile != null && 
+                            !status.Contains("Capturing") && 
+                            !status.Contains("Mounting") &&
+                            !status.Contains("Processing"))
+                        {
+                            txtCurrentFile.Text = "";
+                        }
+                    }
 
                     // Update progress if percentage provided
                     if (percentage >= 0)

@@ -2,12 +2,31 @@ using BackupService;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.ServiceProcess;
 
 try
 {
+    // Set Normal process priority to prevent Efficiency mode
+    // Only backup operations should run at lower priority (BelowNormal)
+    try
+    {
+        Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Normal;
+        File.AppendAllText(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "BackupRestoreService", "startup.log"),
+            $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Process priority set to Normal{Environment.NewLine}");
+    }
+    catch (Exception prioEx)
+    {
+        File.AppendAllText(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "BackupRestoreService", "startup.log"),
+            $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Warning: Failed to set priority: {prioEx.Message}{Environment.NewLine}");
+    }
+
     // Simple startup logging
     var logDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),

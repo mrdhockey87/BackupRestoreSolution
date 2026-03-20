@@ -92,10 +92,14 @@ namespace BackupUI
             if (sender is System.Windows.Controls.Button btn && btn.Tag is System.Guid jobId)
             {
                 var result = MessageBox.Show(
-                    "Are you sure you want to reset the 'IsCurrentlyRunning' flag for this job?\n\n" +
+                    "Are you sure you want to reset this job to its scheduled state?\n\n" +
+                    "This will:\n" +
+                    "  • Clear the 'IsCurrentlyRunning' flag\n" +
+                    "  • Reset consecutive failures to 0\n" +
+                    "  • Recalculate next run time based on schedule\n\n" +
                     "This should only be done if the job is stuck in a 'Running' state when it's not actually running.\n\n" +
-                    "If a backup is currently running, resetting this flag could cause issues.",
-                    "Reset Running Flag",
+                    "If a backup is currently running, resetting could cause issues.",
+                    "Reset Job State",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Warning);
 
@@ -104,16 +108,71 @@ namespace BackupUI
                     var job = jobManager.GetJob(jobId);
                     if (job != null)
                     {
+                        // Reset all execution state flags
                         job.IsCurrentlyRunning = false;
+                        job.ConsecutiveFailures = 0;
+                        
+                        // Recalculate next run time based on schedule
+                        if (job.Schedule != null)
+                        {
+                            // Calculate the natural next run time from now
+                            var now = DateTime.Now;
+                            var scheduledTime = now.Date.Add(job.Schedule.Time);
+                            
+                            DateTime? nextRun = null;
+                            switch (job.Schedule.Frequency)
+                            {
+                                case BackupCommon.ScheduleFrequency.Daily:
+                                    nextRun = scheduledTime > now ? scheduledTime : scheduledTime.AddDays(1);
+                                    break;
+                                    
+                                case BackupCommon.ScheduleFrequency.Weekly:
+                                    var nextWeeklyRun = scheduledTime > now ? scheduledTime : scheduledTime.AddDays(1);
+                                    while (!job.Schedule.DaysOfWeek.Contains(nextWeeklyRun.DayOfWeek))
+                                    {
+                                        nextWeeklyRun = nextWeeklyRun.AddDays(1);
+                                    }
+                                    nextRun = nextWeeklyRun;
+                                    break;
+                                    
+                                case BackupCommon.ScheduleFrequency.Monthly:
+                                    var nextMonthlyRun = new DateTime(now.Year, now.Month, job.Schedule.DayOfMonth,
+                                        job.Schedule.Time.Hours, job.Schedule.Time.Minutes, 0);
+                                    if (nextMonthlyRun <= now)
+                                        nextMonthlyRun = nextMonthlyRun.AddMonths(1);
+                                    nextRun = nextMonthlyRun;
+                                    break;
+                            }
+                            
+                            job.NextScheduledRun = nextRun;
+                            if (job.Schedule != null)
+                            {
+                                job.Schedule.NextRunTime = nextRun;
+                            }
+                        }
+                        else
+                        {
+                            // No schedule, clear next run time
+                            job.NextScheduledRun = null;
+                        }
+                        
                         jobManager.UpdateJob(job);
 
                         // Log the reset action
-                        BackupLogger.LogInfo(job.Name, "IsCurrentlyRunning flag manually reset by user");
+                        BackupLogger.LogInfo(job.Name, "Job state manually reset by user - IsCurrentlyRunning=false, ConsecutiveFailures=0, NextRunTime recalculated");
 
+                        string nextRunMsg = job.NextScheduledRun.HasValue 
+                            ? $"\nNext scheduled run: {job.NextScheduledRun.Value:yyyy-MM-dd HH:mm:ss}"
+                            : "\nNo schedule configured.";
+                            
                         MessageBox.Show(
-                            $"The 'IsCurrentlyRunning' flag for job '{job.Name}' has been reset.\n\n" +
-                            "The job should now show as 'Idle' and can run again.",
-                            "Flag Reset",
+                            $"Job '{job.Name}' has been reset to scheduled state.\n\n" +
+                            "State cleared:\n" +
+                            "  • IsCurrentlyRunning = false\n" +
+                            "  • ConsecutiveFailures = 0\n" +
+                            "  • Next run time recalculated" +
+                            nextRunMsg,
+                            "Job State Reset",
                             MessageBoxButton.OK,
                             MessageBoxImage.Information);
 
@@ -412,8 +471,7 @@ namespace BackupUI
                         {
                             // Delete job and move backup files to recycle bin
                             DeleteJobAndBackupFiles(job);
-                        }
-                        else if (choice == "jobOnly")
+                        }
                         {
                             // Delete job only
                             jobManager.DeleteJob(jobId);

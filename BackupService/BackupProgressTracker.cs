@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using BackupCommon;  // v6.0.1.19: Reference shared BackupProgress DTO
 
 namespace BackupService
 {
@@ -33,8 +34,25 @@ namespace BackupService
             if (_runningJobs.TryGetValue(jobId, out var state))
             {
                 state.Percentage = percentage;
-                state.Message = message;
                 state.LastUpdate = DateTime.Now;
+
+                // Parse message to distinguish file-level vs general progress
+                // File-level messages contain "Backing up:" or "Processing:"
+                if (message.Contains("Backing up:") || message.Contains("Processing:"))
+                {
+                    // This is a file-level message - store in CurrentFile
+                    state.CurrentFile = message;
+                }
+                else
+                {
+                    // This is a general progress message - store in Message
+                    state.Message = message;
+                    // Clear current file when general message arrives (new phase)
+                    if (!message.Contains("Capturing files") && !message.Contains("Mounting"))
+                    {
+                        state.CurrentFile = "";
+                    }
+                }
             }
         }
 
@@ -71,6 +89,7 @@ namespace BackupService
                     IsRunning = state.IsRunning,
                     Percentage = state.Percentage,
                     Message = state.Message,
+                    CurrentFile = state.CurrentFile,  // NEW: Include current file in progress
                     Success = state.Success,
                     ErrorMessage = state.ErrorMessage
                 };
@@ -108,6 +127,7 @@ namespace BackupService
             public bool IsRunning { get; set; }
             public int Percentage { get; set; }
             public string Message { get; set; } = "";
+            public string CurrentFile { get; set; } = "";  // NEW: Track current file being backed up
             public bool Success { get; set; }
             public string? ErrorMessage { get; set; }
             public DateTime StartTime { get; set; }

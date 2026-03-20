@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -75,10 +76,27 @@ namespace BackupService
             CancellationToken cancellationToken,
             Action<string>? logger = null)
         {
+            // Store original priority to restore after backup completes
+            var originalPriority = ProcessPriorityClass.Normal;
+            
             return await Task.Run(() =>
             {
                 try
                 {
+                    // Set process to BelowNormal priority for backup operations only
+                    // This implements "Efficiency mode" for backups to reduce CPU impact
+                    // Mount/Unmount and UI operations remain at Normal priority
+                    try
+                    {
+                        originalPriority = Process.GetCurrentProcess().PriorityClass;
+                        Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
+                        logger?.Invoke($"Process priority set to BelowNormal for backup operation (was {originalPriority})");
+                    }
+                    catch (Exception prioEx)
+                    {
+                        logger?.Invoke($"Warning: Could not set process priority: {prioEx.Message}");
+                    }
+
                     logger?.Invoke($"Starting backup job: {job.Name}");
                     progressCallback?.Invoke(0, "Initializing backup...");
 
@@ -331,6 +349,19 @@ namespace BackupService
                 {
                     logger?.Invoke($"Backup job failed with exception: {ex.Message}");
                     return false;
+                }
+                finally
+                {
+                    // Restore original process priority after backup completion
+                    try
+                    {
+                        Process.GetCurrentProcess().PriorityClass = originalPriority;
+                        logger?.Invoke($"Process priority restored to {originalPriority}");
+                    }
+                    catch (Exception prioEx)
+                    {
+                        logger?.Invoke($"Warning: Could not restore process priority: {prioEx.Message}");
+                    }
                 }
             }, cancellationToken);
         }

@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
+using BackupCommon;  // v6.0.1.19: Use shared BackupProgress DTO
 
 namespace BackupService
 {
@@ -21,36 +22,18 @@ namespace BackupService
         private readonly CancellationTokenSource _cancellationTokenSource = new();
         private Task? _listenTask;
 
-		private static readonly string LogFile = Path.Combine(
-			Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-			"BackupRestoreService", "pipe_debug.log");
-
-		private static void Log(string message)
-		{
-			try
-			{
-				var logDir = Path.GetDirectoryName(LogFile);
-				if (logDir != null && !Directory.Exists(logDir))
-					Directory.CreateDirectory(logDir);
-				File.AppendAllText(LogFile, $"[{DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}");
-			}
-			catch { }
-		}
-
 		public event EventHandler<BackupCommandEventArgs>? CommandReceived;
         public event EventHandler<ProgressQueryEventArgs>? ProgressQueried;
 
         // IHostedService implementation - called automatically when Windows Service starts
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            Log("BackupServiceCommunication: Starting named pipe listener...");
             _listenTask = Task.Run(ListenForConnectionsAsync, _cancellationTokenSource.Token);
             return Task.CompletedTask;
         }
 
         public async Task StopAsync(CancellationToken cancellationToken)
         {
-            Log("BackupServiceCommunication: Stopping named pipe listener...");
             _cancellationTokenSource.Cancel();
             if (_listenTask != null)
             {
@@ -60,8 +43,6 @@ namespace BackupService
 
         private async Task ListenForConnectionsAsync()
         {
-            Log($"BackupServiceCommunication: Started listening for connections on pipe '{PipeName}'");
-            
             while (!_cancellationTokenSource.Token.IsCancellationRequested)
             {
                 try
@@ -73,9 +54,7 @@ namespace BackupService
                         PipeTransmissionMode.Message,
                         PipeOptions.Asynchronous);
 
-                    Log("BackupServiceCommunication: Waiting for client connection...");
                     await pipeServer.WaitForConnectionAsync(_cancellationTokenSource.Token);
-                    Log("BackupServiceCommunication: Client connected!");
 
                     // Handle client in separate task so we can continue listening
                     _ = Task.Run(() => HandleClientAsync(pipeServer), _cancellationTokenSource.Token);
@@ -84,58 +63,41 @@ namespace BackupService
                 {
                     break;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    Log($"Named pipe error: {ex.Message}");
                     await Task.Delay(1000, _cancellationTokenSource.Token);
                 }
             }
-            
-            Log("BackupServiceCommunication: Stopped listening");
         }
 
 		private async Task HandleClientAsync(NamedPipeServerStream pipeServer)
 		{
-			Log("HandleClient: Method called");
 			try
 			{
-				Log("HandleClient: Creating reader stream...");
 				using var reader = new StreamReader(pipeServer, Encoding.UTF8, leaveOpen: true);
-				Log("HandleClient: Reader created, creating writer stream...");
 				using var writer = new StreamWriter(pipeServer, Encoding.UTF8, leaveOpen: true);
-				Log("HandleClient: Writer created, entering message loop...");
 
 				while (pipeServer.IsConnected)
 				{
-					Log("HandleClient: Waiting for message (ReadLineAsync)...");
 					var message = await reader.ReadLineAsync();
-					Log($"HandleClient: Received message: {(message == null ? "NULL" : message.Substring(0, Math.Min(50, message.Length)))}");
 
 					if (message == null)
 					{
-						Log("HandleClient: Message is null, breaking loop");
 						break;
 					}
 
-					Log("HandleClient: Processing message...");
 					var response = ProcessMessage(message);
-					Log($"HandleClient: Got response, writing to pipe: {(response == null ? "NULL" : response.Substring(0, Math.Min(50, response.Length)))}");
 					await writer.WriteLineAsync(response);
 					await writer.FlushAsync();
-					Log("HandleClient: Response written successfully");
 				}
-				Log("HandleClient: Exited message loop");
 			}
-			catch (Exception ex)
+			catch (Exception)
 			{
-				Log($"HandleClient ERROR: {ex.GetType().Name} - {ex.Message}");
-				Log($"HandleClient STACK: {ex.StackTrace}");
+				// Silently handle pipe communication errors
 			}
 			finally
 			{
-				Log("HandleClient: Disposing pipe");
 				pipeServer.Dispose();
-				Log("HandleClient: Method complete");
 			}
 		}
 
@@ -146,23 +108,18 @@ namespace BackupService
                 var command = JsonSerializer.Deserialize<ServiceCommand>(message);
                 if (command == null)
                 {
-                    Log("BackupServiceCommunication: Invalid command (null)");
                     return CreateResponse(false, "Invalid command");
                 }
-
-                Log($"BackupServiceCommunication: Processing command: {command.CommandType}");
 
                 switch (command.CommandType)
                 {
                     case "RunBackup":
                         var jobId = Guid.Parse(command.Data ?? "");
-                        Log($"BackupServiceCommunication: Raising RunBackup event for job: {jobId}");
                         CommandReceived?.Invoke(this, new BackupCommandEventArgs { JobId = jobId });
                         return CreateResponse(true, "Backup started");
 
                     case "AbortBackup":
                         var abortJobId = Guid.Parse(command.Data ?? "");
-                        Log($"BackupServiceCommunication: Raising AbortBackup event for job: {abortJobId}");
                         CommandReceived?.Invoke(this, new BackupCommandEventArgs 
                         { 
                             JobId = abortJobId, 
@@ -190,18 +147,15 @@ namespace BackupService
                             version = version.Substring(0, plusIndex);
                         }
                         
-                        Log($"BackupServiceCommunication: Returning version: {version}");
                         return CreateResponse(true, version);
 
                     default:
-                        Log($"BackupServiceCommunication: Unknown command type: {command.CommandType}");
                         return CreateResponse(false, "Unknown command");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Log($"BackupServiceCommunication: Error processing message: {ex.Message}");
-                return CreateResponse(false, $"Error: {ex.Message}");
+                return CreateResponse(false, "Error processing message");
             }
         }
 
@@ -235,13 +189,6 @@ namespace BackupService
         public BackupProgress? Progress { get; set; }
     }
 
-    public class BackupProgress
-    {
-        public Guid JobId { get; set; }
-        public bool IsRunning { get; set; }
-        public int Percentage { get; set; }
-        public string Message { get; set; } = "";
-        public bool Success { get; set; }
-        public string? ErrorMessage { get; set; }
-    }
+
+
 }

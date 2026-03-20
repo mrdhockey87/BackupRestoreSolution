@@ -176,6 +176,22 @@ namespace BackupUI.Services
             Action<int, string>? progressCallback = null,  // Progress callback
             string? tempPath = null)  // Optional temp path for WIM operations
         {
+            // Ensure mount operations run at Normal priority (not Efficiency mode)
+            var originalPriority = System.Diagnostics.ProcessPriorityClass.Normal;
+            try
+            {
+                originalPriority = System.Diagnostics.Process.GetCurrentProcess().PriorityClass;
+                if (originalPriority != System.Diagnostics.ProcessPriorityClass.Normal)
+                {
+                    System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.Normal;
+                    System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager.MountBackupAsync] Priority raised from {originalPriority} to Normal for mount operation");
+                }
+            }
+            catch (Exception prioEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager.MountBackupAsync] Warning: Could not set priority: {prioEx.Message}");
+            }
+
             try
             {
                 progressCallback?.Invoke(0, "Validating backup file...");
@@ -342,6 +358,22 @@ namespace BackupUI.Services
             string mountPath,
             Action<int, string>? progressCallback = null)
         {
+            // Ensure unmount operations run at Normal priority (not Efficiency mode)
+            var originalPriority = System.Diagnostics.ProcessPriorityClass.Normal;
+            try
+            {
+                originalPriority = System.Diagnostics.Process.GetCurrentProcess().PriorityClass;
+                if (originalPriority != System.Diagnostics.ProcessPriorityClass.Normal)
+                {
+                    System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.Normal;
+                    System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager.UnmountBackupAsync] Priority raised from {originalPriority} to Normal for unmount operation");
+                }
+            }
+            catch (Exception prioEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager.UnmountBackupAsync] Warning: Could not set priority: {prioEx.Message}");
+            }
+
             try
             {
                 progressCallback?.Invoke(0, "Starting unmount operation...");
@@ -403,6 +435,22 @@ namespace BackupUI.Services
                     ex.Message);
 
                 return (false, ex.Message);
+            }
+            finally
+            {
+                // Restore original process priority after unmount completes
+                try
+                {
+                    if (System.Diagnostics.Process.GetCurrentProcess().PriorityClass != originalPriority)
+                    {
+                        System.Diagnostics.Process.GetCurrentProcess().PriorityClass = originalPriority;
+                        System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager.UnmountBackupAsync] Priority restored to {originalPriority} after unmount");
+                    }
+                }
+                catch (Exception prioEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager.UnmountBackupAsync] Warning: Could not restore priority: {prioEx.Message}");
+                }
             }
         }
 

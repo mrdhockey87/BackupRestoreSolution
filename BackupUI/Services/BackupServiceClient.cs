@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using BackupCommon;  // v6.0.1.19: Use shared BackupProgress DTO from BackupCommon
 
 namespace BackupUI.Services
 {
@@ -135,15 +136,5 @@ namespace BackupUI.Services
     {
         public bool Success { get; set; }
         public string Message { get; set; } = "";
-    }
-
-    public class BackupProgress
-    {
-        public Guid JobId { get; set; }
-        public bool IsRunning { get; set; }
-        public int Percentage { get; set; }
-        public string Message { get; set; } = "";
-        public bool Success { get; set; }
-        public string? ErrorMessage { get; set; }
     }
 }

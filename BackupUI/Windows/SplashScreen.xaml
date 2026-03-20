@@ -1,77 +1,86 @@
-<Window x:Class="BackupUI.Windows.SplashScreen"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Secure Server Backup"
-        Height="400"
-        Width="600"
-        WindowStyle="None"
-        AllowsTransparency="True"
-        Background="Transparent"
-        WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize"
-        Topmost="True"
-        ShowInTaskbar="False">
-    
-    <Border Background="{DynamicResource LightTurquoise}"
-            BorderBrush="{DynamicResource PrimaryTurquoise}"
-            BorderThickness="2"
-            CornerRadius="10">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="50"/>
-            </Grid.RowDefinitions>
+<Window
+	x:Class="BackupUI.Windows.SplashScreen"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	Title="Secure Server Backup"
+	Width="600"
+	Height="400"
+	AllowsTransparency="True"
+	Background="Transparent"
+	ResizeMode="NoResize"
+	ShowInTaskbar="False"
+	Topmost="True"
+	WindowStartupLocation="Manual"
+	WindowStyle="None">
 
-            <!-- Logo - adaptive sizing based on window DPI -->
-            <Viewbox Grid.Row="0" 
-                     Stretch="Uniform"
-                     MaxHeight="200"
-                     MaxWidth="200"
-                     Margin="20">
-                <Image x:Name="imgLogo"
-                       Stretch="Uniform"
-                       RenderOptions.BitmapScalingMode="HighQuality"/>
-            </Viewbox>
+	<Border
+		Background="{DynamicResource LightTurquoise}"
+		BorderBrush="{DynamicResource PrimaryTurquoise}"
+		BorderThickness="2"
+		CornerRadius="10">
+		<Grid>
+			<Grid.RowDefinitions>
+				<RowDefinition Height="*" />
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="50" />
+			</Grid.RowDefinitions>
 
-            <!-- Application Title -->
-            <TextBlock Grid.Row="1"
-                       Text="Secure Server Backup"
-                       FontSize="32"
-                       FontWeight="Bold"
-                       Foreground="{DynamicResource PrimaryTurquoise}"
-                       HorizontalAlignment="Center"
-                       Margin="0,10,0,5"/>
+			<!--  Logo - adaptive sizing based on window DPI  -->
+			<Viewbox
+				Grid.Row="0"
+				MaxWidth="200"
+				MaxHeight="200"
+				Margin="20"
+				Stretch="Uniform">
+				<Image
+					x:Name="imgLogo"
+					RenderOptions.BitmapScalingMode="HighQuality"
+					Stretch="Uniform" />
+			</Viewbox>
 
-            <!-- Version and Loading -->
-            <StackPanel Grid.Row="2"
-                        Orientation="Vertical"
-                        HorizontalAlignment="Center"
-                        Margin="0,5,0,20">
-                <TextBlock x:Name="txtVersion"
-                           Text="Version 5.13.11.4"
-                           FontSize="14"
-                           Foreground="{DynamicResource SecondaryText}"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,10"/>
-                
-                <TextBlock x:Name="txtStatus"
-                           Text="Loading..."
-                           FontSize="12"
-                           Foreground="{DynamicResource SecondaryText}"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,5"/>
-            </StackPanel>
+			<!--  Application Title  -->
+			<TextBlock
+				Grid.Row="1"
+				Margin="0,10,0,5"
+				HorizontalAlignment="Center"
+				FontSize="32"
+				FontWeight="Bold"
+				Foreground="{DynamicResource PrimaryTurquoise}"
+				Text="Secure Server Backup" />
 
-            <!-- Progress Bar -->
-            <ProgressBar Grid.Row="3"
-                         x:Name="progressBar"
-                         Height="8"
-                         Margin="40,0,40,20"
-                         IsIndeterminate="True"
-                         Foreground="{DynamicResource PrimaryTurquoise}"
-                         Background="{DynamicResource LightBorderBrush}"/>
-        </Grid>
-    </Border>
+			<!--  Version and Loading  -->
+			<StackPanel
+				Grid.Row="2"
+				Margin="0,5,0,20"
+				HorizontalAlignment="Center"
+				Orientation="Vertical">
+				<TextBlock
+					x:Name="txtVersion"
+					Margin="0,0,0,10"
+					HorizontalAlignment="Center"
+					FontSize="14"
+					Foreground="{DynamicResource SecondaryText}"
+					Text="Version 5.13.11.4" />
+
+				<TextBlock
+					x:Name="txtStatus"
+					Margin="0,0,0,5"
+					HorizontalAlignment="Center"
+					FontSize="12"
+					Foreground="{DynamicResource SecondaryText}"
+					Text="Loading..." />
+			</StackPanel>
+
+			<!--  Progress Bar  -->
+			<ProgressBar
+				x:Name="progressBar"
+				Grid.Row="3"
+				Height="8"
+				Margin="40,0,40,20"
+				Background="{DynamicResource LightBorderBrush}"
+				Foreground="{DynamicResource PrimaryTurquoise}"
+				IsIndeterminate="True" />
+		</Grid>
+	</Border>
 </Window>

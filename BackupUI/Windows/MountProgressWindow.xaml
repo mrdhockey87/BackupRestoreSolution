@@ -53,5 +53,17 @@
 			Foreground="{StaticResource SecondaryText}"
 			Text="Opening SSB archive..."
 			TextWrapping="Wrap" />
+
+		<!--  Current File Being Processed (v6.0.1.19)  -->
+		<TextBlock
+			Name="txtCurrentFile"
+			Grid.Row="3"
+			Margin="0,0,0,5"
+			VerticalAlignment="Bottom"
+			FontSize="10"
+			Foreground="Gray"
+			Text=""
+			TextTrimming="CharacterEllipsis"
+			TextWrapping="Wrap" />
 	</Grid>
 </Window>

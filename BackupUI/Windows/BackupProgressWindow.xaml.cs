@@ -56,6 +56,16 @@ namespace BackupUI.Windows
                     txtProgress.Text = progress.Message;
                     txtPercentage.Text = $"{progress.Percentage}%";
 
+                    // Display current file if available (v6.0.1.19)
+                    if (!string.IsNullOrEmpty(progress.CurrentFile))
+                    {
+                        txtCurrentFile.Text = progress.CurrentFile;
+                    }
+                    else
+                    {
+                        txtCurrentFile.Text = "";
+                    }
+
                     if (!progress.IsRunning)
                     {
                         _progressTimer.Stop();

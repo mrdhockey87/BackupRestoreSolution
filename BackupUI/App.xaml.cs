@@ -11,6 +11,18 @@ namespace BackupUI
     {
         protected override async void OnStartup(StartupEventArgs e)
         {
+            // Set Normal process priority to prevent Efficiency mode for UI operations
+            // Only backup operations should run at lower priority
+            try
+            {
+                Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Normal;
+                Debug.WriteLine("[App.OnStartup] Process priority set to Normal");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[App.OnStartup] Warning: Failed to set process priority: {ex.Message}");
+            }
+
             // Check if running as administrator
             if (!IsRunningAsAdministrator())
             {
