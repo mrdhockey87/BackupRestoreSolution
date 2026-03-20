@@ -70,7 +70,8 @@ namespace BackupUI
 /*
  *
 * Version 6.0.1.20 Fix this file as the AI's last set of updates wiped out most of the file. It only had down through version 1.13 and 
-*				   the last commited was 1.11. the update for 1.12 got lost so I could retrieve the rest of the history. mdail 3/20/2026
+*				   the last commited was 1.11. the update for 1.12 got lost so I could retrieve the rest of the history.  6.0.1.12 fix
+*				   was when the AI thought the problem as in the XML caused by invalid directory names.  mdail 3/20/2026
 * Version 6.0.1.19 UX FIX - FILE NAMES NOW DISPLAY IN PROGRESS WINDOWS: Fixed BackupProgressWindow and MountProgressWindow to display 
 *				   real-time file/folder names during backup and mount operations! User reported: "I asked you to show the files & folder as the 
 *				   backup progressed on BackupProgressWindow and the same for MountProgressWindow, but they never show on the UI as the backup or 
