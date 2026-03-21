@@ -185,49 +185,66 @@ struct FolderFilterContext {
 // Callback for WIM API that filters to only include files within a specific folder
 // This allows capturing a folder FROM its parent while preserving folder structure
 // Example: Capture from "E:\" but only include files under "E:\1TB_PCIE_SSD\"
+//
+// IMPORTANT: For WIM_MSG_PROCESS, the return value controls file inclusion:
+//   - Return WIM_MSG_SUCCESS (TRUE/1) to INCLUDE the file
+//   - Return WIM_MSG_DONE (FALSE/0) to EXCLUDE the file (skip it)
+//   - WIM_MSG_SKIP_ERROR only skips errors, NOT files!
 static DWORD WINAPI FolderFilterCallback(DWORD msgId, WPARAM wParam, LPARAM lParam, PVOID pvContext) {
     FolderFilterContext* context = (FolderFilterContext*)pvContext;
-    
+
     switch (msgId) {
         case WIM_MSG_PROCESS:
         {
             // WIM_MSG_PROCESS - file being processed during capture
             // wParam = path to file (LPCWSTR)
-            if (wParam) {
+            // lParam = pointer to BOOL - set to FALSE to exclude file
+            if (wParam && lParam) {
                 const wchar_t* filePath = (const wchar_t*)wParam;
+                BOOL* pbInclude = (BOOL*)lParam;
                 std::wstring path(filePath);
-                
+
                 // Check if this file is under our target folder
                 // Path will be like "E:\1TB_PCIE_SSD\SomeFile.txt"
                 // We want to include it if it contains "\1TB_PCIE_SSD\"
                 std::wstring searchPattern = L"\\" + context->folderName + L"\\";
-                
-                if (path.find(searchPattern) == std::wstring::npos) {
-                    // File is NOT in our target folder - skip it
-                    return WIM_MSG_SKIP_ERROR;
+
+                // Also check if path STARTS with the folder name (for root-level match)
+                std::wstring startPattern = context->folderName + L"\\";
+
+                bool inTargetFolder = (path.find(searchPattern) != std::wstring::npos) ||
+                                      (path.find(startPattern) == 0);
+
+                if (!inTargetFolder) {
+                    // File is NOT in our target folder - EXCLUDE it
+                    *pbInclude = FALSE;
+                    return WIM_MSG_SUCCESS;
                 }
-                
+
                 // File IS in our target folder - check for system exclusions
-                
+
                 // Exclude protected Windows folders
                 if (path.find(L"System Volume Information") != std::wstring::npos ||
                     path.find(L"$RECYCLE.BIN") != std::wstring::npos) {
-                    OutputDebugStringW((L"[FolderFilter] SKIPPING system folder: " + path).c_str());
-                    return WIM_MSG_SKIP_ERROR;
+                    OutputDebugStringW((L"[FolderFilter] EXCLUDING system folder: " + path).c_str());
+                    *pbInclude = FALSE;
+                    return WIM_MSG_SUCCESS;
                 }
-                
+
                 // Exclude locked system files
                 std::wstring lowerPath = path;
                 std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), ::tolower);
-                
+
                 if (lowerPath.find(L"\\pagefile.sys") != std::wstring::npos ||
                     lowerPath.find(L"\\swapfile.sys") != std::wstring::npos ||
                     lowerPath.find(L"\\hiberfil.sys") != std::wstring::npos) {
-                    OutputDebugStringW((L"[FolderFilter] SKIPPING locked file: " + path).c_str());
-                    return WIM_MSG_SKIP_ERROR;
+                    OutputDebugStringW((L"[FolderFilter] EXCLUDING locked file: " + path).c_str());
+                    *pbInclude = FALSE;
+                    return WIM_MSG_SUCCESS;
                 }
-                
-                // File passes all filters - report progress
+
+                // File passes all filters - INCLUDE it and report progress
+                *pbInclude = TRUE;
                 if (context->userCallback) {
                     const wchar_t* fileName = wcsrchr(filePath, L'\\');
                     if (fileName) {
@@ -343,6 +360,10 @@ std::vector<std::wstring> EnumerateIncludedFolders(const std::wstring& volumePat
 // Static callback for WIM API during backup capture - handles progress reporting
 // NOTE: Exclusions are now handled BEFORE calling WIMCaptureImage by filtering the folder list
 //       This prevents WIM API from attempting to access protected folders at all
+//
+// IMPORTANT: For WIM_MSG_PROCESS, the lParam points to a BOOL:
+//   - Set *lParam = TRUE to INCLUDE the file
+//   - Set *lParam = FALSE to EXCLUDE the file (skip it)
 static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lParam, PVOID pvIgnored) {
     ProgressCallback userCallback = (ProgressCallback)pvIgnored;
 
@@ -351,8 +372,10 @@ static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lP
         {
             // WIM_MSG_PROCESS - file being processed during capture
             // wParam = path to file (LPCWSTR)
-            if (wParam) {
+            // lParam = pointer to BOOL - set to FALSE to exclude file
+            if (wParam && lParam) {
                 const wchar_t* filePath = (const wchar_t*)wParam;
+                BOOL* pbInclude = (BOOL*)lParam;
                 std::wstring path(filePath);
 
                 // **SYSTEM EXCLUSIONS - Filter protected folders/files that cause backup failures**
@@ -360,8 +383,9 @@ static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lP
                 // Exclude protected Windows folders (ERROR_ACCESS_DENIED)
                 if (path.find(L"System Volume Information") != std::wstring::npos ||
                     path.find(L"$RECYCLE.BIN") != std::wstring::npos) {
-                    OutputDebugStringW((L"[BackupProgress] SKIPPING system folder: " + path).c_str());
-                    return WIM_MSG_SKIP_ERROR;  // Tell WIM API to skip this folder
+                    OutputDebugStringW((L"[BackupProgress] EXCLUDING system folder: " + path).c_str());
+                    *pbInclude = FALSE;  // EXCLUDE this folder
+                    return WIM_MSG_SUCCESS;
                 }
 
                 // Exclude locked system files (pagefile, swapfile, hiberfil)
@@ -371,14 +395,16 @@ static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lP
                 if (lowerPath.find(L"\\pagefile.sys") != std::wstring::npos ||
                     lowerPath.find(L"\\swapfile.sys") != std::wstring::npos ||
                     lowerPath.find(L"\\hiberfil.sys") != std::wstring::npos) {
-                    OutputDebugStringW((L"[BackupProgress] SKIPPING locked file: " + path).c_str());
-                    return WIM_MSG_SKIP_ERROR;  // Skip locked system files
+                    OutputDebugStringW((L"[BackupProgress] EXCLUDING locked file: " + path).c_str());
+                    *pbInclude = FALSE;  // EXCLUDE locked system files
+                    return WIM_MSG_SUCCESS;
                 }
 
                 // TODO: Add user-defined exclusion filtering here
                 // Check if path matches any pattern in UserExclusions list
 
-                // File is not excluded - report progress to user
+                // File is not excluded - INCLUDE it and report progress to user
+                *pbInclude = TRUE;
                 if (userCallback) {
                     // Extract just the filename for cleaner display
                     const wchar_t* fileName = wcsrchr(filePath, L'\\');
@@ -483,6 +509,22 @@ static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lP
     }
 }
 
+// Helper function to count images in a WIM file by iterating
+// Returns the highest valid image index (0 if no images)
+DWORD CountWimImages(HANDLE hWim) {
+    DWORD count = 0;
+    for (DWORD i = 1; i <= 1000; i++) {  // WIM files can have many images
+        HANDLE hTest = WIMLoadImage(hWim, i);
+        if (hTest && hTest != INVALID_HANDLE_VALUE) {
+            count = i;
+            WIMCloseHandle(hTest);
+        } else {
+            break;  // No more images
+        }
+    }
+    return count;
+}
+
 // Helper to capture path into WIM image
 // Adds image metadata and returns image handle (must be closed by caller)
 HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* imageName, ProgressCallback callback, const wchar_t* folderName = nullptr) {
@@ -495,28 +537,34 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         callback(30, L"Capturing files to backup archive...");
     }
 
+    // CRITICAL: Count images BEFORE capture to detect new image after capture
+    // This is necessary because WIMCaptureImage returns NULL when callback skips files,
+    // even though the capture succeeded for non-skipped files
+    DWORD imageCountBefore = CountWimImages(hWim);
+    OutputDebugStringW((L"[CaptureToWimImage] Image count BEFORE capture: " + std::to_wstring(imageCountBefore)).c_str());
+
     HANDLE hImage = INVALID_HANDLE_VALUE;
-    
+
     // If folderName is provided, use folder filtering callback
     if (folderName && wcslen(folderName) > 0) {
         // Create filter context with folder name
         FolderFilterContext filterContext;
         filterContext.folderName = folderName;
         filterContext.userCallback = callback;
-        
+
         if (callback) {
             std::wstring msg = L"Capturing folder with structure preservation: ";
             msg += folderName;
             callback(25, msg.c_str());
             OutputDebugStringW((L"[CaptureToWimImage] Using folder filter for: " + std::wstring(folderName)).c_str());
         }
-        
+
         // Register folder filter callback
         WIMRegisterMessageCallback(hWim, FolderFilterCallback, &filterContext);
-        
+
         // Capture - will only include files matching folder filter
         hImage = WIMCaptureImage(hWim, sourcePath, 0);
-        
+
         // Unregister callback
         WIMUnregisterMessageCallback(hWim, FolderFilterCallback);
     }
@@ -544,55 +592,42 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         }
     }
 
+    DWORD captureError = GetLastError();
+    OutputDebugStringW((L"[CaptureToWimImage] WIMCaptureImage returned, hImage=" + 
+                       std::to_wstring(reinterpret_cast<uintptr_t>(hImage)) + 
+                       L", GetLastError=" + std::to_wstring(captureError)).c_str());
+
     // CRITICAL FIX: WIMCaptureImage may return INVALID_HANDLE_VALUE when callback returns WIM_MSG_SKIP_ERROR
     // for filtered files, BUT the capture may have succeeded for all non-skipped files!
-    // We need to check GetLastError() to distinguish between genuine failure and success-with-skips.
+    // We detect success by checking if a new image was added to the WIM.
     if (!hImage || hImage == INVALID_HANDLE_VALUE) {
-        DWORD captureError = GetLastError();
+        OutputDebugStringW(L"[CaptureToWimImage] WIMCaptureImage returned NULL/INVALID, checking if capture actually succeeded...");
 
-        // ERROR_SUCCESS (0) means callback skipped some files but capture succeeded
-        // This happens when FolderFilterCallback returns WIM_MSG_SKIP_ERROR for:
-        // - Files outside target folder
-        // - System Volume Information, $RECYCLE.BIN
-        // - pagefile.sys, swapfile.sys, hiberfil.sys
-        if (captureError == ERROR_SUCCESS || captureError == 0) {
-            OutputDebugStringW(L"[CaptureToWimImage] WIMCaptureImage returned NULL but GetLastError() = 0 (SUCCESS)");
-            OutputDebugStringW(L"[CaptureToWimImage] This means callback skipped files but capture completed successfully");
-            OutputDebugStringW(L"[CaptureToWimImage] Attempting to get image handle via WIMLoadImage...");
+        // Count images AFTER capture
+        DWORD imageCountAfter = CountWimImages(hWim);
+        OutputDebugStringW((L"[CaptureToWimImage] Image count AFTER capture: " + std::to_wstring(imageCountAfter)).c_str());
 
-            // Try to load an image - if WIMCaptureImage succeeded, an image should exist
-            // We don't know the exact count, so try loading index 1 (first image)
-            // NOTE: Cannot use WIMGetImageCount here due to compilation issues
-            hImage = WIMLoadImage(hWim, 1);
+        if (imageCountAfter > imageCountBefore) {
+            // SUCCESS! A new image was added despite WIMCaptureImage returning NULL
+            // This happens when the callback skipped files (WIM_MSG_SKIP_ERROR)
+            OutputDebugStringW(L"[CaptureToWimImage] New image detected! Capture SUCCEEDED with skipped files.");
+            OutputDebugStringW((L"[CaptureToWimImage] Loading new image at index " + std::to_wstring(imageCountAfter)).c_str());
 
-            if (hImage && hImage != INVALID_HANDLE_VALUE) {
-                OutputDebugStringW(L"[CaptureToWimImage] Successfully loaded image handle! Capture SUCCEEDED with skipped files.");
-                // Continue to metadata setting below
-            } else {
-                // Try loading the most recent image by iterating
-                // Since we can't use WIMGetImageCount, try indices 1-10
-                bool foundImage = false;
-                for (int i = 2; i <= 10 && !foundImage; i++) {
-                    hImage = WIMLoadImage(hWim, i);
-                    if (hImage && hImage != INVALID_HANDLE_VALUE) {
-                        OutputDebugStringW((L"[CaptureToWimImage] Found image at index " + std::to_wstring(i)).c_str());
-                        foundImage = true;
-                        break;
-                    }
-                }
-
-                if (!foundImage) {
-                    // Genuine failure - couldn't load any image
-                    DWORD loadError = GetLastError();
-                    std::wstring errMsg = L"Capture appeared to succeed but failed to load image. Error: " + std::to_wstring(loadError);
-                    SetLastErrorMessage(errMsg);
-                    OutputDebugStringW((L"[CaptureToWimImage] ERROR: " + errMsg).c_str());
-                    return INVALID_HANDLE_VALUE;
-                }
+            hImage = WIMLoadImage(hWim, imageCountAfter);
+            if (!hImage || hImage == INVALID_HANDLE_VALUE) {
+                DWORD loadError = GetLastError();
+                std::wstring errMsg = L"Capture succeeded but failed to load new image at index " + 
+                                     std::to_wstring(imageCountAfter) + L". Error: " + std::to_wstring(loadError);
+                SetLastErrorMessage(errMsg);
+                OutputDebugStringW((L"[CaptureToWimImage] ERROR: " + errMsg).c_str());
+                return INVALID_HANDLE_VALUE;
             }
+
+            OutputDebugStringW(L"[CaptureToWimImage] Successfully loaded new image handle!");
         } else {
-            // Genuine error - not just skipped files
+            // No new image was added - this is a genuine failure
             std::wstring errMsg = L"Failed to capture files to archive. WIM Error: " + std::to_wstring(captureError);
+            errMsg += L". No new image was created.";
             SetLastErrorMessage(errMsg);
             OutputDebugStringW((L"[CaptureToWimImage] ERROR: " + errMsg).c_str());
             OutputDebugStringW((L"[CaptureToWimImage] Source: " + std::wstring(sourcePath)).c_str());

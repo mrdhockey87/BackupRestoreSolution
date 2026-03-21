@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-		static private string version_fallback_number = "6.0.1.20";
+		static private string version_fallback_number = "6.0.1.23";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -69,7 +69,33 @@ namespace BackupUI
 
 /*
  *
-* Version 6.0.1.22 Fix the props & project file after changein the icon& splash screen. mdail 3/30/2026 
+* Version 6.0.1.23 CRITICAL FIX - WIM EXCLUSION MECHANISM & IMAGE COUNT TRACKING: Fixed TWO critical bugs in backup system!
+*					BUG 1 - EXCLUSIONS NOT WORKING: Files that should be excluded (System Volume Information, $RECYCLE.BIN, pagefile.sys,
+*					swapfile.sys, hiberfil.sys) were still appearing in backups! Root cause: Code was using `return WIM_MSG_SKIP_ERROR`
+*					to exclude files, but WIM_MSG_SKIP_ERROR only tells WIM API to skip ERRORS and continue - it does NOT exclude files
+*					from capture! The correct WIM API exclusion mechanism is to use the lParam pointer passed to WIM_MSG_PROCESS callback:
+*					lParam points to a BOOL* (pbInclude) - set *pbInclude = FALSE to exclude file, *pbInclude = TRUE to include. FIXED by
+*					changing both FolderFilterCallback and BackupProgressCallback from `return WIM_MSG_SKIP_ERROR` to `BOOL* pbInclude =
+*					(BOOL*)lParam; *pbInclude = FALSE; return WIM_MSG_SUCCESS;`. Now exclusions actually work - excluded files are NOT
+*					captured to backup! BUG 2 - FALSE FAILURE REPORTING: Backup reported error -4 "Failed to capture folder" even though
+*					backup file was created successfully, could be mounted, and contained all expected data! Root cause: WIMCaptureImage
+*					returns INVALID_HANDLE_VALUE when callback excludes files (via *pbInclude = FALSE), even though capture succeeded!
+*					Old code checked `if (!hImage || hImage == INVALID_HANDLE_VALUE)` and immediately returned error -4, without checking
+*					if capture actually succeeded. FIXED by adding CountWimImages() helper function that counts images by iterating with
+*					WIMLoadImage, then rewriting CaptureToWimImage to: (1) Count images BEFORE capture, (2) Call WIMCaptureImage, (3) Count
+*					images AFTER capture, (4) If count increased, capture SUCCEEDED even if handle is NULL! (5) Use WIMLoadImage to get
+*					handle to the new image for metadata. This properly detects success when files were excluded during capture. TECHNICAL
+*					DETAILS: Windows ADK wimgapi.lib (full deployment API) callback mechanism: WIM_MSG_PROCESS receives wParam as file path
+*					and lParam as BOOL* pointer. Setting *lParam = FALSE excludes file, *lParam = TRUE includes file. Return value should
+*					be WIM_MSG_SUCCESS for processed, WIM_MSG_SKIP_ERROR for error recovery (NOT exclusion!). Both FolderFilterCallback
+*					(for filtered folder backups) and BackupProgressCallback (for system exclusions) now use correct API. CountWimImages()
+*					iterates from index 1 calling WIMLoadImage until failure - more reliable than WIMGetImageCount for tracking new images.
+*					BENEFITS: Exclusions now ACTUALLY work (System Volume Information, $RECYCLE.BIN, pagefile.sys excluded from backups),
+*					No more false failure reports (backup succeeds and reports success correctly), Proper WIM API usage following Microsoft
+*					documentation, User exclusions from ExclusionsManagementWindow will also work correctly now. TESTING: Backup folder with
+*					excluded system files → backup succeeds → mount backup → excluded files NOT present → success reported correctly! Complete
+*					fix for both exclusion mechanism and false failure reporting. Production-ready WIM backup with correct API usage! mdail 3/21/2026 
+* Version 6.0.1.22 Fix the props & project file after changein the icon& splash screen. mdail 3/30/2026
 * Version 6.0.1.21 Changed the Splash scree logo & icon to better quality images. mdail 3/30/2026
 * Version 6.0.1.20 Fix this file as the AI's last set of updates wiped out most of the file. It only had down through version 1.13 and 
 *				   the last commited was 1.11. the update for 1.12 got lost so I could retrieve the rest of the history.  6.0.1.12 fix
