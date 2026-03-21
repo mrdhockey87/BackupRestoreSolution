@@ -69,6 +69,8 @@ namespace BackupUI
 
 /*
  *
+* Version 6.0.1.24 Enabled Native debugging for the C++ code in the service - this will allow us to set breakpoints and step 
+*				   through the C++ code in Visual Studio when debugging the service! mdail 3/21/2026
 * Version 6.0.1.23 CRITICAL FIX - WIM EXCLUSION MECHANISM & IMAGE COUNT TRACKING: Fixed TWO critical bugs in backup system!
 *					BUG 1 - EXCLUSIONS NOT WORKING: Files that should be excluded (System Volume Information, $RECYCLE.BIN, pagefile.sys,
 *					swapfile.sys, hiberfil.sys) were still appearing in backups! Root cause: Code was using `return WIM_MSG_SKIP_ERROR`
@@ -95,8 +97,8 @@ namespace BackupUI
 *					documentation, User exclusions from ExclusionsManagementWindow will also work correctly now. TESTING: Backup folder with
 *					excluded system files → backup succeeds → mount backup → excluded files NOT present → success reported correctly! Complete
 *					fix for both exclusion mechanism and false failure reporting. Production-ready WIM backup with correct API usage! mdail 3/21/2026 
-* Version 6.0.1.22 Fix the props & project file after changein the icon& splash screen. mdail 3/30/2026
-* Version 6.0.1.21 Changed the Splash scree logo & icon to better quality images. mdail 3/30/2026
+* Version 6.0.1.22 Fix the props & project file after changein the icon& splash screen. mdail 3/21/2026
+* Version 6.0.1.21 Changed the Splash scree logo & icon to better quality images. mdail 3/21/2026
 * Version 6.0.1.20 Fix this file as the AI's last set of updates wiped out most of the file. It only had down through version 1.13 and 
 *				   the last commited was 1.11. the update for 1.12 got lost so I could retrieve the rest of the history.  6.0.1.12 fix
 *				   was when the AI thought the problem as in the XML caused by invalid directory names.  mdail 3/20/2026
