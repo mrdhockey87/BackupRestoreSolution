@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-		static private string version_fallback_number = "6.0.1.23";
+		static private string version_fallback_number = "6.0.1.25";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,23 @@ namespace BackupUI
 
 /*
  *
+* Version 6.0.1.25 CRITICAL FIX - FALSE ERROR -4 DESPITE SUCCESSFUL BACKUP: User reported "Exact same error" after 6.0.1.23/24 fixes -
+*                  backup completes successfully (file mountable with ALL files including 1TB_PCIE_SSD folder), but STILL reports error -4
+*                  "Failed to capture folder: 1TB_PCIE_SSD". ROOT CAUSE FOUND: The CountWimImages() function was using manual WIMLoadImage
+*                  iteration which is unreliable for detecting new images immediately after WIMCaptureImage completes. The proper API
+*                  function WIMGetImageCount was not being used! Additionally, when folder filtering excludes many files, WIMLoadImage
+*                  may fail to load the new image handle even though the image WAS created. FIXES APPLIED: (1) Replaced manual iteration
+*                  in CountWimImages() with proper WIMGetImageCount API call - this is the official way to get image count from WIM handle.
+*                  (2) Added Sleep(100) before image count check to allow WIM API to finalize internal state. (3) Added WIMGetAttributes
+*                  verification to confirm image exists even when WIMLoadImage fails. (4) Added (HANDLE)1 special success marker for cases
+*                  where capture succeeded but handle unavailable - caller now checks for this marker instead of treating it as NULL failure.
+*                  (5) Updated BackupDisk caller code to handle the marker properly: INVALID_HANDLE_VALUE = failure, (HANDLE)1 = success
+*                  without handle, anything else = success with valid handle. (6) Added detailed debug logging showing before/after image
+*                  counts and WIMGetAttributes results for diagnostics. TECHNICAL: WIMCaptureImage returns INVALID_HANDLE_VALUE when callback
+*                  excludes files (*pbInclude=FALSE), but capture DID succeed. WIMGetImageCount properly returns the count. After Sleep,
+*                  count is accurate. If WIMLoadImage fails but WIMGetAttributes confirms count increased, we return success marker.
+*                  IMPORTANT: After updating C++ BackupEngine.dll, you MUST restart the BackupService for changes to take effect! The
+*                  service caches the DLL in memory. Use Services.msc or 'Restart-Service BackupRestoreService' in PowerShell. mdail 3/21/2026
 * Version 6.0.1.24 Enabled Native debugging for the C++ code in the service - this will allow us to set breakpoints and step 
 *				   through the C++ code in Visual Studio when debugging the service! mdail 3/21/2026
 * Version 6.0.1.23 CRITICAL FIX - WIM EXCLUSION MECHANISM & IMAGE COUNT TRACKING: Fixed TWO critical bugs in backup system!
