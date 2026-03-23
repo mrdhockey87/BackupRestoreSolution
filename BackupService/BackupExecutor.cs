@@ -70,6 +70,13 @@ namespace BackupService
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern void GetLastErrorMessage(StringBuilder buffer, int bufferSize);
 
+        // Job context functions - tells C++ engine which job is running for logging
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private static extern void SetCurrentJobName(string jobName);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void ClearCurrentJobName();
+
         public async Task<bool> ExecuteBackupJobWithProgress(
             BackupJob job, 
             Action<int, string>? progressCallback,
@@ -95,6 +102,18 @@ namespace BackupService
                     catch (Exception prioEx)
                     {
                         logger?.Invoke($"Warning: Could not set process priority: {prioEx.Message}");
+                    }
+
+                    // Set job name for C++ engine logging context
+                    // This ensures C++ logs go to {JobName}.json instead of engine.json
+                    try
+                    {
+                        SetCurrentJobName(job.Name);
+                        logger?.Invoke($"C++ engine logging context set to: {job.Name}");
+                    }
+                    catch (Exception jobNameEx)
+                    {
+                        logger?.Invoke($"Warning: Could not set C++ job name context: {jobNameEx.Message}");
                     }
 
                     logger?.Invoke($"Starting backup job: {job.Name}");
@@ -352,6 +371,13 @@ namespace BackupService
                 }
                 finally
                 {
+                    // Clear C++ engine logging context
+                    try
+                    {
+                        ClearCurrentJobName();
+                    }
+                    catch { }
+
                     // Restore original process priority after backup completion
                     try
                     {

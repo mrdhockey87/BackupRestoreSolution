@@ -141,5 +141,12 @@ namespace BackupUI.Services
             bool restoreSystemState,
             bool preservePermissions,
             ProgressCallback? callback);
+
+        // Job context functions - tells C++ engine which job is running for logging
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern void SetCurrentJobName(string jobName);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void ClearCurrentJobName();
     }
 }

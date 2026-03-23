@@ -205,6 +205,17 @@ extern "C" {
         int* build);
 
     // ====================
+    // Job Context Functions
+    // ====================
+
+    // Set the current job name for logging context
+    // C++ engine will log to {JobName}.json instead of engine.json
+    BACKUPENGINE_API void SetCurrentJobName(const wchar_t* jobName);
+
+    // Clear the current job name (reverts to engine.json logging)
+    BACKUPENGINE_API void ClearCurrentJobName();
+
+    // ====================
     // Enhanced Restore Functions (Version 4.7.0.0)
     // ====================
 

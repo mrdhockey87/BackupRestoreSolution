@@ -235,7 +235,34 @@ namespace BackupCommon
                 if (!File.Exists(filePath))
                     return new List<BackupLogEntry>();
 
-                var json = File.ReadAllText(filePath);
+                // Read with auto-detect encoding to handle both UTF-8 and UTF-16 files
+                // (C++ engine may have written UTF-16 previously, now writes UTF-8)
+                string json;
+                var bytes = File.ReadAllBytes(filePath);
+                if (bytes.Length == 0)
+                    return new List<BackupLogEntry>();
+
+                // Check for BOM to detect encoding
+                if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+                {
+                    // UTF-16 LE BOM
+                    json = System.Text.Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+                }
+                else if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+                {
+                    // UTF-16 BE BOM
+                    json = System.Text.Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+                }
+                else if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+                {
+                    // UTF-8 BOM
+                    json = System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+                }
+                else
+                {
+                    // No BOM - try UTF-8 (default for new files)
+                    json = System.Text.Encoding.UTF8.GetString(bytes);
+                }
 
                 if (string.IsNullOrWhiteSpace(json))
                     return new List<BackupLogEntry>();
@@ -245,15 +272,39 @@ namespace BackupCommon
             }
             catch (JsonException)
             {
-                // Corrupted JSON file - backup and start fresh
+                // JSON parsing failed - try to recover individual entries
+                var fileName = Path.GetFileNameWithoutExtension(filePath);
+
+                // Skip recovery for already-corrupted backup files
+                if (fileName.Contains("_corrupted_"))
+                    return new List<BackupLogEntry>();
+
                 try
                 {
-                    var fileName = Path.GetFileNameWithoutExtension(filePath);
+                    var recoveredLogs = TryRecoverLogsFromCorruptedFile(filePath);
+
+                    // Backup original corrupted file
                     var backupFile = Path.Combine(LogDirectory, $"{fileName}_corrupted_{DateTime.Now:yyyyMMddHHmmss}.json");
                     File.Copy(filePath, backupFile, true);
                     System.Diagnostics.Debug.WriteLine($"Corrupted log file backed up to: {backupFile}");
+
+                    // If we recovered entries, save them back (fixes the file)
+                    if (recoveredLogs.Count > 0)
+                    {
+                        SaveLogsToFile(filePath, recoveredLogs);
+                        System.Diagnostics.Debug.WriteLine($"Recovered {recoveredLogs.Count} entries from corrupted file: {filePath}");
+                        return recoveredLogs;
+                    }
+                    else
+                    {
+                        // No entries recovered - reset to empty
+                        File.WriteAllText(filePath, "[]");
+                    }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error during log recovery: {ex.Message}");
+                }
 
                 return new List<BackupLogEntry>();
             }
@@ -261,6 +312,190 @@ namespace BackupCommon
             {
                 System.Diagnostics.Debug.WriteLine($"Error loading logs from {filePath}: {ex.Message}");
                 return new List<BackupLogEntry>();
+            }
+        }
+
+        /// <summary>
+        /// Attempts to recover log entries from a corrupted JSON file by parsing each entry individually.
+        /// This handles cases where some entries are truncated or malformed.
+        /// </summary>
+        private static List<BackupLogEntry> TryRecoverLogsFromCorruptedFile(string filePath)
+        {
+            var recoveredLogs = new List<BackupLogEntry>();
+
+            try
+            {
+                var content = File.ReadAllText(filePath);
+
+                // Find all JSON object patterns that look like log entries
+                // Pattern: {"Timestamp":... through ...,"IsRead":...}
+                int searchStart = 0;
+                while (searchStart < content.Length)
+                {
+                    int objStart = content.IndexOf("{\"Timestamp\":", searchStart);
+                    if (objStart < 0) break;
+
+                    // Find the end of this object - look for }," or }] or just }
+                    int objEnd = -1;
+                    int braceCount = 0;
+                    bool inString = false;
+                    bool escaped = false;
+
+                    for (int i = objStart; i < content.Length; i++)
+                    {
+                        char c = content[i];
+
+                        if (escaped)
+                        {
+                            escaped = false;
+                            continue;
+                        }
+
+                        if (c == '\\' && inString)
+                        {
+                            escaped = true;
+                            continue;
+                        }
+
+                        if (c == '"')
+                        {
+                            inString = !inString;
+                            continue;
+                        }
+
+                        if (!inString)
+                        {
+                            if (c == '{') braceCount++;
+                            else if (c == '}')
+                            {
+                                braceCount--;
+                                if (braceCount == 0)
+                                {
+                                    objEnd = i;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (objEnd > objStart)
+                    {
+                        var jsonObj = content.Substring(objStart, objEnd - objStart + 1);
+
+                        try
+                        {
+                            var entry = JsonSerializer.Deserialize<BackupLogEntry>(jsonObj);
+                            if (entry != null && entry.Timestamp != default)
+                            {
+                                recoveredLogs.Add(entry);
+                            }
+                        }
+                        catch
+                        {
+                            // This individual entry couldn't be parsed - try to fix common issues
+                            var fixedJson = TryFixMalformedEntry(jsonObj);
+                            if (fixedJson != null)
+                            {
+                                try
+                                {
+                                    var entry = JsonSerializer.Deserialize<BackupLogEntry>(fixedJson);
+                                    if (entry != null && entry.Timestamp != default)
+                                    {
+                                        recoveredLogs.Add(entry);
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+
+                        searchStart = objEnd + 1;
+                    }
+                    else
+                    {
+                        // Couldn't find closing brace - try to construct a minimal valid entry from what we have
+                        var partialJson = content.Substring(objStart, Math.Min(500, content.Length - objStart));
+                        var fixedJson = TryFixMalformedEntry(partialJson);
+                        if (fixedJson != null)
+                        {
+                            try
+                            {
+                                var entry = JsonSerializer.Deserialize<BackupLogEntry>(fixedJson);
+                                if (entry != null && entry.Timestamp != default)
+                                {
+                                    recoveredLogs.Add(entry);
+                                }
+                            }
+                            catch { }
+                        }
+                        searchStart = objStart + 1;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error recovering logs: {ex.Message}");
+            }
+
+            return recoveredLogs;
+        }
+
+        /// <summary>
+        /// Tries to fix common JSON malformations in log entries.
+        /// </summary>
+        private static string? TryFixMalformedEntry(string json)
+        {
+            try
+            {
+                // If JSON doesn't end with }, it's truncated
+                json = json.TrimEnd();
+
+                if (!json.EndsWith("}"))
+                {
+                    // Find the last complete property and close the object
+                    // Look for common property endings like :false}, :true}, :""}, etc.
+
+                    // Check if we're in the middle of a string value
+                    int lastQuote = json.LastIndexOf('"');
+                    int lastColon = json.LastIndexOf(':');
+
+                    if (lastColon > lastQuote)
+                    {
+                        // We're after a colon but haven't finished the value
+                        // Truncate to before this property and close
+                        int lastComma = json.LastIndexOf(',');
+                        if (lastComma > 0)
+                        {
+                            json = json.Substring(0, lastComma) + "}";
+                        }
+                        else
+                        {
+                            return null; // Can't fix
+                        }
+                    }
+                    else
+                    {
+                        // We're in the middle of a string - close the string and object
+                        json += "\"}";
+
+                        // Now check if we need to add missing default properties
+                        if (!json.Contains("\"Details\""))
+                            json = json.TrimEnd('}') + ",\"Details\":\"\",\"ValidationPassed\":true,\"BackupPath\":\"\",\"IsRead\":false}";
+                        else if (!json.Contains("\"ValidationPassed\""))
+                            json = json.TrimEnd('}') + ",\"ValidationPassed\":true,\"BackupPath\":\"\",\"IsRead\":false}";
+                        else if (!json.Contains("\"BackupPath\""))
+                            json = json.TrimEnd('}') + ",\"BackupPath\":\"\",\"IsRead\":false}";
+                        else if (!json.Contains("\"IsRead\""))
+                            json = json.TrimEnd('}') + ",\"IsRead\":false}";
+                    }
+                }
+
+                // Validate it can be parsed
+                JsonSerializer.Deserialize<BackupLogEntry>(json);
+                return json;
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -321,9 +556,10 @@ namespace BackupCommon
                     // Load service logs
                     allLogs.AddRange(LoadLogsFromFile(ServiceLogFile));
 
-                    // Load all job log files
+                    // Load all job log files (exclude corrupted backups and legacy file)
                     var logFiles = Directory.GetFiles(LogDirectory, "*.json")
-                        .Where(f => !f.Equals(ServiceLogFile, StringComparison.OrdinalIgnoreCase));
+                        .Where(f => !f.Equals(ServiceLogFile, StringComparison.OrdinalIgnoreCase)
+                                 && !Path.GetFileName(f).Contains("_corrupted_"));
 
                     foreach (var logFile in logFiles)
                     {
@@ -390,7 +626,8 @@ namespace BackupCommon
                 {
                     var jobNames = new List<string>();
                     var logFiles = Directory.GetFiles(LogDirectory, "*.json")
-                        .Where(f => !f.Equals(ServiceLogFile, StringComparison.OrdinalIgnoreCase));
+                        .Where(f => !f.Equals(ServiceLogFile, StringComparison.OrdinalIgnoreCase)
+                                 && !Path.GetFileName(f).Contains("_corrupted_"));
 
                     foreach (var logFile in logFiles)
                     {
@@ -418,7 +655,8 @@ namespace BackupCommon
                 try
                 {
                     var cutoffDate = DateTime.Now.AddDays(-daysToKeep);
-                    var logFiles = Directory.GetFiles(LogDirectory, "*.json");
+                    var logFiles = Directory.GetFiles(LogDirectory, "*.json")
+                        .Where(f => !Path.GetFileName(f).Contains("_corrupted_"));
 
                     foreach (var logFile in logFiles)
                     {
@@ -471,7 +709,8 @@ namespace BackupCommon
             {
                 try
                 {
-                    var logFiles = Directory.GetFiles(LogDirectory, "*.json");
+                    var logFiles = Directory.GetFiles(LogDirectory, "*.json")
+                        .Where(f => !Path.GetFileName(f).Contains("_corrupted_"));
 
                     foreach (var logFile in logFiles)
                     {

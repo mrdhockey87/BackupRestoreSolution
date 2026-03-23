@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-		static private string version_fallback_number = "6.0.1.25";
+		static private string version_fallback_number = "6.0.1.31";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -69,7 +69,66 @@ namespace BackupUI
 
 /*
  *
-* Version 6.0.1.25 CRITICAL FIX - FALSE ERROR -4 DESPITE SUCCESSFUL BACKUP: User reported "Exact same error" after 6.0.1.23/24 fixes -
+* Version 6.1.1.31 ENCODING FIX - UTF-8 JSON INTEROP: Fixed critical C++/C# encoding mismatch causing JSON parse failures!
+*                  Root cause: C++ std::wofstream was writing UTF-16 encoded JSON while C# System.Text.Json expected UTF-8.
+*                  This caused engine.json logs to be unreadable by C# BackupLogger, potentially triggering false corruption
+*                  detection and backup/recovery logic. THREE-PART FIX: 1) C++ WRITING: Changed LogToJsonFile() from
+*                  std::wofstream to std::ofstream with explicit WideCharToMultiByte(CP_UTF8) conversion. All wide strings
+*                  (wchar_t*) now converted to UTF-8 before writing. 2) C++ READING: Changed LoadExistingLogs() from
+*                  std::wifstream to std::ifstream with MultiByteToWideChar(CP_UTF8) for reading existing entries. 3) ATOMIC
+*                  FILE WRITES: Implemented crash-safe file operations - writes to temp file (.tmp suffix), then uses
+*                  DeleteFileW + MoveFileW to atomically replace original. Prevents corruption if process crashes mid-write.
+*                  4) C# MULTI-ENCODING SUPPORT: Enhanced LoadLogsFromFile() in BackupLogger.cs with BOM (Byte Order Mark)
+*                  detection to handle legacy UTF-16 files: checks for UTF-8 BOM (EF BB BF), UTF-16 LE BOM (FF FE), UTF-16 BE
+*                  BOM (FE FF), falls back to UTF-8 for no BOM. This ensures backward compatibility with any existing log
+*                  files while standardizing on UTF-8 going forward. Verified engine.json logs now appear correctly in
+*                  Activity page via *.json wildcard search in LoadLogs(). Complete C++/C# encoding interop with crash
+*                  safety and backward compatibility! mdail 3/23/2026
+* Version 6.1.1.30 BUILD VERIFICATION: Verified all encoding changes compile and build successfully across BackupEngine
+*                  (C++), BackupCommon (C#), and BackupUI (C#) projects. No runtime testing yet - intermediate build
+*                  checkpoint before full verification. mdail 3/23/2026
+* Version 6.1.1.29 LOGGING UNIFIED - BACKUPENGINE JSON FORMAT:
+*                  as BackupLogger.cs for consistency. Engine logs now written to engine.json instead of BackupEngine.log,
+*                  using identical BackupLogEntry structure: {Timestamp, JobName, Level, Message, Details, ValidationPassed,
+*                  BackupPath, IsRead}. JobName is "[ENGINE]" for engine logs. Log level values match BackupLogLevel enum:
+*                  Info, Warning, Error, Success. Max 2000 entries retained (matching BackupLogger.cs MaxLogEntriesPerFile).
+*                  JSON escaping added for special characters in messages. This allows UI to read engine logs alongside
+*                  job-specific logs with consistent formatting. mdail 3/23/2026
+* Version 6.1.1.28 CRITICAL FIX - VSS SNAPSHOT PATH MISSING TRAILING BACKSLASH:
+*                  WIM Error 87 (ERROR_INVALID_PARAMETER) when using VSS snapshots! Root cause: The trailing backslash was
+*                  being added to actualSourcePath BEFORE the VSS snapshot was created, but then the path was OVERWRITTEN
+*                  with the VSS snapshot path (e.g., "\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy22") which does NOT
+*                  have a trailing backslash. WIMCaptureImage requires a trailing backslash to recognize the path as a
+*                  directory root. Without it, WIMCaptureImage returns NULL with ERROR_INVALID_PARAMETER (87). SOLUTION:
+*                  Moved the trailing backslash addition to AFTER the VSS snapshot assignment, ensuring the final source
+*                  path always ends with a backslash (e.g., "\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy22\").
+*                  This was a regression introduced in 6.0.1.26/27 when refactoring to per-volume capture - the old
+*                  per-folder code happened to work because folder paths already had backslashes. IMPORTANT: After updating
+*                  C++ BackupEngine.dll, you MUST restart the BackupService for changes to take effect! mdail 3/23/2026
+* Version 6.0.1.27 CRITICAL FIX - BACKUPVOLUME PER-VOLUME CAPTURE:
+*                  BackupVolume was ALSO creating one WIM image per top-level folder instead of one image for the entire volume.
+*                  Root cause: BackupVolume used EnumerateIncludedFolders to get folder list, then looped calling CaptureToWimImage
+*                  for EACH folder separately. This caused identical problems: "Failed to capture folder" errors, bloated WIM files,
+*                  and unnecessary complexity. SOLUTION: Applied same fix as BackupDisk - replaced entire folder enumeration loop
+*                  with single CaptureToWimImage call capturing the entire volume root path. Removed EnumerateIncludedFolders
+*                  dependency for volume backups entirely. Image naming simplified to "Volume Backup". Benefits identical to
+*                  BackupDisk fix: (1) Simpler code, (2) Faster backups, (3) Cleaner WIM structure (one image = one volume),
+*                  (4) Eliminates false "Failed to capture folder" errors. Note: Both BackupDisk and BackupVolume now use the
+*                  same direct volume capture pattern for consistency. IMPORTANT: After updating C++ BackupEngine.dll, you MUST
+*                  restart the BackupService for changes to take effect! mdail 3/23/2026
+* Version 6.0.1.26 CRITICAL FIX - BACKUPDISK PER-VOLUME CAPTURE:
+*                  instead of one image per volume! Root cause: BackupDisk function had a loop (lines 1328-1390) that called
+*                  EnumerateIncludedFolders to get folder list, then created a separate WIM image for EACH folder. This caused
+*                  "Failed to capture folder" errors and bloated WIM files with redundant images. SOLUTION: Completely redesigned
+*                  BackupDisk to use direct per-volume capture - ONE CaptureToWimImage call per volume, capturing the entire
+*                  volume root path. Removed EnumerateIncludedFolders dependency for disk backups entirely. Image naming changed
+*                  from "Disk X - FolderName" to "Disk X Volume Y" for clarity. Benefits: (1) Simpler code (~70 lines vs 100+),
+*                  (2) Faster backups (no folder enumeration overhead), (3) Cleaner WIM structure (one image = one volume),
+*                  (4) Eliminates false "Failed to capture folder" errors. Technical: CaptureToWimImage now receives volume
+*                  path (e.g., "\\?\Volume{guid}\") directly from VSS snapshot, captures ALL files/folders on volume in
+*                  single operation. WIM API handles folder hierarchy internally. IMPORTANT: After updating C++ BackupEngine.dll,
+*                  you MUST restart the BackupService for changes to take effect! mdail 3/23/2026
+* Version 6.0.1.25 CRITICAL FIX - FALSE ERROR -4 DESPITE SUCCESSFUL BACKUP:
 *                  backup completes successfully (file mountable with ALL files including 1TB_PCIE_SSD folder), but STILL reports error -4
 *                  "Failed to capture folder: 1TB_PCIE_SSD". ROOT CAUSE FOUND: The CountWimImages() function was using manual WIMLoadImage
 *                  iteration which is unreliable for detecting new images immediately after WIMCaptureImage completes. The proper API

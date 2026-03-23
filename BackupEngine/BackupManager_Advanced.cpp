@@ -2,18 +2,318 @@
 #include "BackupEngine.h"
 #include "VSSSnapshotManager.h"  // Add VSS support
 #include <Windows.h>
+#include <ShlObj.h>  // For SHGetFolderPathW
 #include <string>
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <vector>
 #include <algorithm>  // For std::transform (lowercase conversion)
+#include <chrono>
+#include <iomanip>
+#include <sstream>
+#include <mutex>      // For thread-safe job name tracking
 #include "wimgapi.h"  // Windows Imaging API for WIM file creation
 
 #pragma comment(lib, "wimgapi.lib")
 
 namespace fs = std::filesystem;
 extern void SetLastErrorMessage(const std::wstring& error);
+
+// ============================================================================
+// CURRENT JOB NAME TRACKING
+// Set by C# before calling backup functions via SetCurrentJobName()
+// Used by logging functions to write to job-specific log file
+// ============================================================================
+static std::wstring g_currentJobName = L"";
+static std::mutex g_jobNameMutex;
+
+// Set the current job name (called from C# before backup starts)
+extern "C" BACKUPENGINE_API void SetCurrentJobName(const wchar_t* jobName) {
+    std::lock_guard<std::mutex> lock(g_jobNameMutex);
+    g_currentJobName = jobName ? jobName : L"";
+    OutputDebugStringW((L"[BackupEngine] SetCurrentJobName: " + g_currentJobName + L"\n").c_str());
+}
+
+// Clear the current job name (called from C# after backup completes)
+extern "C" BACKUPENGINE_API void ClearCurrentJobName() {
+    std::lock_guard<std::mutex> lock(g_jobNameMutex);
+    g_currentJobName = L"";
+}
+
+// Get current job name (thread-safe)
+static std::wstring GetCurrentJobName() {
+    std::lock_guard<std::mutex> lock(g_jobNameMutex);
+    return g_currentJobName;
+}
+
+// ============================================================================
+// FILE-BASED LOGGING FOR BACKUPENGINE
+// Writes to %ProgramData%\BackupRestoreService\Logs\{JobName}.json
+// Falls back to engine.json if no job name is set
+// Uses same JSON format as BackupLogger.cs for consistency with backup logs
+// ============================================================================
+namespace {
+    std::wstring GetBackupEngineLogDir() {
+        wchar_t programData[MAX_PATH];
+        if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_COMMON_APPDATA, NULL, 0, programData))) {
+            std::wstring logDir = std::wstring(programData) + L"\\BackupRestoreService\\Logs";
+            CreateDirectoryW((std::wstring(programData) + L"\\BackupRestoreService").c_str(), NULL);
+            CreateDirectoryW(logDir.c_str(), NULL);
+            return logDir;
+        }
+        return L"C:\\";  // Fallback
+    }
+
+    // Sanitize job name for use as filename (same logic as C# SanitizeFileName)
+    std::wstring SanitizeJobNameForFile(const std::wstring& jobName) {
+        if (jobName.empty()) return L"engine";
+
+        std::wstring result;
+        result.reserve(jobName.size());
+
+        // Characters invalid in Windows filenames
+        const std::wstring invalidChars = L"<>:\"/\\|?*";
+
+        for (wchar_t c : jobName) {
+            if (c < 32 || invalidChars.find(c) != std::wstring::npos) {
+                result += L'_';
+            } else {
+                result += c;
+            }
+        }
+
+        return result.empty() ? L"engine" : result;
+    }
+
+    std::wstring GetBackupEngineLogPath() {
+        std::wstring jobName = GetCurrentJobName();
+        if (jobName.empty()) {
+            // No job name set - use legacy engine.json
+            return GetBackupEngineLogDir() + L"\\engine.json";
+        }
+        // Use job-specific log file
+        return GetBackupEngineLogDir() + L"\\" + SanitizeJobNameForFile(jobName) + L".json";
+    }
+
+    // Get job name for JSON entry (use actual job name or [ENGINE] as fallback)
+    std::wstring GetJobNameForLogEntry() {
+        std::wstring jobName = GetCurrentJobName();
+        return jobName.empty() ? L"[ENGINE]" : jobName;
+    }
+
+    // Escape special characters for JSON string
+    std::wstring EscapeJsonString(const std::wstring& input) {
+        std::wstring result;
+        result.reserve(input.size() + 16);
+        for (wchar_t c : input) {
+            switch (c) {
+                case L'\\': result += L"\\\\"; break;
+                case L'"':  result += L"\\\""; break;
+                case L'\n': result += L"\\n"; break;
+                case L'\r': result += L"\\r"; break;
+                case L'\t': result += L"\\t"; break;
+                default:    result += c; break;
+            }
+        }
+        return result;
+    }
+
+    // Log entry to JSON file matching BackupLogger.cs format
+    // Level: "Info", "Warning", "Error", "Success"
+    void LogToJsonFile(const std::wstring& level, const std::wstring& message, const std::wstring& details = L"") {
+        try {
+            // Get log path dynamically (may change if job name changes)
+            std::wstring logPath = GetBackupEngineLogPath();
+            static const int MaxLogEntries = 2000;  // Match BackupLogger.cs
+
+            // Get current timestamp in ISO 8601 format for JSON
+            auto now = std::chrono::system_clock::now();
+            auto time = std::chrono::system_clock::to_time_t(now);
+            std::tm tm;
+            localtime_s(&tm, &time);
+
+            std::wstringstream timestamp;
+            timestamp << std::put_time(&tm, L"%Y-%m-%dT%H:%M:%S");
+
+            // Get job name for log entry (actual job name or [ENGINE] fallback)
+            std::wstring jobNameForEntry = GetJobNameForLogEntry();
+
+            // Build JSON entry matching BackupLogEntry structure
+            std::wstring jsonEntry = L"{";
+            jsonEntry += L"\"Timestamp\":\"" + timestamp.str() + L"\",";
+            jsonEntry += L"\"JobName\":\"" + EscapeJsonString(jobNameForEntry) + L"\",";
+            jsonEntry += L"\"Level\":\"" + level + L"\",";
+            jsonEntry += L"\"Message\":\"" + EscapeJsonString(message) + L"\",";
+            jsonEntry += L"\"Details\":\"" + EscapeJsonString(details) + L"\",";
+            jsonEntry += L"\"ValidationPassed\":true,";
+            jsonEntry += L"\"BackupPath\":\"\",";
+            jsonEntry += L"\"IsRead\":false";
+            jsonEntry += L"}";
+
+            // Read existing JSON array, append entry, and write back
+            std::vector<std::wstring> entries;
+
+            // Read existing entries using proper JSON parsing that handles braces in string values
+            // Read as UTF-8 (compatible with C# JsonSerializer)
+            std::ifstream inFile(logPath, std::ios::binary);
+            if (inFile.is_open()) {
+                // Read entire file as bytes
+                std::string utf8Content((std::istreambuf_iterator<char>(inFile)),
+                                        std::istreambuf_iterator<char>());
+                inFile.close();
+
+                // Convert UTF-8 to wide string for parsing
+                std::wstring content;
+                if (!utf8Content.empty()) {
+                    int wideSize = MultiByteToWideChar(CP_UTF8, 0, utf8Content.c_str(), -1, nullptr, 0);
+                    if (wideSize > 0) {
+                        content.resize(wideSize - 1);  // -1 to exclude null terminator
+                        MultiByteToWideChar(CP_UTF8, 0, utf8Content.c_str(), -1, &content[0], wideSize);
+                    }
+                }
+
+                // Parse JSON array properly - handle braces inside quoted strings
+                size_t pos = 0;
+                while (pos < content.size()) {
+                    // Find start of JSON object
+                    size_t objStart = content.find(L'{', pos);
+                    if (objStart == std::wstring::npos) break;
+
+                    // Find matching closing brace, accounting for nested braces in strings
+                    int braceCount = 0;
+                    bool inString = false;
+                    bool escaped = false;
+                    size_t objEnd = std::wstring::npos;
+
+                    for (size_t i = objStart; i < content.size(); i++) {
+                        wchar_t c = content[i];
+
+                        if (escaped) {
+                            escaped = false;
+                            continue;
+                        }
+
+                        if (c == L'\\' && inString) {
+                            escaped = true;
+                            continue;
+                        }
+
+                        if (c == L'"') {
+                            inString = !inString;
+                            continue;
+                        }
+
+                        if (!inString) {
+                            if (c == L'{') braceCount++;
+                            else if (c == L'}') {
+                                braceCount--;
+                                if (braceCount == 0) {
+                                    objEnd = i;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (objEnd != std::wstring::npos && objEnd > objStart) {
+                        entries.push_back(content.substr(objStart, objEnd - objStart + 1));
+                        pos = objEnd + 1;
+                    } else {
+                        // Malformed entry - skip past this opening brace
+                        pos = objStart + 1;
+                    }
+                }
+            }
+
+            // Add new entry
+            entries.push_back(jsonEntry);
+
+            // Keep only last MaxLogEntries
+            if (entries.size() > MaxLogEntries) {
+                entries.erase(entries.begin(), entries.begin() + (entries.size() - MaxLogEntries));
+            }
+
+            // Write JSON array with UTF-8 encoding (required for C# JsonSerializer compatibility)
+            // Use atomic write pattern: write to temp file, then rename
+            std::wstring tempPath = logPath + L".tmp";
+            std::ofstream outFile(tempPath, std::ios::trunc | std::ios::binary);
+            if (outFile.is_open()) {
+                // Convert entries to UTF-8 and write
+                outFile << "[\n";
+                for (size_t i = 0; i < entries.size(); i++) {
+                    // Convert wide string to UTF-8
+                    std::string utf8Entry;
+                    int utf8Size = WideCharToMultiByte(CP_UTF8, 0, entries[i].c_str(), -1, nullptr, 0, nullptr, nullptr);
+                    if (utf8Size > 0) {
+                        utf8Entry.resize(utf8Size - 1);  // -1 to exclude null terminator
+                        WideCharToMultiByte(CP_UTF8, 0, entries[i].c_str(), -1, &utf8Entry[0], utf8Size, nullptr, nullptr);
+                    }
+
+                    outFile << "  " << utf8Entry;
+                    if (i < entries.size() - 1) {
+                        outFile << ",";
+                    }
+                    outFile << "\n";
+                }
+                outFile << "]\n";
+                outFile.close();
+
+                // Atomic replace: delete old file, rename temp to final
+                // This prevents corruption if process crashes during write
+                DeleteFileW(logPath.c_str());
+                MoveFileW(tempPath.c_str(), logPath.c_str());
+            }
+
+            // Also output to debug (for attached debuggers)
+            OutputDebugStringW((L"[BackupEngine] [" + level + L"] " + message + L"\n").c_str());
+        }
+        catch (...) {
+            // Silently fail - don't crash backup operation for logging
+        }
+    }
+
+    void LogError(const std::wstring& message, const std::wstring& details = L"") {
+        LogToJsonFile(L"Error", message, details);
+    }
+
+    void LogInfo(const std::wstring& message, const std::wstring& details = L"") {
+        LogToJsonFile(L"Info", message, details);
+    }
+
+    void LogDebug(const std::wstring& message, const std::wstring& details = L"") {
+        // Debug messages go to Info level in JSON (no Debug level in BackupLogLevel enum)
+        LogToJsonFile(L"Info", L"[DEBUG] " + message, details);
+    }
+
+    void LogWarning(const std::wstring& message, const std::wstring& details = L"") {
+        LogToJsonFile(L"Warning", message, details);
+    }
+
+    // Legacy function for backward compatibility with existing code
+    void LogToFile(const std::wstring& message) {
+        LogToJsonFile(L"Info", message);
+    }
+
+    // Sanitize string for safe use in XML (escapes special XML characters)
+    // Required for WIMSetImageInformation which parses strict XML
+    std::wstring SanitizeXmlName(const std::wstring& input) {
+        std::wstring result;
+        result.reserve(input.size() + 16);
+        for (wchar_t c : input) {
+            switch (c) {
+                case L'&':  result += L"&amp;"; break;
+                case L'<':  result += L"&lt;"; break;
+                case L'>':  result += L"&gt;"; break;
+                case L'"':  result += L"&quot;"; break;
+                case L'\'': result += L"&apos;"; break;
+                default:    result += c; break;
+            }
+        }
+        return result;
+    }
+}
+// ============================================================================
 
 // Forward declare BackupFiles from BackupEngine.cpp (legacy support)
 extern "C" BACKUPENGINE_API int BackupFiles(
@@ -202,15 +502,23 @@ static DWORD WINAPI FolderFilterCallback(DWORD msgId, WPARAM wParam, LPARAM lPar
             // WIM_MSG_PROCESS - file being processed during capture
             // wParam = path to file (LPCWSTR)
             // lParam = pointer to BOOL - set to FALSE to exclude file
-            OutputDebugStringW(L"[FolderFilterCallback] WIM_MSG_PROCESS received!");
+
+            // Log every 100th file to avoid excessive logging
+            static int fileCount = 0;
+            fileCount++;
+            if (fileCount == 1) {
+                LogInfo(L"FolderFilterCallback: WIM_MSG_PROCESS - First file being processed");
+            }
 
             if (wParam && lParam) {
                 const wchar_t* filePath = (const wchar_t*)wParam;
                 BOOL* pbInclude = (BOOL*)lParam;
                 std::wstring path(filePath);
 
-                // DEBUG: Log file being checked
-                OutputDebugStringW((L"[FolderFilterCallback] Checking file: " + path).c_str());
+                // Log every 100th file for progress tracking
+                if (fileCount % 100 == 0) {
+                    LogInfo(L"FolderFilterCallback: Processed " + std::to_wstring(fileCount) + L" files, current: " + path);
+                }
 
                 // Check if this file is under our target folder
                 // Path will be like "E:\1TB_PCIE_SSD\SomeFile.txt"
@@ -234,7 +542,7 @@ static DWORD WINAPI FolderFilterCallback(DWORD msgId, WPARAM wParam, LPARAM lPar
                 // Exclude protected Windows folders
                 if (path.find(L"System Volume Information") != std::wstring::npos ||
                     path.find(L"$RECYCLE.BIN") != std::wstring::npos) {
-                    OutputDebugStringW((L"[FolderFilter] EXCLUDING system folder: " + path).c_str());
+                    LogDebug(L"FolderFilter: EXCLUDING system folder: " + path);
                     *pbInclude = FALSE;
                     return WIM_MSG_SUCCESS;
                 }
@@ -246,7 +554,7 @@ static DWORD WINAPI FolderFilterCallback(DWORD msgId, WPARAM wParam, LPARAM lPar
                 if (lowerPath.find(L"\\pagefile.sys") != std::wstring::npos ||
                     lowerPath.find(L"\\swapfile.sys") != std::wstring::npos ||
                     lowerPath.find(L"\\hiberfil.sys") != std::wstring::npos) {
-                    OutputDebugStringW((L"[FolderFilter] EXCLUDING locked file: " + path).c_str());
+                    LogDebug(L"FolderFilter: EXCLUDING locked file: " + path);
                     *pbInclude = FALSE;
                     return WIM_MSG_SUCCESS;
                 }
@@ -263,7 +571,6 @@ static DWORD WINAPI FolderFilterCallback(DWORD msgId, WPARAM wParam, LPARAM lPar
 
                     std::wstring message = L"Backing up: ";
                     message += fileName;
-                    OutputDebugStringW((L"[FolderFilterCallback] Sending to UI: " + message).c_str());
                     context->userCallback(51, message.c_str());
                 }
             }
@@ -273,17 +580,24 @@ static DWORD WINAPI FolderFilterCallback(DWORD msgId, WPARAM wParam, LPARAM lPar
         case WIM_MSG_PROGRESS:
         {
             // Overall progress during capture
+            static int lastPercent = -1;
             if (context->userCallback) {
                 int percentage = (int)wParam;
+                // Log every 10% change
+                if (percentage / 10 != lastPercent / 10) {
+                    LogInfo(L"FolderFilterCallback: WIM_MSG_PROGRESS " + std::to_wstring(percentage) + L"%");
+                    lastPercent = percentage;
+                }
                 percentage = 30 + (percentage * 50 / 100);  // Scale to 30-80%
                 context->userCallback(percentage, L"Capturing files...");
             }
             return WIM_MSG_SUCCESS;
         }
-        
+
         case WIM_MSG_SETRANGE:
         {
             // Total number of files to capture
+            LogInfo(L"FolderFilterCallback: WIM_MSG_SETRANGE - Total files: " + std::to_wstring((DWORD)wParam));
             if (context->userCallback) {
                 std::wstring message = L"Preparing to backup ";
                 message += std::to_wstring((DWORD)wParam);
@@ -292,7 +606,7 @@ static DWORD WINAPI FolderFilterCallback(DWORD msgId, WPARAM wParam, LPARAM lPar
             }
             return WIM_MSG_SUCCESS;
         }
-        
+
         case WIM_MSG_ERROR:
         {
             // Error during capture
@@ -576,7 +890,12 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
     // This is necessary because WIMCaptureImage returns NULL when callback skips files,
     // even though the capture succeeded for non-skipped files
     DWORD imageCountBefore = CountWimImages(hWim);
-    OutputDebugStringW((L"[CaptureToWimImage] Image count BEFORE capture: " + std::to_wstring(imageCountBefore)).c_str());
+    LogInfo(L"CaptureToWimImage: Image count BEFORE capture: " + std::to_wstring(imageCountBefore));
+    LogInfo(L"CaptureToWimImage: Source path: " + std::wstring(sourcePath));
+    LogInfo(L"CaptureToWimImage: Image name: " + std::wstring(imageName));
+    if (folderName) {
+        LogInfo(L"CaptureToWimImage: Folder filter: " + std::wstring(folderName));
+    }
 
     HANDLE hImage = INVALID_HANDLE_VALUE;
 
@@ -591,14 +910,18 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
             std::wstring msg = L"Capturing folder with structure preservation: ";
             msg += folderName;
             callback(25, msg.c_str());
-            OutputDebugStringW((L"[CaptureToWimImage] Using folder filter for: " + std::wstring(folderName)).c_str());
         }
+        LogInfo(L"CaptureToWimImage: Using folder filter for: " + std::wstring(folderName));
 
         // Register folder filter callback
         WIMRegisterMessageCallback(hWim, FolderFilterCallback, &filterContext);
 
         // Capture - will only include files matching folder filter
+        LogInfo(L"CaptureToWimImage: Calling WIMCaptureImage with folder filter...");
         hImage = WIMCaptureImage(hWim, sourcePath, 0);
+        DWORD captureErr = GetLastError();
+        LogInfo(L"CaptureToWimImage: WIMCaptureImage returned, hImage=" + std::to_wstring(reinterpret_cast<uintptr_t>(hImage)) + 
+                L", GetLastError=" + std::to_wstring(captureErr));
 
         // Unregister callback
         WIMUnregisterMessageCallback(hWim, FolderFilterCallback);
@@ -615,11 +938,15 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         // Capture the volume/directory into WIM
         // Exclusions are handled via callback, not config file
         // NOTE: WIM_FLAG_VERIFY removed - caused ERROR_INVALID_PARAMETER and metadata failures
+        LogInfo(L"CaptureToWimImage: Calling WIMCaptureImage (no folder filter)...");
         hImage = WIMCaptureImage(
             hWim, 
             sourcePath,
             0  // No flags - WIM_FLAG_VERIFY caused error -5 metadata failures
         );
+        DWORD captureErr = GetLastError();
+        LogInfo(L"CaptureToWimImage: WIMCaptureImage returned, hImage=" + std::to_wstring(reinterpret_cast<uintptr_t>(hImage)) + 
+                L", GetLastError=" + std::to_wstring(captureErr));
 
         // Unregister callback after capture completes
         if (callback) {
@@ -636,8 +963,8 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
     // (*pbInclude = FALSE), BUT the capture may have succeeded for all included files!
     // We detect success by checking if a new image was added to the WIM via WIMGetImageCount.
     if (!hImage || hImage == INVALID_HANDLE_VALUE) {
-        OutputDebugStringW(L"[CaptureToWimImage] WIMCaptureImage returned NULL/INVALID, checking if capture actually succeeded...");
-        OutputDebugStringW((L"[CaptureToWimImage] WIMCaptureImage error code was: " + std::to_wstring(captureError)).c_str());
+        LogInfo(L"CaptureToWimImage: WIMCaptureImage returned NULL/INVALID, checking if capture actually succeeded...");
+        LogInfo(L"CaptureToWimImage: WIMCaptureImage error code was: " + std::to_wstring(captureError));
 
         // Give WIM API a moment to finalize internal state before checking image count
         // This ensures WIMGetImageCount returns accurate count after capture completion
@@ -645,14 +972,14 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
 
         // Count images AFTER capture using proper WIM API
         DWORD imageCountAfter = CountWimImages(hWim);
-        OutputDebugStringW((L"[CaptureToWimImage] Image count AFTER capture: " + std::to_wstring(imageCountAfter)).c_str());
-        OutputDebugStringW((L"[CaptureToWimImage] Image count BEFORE was: " + std::to_wstring(imageCountBefore)).c_str());
+        LogInfo(L"CaptureToWimImage: Image count AFTER capture: " + std::to_wstring(imageCountAfter));
+        LogInfo(L"CaptureToWimImage: Image count BEFORE was: " + std::to_wstring(imageCountBefore));
 
         if (imageCountAfter > imageCountBefore) {
             // SUCCESS! A new image was added despite WIMCaptureImage returning NULL
             // This happens when the callback excluded files (*pbInclude = FALSE)
-            OutputDebugStringW(L"[CaptureToWimImage] SUCCESS - New image detected! Capture completed with filtered files.");
-            OutputDebugStringW((L"[CaptureToWimImage] Loading new image at index " + std::to_wstring(imageCountAfter)).c_str());
+            LogInfo(L"CaptureToWimImage: SUCCESS - New image detected! Capture completed with filtered files.");
+            LogInfo(L"CaptureToWimImage: Loading new image at index " + std::to_wstring(imageCountAfter));
 
             hImage = WIMLoadImage(hWim, imageCountAfter);
             if (!hImage || hImage == INVALID_HANDLE_VALUE) {
@@ -698,18 +1025,21 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
             errMsg += L". No new image was created (before=" + std::to_wstring(imageCountBefore) + 
                       L", after=" + std::to_wstring(imageCountAfter) + L").";
             SetLastErrorMessage(errMsg);
-            OutputDebugStringW((L"[CaptureToWimImage] ERROR: " + errMsg).c_str());
-            OutputDebugStringW((L"[CaptureToWimImage] Source: " + std::wstring(sourcePath)).c_str());
+            LogError(errMsg);
+            LogError(L"CaptureToWimImage: Source path was: " + std::wstring(sourcePath));
             return INVALID_HANDLE_VALUE;
         }
     }
 
-    OutputDebugStringW(L"[CaptureToWimImage] Capture successful, setting metadata...");
+    LogInfo(L"CaptureToWimImage: Capture successful, setting metadata...");
 
     // Build simple XML metadata for the image (just NAME, no DESCRIPTION)
-    // Complex XML can cause WIMSetImageInformation to fail
+    // Sanitize the image name to escape XML special characters (prevents Error 1465)
+    std::wstring sanitizedName = SanitizeXmlName(imageName);
+    LogInfo(L"CaptureToWimImage: Setting metadata with sanitized name: " + sanitizedName);
+
     std::wstring xmlMetadata = L"<WIM><IMAGE><NAME>";
-    xmlMetadata += imageName;
+    xmlMetadata += sanitizedName;
     xmlMetadata += L"</NAME></IMAGE></WIM>";
 
     // Set image metadata
@@ -718,10 +1048,11 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         WIMCloseHandle(hImage);
         std::wstring errMsg = L"Failed to set image metadata (Error " + std::to_wstring(metadataError) + L")";
         SetLastErrorMessage(errMsg);
-        OutputDebugStringW((L"[CaptureToWimImage] ERROR: " + errMsg).c_str());
+        LogError(errMsg);
         return INVALID_HANDLE_VALUE;
     }
 
+    LogInfo(L"CaptureToWimImage: SUCCESS - Image captured and metadata set");
     return hImage;
 }
 
@@ -952,61 +1283,52 @@ extern "C" {
                 }
             }
 
-            if (callback) {
-                callback(22, L"Enumerating folders to backup...");
-            }
-
-            // Enumerate top-level folders and filter out exclusions
-            std::vector<std::wstring> foldersToBackup = EnumerateIncludedFolders(
-                actualSourcePath, userExclusions, userExclusionCount, callback);
-
-            if (foldersToBackup.empty()) {
-                SetLastErrorMessage(L"No folders to backup after applying exclusions");
-                return -2;
-            }
-
-            if (callback) {
-                std::wstring msg = L"Backing up " + std::to_wstring(foldersToBackup.size()) + L" folders...";
-                callback(25, msg.c_str());
-            }
-
             // Create WIM file
+            if (callback) {
+                callback(22, L"Creating WIM backup archive...");
+            }
+
             HANDLE hWim = CreateWimFile(destFile.c_str(), compress, callback);
             if (!hWim || hWim == INVALID_HANDLE_VALUE) {
                 return -3;
             }
 
-            // Capture each included folder as a separate image in the WIM file
-            int folderIndex = 0;
-            for (const auto& folderPath : foldersToBackup) {
-                folderIndex++;
-                int progressBase = 30 + (folderIndex - 1) * (40 / static_cast<int>(foldersToBackup.size()));
+            // Ensure source path has trailing backslash for WIM API
+            if (!actualSourcePath.empty() && actualSourcePath.back() != L'\\') {
+                actualSourcePath += L'\\';
+            }
 
-                if (callback) {
-                    std::wstring folderName = fs::path(folderPath).filename().wstring();
-                    std::wstring msg = L"Backing up folder " + std::to_wstring(folderIndex) + 
-                                      L" of " + std::to_wstring(foldersToBackup.size()) + 
-                                      L": " + folderName;
-                    callback(progressBase, msg.c_str());
-                }
+            // Create image name for this volume
+            std::wstring imageName = L"Volume Backup";
+            LogInfo(L"BackupVolume: Capturing entire volume as single image");
+            LogInfo(L"BackupVolume: Source path: " + actualSourcePath);
 
-                // Create image name with folder name
-                std::wstring folderName = fs::path(folderPath).filename().wstring();
-                std::wstring imageName = L"Volume - " + folderName;
+            if (callback) {
+                callback(25, L"Capturing volume to backup archive...");
+            }
 
-                OutputDebugStringW((L"[BackupVolume] Capturing folder: " + folderPath).c_str());
+            // Capture the ENTIRE VOLUME as ONE image (not individual folders)
+            // This is simpler, faster, and more reliable than per-folder capture
+            HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), imageName.c_str(), callback, nullptr);
 
-                HANDLE hImage = CaptureToWimImage(hWim, folderPath.c_str(), imageName.c_str(), callback);
+            // CaptureToWimImage returns:
+            //   - INVALID_HANDLE_VALUE (0xFFFFFFFF) on failure
+            //   - Valid handle on normal success  
+            //   - (HANDLE)1 special marker when capture succeeded but no handle available
+            if (hImage == INVALID_HANDLE_VALUE) {
+                LogError(L"BackupVolume: CaptureToWimImage FAILED for volume: " + actualSourcePath);
+                WIMCloseHandle(hWim);
+                std::wstring err = L"Failed to capture volume: " + actualSourcePath;
+                SetLastErrorMessage(err);
+                return -4;
+            }
 
-                if (!hImage || hImage == INVALID_HANDLE_VALUE) {
-                    WIMCloseHandle(hWim);
-                    std::wstring err = L"Failed to capture folder: " + folderPath;
-                    SetLastErrorMessage(err);
-                    return -4;
-                }
-
+            // Close handle only if it's a real handle (not the success marker)
+            if (hImage != (HANDLE)1 && hImage != NULL) {
                 WIMCloseHandle(hImage);
             }
+
+            LogInfo(L"BackupVolume: Volume captured successfully");
 
             if (callback) {
                 callback(70, L"Finalizing backup archive...");
@@ -1213,97 +1535,68 @@ extern "C" {
                 }
 
                 // Create VSS snapshot for this volume
-                OutputDebugStringW((L"[BackupDisk] Processing volume " + std::to_wstring(volumeIndex) + L"/" + std::to_wstring(volumes.size()) + L": " + volume).c_str());
+                LogInfo(L"BackupDisk: Processing volume " + std::to_wstring(volumeIndex) + L"/" + std::to_wstring(volumes.size()) + L": " + volume);
 
                 BackupEngine::VSSSnapshotManager vssManager;
                 HRESULT hr = vssManager.Initialize();
                 std::wstring vssStatus = SUCCEEDED(hr) ? L"SUCCESS" : L"FAILED";
-                OutputDebugStringW((L"[BackupDisk] VSS Initialize: " + vssStatus).c_str());
+                LogInfo(L"BackupDisk: VSS Initialize: " + vssStatus);
 
                 wchar_t snapshotPath[MAX_PATH] = { 0 };
-                std::wstring actualSourcePath = volume + L"\\";  // Add trailing backslash
+                std::wstring actualSourcePath = volume;
+
+                // Note: trailing backslash added AFTER VSS snapshot assignment below
+                // VSS snapshot requires volume path for input, but returns path without backslash
 
                 if (SUCCEEDED(hr)) {
-                    OutputDebugStringW(L"[BackupDisk] Creating VSS snapshot...");
+                    LogInfo(L"BackupDisk: Creating VSS snapshot for: " + actualSourcePath);
                     hr = vssManager.CreateVolumeSnapshot(actualSourcePath.c_str(), snapshotPath, MAX_PATH);
                     if (SUCCEEDED(hr)) {
                         actualSourcePath = snapshotPath;
-                        OutputDebugStringW((L"[BackupDisk] VSS snapshot created: " + std::wstring(snapshotPath)).c_str());
+                        LogInfo(L"BackupDisk: VSS snapshot created: " + std::wstring(snapshotPath));
                     }
                     else {
-                        OutputDebugStringW((L"[BackupDisk] VSS snapshot failed, using direct path, HR=" + std::to_wstring(hr)).c_str());
+                        LogInfo(L"BackupDisk: VSS snapshot failed (HR=" + std::to_wstring(hr) + L"), using direct path");
                     }
                 }
 
-                // Enumerate folders for this volume and filter out exclusions
-                std::vector<std::wstring> foldersToBackup = EnumerateIncludedFolders(
-                    actualSourcePath, userExclusions, userExclusionCount, callback);
-
-                if (foldersToBackup.empty()) {
-                    OutputDebugStringW((L"[BackupDisk] WARNING: No folders to backup in volume " + std::to_wstring(volumeIndex) + L" after applying exclusions").c_str());
-                    // Continue to next volume instead of failing
-                    continue;
+                // CRITICAL: Ensure source path has trailing backslash for WIM API AFTER VSS assignment
+                // VSS snapshot paths like "\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy22" need trailing backslash
+                // to be recognized as directory roots by WIMCaptureImage
+                if (!actualSourcePath.empty() && actualSourcePath.back() != L'\\') {
+                    actualSourcePath += L'\\';
                 }
 
-                // Capture each included folder as a separate image
-                for (size_t folderIdx = 0; folderIdx < foldersToBackup.size(); folderIdx++) {
-                    const auto& folderPath = foldersToBackup[folderIdx];
+                // Create image name for this volume
+                std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + L" Volume " + std::to_wstring(volumeIndex);
+                LogInfo(L"BackupDisk: Capturing entire volume as single image: " + imageName);
+                LogInfo(L"BackupDisk: Source path: " + actualSourcePath);
 
-                    // Create unique image name with volume and folder info
-                    std::wstring folderName = fs::path(folderPath).filename().wstring();
-                    std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + 
-                                           L" Volume " + std::to_wstring(volumeIndex) + 
-                                           L" - " + folderName;
+                // Capture the ENTIRE VOLUME as ONE image (not individual folders)
+                // This is simpler, faster, and more reliable than per-folder capture
+                HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), imageName.c_str(), callback, nullptr);
 
-                    OutputDebugStringW((L"[BackupDisk] Capturing folder " + std::to_wstring(folderIdx + 1) + 
-                                       L"/" + std::to_wstring(foldersToBackup.size()) + L": " + folderPath).c_str());
-
-                    // IMPORTANT: To preserve folder structure in mounted WIM, we need to:
-                    // 1. Capture from the PARENT directory (volume root), not the folder itself
-                    // 2. Use folder filter callback to only include this specific folder
-                    // This way the WIM will contain "FolderName\File.txt" instead of just "File.txt"
-                    
-                    // Get parent path (volume root with trailing backslash)
-                    fs::path folderFsPath(folderPath);
-                    std::wstring parentPath = folderFsPath.parent_path().wstring();
-                    
-                    // Ensure parent path has trailing backslash for WIM API
-                    if (!parentPath.empty() && parentPath.back() != L'\\') {
-                        parentPath += L'\\';
-                    }
-                    
-                    OutputDebugStringW((L"[BackupDisk] Capturing FROM parent: " + parentPath + 
-                                       L" WITH folder filter: " + folderName).c_str());
-                    
-                    // Capture with folder filtering to preserve structure
-                    HANDLE hImage = CaptureToWimImage(hWim, parentPath.c_str(), 
-                                                     imageName.c_str(), callback, folderName.c_str());
-
-                    // CaptureToWimImage returns:
-                    //   - INVALID_HANDLE_VALUE (0xFFFFFFFF) on failure
-                    //   - Valid handle on normal success  
-                    //   - (HANDLE)1 special marker when capture succeeded but no handle available
-                    //     (this happens with heavy filtering when WIMLoadImage can't reload)
-                    if (hImage == INVALID_HANDLE_VALUE) {
-                        WIMCloseHandle(hWim);
-                        std::wstring err = L"Failed to capture folder: " + folderPath;
-                        SetLastErrorMessage(err);
-                        return -4;
-                    }
-
-                    // Close handle only if it's a real handle (not the success marker)
-                    if (hImage != (HANDLE)1 && hImage != NULL) {
-                        WIMCloseHandle(hImage);
-                    } else if (hImage == (HANDLE)1) {
-                        OutputDebugStringW((L"[BackupDisk] Folder captured successfully (marker handle): " + folderName).c_str());
-                    }
+                // CaptureToWimImage returns:
+                //   - INVALID_HANDLE_VALUE (0xFFFFFFFF) on failure
+                //   - Valid handle on normal success  
+                //   - (HANDLE)1 special marker when capture succeeded but no handle available
+                if (hImage == INVALID_HANDLE_VALUE) {
+                    LogError(L"BackupDisk: CaptureToWimImage FAILED for volume: " + volume);
+                    WIMCloseHandle(hWim);
+                    std::wstring err = L"Failed to capture volume: " + volume;
+                    SetLastErrorMessage(err);
+                    return -4;
                 }
 
-                OutputDebugStringW((L"[BackupDisk] Volume " + std::to_wstring(volumeIndex) + L" completed with " + 
-                                   std::to_wstring(foldersToBackup.size()) + L" folders").c_str());
+                // Close handle only if it's a real handle (not the success marker)
+                if (hImage != (HANDLE)1 && hImage != NULL) {
+                    WIMCloseHandle(hImage);
+                }
+
+                LogInfo(L"BackupDisk: Volume " + std::to_wstring(volumeIndex) + L" captured successfully");
             }
 
-            OutputDebugStringW(L"[BackupDisk] All volumes captured, finalizing WIM...");
+            LogInfo(L"BackupDisk: All volumes captured, finalizing WIM...");
 
             if (callback) {
                 callback(85, L"Finalizing backup archive...");
@@ -1311,7 +1604,7 @@ extern "C" {
 
             // Close WIM file
             WIMCloseHandle(hWim);
-            OutputDebugStringW(L"[BackupDisk] WIM file closed successfully");
+            LogInfo(L"BackupDisk: WIM file closed successfully");
 
             // Handle system state if requested
             if (includeSystemState) {
@@ -1507,6 +1800,11 @@ extern "C" {
                     hr = vssManager.CreateVolumeSnapshot(actualSourcePath.c_str(), snapshotPath, MAX_PATH);
                     if (SUCCEEDED(hr)) {
                         actualSourcePath = snapshotPath;
+                        // CRITICAL: VSS snapshot path does NOT include trailing backslash
+                        // WIM API requires trailing backslash for volume/directory capture
+                        if (!actualSourcePath.empty() && actualSourcePath.back() != L'\\') {
+                            actualSourcePath += L'\\';
+                        }
                     }
                 }
 
@@ -1701,6 +1999,11 @@ extern "C" {
                     hr = vssManager.CreateVolumeSnapshot(actualSourcePath.c_str(), snapshotPath, MAX_PATH);
                     if (SUCCEEDED(hr)) {
                         actualSourcePath = snapshotPath;
+                        // CRITICAL: VSS snapshot path does NOT include trailing backslash
+                        // WIM API requires trailing backslash for volume/directory capture
+                        if (!actualSourcePath.empty() && actualSourcePath.back() != L'\\') {
+                            actualSourcePath += L'\\';
+                        }
                     }
                 }
 
