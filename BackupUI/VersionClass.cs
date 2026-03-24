@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-		static private string version_fallback_number = "6.0.1.32";
+		static private string version_fallback_number = "6.1.1.33";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
