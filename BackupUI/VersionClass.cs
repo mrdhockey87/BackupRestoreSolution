@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-		static private string version_fallback_number = "6.0.1.31";
+		static private string version_fallback_number = "6.0.1.32";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -69,7 +69,23 @@ namespace BackupUI
 
 /*
  *
-* Version 6.1.1.31 ENCODING FIX - UTF-8 JSON INTEROP: Fixed critical C++/C# encoding mismatch causing JSON parse failures!
+* Version 6.1.1.33 fix the props file to better target all windows 10 after the aniverery update. mdail 3/24/2026
+* Version 6.1.1.32 CRITICAL FIX - WIMGAPI STUB REMOVAL + ADK COMPLIANCE: Fixed error 1465 "Failed to set image metadata" during backup!
+*                  Root cause: Project had a LOCAL STUB wimgapi.h with INCORRECT API signatures that shadowed the real Windows ADK header.
+*                  The stub declared WIMSetImageInformation with only 2 parameters (HANDLE, LPCWSTR) but the actual Windows ADK API
+*                  requires 3 parameters: WIMSetImageInformation(HANDLE hImage, PVOID pvImageInfo, DWORD cbImageInfo). Additional stub
+*                  errors: WIMGetImageCount was declared with output parameter but ADK returns count directly; WIM_FLAG_REFERENCE
+*                  constant doesn't exist in ADK; callback functions need FARPROC cast. FIX APPLIED: 1) DELETED local BackupEngine/wimgapi.h
+*                  stub - project now uses ONLY the official Windows ADK header from "C:\Program Files (x86)\Windows Kits\10\Assessment
+*                  and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Include\wimgapi.h". 2) Changed #include "wimgapi.h" (quotes=local first)
+*                  to #include <wimgapi.h> (angle brackets=system/ADK first) in BackupManager_Advanced.cpp. 3) Fixed WIMGetImageCount call
+*                  to use ADK signature (returns DWORD directly, not via output parameter). 4) Fixed WIMRegisterMessageCallback and
+*                  WIMUnregisterMessageCallback to cast callback functions to FARPROC as required by ADK. 5) Removed non-existent
+*                  WIM_FLAG_REFERENCE from WIMCreateFile calls for incremental/differential backups. 6) Added cbImageInfo size parameter
+*                  to WIMSetImageInformation call. The stub was causing error 1465 (ERROR_RESOURCE_NOT_PRESENT) because the WIM API
+*                  couldn't determine metadata buffer length without the size parameter. LESSON: Never use stub headers for Windows APIs -
+*                  always use official SDK/ADK headers! IMPORTANT: Restart BackupRestoreService after rebuild! mdail 3/24/2026
+* Version 6.1.1.31 ENCODING FIX - UTF-8 JSON INTEROP:
 *                  Root cause: C++ std::wofstream was writing UTF-16 encoded JSON while C# System.Text.Json expected UTF-8.
 *                  This caused engine.json logs to be unreadable by C# BackupLogger, potentially triggering false corruption
 *                  detection and backup/recovery logic. THREE-PART FIX: 1) C++ WRITING: Changed LogToJsonFile() from

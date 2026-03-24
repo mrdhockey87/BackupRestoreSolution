@@ -5,8 +5,8 @@
        ================================================================
              ALL PROJECTS (BackupUI, BackupService, BackupEngine) use this single version.
              Change version HERE and it updates everywhere automatically.
-             Current Version: 6.1.1.31
-             Last Updated: 3/23/2026
+             Current Version: 6.1.1.33
+             Last Updated: 3/24/2026
 
              UPDATE VERSION IN ONE PLACE: Change ProductVersion property below.
              All version properties (Version, AssemblyVersion, FileVersion, 
@@ -14,7 +14,7 @@
              ================================================================ -->
        <PropertyGroup>
          <!-- SINGLE VERSION DEFINITION - Update this value only -->
-         <ProductVersion>6.1.1.31</ProductVersion>
+         <ProductVersion>6.1.1.33</ProductVersion>
     
     <!-- All version properties use the ProductVersion variable -->
     <Version>$(ProductVersion)</Version>
@@ -44,12 +44,23 @@
        C++ PROJECTS (BackupEngine.vcxproj)
        ================================================================
        Uses OutDir/IntDir (not OutputPath)
+       PlatformToolset and WindowsTargetPlatformVersion are centralized here.
+
+       WINDOWS SDK VERSION OPTIONS:
+       - 10.0           = Use latest installed SDK (auto-select)
+       - 10.0.19041.0   = Windows 10 2004 (broad compatibility)
+       - 10.0.22621.0   = Windows 11 22H2
+       - 10.0.26100.0   = Windows 11 24H2 (latest)
        ================================================================ -->
   <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
     <!-- For C++ use OutDir/IntDir, *not* OutputPath -->
     <OutDir>$(ArtifactsBin)$(Configuration)\</OutDir>
     <!-- Keep obj separated per project to avoid collisions -->
     <IntDir>$(ArtifactsObj)$(MSBuildProjectName)\$(Configuration)\</IntDir>
+    <!-- CENTRALIZED C++ TOOLSET SETTINGS -->
+    <PlatformToolset>v145</PlatformToolset>
+    <!-- Specific Windows 10 SDK for broad compatibility -->
+    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
 
   <!-- ================================================================

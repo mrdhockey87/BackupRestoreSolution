@@ -13,7 +13,7 @@
 #include <iomanip>
 #include <sstream>
 #include <mutex>      // For thread-safe job name tracking
-#include "wimgapi.h"  // Windows Imaging API for WIM file creation
+#include <wimgapi.h>  // Windows Imaging API for WIM file creation (from Windows ADK)
 
 #pragma comment(lib, "wimgapi.lib")
 
@@ -842,21 +842,23 @@ static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lP
 }
 
 // Helper function to count images in a WIM file
-// Uses WIMGetImageCount API with the correct two-parameter signature
+// Uses WIMGetImageCount API - returns the image count directly
 // Returns the number of images (0 if no images or error)
 DWORD CountWimImages(HANDLE hWim) {
     if (!hWim || hWim == INVALID_HANDLE_VALUE) {
         return 0;
     }
 
-    // Use WIMGetImageCount with output parameter (per our wimgapi.h stub signature)
-    DWORD count = 0;
-    if (WIMGetImageCount(hWim, &count)) {
+    // WIMGetImageCount returns the count directly (per Windows ADK wimgapi.h)
+    DWORD count = WIMGetImageCount(hWim);
+    if (count != 0) {
         OutputDebugStringW((L"[CountWimImages] WIMGetImageCount returned: " + std::to_wstring(count)).c_str());
         return count;
     } else {
         DWORD err = GetLastError();
-        OutputDebugStringW((L"[CountWimImages] WIMGetImageCount FAILED, error: " + std::to_wstring(err)).c_str());
+        if (err != ERROR_SUCCESS) {
+            OutputDebugStringW((L"[CountWimImages] WIMGetImageCount returned 0, error: " + std::to_wstring(err)).c_str());
+        }
 
         // Fallback: manually iterate to count images (more reliable backup method)
         count = 0;
@@ -913,8 +915,8 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         }
         LogInfo(L"CaptureToWimImage: Using folder filter for: " + std::wstring(folderName));
 
-        // Register folder filter callback
-        WIMRegisterMessageCallback(hWim, FolderFilterCallback, &filterContext);
+        // Register folder filter callback (cast to FARPROC per Windows ADK signature)
+        WIMRegisterMessageCallback(hWim, reinterpret_cast<FARPROC>(FolderFilterCallback), &filterContext);
 
         // Capture - will only include files matching folder filter
         LogInfo(L"CaptureToWimImage: Calling WIMCaptureImage with folder filter...");
@@ -923,15 +925,15 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         LogInfo(L"CaptureToWimImage: WIMCaptureImage returned, hImage=" + std::to_wstring(reinterpret_cast<uintptr_t>(hImage)) + 
                 L", GetLastError=" + std::to_wstring(captureErr));
 
-        // Unregister callback
-        WIMUnregisterMessageCallback(hWim, FolderFilterCallback);
+        // Unregister callback (cast to FARPROC per Windows ADK signature)
+        WIMUnregisterMessageCallback(hWim, reinterpret_cast<FARPROC>(FolderFilterCallback));
     }
     else {
         // Standard capture without folder filtering
         // Register progress callback to get file-level feedback during capture
         // NOTE: Exclusions are handled in callback by returning WIM_MSG_SKIP_ERROR for protected files
         if (callback) {
-            WIMRegisterMessageCallback(hWim, BackupProgressCallback, callback);
+            WIMRegisterMessageCallback(hWim, reinterpret_cast<FARPROC>(BackupProgressCallback), callback);
             callback(25, L"Starting backup capture...");
         }
 
@@ -948,9 +950,9 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         LogInfo(L"CaptureToWimImage: WIMCaptureImage returned, hImage=" + std::to_wstring(reinterpret_cast<uintptr_t>(hImage)) + 
                 L", GetLastError=" + std::to_wstring(captureErr));
 
-        // Unregister callback after capture completes
+        // Unregister callback after capture completes (cast to FARPROC per Windows ADK signature)
         if (callback) {
-            WIMUnregisterMessageCallback(hWim, BackupProgressCallback);
+            WIMUnregisterMessageCallback(hWim, reinterpret_cast<FARPROC>(BackupProgressCallback));
         }
     }
 
@@ -1033,22 +1035,30 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
 
     LogInfo(L"CaptureToWimImage: Capture successful, setting metadata...");
 
-    // Build simple XML metadata for the image (just NAME, no DESCRIPTION)
+    // Build XML metadata for the image
+    // IMPORTANT: Per MSDN, when hImage is from WIMCaptureImage, XML must use <IMAGE> tags (not <WIM><IMAGE>)
     // Sanitize the image name to escape XML special characters (prevents Error 1465)
     std::wstring sanitizedName = SanitizeXmlName(imageName);
     LogInfo(L"CaptureToWimImage: Setting metadata with sanitized name: " + sanitizedName);
 
-    std::wstring xmlMetadata = L"<WIM><IMAGE><NAME>";
+    std::wstring xmlMetadata = L"<IMAGE><NAME>";
     xmlMetadata += sanitizedName;
-    xmlMetadata += L"</NAME></IMAGE></WIM>";
+    xmlMetadata += L"</NAME></IMAGE>";
 
-    // Set image metadata
-    if (!WIMSetImageInformation(hImage, xmlMetadata.c_str())) {
+    // Calculate size in bytes (Unicode = 2 bytes per character, no null terminator needed)
+    DWORD xmlSizeInBytes = static_cast<DWORD>(xmlMetadata.length() * sizeof(wchar_t));
+    LogInfo(L"CaptureToWimImage: XML metadata size: " + std::to_wstring(xmlSizeInBytes) + L" bytes");
+
+    // Set image metadata - must pass size in bytes as third parameter
+    if (!WIMSetImageInformation(hImage, const_cast<wchar_t*>(xmlMetadata.c_str()), xmlSizeInBytes)) {
         DWORD metadataError = GetLastError();
         WIMCloseHandle(hImage);
         std::wstring errMsg = L"Failed to set image metadata (Error " + std::to_wstring(metadataError) + L")";
+        errMsg += L" for image name: " + std::wstring(imageName);
+        errMsg += L" (sanitized: " + sanitizedName + L")";
         SetLastErrorMessage(errMsg);
         LogError(errMsg);
+        LogError(L"CaptureToWimImage: XML was: " + xmlMetadata);
         return INVALID_HANDLE_VALUE;
     }
 
@@ -1746,9 +1756,9 @@ extern "C" {
                 callback(10, msg.c_str());
             }
 
-            // Open existing WIM file with WIM_FLAG_REFERENCE to add incremental images
+            // Open existing WIM file to add incremental images
             if (callback) {
-                callback(15, L"Opening existing backup with WIM_FLAG_REFERENCE...");
+                callback(15, L"Opening existing backup for incremental...");
             }
 
             // When opening existing WIM, compression type must be 0 (read from file)
@@ -1760,7 +1770,7 @@ extern "C" {
                 destFile.c_str(),
                 WIM_GENERIC_READ | WIM_GENERIC_WRITE,  // Need READ+WRITE to append images
                 WIM_OPEN_EXISTING,
-                WIM_FLAG_REFERENCE,  // Enable referential images only (no VERIFY)
+                0,  // No special flags needed for append operation
                 0,  // MUST be 0 when opening existing WIM! Compression read from file.
                 NULL
             );
@@ -1947,10 +1957,10 @@ extern "C" {
                 callback(10, msg.c_str());
             }
 
-            // Open existing WIM file with WIM_FLAG_REFERENCE to add differential images
+            // Open existing WIM file to add differential images
             // Differential always references the FIRST (full) backup, not the most recent
             if (callback) {
-                callback(15, L"Opening existing backup with WIM_FLAG_REFERENCE...");
+                callback(15, L"Opening existing backup for differential...");
             }
 
             // When opening existing WIM, compression type must be 0 (read from file)
@@ -1962,7 +1972,7 @@ extern "C" {
                 destFile.c_str(),
                 WIM_GENERIC_READ | WIM_GENERIC_WRITE,  // Need READ+WRITE to append images
                 WIM_OPEN_EXISTING,
-                WIM_FLAG_REFERENCE,  // Enable referential images only (no VERIFY)
+                0,  // No special flags needed for append operation
                 0,  // MUST be 0 when opening existing WIM! Compression read from file.
                 NULL
             );
