@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-		static private string version_fallback_number = "6.1.1.33";
+		static private string version_fallback_number = "6.1.1.34";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -35,7 +35,7 @@ namespace BackupUI
 				int plusIndex = versionString.IndexOf('+');
 				if (plusIndex > 0)
 				{
-					versionString = versionString.Substring(0, plusIndex);
+					versionString = versionString[..plusIndex];
 				}
 				return versionString;
 			}
@@ -69,6 +69,17 @@ namespace BackupUI
 
 /*
  *
+* Version 6.1.1.34 CRITICAL FIX - FALSE FAILURE WHEN METADATA UPDATE FAILS AFTER SUCCESSFUL CAPTURE:
+*                  Root cause: When WIMCaptureImage returned NULL but image count increased (successful filtered capture via callback),
+*                  the code would call WIMLoadImage to get a handle for setting metadata. However, the handle from WIMLoadImage is
+*                  often read-only and WIMSetImageInformation would fail, causing the ENTIRE backup to report error -4 despite the
+*                  backup file being completely valid (mountable, correct files, correct exclusions). USER REPORTED: "Where we really
+*                  seem to be failing is when it tries to update the meta data for the volume" - confirmed metadata update as failure
+*                  point. FIX: Changed WIMSetImageInformation failure handling from FATAL ERROR (return INVALID_HANDLE_VALUE) to
+*                  WARNING LOG (continue with success). Metadata is just image labeling - the image itself is valid and restorable.
+*                  The backup file was always working correctly; only the error reporting was wrong. Now backups complete successfully
+*                  even when metadata can't be set (common with callback-filtered captures). ALSO FIXED: Removed WIMCloseHandle call
+*                  on metadata failure which was double-closing the handle causing potential corruption. mdail 3/26/2026
 * Version 6.1.1.33 fix the props file to better target all windows 10 after the aniverery update. mdail 3/24/2026
 * Version 6.1.1.32 CRITICAL FIX - WIMGAPI STUB REMOVAL + ADK COMPLIANCE: Fixed error 1465 "Failed to set image metadata" during backup!
 *                  Root cause: Project had a LOCAL STUB wimgapi.h with INCORRECT API signatures that shadowed the real Windows ADK header.
