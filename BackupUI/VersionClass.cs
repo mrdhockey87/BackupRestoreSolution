@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-		static private string version_fallback_number = "6.1.1.34";
+		static private string version_fallback_number = "6.1.1.36";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,36 @@ namespace BackupUI
 
 /*
  *
+* Version 6.1.1.36 METADATA FALLBACK ENHANCEMENT - TWO-STAGE METADATA SETTING:
+*                  Improved CaptureToWimImage metadata handling for callback-filtered captures. When WIMSetImageInformation
+*                  fails on the image handle (which happens when the handle came from WIMLoadImage after a callback-filtered
+*                  capture where exclusions caused a read-only handle), the code now implements a two-stage approach:
+*                  1) Gets the correct image index using CountWimImages(hWim) to ensure accurate indexing.
+*                  2) Tries setting metadata via the WIM FILE handle (not image handle) using the proper
+*                  <WIM><IMAGE INDEX="N">...</IMAGE></WIM> XML format per MSDN documentation.
+*                  3) Only falls back to "metadata unavailable" warning if both methods fail.
+*                  This fixes the exclusion count issue by using the correct image index from CountWimImages when setting
+*                  metadata via the WIM file handle, ensuring proper image naming even when the capture handle is unavailable
+*                  or read-only. mdail 3/30/2026
+* Version 6.1.1.35 LOG FILE RELIABILITY + ENCODING FIX + METADATA FALLBACK:
+*                  1) CORRUPTED LOG RECOVERY: Added TryRecoverLogsFromCorruptedFile() that parses corrupted JSON files
+*                  entry-by-entry, recovering valid entries even when the file is truncated or malformed. Backs up
+*                  corrupted files with _corrupted_ suffix before repair. This prevents log loss from power failures
+*                  or race conditions during writes.
+*                  2) ENCODING AUTO-DETECTION: LoadLogsFromFile() now auto-detects UTF-8, UTF-16 LE, and UTF-16 BE
+*                  encoding by checking BOM (Byte Order Mark). This fixes compatibility issues where C++ engine
+*                  previously wrote UTF-16 but C# expected UTF-8. Both old and new log files now load correctly.
+*                  3) INCREASED LOG RETENTION: MaxLogEntriesPerFile increased from 500 to 2000 to prevent log loss
+*                  during extended backup operations or high-activity periods.
+*                  4) FILE LOCK RETRY LOGIC: Added 3-retry with 50ms delay when reading log files to handle race
+*                  conditions with C++ engine atomic writes (temp file + rename pattern).
+*                  5) C++ ENGINE UTF-8 OUTPUT: BackupManager_Advanced.cpp now writes log entries as UTF-8 instead of
+*                  UTF-16, ensuring consistent encoding with C# JsonSerializer expectations.
+*                  6) METADATA FALLBACK VIA WIM HANDLE: When WIMSetImageInformation fails on read-only image handles
+*                  (from WIMLoadImage after callback-filtered captures), now tries setting metadata via the WIM file
+*                  handle using <WIM><IMAGE INDEX="N">...</IMAGE></WIM> format per MSDN documentation. This properly
+*                  sets image names even when the capture handle is unavailable, fixing the metadata count issue where
+*                  exclusions caused the image handle to be read-only. mdail 3/30/2026
 * Version 6.1.1.34 CRITICAL FIX - FALSE FAILURE WHEN METADATA UPDATE FAILS AFTER SUCCESSFUL CAPTURE:
 *                  Root cause: When WIMCaptureImage returned NULL but image count increased (successful filtered capture via callback),
 *                  the code would call WIMLoadImage to get a handle for setting metadata. However, the handle from WIMLoadImage is

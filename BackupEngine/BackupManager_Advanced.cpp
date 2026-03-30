@@ -1035,6 +1035,10 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
 
     LogInfo(L"CaptureToWimImage: Capture successful, setting metadata...");
 
+    // Get the current image index (the newly captured image)
+    DWORD imageIndex = CountWimImages(hWim);
+    LogInfo(L"CaptureToWimImage: New image index: " + std::to_wstring(imageIndex));
+
     // Build XML metadata for the image
     // IMPORTANT: Per MSDN, when hImage is from WIMCaptureImage, XML must use <IMAGE> tags (not <WIM><IMAGE>)
     // Sanitize the image name to escape XML special characters (prevents Error 1465)
@@ -1051,21 +1055,38 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
 
     // Set image metadata - must pass size in bytes as third parameter
     // NOTE: If hImage was obtained via WIMLoadImage (after callback-filtered capture),
-    // WIMSetImageInformation may fail because the handle is read-only. This is OK -
-    // the image itself was captured successfully, metadata is optional labeling.
+    // WIMSetImageInformation may fail because the handle is read-only.
     if (!WIMSetImageInformation(hImage, const_cast<wchar_t*>(xmlMetadata.c_str()), xmlSizeInBytes)) {
         DWORD metadataError = GetLastError();
+        LogWarning(L"WIMSetImageInformation failed on image handle (Error " + std::to_wstring(metadataError) + 
+                   L") - trying via WIM file handle...");
 
-        // FIX: Don't fail the backup just because metadata couldn't be set!
-        // The image was successfully captured (verified by image count increase).
-        // Metadata failure is non-critical - the backup is still valid and restorable.
-        LogWarning(L"Could not set image metadata (Error " + std::to_wstring(metadataError) + 
-                   L") - image captured successfully, metadata is optional");
-        LogInfo(L"CaptureToWimImage: Image name was: " + std::wstring(imageName));
-        LogInfo(L"CaptureToWimImage: XML was: " + xmlMetadata);
+        // IMPROVED FIX: When image handle is read-only (from WIMLoadImage after callback-filtered capture),
+        // try setting metadata via the WIM file handle using <WIM> wrapper format.
+        // Per MSDN: "If the input handle is from WIMCreateFile, then XML must be enclosed by <WIM></WIM> tags"
+        std::wstring wimXmlMetadata = L"<WIM><IMAGE INDEX=\"";
+        wimXmlMetadata += std::to_wstring(imageIndex);
+        wimXmlMetadata += L"\"><NAME>";
+        wimXmlMetadata += sanitizedName;
+        wimXmlMetadata += L"</NAME></IMAGE></WIM>";
 
-        // Return success - the image exists and is valid!
-        LogInfo(L"CaptureToWimImage: SUCCESS - Image captured (metadata skipped due to read-only handle)");
+        DWORD wimXmlSizeInBytes = static_cast<DWORD>(wimXmlMetadata.length() * sizeof(wchar_t));
+        LogInfo(L"CaptureToWimImage: Trying WIM-level metadata: " + wimXmlMetadata);
+
+        if (!WIMSetImageInformation(hWim, const_cast<wchar_t*>(wimXmlMetadata.c_str()), wimXmlSizeInBytes)) {
+            DWORD wimMetadataError = GetLastError();
+            // Both methods failed - log warning but don't fail the backup
+            // The image itself was captured successfully (verified by image count increase)
+            LogWarning(L"Could not set image metadata via WIM handle either (Error " + std::to_wstring(wimMetadataError) + 
+                       L") - image captured successfully, metadata is optional");
+            LogInfo(L"CaptureToWimImage: Image name was: " + std::wstring(imageName));
+
+            // Return success - the image exists and is valid even without custom metadata!
+            LogInfo(L"CaptureToWimImage: SUCCESS - Image captured (metadata unavailable but backup is valid)");
+            return hImage;
+        }
+
+        LogInfo(L"CaptureToWimImage: SUCCESS - Image captured and metadata set via WIM file handle");
         return hImage;
     }
 

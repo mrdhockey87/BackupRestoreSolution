@@ -297,7 +297,10 @@ namespace BackupService
 
                         if (verifyResult != 0)
                         {
-                            logger?.Invoke($"Backup verification FAILED: {errorMsg}");
+                            logger?.Invoke($"[VERIFICATION FAILED] Result code: {verifyResult}");
+                            logger?.Invoke($"[VERIFICATION FAILED] Error: {errorMsg}");
+                            logger?.Invoke($"[VERIFICATION FAILED] The backup file will be DELETED because verification failed");
+                            logger?.Invoke($"[VERIFICATION FAILED] This is why no backup file exists in target directory");
 
                             // Auto-recovery: If incremental/differential failed verification,
                             // force FULL backup on next run to rebuild the backup chain
@@ -324,12 +327,15 @@ namespace BackupService
                             {
                                 try
                                 {
+                                    var fileInfo = new FileInfo(newBackupPath);
+                                    var fileSize = fileInfo.Length;
+                                    logger?.Invoke($"[CLEANUP] Deleting failed backup: {Path.GetFileName(newBackupPath)} ({fileSize:N0} bytes)");
                                     File.Delete(newBackupPath);
-                                    logger?.Invoke($"Failed backup deleted: {Path.GetFileName(newBackupPath)}");
+                                    logger?.Invoke($"[CLEANUP] Failed backup deleted successfully");
                                 }
                                 catch (Exception ex)
                                 {
-                                    logger?.Invoke($"Warning: Could not delete failed backup: {ex.Message}");
+                                    logger?.Invoke($"[WARNING] Could not delete failed backup: {ex.Message}");
                                 }
                             }
 

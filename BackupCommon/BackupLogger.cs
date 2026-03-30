@@ -230,89 +230,105 @@ namespace BackupCommon
 
         private static List<BackupLogEntry> LoadLogsFromFile(string filePath)
         {
-            try
+            // Retry logic to handle race condition with C++ engine atomic writes
+            // C++ writes to temp file then renames - we might catch it mid-operation
+            const int maxRetries = 3;
+            const int retryDelayMs = 50;
+
+            for (int attempt = 0; attempt < maxRetries; attempt++)
             {
-                if (!File.Exists(filePath))
-                    return new List<BackupLogEntry>();
-
-                // Read with auto-detect encoding to handle both UTF-8 and UTF-16 files
-                // (C++ engine may have written UTF-16 previously, now writes UTF-8)
-                string json;
-                var bytes = File.ReadAllBytes(filePath);
-                if (bytes.Length == 0)
-                    return new List<BackupLogEntry>();
-
-                // Check for BOM to detect encoding
-                if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
-                {
-                    // UTF-16 LE BOM
-                    json = System.Text.Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
-                }
-                else if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
-                {
-                    // UTF-16 BE BOM
-                    json = System.Text.Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
-                }
-                else if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-                {
-                    // UTF-8 BOM
-                    json = System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
-                }
-                else
-                {
-                    // No BOM - try UTF-8 (default for new files)
-                    json = System.Text.Encoding.UTF8.GetString(bytes);
-                }
-
-                if (string.IsNullOrWhiteSpace(json))
-                    return new List<BackupLogEntry>();
-
-                var logs = JsonSerializer.Deserialize<List<BackupLogEntry>>(json);
-                return logs ?? new List<BackupLogEntry>();
-            }
-            catch (JsonException)
-            {
-                // JSON parsing failed - try to recover individual entries
-                var fileName = Path.GetFileNameWithoutExtension(filePath);
-
-                // Skip recovery for already-corrupted backup files
-                if (fileName.Contains("_corrupted_"))
-                    return new List<BackupLogEntry>();
-
                 try
                 {
-                    var recoveredLogs = TryRecoverLogsFromCorruptedFile(filePath);
+                    if (!File.Exists(filePath))
+                        return new List<BackupLogEntry>();
 
-                    // Backup original corrupted file
-                    var backupFile = Path.Combine(LogDirectory, $"{fileName}_corrupted_{DateTime.Now:yyyyMMddHHmmss}.json");
-                    File.Copy(filePath, backupFile, true);
-                    System.Diagnostics.Debug.WriteLine($"Corrupted log file backed up to: {backupFile}");
+                    // Read with auto-detect encoding to handle both UTF-8 and UTF-16 files
+                    // (C++ engine may have written UTF-16 previously, now writes UTF-8)
+                    string json;
+                    var bytes = File.ReadAllBytes(filePath);
+                    if (bytes.Length == 0)
+                        return new List<BackupLogEntry>();
 
-                    // If we recovered entries, save them back (fixes the file)
-                    if (recoveredLogs.Count > 0)
+                    // Check for BOM to detect encoding
+                    if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
                     {
-                        SaveLogsToFile(filePath, recoveredLogs);
-                        System.Diagnostics.Debug.WriteLine($"Recovered {recoveredLogs.Count} entries from corrupted file: {filePath}");
-                        return recoveredLogs;
+                        // UTF-16 LE BOM
+                        json = System.Text.Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+                    }
+                    else if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+                    {
+                        // UTF-16 BE BOM
+                        json = System.Text.Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+                    }
+                    else if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+                    {
+                        // UTF-8 BOM
+                        json = System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
                     }
                     else
                     {
-                        // No entries recovered - reset to empty
-                        File.WriteAllText(filePath, "[]");
+                        // No BOM - try UTF-8 (default for new files)
+                        json = System.Text.Encoding.UTF8.GetString(bytes);
                     }
+
+                    if (string.IsNullOrWhiteSpace(json))
+                        return new List<BackupLogEntry>();
+
+                    var logs = JsonSerializer.Deserialize<List<BackupLogEntry>>(json);
+                    return logs ?? new List<BackupLogEntry>();
+                }
+                catch (IOException) when (attempt < maxRetries - 1)
+                {
+                    // File might be locked by C++ engine - retry after short delay
+                    System.Threading.Thread.Sleep(retryDelayMs);
+                    continue;
+                }
+                catch (JsonException)
+                {
+                    // JSON parsing failed - try to recover individual entries
+                    var fileName = Path.GetFileNameWithoutExtension(filePath);
+
+                    // Skip recovery for already-corrupted backup files
+                    if (fileName.Contains("_corrupted_"))
+                        return new List<BackupLogEntry>();
+
+                    try
+                    {
+                        var recoveredLogs = TryRecoverLogsFromCorruptedFile(filePath);
+
+                        // Backup original corrupted file
+                        var backupFile = Path.Combine(LogDirectory, $"{fileName}_corrupted_{DateTime.Now:yyyyMMddHHmmss}.json");
+                        File.Copy(filePath, backupFile, true);
+                        System.Diagnostics.Debug.WriteLine($"Corrupted log file backed up to: {backupFile}");
+
+                        // If we recovered entries, save them back (fixes the file)
+                        if (recoveredLogs.Count > 0)
+                        {
+                            SaveLogsToFile(filePath, recoveredLogs);
+                            System.Diagnostics.Debug.WriteLine($"Recovered {recoveredLogs.Count} entries from corrupted file: {filePath}");
+                            return recoveredLogs;
+                        }
+                        else
+                        {
+                            // No entries recovered - reset to empty
+                            File.WriteAllText(filePath, "[]");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error during log recovery: {ex.Message}");
+                    }
+
+                    return new List<BackupLogEntry>();
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error during log recovery: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Error loading logs from {filePath}: {ex.Message}");
+                    return new List<BackupLogEntry>();
                 }
+            }
 
-                return new List<BackupLogEntry>();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error loading logs from {filePath}: {ex.Message}");
-                return new List<BackupLogEntry>();
-            }
+            return new List<BackupLogEntry>();
         }
 
         /// <summary>
@@ -543,7 +559,8 @@ namespace BackupCommon
         #region Legacy Support / Backward Compatibility
 
         /// <summary>
-        /// Load all logs from all job files plus service log
+        /// Load all logs from all job files plus service log.
+        /// Also includes any orphaned entries from corrupted backup files.
         /// </summary>
         public static List<BackupLogEntry> LoadLogs()
         {
@@ -564,6 +581,37 @@ namespace BackupCommon
                     foreach (var logFile in logFiles)
                     {
                         allLogs.AddRange(LoadLogsFromFile(logFile));
+                    }
+
+                    // Also load entries from corrupted backup files so no messages are lost
+                    // These are backup copies made when log corruption is detected
+                    var corruptedFiles = Directory.GetFiles(LogDirectory, "*_corrupted_*.json");
+                    foreach (var corruptedFile in corruptedFiles)
+                    {
+                        try
+                        {
+                            var recoveredEntries = TryRecoverLogsFromCorruptedFile(corruptedFile);
+                            if (recoveredEntries.Count > 0)
+                            {
+                                // Add any entries not already in allLogs (by timestamp + message to dedupe)
+                                foreach (var entry in recoveredEntries)
+                                {
+                                    bool isDupe = allLogs.Any(l => 
+                                        l.Timestamp == entry.Timestamp && 
+                                        l.Message == entry.Message &&
+                                        l.JobName == entry.JobName);
+
+                                    if (!isDupe)
+                                    {
+                                        allLogs.Add(entry);
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error loading corrupted log file {corruptedFile}: {ex.Message}");
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -594,9 +642,43 @@ namespace BackupCommon
 
             lock (lockObject)
             {
-                return LoadLogsFromFile(jobLogFile)
-                    .OrderByDescending(l => l.Timestamp)
-                    .ToList();
+                var logs = LoadLogsFromFile(jobLogFile);
+
+                // Also include entries from any corrupted backup files for this job
+                // These are backup copies made when log corruption is detected
+                try
+                {
+                    var corruptedFiles = Directory.GetFiles(LogDirectory, $"{safeJobName}_corrupted_*.json");
+                    foreach (var corruptedFile in corruptedFiles)
+                    {
+                        try
+                        {
+                            var recoveredEntries = TryRecoverLogsFromCorruptedFile(corruptedFile);
+                            foreach (var entry in recoveredEntries)
+                            {
+                                // Add if not a duplicate (by timestamp + message)
+                                bool isDupe = logs.Any(l => 
+                                    l.Timestamp == entry.Timestamp && 
+                                    l.Message == entry.Message);
+
+                                if (!isDupe)
+                                {
+                                    logs.Add(entry);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error loading corrupted job log {corruptedFile}: {ex.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error searching for corrupted job logs: {ex.Message}");
+                }
+
+                return logs.OrderByDescending(l => l.Timestamp).ToList();
             }
         }
 
@@ -893,6 +975,123 @@ namespace BackupCommon
                     System.Diagnostics.Debug.WriteLine($"Error deleting log entries: {ex.Message}");
                     return 0;
                 }
+            }
+        }
+
+        #endregion
+
+        #region Corrupted Log Consolidation
+
+        /// <summary>
+        /// Consolidates entries from corrupted backup log files back into the main job log files.
+        /// This merges any orphaned log entries and then deletes the corrupted backup files.
+        /// Call this method to recover messages that ended up in corrupted log files.
+        /// </summary>
+        /// <returns>Number of entries recovered and merged</returns>
+        public static int ConsolidateCorruptedLogs()
+        {
+            lock (lockObject)
+            {
+                int totalRecovered = 0;
+
+                try
+                {
+                    var corruptedFiles = Directory.GetFiles(LogDirectory, "*_corrupted_*.json");
+
+                    foreach (var corruptedFile in corruptedFiles)
+                    {
+                        try
+                        {
+                            // Extract original job name from corrupted filename
+                            // Format: {JobName}_corrupted_{timestamp}.json
+                            var fileName = Path.GetFileNameWithoutExtension(corruptedFile);
+                            var corruptedIndex = fileName.IndexOf("_corrupted_");
+                            if (corruptedIndex <= 0) continue;
+
+                            var jobName = fileName.Substring(0, corruptedIndex);
+                            var mainLogFile = Path.Combine(LogDirectory, $"{jobName}.json");
+
+                            // Recover entries from corrupted file
+                            var recoveredEntries = TryRecoverLogsFromCorruptedFile(corruptedFile);
+                            if (recoveredEntries.Count == 0)
+                            {
+                                // No entries to recover - delete the corrupted file
+                                File.Delete(corruptedFile);
+                                continue;
+                            }
+
+                            // Load existing main log file
+                            var mainLogs = LoadLogsFromFile(mainLogFile);
+
+                            // Merge recovered entries (skip duplicates by timestamp + message)
+                            int mergedCount = 0;
+                            foreach (var entry in recoveredEntries)
+                            {
+                                bool isDupe = mainLogs.Any(l => 
+                                    l.Timestamp == entry.Timestamp && 
+                                    l.Message == entry.Message);
+
+                                if (!isDupe)
+                                {
+                                    mainLogs.Add(entry);
+                                    mergedCount++;
+                                }
+                            }
+
+                            if (mergedCount > 0)
+                            {
+                                // Sort by timestamp and save
+                                mainLogs = mainLogs.OrderBy(l => l.Timestamp).ToList();
+
+                                // Keep only last MaxLogEntriesPerFile
+                                if (mainLogs.Count > MaxLogEntriesPerFile)
+                                {
+                                    mainLogs = mainLogs
+                                        .OrderByDescending(l => l.Timestamp)
+                                        .Take(MaxLogEntriesPerFile)
+                                        .OrderBy(l => l.Timestamp)
+                                        .ToList();
+                                }
+
+                                SaveLogsToFile(mainLogFile, mainLogs);
+                                totalRecovered += mergedCount;
+                                System.Diagnostics.Debug.WriteLine($"Merged {mergedCount} entries from {Path.GetFileName(corruptedFile)} into {jobName}.json");
+                            }
+
+                            // Delete the corrupted backup file after successful merge
+                            File.Delete(corruptedFile);
+                            System.Diagnostics.Debug.WriteLine($"Deleted corrupted backup file: {Path.GetFileName(corruptedFile)}");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error consolidating {corruptedFile}: {ex.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error consolidating corrupted logs: {ex.Message}");
+                }
+
+                return totalRecovered;
+            }
+        }
+
+        /// <summary>
+        /// Gets list of corrupted log backup files that exist in the log directory.
+        /// </summary>
+        public static List<string> GetCorruptedLogFiles()
+        {
+            try
+            {
+                return Directory.GetFiles(LogDirectory, "*_corrupted_*.json")
+                    .Select(f => Path.GetFileName(f))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting corrupted log files: {ex.Message}");
+                return new List<string>();
             }
         }
 
