@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-		static private string version_fallback_number = "6.1.1.36";
+		static private string version_fallback_number = "6.1.1.37";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,34 @@ namespace BackupUI
 
 /*
  *
+* Version 6.1.1.37 C++ LOGGING INTEGRATION - CALLBACK PATTERN FOR CENTRALIZED LOGGING:
+*                  Implemented comprehensive logging callback system to integrate C++ BackupEngine diagnostic messages
+*                  into C# BackupLogger centralized JSON log files. Previously, C++ used OutputDebugStringW() calls only
+*                  visible in DebugView - now all C++ operations (disk enumeration, VSS snapshots, WIM captures, errors)
+*                  are captured in the same per-job JSON log files as C# operations. SIX-STEP IMPLEMENTATION:
+*                  1) CALLBACK TYPEDEF: Added LogCallback typedef to BackupEngine.h with signature
+*                     void(__cdecl* LogCallback)(int level, const wchar_t* message, const wchar_t* details)
+*                     mirroring existing ProgressCallback pattern. Log levels: 0=Info, 1=Success, 2=Warning, 3=Error.
+*                  2) FUNCTION SIGNATURES: Updated BackupDisk, BackupVolume, BackupFiles in BackupEngine.h to accept
+*                     optional LogCallback parameter as final argument after ProgressCallback.
+*                  3) C++ IMPLEMENTATION: Modified BackupManager_Advanced.cpp and BackupFiles_Implementation.cpp to replace
+*                     all OutputDebugStringW() calls with logCallback invocations. Null-checks prevent crashes when callback
+*                     not provided. Added diagnostic logging at key points: volume enumeration, directory creation, WIM file
+*                     creation, volume capture success/failure, system state backup, completion status.
+*                  4) P/INVOKE DECLARATIONS: Added LogCallback delegate to BackupEngineInterop.cs (WPF project) and
+*                     BackupExecutor.cs (Service project) with [UnmanagedFunctionPointer(CallingConvention.Cdecl)] and
+*                     LPWStr marshalling for Unicode strings. Updated all BackupDisk/BackupVolume/BackupFiles P/Invoke
+*                     declarations to include LogCallback? parameter.
+*                  5) C# WRAPPER METHOD: Created LogFromEngine() method in BackupExecutor.cs that maps integer log levels
+*                     to BackupLogLevel enum and calls appropriate BackupLogger methods (LogInfo/LogSuccess/LogWarning/LogError)
+*                     with current job name context (_currentJobName field).
+*                  6) INTEGRATION: Modified ExecuteBackup() to create LogCallback delegate pointing to LogFromEngine wrapper,
+*                     then pass it to all BackupDisk/BackupVolume/BackupFiles calls alongside existing ProgressCallback.
+*                  RESULT: Complete C++/C# logging integration - all backup operations now produce unified JSON logs in
+*                  C:\ProgramData\BackupRestoreService\Logs\{JobName}.json with chronological C++ and C# entries together.
+*                  Enables complete audit trail, improved troubleshooting, and eliminates need for separate DebugView monitoring.
+*                  Follows proven callback pattern from ProgressCallback - type-safe marshalling, no threading concerns,
+*                  backwards compatible (callback parameter optional/nullable). mdail 4/8/2026
 * Version 6.1.1.36 METADATA FALLBACK ENHANCEMENT - TWO-STAGE METADATA SETTING:
 *                  Improved CaptureToWimImage metadata handling for callback-filtered captures. When WIMSetImageInformation
 *                  fails on the image handle (which happens when the handle came from WIMLoadImage after a callback-filtered

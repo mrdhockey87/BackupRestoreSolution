@@ -14,6 +14,10 @@ extern "C" {
     // Callback for progress updates
     typedef void (*ProgressCallback)(int percentage, const wchar_t* message);
 
+    // Logging callback for C++ to send log entries to C#
+    // level: 0=Info, 1=Success, 2=Warning, 3=Error
+    typedef void(__cdecl* LogCallback)(int level, const wchar_t* message, const wchar_t* details);
+
     // ====================
     // Backup Functions
     // ====================
@@ -30,7 +34,8 @@ extern "C" {
         const wchar_t* destPath,
         const wchar_t** userExclusions,
         int userExclusionCount,
-        ProgressCallback callback);
+        ProgressCallback callback,
+        LogCallback logCallback);
 
     // Backup an entire volume (with optional system state)
     BACKUPENGINE_API int BackupVolume(
@@ -40,7 +45,8 @@ extern "C" {
         bool compress,
         const wchar_t** userExclusions,
         int userExclusionCount,
-        ProgressCallback callback);
+        ProgressCallback callback,
+        LogCallback logCallback);
 
     // Backup an entire disk by disk number
     BACKUPENGINE_API int BackupDisk(
@@ -50,7 +56,8 @@ extern "C" {
         bool compress,
         const wchar_t** userExclusions,
         int userExclusionCount,
-        ProgressCallback callback);
+        ProgressCallback callback,
+        LogCallback logCallback);
 
     // Create incremental backup (only changed files since last backup)
     BACKUPENGINE_API int CreateIncrementalBackup(

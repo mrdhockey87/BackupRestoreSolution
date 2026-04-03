@@ -391,12 +391,12 @@ namespace BackupUI.Windows
                                 {
                                     result = BackupEngineInterop.BackupVolume(
                                         sourcePath, destPath, job.IncludeSystemState,
-                                        job.CompressData, callback);
+                                        job.CompressData, null, 0, callback, null);
                                 }
                                 else
                                 {
                                     result = BackupEngineInterop.BackupFiles(
-                                        sourcePath, destPath, callback);
+                                        sourcePath, destPath, null, 0, callback, null);
                                 }
                                 break;
 

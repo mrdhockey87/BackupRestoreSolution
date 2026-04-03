@@ -87,10 +87,12 @@ extern "C" {
         const wchar_t* destPath,
         const wchar_t** userExclusions,
         int userExclusionCount,
-        ProgressCallback callback) {
+        ProgressCallback callback,
+        LogCallback logCallback) {
 
         if (!sourcePath || !destPath) {
             SetLastErrorMessage(L"Invalid parameters");
+            if (logCallback) logCallback(3, L"BackupFiles: Invalid parameters", L"sourcePath or destPath is NULL");
             return -1;
         }
 
@@ -98,6 +100,7 @@ extern "C" {
             if (callback) {
                 callback(0, L"Starting file backup...");
             }
+            if (logCallback) logCallback(0, L"Starting file backup", std::wstring(sourcePath).c_str());
 
             std::wstring sourceStr(sourcePath);
 

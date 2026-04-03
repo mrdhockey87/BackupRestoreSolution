@@ -18,24 +18,30 @@ namespace BackupService
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void LogCallback(
+            int level,
+            [MarshalAs(UnmanagedType.LPWStr)] string message,
+            [MarshalAs(UnmanagedType.LPWStr)] string details);
+
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupFiles(string sourcePath, string destPath,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
-            int userExclusionCount, ProgressCallback? callback);
+            int userExclusionCount, ProgressCallback? callback, LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupVolume(string volumePath, string destPath, bool includeSystemState, 
             bool compress,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
             int userExclusionCount,
-            ProgressCallback? callback);
+            ProgressCallback? callback, LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupDisk(int diskNumber, string destPath, bool includeSystemState, 
             bool compress,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
             int userExclusionCount,
-            ProgressCallback? callback);
+            ProgressCallback? callback, LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupDiskIncremental(int diskNumber, string destPath, bool includeSystemState, 
@@ -108,6 +114,7 @@ namespace BackupService
                     // This ensures C++ logs go to {JobName}.json instead of engine.json
                     try
                     {
+                        _currentJobName = job.Name;
                         SetCurrentJobName(job.Name);
                         logger?.Invoke($"C++ engine logging context set to: {job.Name}");
                     }
@@ -205,8 +212,10 @@ namespace BackupService
                             logger?.Invoke($"[ERROR] Source path: {sourcePath}");
                             logger?.Invoke($"[ERROR] Destination path: {newBackupPath}");
 
-                            // CRITICAL: Delete failed backup file for incremental/differential
+                            // COMMENTED OUT FOR DEBUGGING: Delete failed backup file for incremental/differential
                             // This ensures next attempt will start fresh instead of trying to open corrupt file
+                            // DISABLED to allow testing if backup files are actually mountable despite errors
+                            /*
                             if ((job.Type == BackupType.Incremental || job.Type == BackupType.Differential) && 
                                 newBackupPath != null && File.Exists(newBackupPath))
                             {
@@ -221,6 +230,8 @@ namespace BackupService
                                     logger?.Invoke($"[WARNING] Could not delete failed backup file: {ex.Message}");
                                 }
                             }
+                            */
+                            logger?.Invoke($"[DEBUG] Failed backup file preserved for analysis: {Path.GetFileName(newBackupPath)}");
 
                             return false;
                         }
@@ -322,7 +333,9 @@ namespace BackupService
                                 }
                             }
 
-                            // Delete the failed backup FILE
+                            // COMMENTED OUT FOR DEBUGGING: Delete the failed backup FILE
+                            // DISABLED to allow testing if backup files are actually mountable despite verification errors
+                            /*
                             if (newBackupPath != null && File.Exists(newBackupPath))
                             {
                                 try
@@ -337,6 +350,16 @@ namespace BackupService
                                 {
                                     logger?.Invoke($"[WARNING] Could not delete failed backup: {ex.Message}");
                                 }
+                            }
+                            */
+
+                            // Log file preservation for analysis
+                            if (newBackupPath != null && File.Exists(newBackupPath))
+                            {
+                                var fileInfo = new FileInfo(newBackupPath);
+                                var fileSize = fileInfo.Length;
+                                logger?.Invoke($"[DEBUG] Failed backup preserved for analysis: {Path.GetFileName(newBackupPath)} ({fileSize:N0} bytes)");
+                                logger?.Invoke($"[DEBUG] You can attempt to mount this file to verify if it's actually valid");
                             }
 
                             return false;
@@ -403,10 +426,41 @@ namespace BackupService
             return await ExecuteBackupJobWithProgress(job, null, CancellationToken.None, logger);
         }
 
+        private string? _currentJobName;
+
+        private void LogFromEngine(int level, string message, string details)
+        {
+            var jobName = _currentJobName ?? "Unknown";
+
+            // Map integer level to BackupLogLevel enum
+            // 0=Info, 1=Success, 2=Warning, 3=Error
+            switch (level)
+            {
+                case 0: // Info
+                    BackupLogger.LogInfo(jobName, message, details);
+                    break;
+                case 1: // Success
+                    BackupLogger.LogSuccess(jobName, message, details);
+                    break;
+                case 2: // Warning
+                    BackupLogger.LogWarning(jobName, message, details);
+                    break;
+                case 3: // Error
+                    BackupLogger.LogError(jobName, message, details);
+                    break;
+                default:
+                    BackupLogger.LogInfo(jobName, message, details);
+                    break;
+            }
+        }
+
         private int ExecuteBackup(BackupJob job, string sourcePath, string destPath, 
             ProgressCallback? callback, Action<string>? logger)
         {
             int result;
+
+            // Create logging callback for C++ to send logs to BackupLogger
+            LogCallback logCallback = LogFromEngine;
 
             // Convert user exclusions to array for P/Invoke (empty array if null)
             string[] exclusionsArray = job.UserExclusions?.ToArray() ?? Array.Empty<string>();
@@ -457,7 +511,7 @@ namespace BackupService
                         logger?.Invoke($"[DIAGNOSTIC] About to call BackupDisk({diskNumber}, {destPath}, {job.IncludeSystemState}, {job.CompressData}, exclusions: {exclusionCount})");
 
                         result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
-                                          exclusionsArray, exclusionCount, callback);
+                                          exclusionsArray, exclusionCount, callback, logCallback);
 
                         // DIAGNOSTIC: Log result code immediately
                         logger?.Invoke($"[DIAGNOSTIC] BackupDisk returned: {result}");
@@ -472,12 +526,12 @@ namespace BackupService
                     {
                         logger?.Invoke($"Backing up volume: {sourcePath}");
                         result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
-                                            exclusionsArray, exclusionCount, callback);
+                                            exclusionsArray, exclusionCount, callback, logCallback);
                     }
                     else
                     {
                         logger?.Invoke($"Backing up files: {sourcePath}");
-                        result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback);
+                        result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback, logCallback);
                     }
                     break;
 
@@ -507,7 +561,7 @@ namespace BackupService
                     {
                         logger?.Invoke($"No base backup found. Creating initial full backup: {diskNumber}");
                         result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
-                                          exclusionsArray, exclusionCount, callback);
+                                          exclusionsArray, exclusionCount, callback, logCallback);
 
                         if (result != 0)
                         {
@@ -530,11 +584,11 @@ namespace BackupService
                         if (job.Target == BackupTarget.Volume)
                         {
                             result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
-                                                exclusionsArray, exclusionCount, callback);
+                                                exclusionsArray, exclusionCount, callback, logCallback);
                         }
                         else
                         {
-                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback);
+                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback, logCallback);
                         }
                     }
                     else
@@ -573,7 +627,7 @@ namespace BackupService
                     {
                         logger?.Invoke($"No base backup found. Creating initial full backup: {diskNumber}");
                         result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
-                                          exclusionsArray, exclusionCount, callback);
+                                          exclusionsArray, exclusionCount, callback, logCallback);
 
                         if (result != 0)
                         {
@@ -596,11 +650,11 @@ namespace BackupService
                         if (job.Target == BackupTarget.Volume)
                         {
                             result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
-                                                exclusionsArray, exclusionCount, callback);
+                                                exclusionsArray, exclusionCount, callback, logCallback);
                         }
                         else
                         {
-                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback);
+                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback, logCallback);
                         }
                     }
                     else

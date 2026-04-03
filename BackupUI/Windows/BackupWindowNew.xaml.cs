@@ -1931,7 +1931,10 @@ namespace BackupUI.Windows
                                     diskDestPath,
                                     job.IncludeSystemState,
                                     job.CompressData,
-                                    progressCallback);
+                                    null,
+                                    0,
+                                    progressCallback,
+                                    null);
 
                                 if (result != 0)
                                 {
@@ -1959,7 +1962,10 @@ namespace BackupUI.Windows
                                 volumeDestPath,
                                 job.IncludeSystemState,
                                 job.CompressData,
-                                progressCallback);
+                                null,
+                                0,
+                                progressCallback,
+                                null);
 
                             if (result != 0)
                             {
@@ -1980,7 +1986,10 @@ namespace BackupUI.Windows
                                     result = BackupEngineInterop.BackupFiles(
                                         sourcePath,
                                         job.DestinationPath,
-                                        progressCallback);
+                                        null,
+                                        0,
+                                        progressCallback,
+                                        null);
 
                                     if (result != 0)
                                     {

@@ -11,6 +11,12 @@ namespace BackupUI.Services
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void LogCallback(
+            int level,
+            [MarshalAs(UnmanagedType.LPWStr)] string message,
+            [MarshalAs(UnmanagedType.LPWStr)] string details);
+
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int CreateVolumeSnapshot(
             string volume,
@@ -21,7 +27,10 @@ namespace BackupUI.Services
         public static extern int BackupFiles(
             string sourcePath,
             string destPath,
-            ProgressCallback? callback);
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[]? userExclusions,
+            int userExclusionCount,
+            ProgressCallback? callback,
+            LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int BackupHyperVVM(
@@ -75,7 +84,10 @@ namespace BackupUI.Services
             string destPath,
             bool includeSystemState,
             bool compress,
-            ProgressCallback? callback);
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[]? userExclusions,
+            int userExclusionCount,
+            ProgressCallback? callback,
+            LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int BackupDisk(
@@ -83,7 +95,10 @@ namespace BackupUI.Services
             string destPath,
             bool includeSystemState,
             bool compress,
-            ProgressCallback? callback);
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[]? userExclusions,
+            int userExclusionCount,
+            ProgressCallback? callback,
+            LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int CreateIncrementalBackup(
