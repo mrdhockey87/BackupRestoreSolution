@@ -1,227 +1,419 @@
-<Window x:Class="BackupUI.Windows.BackupWindowNew"
-xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-xmlns:local="clr-namespace:BackupUI.Models"
-xmlns:controls="clr-namespace:BackupUI.Controls"
-Title="Create Backup"
-Height="850"
-Width="1000"
-WindowStartupLocation="CenterOwner">
-    <Window.Resources>
-        <!-- TreeView Checkbox Style -->
-        <Style x:Key="TreeViewCheckBoxStyle" TargetType="CheckBox">
-            <Setter Property="IsThreeState" Value="True"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="0,0,5,0"/>
-        </Style>
-    </Window.Resources>
+<Window
+	x:Class="BackupUI.Windows.BackupWindowNew"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="clr-namespace:BackupUI.Controls"
+	xmlns:local="clr-namespace:BackupUI.Models"
+	Title="Create Backup"
+	Width="1000"
+	Height="850"
+	WindowStartupLocation="CenterOwner">
+	<Window.Resources>
+		<!--  TreeView Checkbox Style  -->
+		<Style x:Key="TreeViewCheckBoxStyle" TargetType="CheckBox">
+			<Setter Property="IsThreeState" Value="True" />
+			<Setter Property="VerticalAlignment" Value="Center" />
+			<Setter Property="Margin" Value="0,0,5,0" />
+		</Style>
+	</Window.Resources>
 
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+	<Grid Margin="10">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+		</Grid.RowDefinitions>
 
-        <!-- Header -->
-        <TextBlock Grid.Row="0" Text="Create Backup" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
+		<!--  Header  -->
+		<TextBlock
+			Grid.Row="0"
+			Margin="0,0,0,15"
+			FontSize="20"
+			FontWeight="Bold"
+			Text="Create Backup" />
 
-        <!-- Main Content: Two Columns -->
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+		<!--  Main Content: Two Columns  -->
+		<Grid Grid.Row="1">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="*" />
+			</Grid.ColumnDefinitions>
 
-            <!-- LEFT COLUMN: What to Backup -->
-            <GroupBox Grid.Column="0" Header="What to Backup" Margin="0,0,10,0">
-                <Grid Margin="5">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+			<!--  LEFT COLUMN: What to Backup  -->
+			<GroupBox
+				Grid.Column="0"
+				Margin="0,0,10,0"
+				Header="What to Backup">
+				<Grid Margin="5">
+					<Grid.RowDefinitions>
+						<RowDefinition Height="Auto" />
+						<RowDefinition Height="*" />
+						<RowDefinition Height="Auto" />
+					</Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Foreground="{StaticResource SecondaryText}" FontSize="11" Margin="0,0,0,10">
-                        Check drives or volumes to backup. Files and folders are shown when volumes are unchecked. 
-                        Boot volumes will automatically include system state backup.
-                    </TextBlock>
+					<TextBlock
+						Grid.Row="0"
+						Margin="0,0,0,10"
+						FontSize="11"
+						Foreground="{StaticResource SecondaryText}"
+						TextWrapping="Wrap">
+						Check drives or volumes to backup. Files and folders are shown when volumes are unchecked.
+						Boot volumes will automatically include system state backup.
+					</TextBlock>
 
-                    <Grid Grid.Row="1">
-                        <TreeView Name="treeViewDrives" BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="1">
-                            <TreeView.ItemContainerStyle>
-                                <Style TargetType="TreeViewItem">
-                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
-                                    <Setter Property="Padding" Value="2"/>
-                                </Style>
-                            </TreeView.ItemContainerStyle>
-                        </TreeView>
-                        
-                        <!-- Loading Overlay -->
-                        <Border Name="loadingOverlay" Background="{StaticResource PanelBackground}" Opacity="0.9" Visibility="Collapsed">
-                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <TextBlock Text="Loading drives and volumes..." FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                                <ProgressBar IsIndeterminate="True" Width="200" Height="20"/>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
+					<Grid Grid.Row="1">
+						<TreeView
+							Name="treeViewDrives"
+							BorderBrush="{StaticResource LightBorderBrush}"
+							BorderThickness="1">
+							<TreeView.ItemContainerStyle>
+								<Style TargetType="TreeViewItem">
+									<Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+									<Setter Property="Padding" Value="2" />
+								</Style>
+							</TreeView.ItemContainerStyle>
+						</TreeView>
 
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
-                        <Button Content="Refresh" Width="80" Margin="0,0,5,0" Click="RefreshDrives_Click"/>
-                        <Button Content="Expand All" Width="80" Margin="0,0,5,0" Click="ExpandAll_Click"/>
-                        <Button Content="Collapse All" Width="80" Click="CollapseAll_Click"/>
-                    </StackPanel>
-                </Grid>
-            </GroupBox>
+						<!--  Loading Overlay  -->
+						<Border
+							Name="loadingOverlay"
+							Background="{StaticResource PanelBackground}"
+							Opacity="0.9"
+							Visibility="Collapsed">
+							<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+								<TextBlock
+									Margin="0,0,0,10"
+									HorizontalAlignment="Center"
+									FontSize="14"
+									FontWeight="Bold"
+									Text="Loading drives and volumes..." />
+								<ProgressBar
+									Width="200"
+									Height="20"
+									IsIndeterminate="True" />
+							</StackPanel>
+						</Border>
+					</Grid>
 
-            <!-- RIGHT COLUMN: Settings and Schedule -->
-            <Grid Grid.Column="1">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
+					<StackPanel
+						Grid.Row="2"
+						Margin="0,10,0,0"
+						Orientation="Horizontal">
+						<Button
+							Width="80"
+							Margin="0,0,5,0"
+							Click="RefreshDrives_Click"
+							Content="Refresh" />
+						<Button
+							Width="80"
+							Margin="0,0,5,0"
+							Click="ExpandAll_Click"
+							Content="Expand All" />
+						<Button
+							Width="80"
+							Click="CollapseAll_Click"
+							Content="Collapse All" />
+					</StackPanel>
+				</Grid>
+			</GroupBox>
 
-                <!-- Settings Section -->
-                <GroupBox Grid.Row="0" Header="Settings" Margin="0,0,0,10">
-                    <StackPanel Margin="5">
-                        <TextBlock Text="Backup Name:" Margin="0,0,0,5"/>
-                        <TextBox Name="txtBackupName" Margin="0,0,0,15" Height="25"/>
+			<!--  RIGHT COLUMN: Settings and Schedule  -->
+			<Grid Grid.Column="1">
+				<Grid.RowDefinitions>
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="*" />
+				</Grid.RowDefinitions>
 
-                        <TextBlock Text="Backup Type:" Margin="0,0,0,5"/>
-                        <StackPanel Margin="0,0,0,15">
-                            <!-- First row -->
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                                <RadioButton Name="rbFullBackup" Content="Full Backup" GroupName="BackupType" IsChecked="True" Margin="0,0,20,0" Checked="BackupType_Changed"/>
-                                <RadioButton Name="rbIncremental" Content="Full then Incremental" GroupName="BackupType" Margin="0,0,20,0" Checked="BackupType_Changed"/>
-                                <RadioButton Name="rbDifferential" Content="Full then Differential" GroupName="BackupType" Checked="BackupType_Changed"/>
-                            </StackPanel>
-                            <!-- Second row -->
-                            <StackPanel Orientation="Horizontal">
-                                <RadioButton Name="rbCloneDisk" Content="Clone to Disk" GroupName="BackupType" Margin="0,0,20,0" Checked="BackupType_Changed"/>
-                                <RadioButton Name="rbCloneVirtual" Content="Clone to Virtual Disk (Hyper-V)" GroupName="BackupType" Margin="0,0,20,0" Checked="BackupType_Changed"/>
-                                <RadioButton Name="rbCloneHyperV" Content="Clone Hyper-V System" GroupName="BackupType" Checked="BackupType_Changed"/>
-                            </StackPanel>
-                        </StackPanel>
+				<!--  Settings Section  -->
+				<GroupBox
+					Grid.Row="0"
+					Margin="0,0,0,10"
+					Header="Settings">
+					<StackPanel Margin="5">
+						<TextBlock Margin="0,0,0,5" Text="Backup Name:" />
+						<TextBox
+							Name="txtBackupName"
+							Height="25"
+							Margin="0,0,0,15" />
 
-                        <StackPanel Name="pnlCloneOptions" Visibility="Collapsed" Margin="0,0,0,15">
-                            <TextBlock Name="txtCloneDestinationLabel" Text="Clone to Physical Disk:" Margin="0,0,0,5"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox Name="txtCloneDestination" Grid.Column="0" Height="25" Margin="0,0,5,0"/>
-                                <Button Grid.Column="1" Content="Browse..." Width="80" Click="BrowseCloneDestination_Click"/>
-                            </Grid>
-                        </StackPanel>
+						<TextBlock Margin="0,0,0,5" Text="Backup Type:" />
+						<StackPanel Margin="0,0,0,15">
+							<!--  First row  -->
+							<StackPanel Margin="0,0,0,5" Orientation="Horizontal">
+								<RadioButton
+									Name="rbFullBackup"
+									Margin="0,0,20,0"
+									Checked="BackupType_Changed"
+									Content="Full Backup"
+									GroupName="BackupType"
+									IsChecked="True" />
+								<RadioButton
+									Name="rbIncremental"
+									Margin="0,0,20,0"
+									Checked="BackupType_Changed"
+									Content="Full then Incremental"
+									GroupName="BackupType" />
+								<RadioButton
+									Name="rbDifferential"
+									Checked="BackupType_Changed"
+									Content="Full then Differential"
+									GroupName="BackupType" />
+							</StackPanel>
+							<!--  Second row  -->
+							<StackPanel Orientation="Horizontal">
+								<RadioButton
+									Name="rbCloneDisk"
+									Margin="0,0,20,0"
+									Checked="BackupType_Changed"
+									Content="Clone to Disk"
+									GroupName="BackupType" />
+								<RadioButton
+									Name="rbCloneVirtual"
+									Margin="0,0,20,0"
+									Checked="BackupType_Changed"
+									Content="Clone to Virtual Disk (Hyper-V)"
+									GroupName="BackupType" />
+								<RadioButton
+									Name="rbCloneHyperV"
+									Checked="BackupType_Changed"
+									Content="Clone Hyper-V System"
+									GroupName="BackupType" />
+							</StackPanel>
+						</StackPanel>
 
-                        <StackPanel Name="pnlBackupDestination" Visibility="Visible">
-                            <TextBlock Text="Backup Destination:" Margin="0,0,0,5"/>
-                            <Grid Margin="0,0,0,15">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox Name="txtDestination" Grid.Column="0" Height="25" Margin="0,0,5,0"/>
-                                <Button Grid.Column="1" Content="Browse..." Width="80" Click="BrowseDestination_Click"/>
-                            </Grid>
-                        </StackPanel>
+						<StackPanel
+							Name="pnlCloneOptions"
+							Margin="0,0,0,15"
+							Visibility="Collapsed">
+							<TextBlock
+								Name="txtCloneDestinationLabel"
+								Margin="0,0,0,5"
+								Text="Clone to Physical Disk:" />
+							<Grid>
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="Auto" />
+								</Grid.ColumnDefinitions>
+								<TextBox
+									Name="txtCloneDestination"
+									Grid.Column="0"
+									Height="25"
+									Margin="0,0,5,0" />
+								<Button
+									Grid.Column="1"
+									Width="80"
+									Click="BrowseCloneDestination_Click"
+									Content="Browse..." />
+							</Grid>
+						</StackPanel>
 
-                        <CheckBox Name="chkAutoSystemState" Content="Auto-include system state for boot volumes" 
-                                  IsChecked="True" Margin="0,0,0,10"/>
-                        <CheckBox Name="chkCompress" Content="Compress backup data" IsChecked="True" Margin="0,0,0,10"/>
-                        <CheckBox Name="chkSplitFiles" Content="Split into 4.7GB files (DVD size)" 
-                                  IsChecked="True" Margin="0,0,0,10"/>
-                        <CheckBox Name="chkVerify" Content="Verify backup after completion" IsChecked="True" Margin="0,0,0,10"/>
+						<StackPanel Name="pnlBackupDestination" Visibility="Visible">
+							<TextBlock Margin="0,0,0,5" Text="Backup Destination:" />
+							<Grid Margin="0,0,0,15">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="Auto" />
+								</Grid.ColumnDefinitions>
+								<TextBox
+									Name="txtDestination"
+									Grid.Column="0"
+									Height="25"
+									Margin="0,0,5,0" />
+								<Button
+									Grid.Column="1"
+									Width="80"
+									Click="BrowseDestination_Click"
+									Content="Browse..." />
+							</Grid>
+						</StackPanel>
 
-                        <Button Name="btnManageExclusions" Content="Manage Exclusions..." Width="150" 
-                                HorizontalAlignment="Left" Margin="0,0,0,15" 
-                                Click="ManageExclusions_Click"
-                                ToolTip="Configure files, folders, and patterns to exclude from backup"/>
+						<CheckBox
+							Name="chkAutoSystemState"
+							Margin="0,0,0,10"
+							Content="Auto-include system state for boot volumes"
+							IsChecked="True" />
+						<CheckBox
+							Name="chkCompress"
+							Margin="0,0,0,10"
+							Content="Compress backup data"
+							IsChecked="True" />
+						<CheckBox
+							Name="chkSplitFiles"
+							Margin="0,0,0,10"
+							Content="Split into 4.7GB files (DVD size)"
+							IsChecked="True" />
+						<CheckBox
+							Name="chkVerify"
+							Margin="0,0,0,10"
+							Content="Verify backup after completion"
+							IsChecked="True" />
 
-                        <StackPanel Name="pnlRetentionSettings" Visibility="Collapsed">
-                            <TextBlock Text="Full Backup Retention:" Margin="0,0,0,5" FontWeight="SemiBold"/>
-                            <TextBlock Text="Specify how many full backups to keep (applies to Full backup type only)" 
-                                       TextWrapping="Wrap" Foreground="{StaticResource SecondaryText}" FontSize="10" Margin="0,0,0,5"/>
-                            <Grid Margin="0,0,0,5">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="80"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Keep last" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                                <TextBox Name="txtRetainCount" Grid.Column="1" Height="25" Text="1" 
-                                         VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
-                                <TextBlock Grid.Column="2" Text="full backup(s)" VerticalAlignment="Center" Margin="5,0,0,0"/>
-                            </Grid>
-                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource SecondaryText}" FontSize="10" Margin="0,0,0,0">
-                                Note: When keeping more than 1 backup, date/time will be added to backup names. Old backups are only deleted after successful verification.
-                            </TextBlock>
-                        </StackPanel>
-                    </StackPanel>
-                </GroupBox>
+						<Button
+							Name="btnManageExclusions"
+							Width="150"
+							Margin="0,0,0,15"
+							HorizontalAlignment="Left"
+							Click="ManageExclusions_Click"
+							Content="Manage Exclusions..."
+							ToolTip="Configure files, folders, and patterns to exclude from backup" />
 
-                <!-- Schedule Section -->
-                <GroupBox Grid.Row="1" Header="Schedule">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="5">
-                            <CheckBox Name="chkEnableSchedule" Content="Enable Scheduled Backup" Margin="0,0,0,15" 
-                                      Checked="Schedule_CheckedChanged" Unchecked="Schedule_CheckedChanged"/>
+						<StackPanel Name="pnlRetentionSettings" Visibility="Collapsed">
+							<TextBlock
+								Margin="0,0,0,5"
+								FontWeight="SemiBold"
+								Text="Full Backup Retention:" />
+							<TextBlock
+								Margin="0,0,0,5"
+								FontSize="10"
+								Foreground="{StaticResource SecondaryText}"
+								Text="Specify how many full backups to keep (applies to Full backup type only)"
+								TextWrapping="Wrap" />
+							<Grid Margin="0,0,0,5">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="Auto" />
+									<ColumnDefinition Width="80" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+								<TextBlock
+									Grid.Column="0"
+									Margin="0,0,5,0"
+									VerticalAlignment="Center"
+									Text="Keep last" />
+								<TextBox
+									Name="txtRetainCount"
+									Grid.Column="1"
+									Height="25"
+									HorizontalContentAlignment="Center"
+									VerticalContentAlignment="Center"
+									Text="1" />
+								<TextBlock
+									Grid.Column="2"
+									Margin="5,0,0,0"
+									VerticalAlignment="Center"
+									Text="full backup(s)" />
+							</Grid>
+							<TextBlock
+								Margin="0,0,0,0"
+								FontSize="10"
+								Foreground="{StaticResource SecondaryText}"
+								TextWrapping="Wrap">
+								Note: When keeping more than 1 backup, date/time will be added to backup names. Old backups are only deleted after successful verification.
+							</TextBlock>
+						</StackPanel>
+					</StackPanel>
+				</GroupBox>
 
-                            <StackPanel Name="pnlSchedule" IsEnabled="False">
-                                <TextBlock Text="Frequency:" Margin="0,0,0,5"/>
-                                <ComboBox Name="cmbFrequency" Margin="0,0,0,15" Height="25" SelectionChanged="Frequency_SelectionChanged">
-                                    <ComboBoxItem Content="Daily" IsSelected="True"/>
-                                    <ComboBoxItem Content="Weekly"/>
-                                    <ComboBoxItem Content="Monthly"/>
-                                    <ComboBoxItem Content="Once"/>
-                                </ComboBox>
+				<!--  Schedule Section  -->
+				<GroupBox Grid.Row="1" Header="Schedule">
+					<ScrollViewer VerticalScrollBarVisibility="Auto">
+						<StackPanel Margin="5">
+							<CheckBox
+								Name="chkEnableSchedule"
+								Margin="0,0,0,15"
+								Checked="Schedule_CheckedChanged"
+								Content="Enable Scheduled Backup"
+								Unchecked="Schedule_CheckedChanged" />
 
-                                <TextBlock Text="Time:" Margin="0,0,0,5"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
-                                    <ComboBox Name="cmbHour" Width="60" Margin="0,0,5,0"/>
-                                    <TextBlock Text=":" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                                    <ComboBox Name="cmbMinute" Width="60" Margin="0,0,10,0"/>
-                                    <ComboBox Name="cmbAmPm" Width="60">
-                                        <ComboBoxItem Content="AM"/>
-                                        <ComboBoxItem Content="PM"/>
-                                    </ComboBox>
-                                </StackPanel>
+							<StackPanel Name="pnlSchedule" IsEnabled="False">
+								<TextBlock Margin="0,0,0,5" Text="Frequency:" />
+								<ComboBox
+									Name="cmbFrequency"
+									Height="25"
+									Margin="0,0,0,15"
+									SelectionChanged="Frequency_SelectionChanged">
+									<ComboBoxItem Content="Daily" IsSelected="True" />
+									<ComboBoxItem Content="Weekly" />
+									<ComboBoxItem Content="Monthly" />
+									<ComboBoxItem Content="Once" />
+								</ComboBox>
 
-                                <StackPanel Name="pnlWeekly" Visibility="Collapsed" Margin="0,0,0,15">
-                                    <TextBlock Text="Days of Week:" Margin="0,0,0,5"/>
-                                    <StackPanel>
-                                        <CheckBox Name="chkMonday" Content="Monday"/>
-                                        <CheckBox Name="chkTuesday" Content="Tuesday"/>
-                                        <CheckBox Name="chkWednesday" Content="Wednesday"/>
-                                        <CheckBox Name="chkThursday" Content="Thursday"/>
-                                        <CheckBox Name="chkFriday" Content="Friday"/>
-                                        <CheckBox Name="chkSaturday" Content="Saturday"/>
-                                        <CheckBox Name="chkSunday" Content="Sunday"/>
-                                    </StackPanel>
-                                </StackPanel>
+								<TextBlock Margin="0,0,0,5" Text="Time:" />
+								<StackPanel Margin="0,0,0,15" Orientation="Horizontal">
+									<ComboBox
+										Name="cmbHour"
+										Width="60"
+										Margin="0,0,5,0" />
+									<TextBlock
+										Margin="0,0,5,0"
+										VerticalAlignment="Center"
+										Text=":" />
+									<ComboBox
+										Name="cmbMinute"
+										Width="60"
+										Margin="0,0,10,0" />
+									<ComboBox Name="cmbAmPm" Width="60">
+										<ComboBoxItem Content="AM" />
+										<ComboBoxItem Content="PM" />
+									</ComboBox>
+								</StackPanel>
 
-                                <StackPanel Name="pnlMonthly" Visibility="Collapsed" Margin="0,0,0,15">
-                                    <TextBlock Text="Day of Month:" Margin="0,0,0,5"/>
-                                    <ComboBox Name="cmbDayOfMonth" Width="60" HorizontalAlignment="Left"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </StackPanel>
-                    </ScrollViewer>
-                </GroupBox>
-            </Grid>
-        </Grid>
+								<StackPanel
+									Name="pnlWeekly"
+									Margin="0,0,0,15"
+									Visibility="Collapsed">
+									<TextBlock Margin="0,0,0,5" Text="Days of Week:" />
+									<StackPanel>
+										<CheckBox Name="chkMonday" Content="Monday" />
+										<CheckBox Name="chkTuesday" Content="Tuesday" />
+										<CheckBox Name="chkWednesday" Content="Wednesday" />
+										<CheckBox Name="chkThursday" Content="Thursday" />
+										<CheckBox Name="chkFriday" Content="Friday" />
+										<CheckBox Name="chkSaturday" Content="Saturday" />
+										<CheckBox Name="chkSunday" Content="Sunday" />
+									</StackPanel>
+								</StackPanel>
 
-        <!-- Progress Bar -->
-        <ProgressBar Grid.Row="2" Name="progressBar" Height="20" Margin="0,10,0,10" Visibility="Collapsed"/>
-        <TextBlock Grid.Row="2" Name="txtProgress" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+								<StackPanel
+									Name="pnlMonthly"
+									Margin="0,0,0,15"
+									Visibility="Collapsed">
+									<TextBlock Margin="0,0,0,5" Text="Day of Month:" />
+									<ComboBox
+										Name="cmbDayOfMonth"
+										Width="60"
+										HorizontalAlignment="Left" />
+								</StackPanel>
+							</StackPanel>
+						</StackPanel>
+					</ScrollViewer>
+				</GroupBox>
+			</Grid>
+		</Grid>
 
-        <!-- Action Buttons -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Start Backup" Width="100" Margin="0,0,5,0" Click="StartBackup_Click"/>
-            <Button Content="Save Job" Width="100" Margin="0,0,5,0" Click="SaveJob_Click"/>
-            <Button Content="Cancel" Width="100" Click="Cancel_Click"/>
-        </StackPanel>
-    </Grid>
+		<!--  Progress Bar  -->
+		<ProgressBar
+			Name="progressBar"
+			Grid.Row="2"
+			Height="20"
+			Margin="0,10,0,10"
+			Visibility="Collapsed" />
+		<TextBlock
+			Name="txtProgress"
+			Grid.Row="2"
+			HorizontalAlignment="Center"
+			VerticalAlignment="Center"
+			Visibility="Collapsed" />
+
+		<!--  Action Buttons  -->
+		<StackPanel
+			Grid.Row="3"
+			HorizontalAlignment="Right"
+			Orientation="Horizontal">
+			<Button
+				Width="100"
+				Margin="0,0,5,0"
+				Click="StartBackup_Click"
+				Content="Start Backup" />
+			<Button
+				Width="100"
+				Margin="0,0,5,0"
+				Click="SaveJob_Click"
+				Content="Save Job" />
+			<Button
+				Width="100"
+				Click="Cancel_Click"
+				Content="Cancel" />
+		</StackPanel>
+	</Grid>
 </Window>

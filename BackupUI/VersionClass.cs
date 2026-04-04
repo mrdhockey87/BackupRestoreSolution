@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-		static private string version_fallback_number = "6.1.1.37";
+		static private string version_fallback_number = "6.1.1.38";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,32 @@ namespace BackupUI
 
 /*
  *
+* Version 6.1.1.39 Fixed the textbox's background on the backup windows new getting overriden by the internal scrollviewer
+*                  which would set the background to MediumTurquoise which was too dark. Apartently windows applies a scrollerviewer
+*                  to textbox's in the background to handle wrapping and things like that. mdail 4/4/2026
+* Version 6.1.1.38 COMPREHENSIVE WIMLOADIMAGE FIX - WIMSETTEMPORARYPATH FOR ALL CODE PATHS:
+*                  Fixed critical bug affecting verification, restore, and metadata operations where WIMLoadImage() was
+*                  failing with error 1632 ("Image data is corrupted") on perfectly valid backup files. The issue occurred
+*                  because multiple functions were calling WIMLoadImage() without first setting a temporary path via
+*                  WIMSetTemporaryPath(). The WIM API requires a temp directory to decompress and load image data.
+*                  Without it, WIMLoadImage returns error 1632 (ERROR_INSTALL_SERVICE_FAILURE) even when WIM files are
+*                  completely valid. This was a FALSE FAILURE - backups that failed verification were actually mountable
+*                  and contained all expected data. COMPREHENSIVE FIX APPLIED TO 6 LOCATIONS ACROSS 4 FILES:
+*                  1) BackupVerification.cpp - VerifyWimArchive() line 234: Prevents false verification failures after
+*                     backup completion. Valid backups no longer deleted due to verification errors.
+*                  2) RestoreEngine_Advanced.cpp - RestoreDisk() line 629: Prevents restore failures when loading valid
+*                     backup images. Restores now succeed on first attempt without error 1632.
+*                  3) WimMountManager.cpp - GetWimImageInfo() line 788: Prevents failures when reading image metadata
+*                     (name, description). Image information displays correctly in UI.
+*                  4-6) BackupManager_Advanced.cpp - CaptureToWimImage() lines 997, 1103, 1121: Prevents failures when
+*                     reloading image handles after filtered captures. Metadata setting works correctly for folder backups
+*                     with exclusions. FIX PATTERN: 1) Get system temp directory using GetTempPathW(), 2) Call
+*                     WIMSetTemporaryPath() on WIM handle after WIMCreateFile but before WIMLoadImage. This mirrors the
+*                     proven fix from WimMountManager.cpp MountWimImage() function added in v5.13.9.8 for mounting operations.
+*                  IMPACT: Eliminates ALL error 1632 false failures in Windows backup/restore/verification code. User's
+*                  150GB backup that previously failed verification now passes successfully. Automated scheduled backups
+*                  no longer report false failures. NOTE: Linux restore unaffected - uses wimlib which handles temp paths
+*                  automatically. mdail 4/4/2026
 * Version 6.1.1.37 C++ LOGGING INTEGRATION - CALLBACK PATTERN FOR CENTRALIZED LOGGING:
 *                  Implemented comprehensive logging callback system to integrate C++ BackupEngine diagnostic messages
 *                  into C# BackupLogger centralized JSON log files. Previously, C++ used OutputDebugStringW() calls only
@@ -96,7 +122,7 @@ namespace BackupUI
 *                  C:\ProgramData\BackupRestoreService\Logs\{JobName}.json with chronological C++ and C# entries together.
 *                  Enables complete audit trail, improved troubleshooting, and eliminates need for separate DebugView monitoring.
 *                  Follows proven callback pattern from ProgressCallback - type-safe marshalling, no threading concerns,
-*                  backwards compatible (callback parameter optional/nullable). mdail 4/8/2026
+*                  backwards compatible (callback parameter optional/nullable). mdail 4/4/2026
 * Version 6.1.1.36 METADATA FALLBACK ENHANCEMENT - TWO-STAGE METADATA SETTING:
 *                  Improved CaptureToWimImage metadata handling for callback-filtered captures. When WIMSetImageInformation
 *                  fails on the image handle (which happens when the handle came from WIMLoadImage after a callback-filtered

@@ -784,6 +784,12 @@ extern "C" {
             return false;
         }
 
+        // Set temporary path for WIM API (required for WIMLoadImage)
+        wchar_t tempPath[MAX_PATH];
+        if (GetTempPathW(MAX_PATH, tempPath)) {
+            WIMSetTemporaryPath(hWim, tempPath);
+        }
+
         // Load the image
         HANDLE hImage = WIMLoadImage(hWim, imageIndex);
         if (!hImage || hImage == INVALID_HANDLE_VALUE) {

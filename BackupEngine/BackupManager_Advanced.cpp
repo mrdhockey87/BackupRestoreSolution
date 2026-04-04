@@ -994,6 +994,12 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
             LogInfo(L"CaptureToWimImage: SUCCESS - New image detected! Capture completed with filtered files.");
             LogInfo(L"CaptureToWimImage: Loading new image at index " + std::to_wstring(imageCountAfter));
 
+            // Set temporary path for WIM API (required for WIMLoadImage)
+            wchar_t tempPath[MAX_PATH];
+            if (GetTempPathW(MAX_PATH, tempPath)) {
+                WIMSetTemporaryPath(hWim, tempPath);
+            }
+
             hImage = WIMLoadImage(hWim, imageCountAfter);
             if (!hImage || hImage == INVALID_HANDLE_VALUE) {
                 DWORD loadError = GetLastError();
@@ -1100,6 +1106,12 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
 
         // Reload the image handle for return (even if metadata failed)
         if (needToReloadHandle) {
+            // Set temporary path for WIM API (required for WIMLoadImage)
+            wchar_t tempPath[MAX_PATH];
+            if (GetTempPathW(MAX_PATH, tempPath)) {
+                WIMSetTemporaryPath(hWim, tempPath);
+            }
+
             hImage = WIMLoadImage(hWim, imageIndex);
             if (!hImage || hImage == INVALID_HANDLE_VALUE) {
                 LogWarning(L"Could not reload image handle after metadata attempt");
@@ -1118,6 +1130,12 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
 
     // Reload image handle for return if we closed it earlier
     if (needToReloadHandle) {
+        // Set temporary path for WIM API (required for WIMLoadImage)
+        wchar_t tempPath[MAX_PATH];
+        if (GetTempPathW(MAX_PATH, tempPath)) {
+            WIMSetTemporaryPath(hWim, tempPath);
+        }
+
         hImage = WIMLoadImage(hWim, imageIndex);
         if (!hImage || hImage == INVALID_HANDLE_VALUE) {
             LogWarning(L"Could not reload image handle after successful metadata set");

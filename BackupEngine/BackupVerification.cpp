@@ -231,6 +231,13 @@ extern "C" {
                 callback(60, msg.c_str());
             }
 
+            // Set temporary path for WIM API (required for WIMLoadImage to work)
+            // Without this, WIMLoadImage fails with error 1632 even on valid WIM files
+            wchar_t tempPath[MAX_PATH];
+            if (GetTempPathW(MAX_PATH, tempPath)) {
+                WIMSetTemporaryPath(hWim, tempPath);
+            }
+
             // Try loading first image to verify image structure
             HANDLE hImage = WIMLoadImage(hWim, 1);
 
