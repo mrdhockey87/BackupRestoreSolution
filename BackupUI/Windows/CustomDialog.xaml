@@ -146,9 +146,9 @@
 				<TextBlock
 					x:Name="txtIcon"
 					Grid.Column="0"
-					Margin="0,10,20,0"
+					Margin="0,10,20,10"
 					VerticalAlignment="Top"
-					FontSize="48" />
+					FontSize="24" />
 
 				<!--  Message  -->
 				<TextBox

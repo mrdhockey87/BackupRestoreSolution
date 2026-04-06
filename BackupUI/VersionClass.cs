@@ -69,6 +69,8 @@ namespace BackupUI
 
 /*
  *
+* Version 6.1.3.4 Change the size of the iconand add 10 as the bottom margin to better align the icon with the text on 
+*			      the Custom dialog. mdail 4/6/2026
 * Version 6.1.3.3 Changed the MinWidth to 250 for the CustomDialog to better fit smaller messages that might have 3 buttons. mdail 4/6/2026
 * Version 6.1.3.2 FILE ORGANIZATION & DIALOG UX IMPROVEMENTS: Moved CustomDialog files (CustomDialog.xaml, CustomDialog.xaml.cs) 
 *                  from root BackupUI\ directory to Windows\ subdirectory for consistent project structure - aligning with 36+ other 
