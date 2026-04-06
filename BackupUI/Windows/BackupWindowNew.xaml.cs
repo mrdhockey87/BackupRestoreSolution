@@ -54,10 +54,8 @@ namespace BackupUI.Windows
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error initializing backup window: {ex.Message}\n\nStack Trace: {ex.StackTrace}", 
-                    "Initialization Error",
-                    MessageBoxButton.OK, 
-                    MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error initializing backup window: {ex.Message}\n\nStack Trace: {ex.StackTrace}", 
+                    "Initialization Error");
             }
         }
 
@@ -200,10 +198,8 @@ namespace BackupUI.Windows
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading drives: {ex.Message}\n\nStack Trace: {ex.StackTrace}", 
-                    "Error",
-                    MessageBoxButton.OK, 
-                    MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error loading drives: {ex.Message}\n\nStack Trace: {ex.StackTrace}", 
+                    "Error");
             }
         }
 
@@ -459,8 +455,7 @@ namespace BackupUI.Windows
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading drives: {ex.Message}\n\nDetails: {ex.InnerException?.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error loading drives: {ex.Message}\n\nDetails: {ex.InnerException?.Message}", "Error");
                 throw; // Re-throw to be caught by caller
             }
             finally
@@ -687,10 +682,8 @@ namespace BackupUI.Windows
                             {
                                 System.Diagnostics.Debug.WriteLine($"Error processing individual disk: {diskEx.Message}");
                                 Dispatcher.Invoke(() =>
-                                    MessageBox.Show($"Error processing a disk: {diskEx.Message}\n\nContinuing with remaining disks...", 
-                                        "Warning",
-                                        MessageBoxButton.OK, 
-                                        MessageBoxImage.Warning));
+                                    CustomDialogService.ShowWarning($"Error processing a disk: {diskEx.Message}\n\nContinuing with remaining disks...", 
+                                        "Warning"));
                             }
                         }
                     }
@@ -701,10 +694,8 @@ namespace BackupUI.Windows
                 {
                     System.Diagnostics.Debug.WriteLine($"CRITICAL ERROR in LoadPhysicalDrives: {ex.Message}\nStack: {ex.StackTrace}");
                     Dispatcher.Invoke(() =>
-                        MessageBox.Show($"Error loading physical drives: {ex.Message}\n\nDetails: {ex.GetType().Name}\n\nPlease check Output window for details.", 
-                            "Error",
-                            MessageBoxButton.OK, 
-                            MessageBoxImage.Error));
+                        CustomDialogService.ShowError($"Error loading physical drives: {ex.Message}\n\nDetails: {ex.GetType().Name}\n\nPlease check Output window for details.", 
+                            "Error"));
                 }
             });
         }
@@ -1178,8 +1169,7 @@ namespace BackupUI.Windows
                 
                 if (networkRoot == null)
                 {
-                    MessageBox.Show("Network Locations node not found.", "Error",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    CustomDialogService.ShowError("Network Locations node not found.", "Error");
                     return;
                 }
 
@@ -1189,8 +1179,7 @@ namespace BackupUI.Windows
 
                 if (existing != null)
                 {
-                    MessageBox.Show($"Network path already added:\n{uncPath}", "Duplicate Path",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    CustomDialogService.ShowInfo($"Network path already added:\n{uncPath}", "Duplicate Path");
                     return;
                 }
 
@@ -1234,13 +1223,11 @@ namespace BackupUI.Windows
                 // Refresh the tree view
                 RefreshTreeView();
 
-                MessageBox.Show($"Network path added successfully:\n{uncPath}", "Success",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                CustomDialogService.ShowSuccess($"Network path added successfully:\n{uncPath}", "Success");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error adding network path:\n{ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error adding network path:\n{ex.Message}", "Error");
             }
         }
 
@@ -1265,8 +1252,7 @@ namespace BackupUI.Windows
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error refreshing drives: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error refreshing drives: {ex.Message}", "Error");
             }
         }
 
@@ -1386,10 +1372,8 @@ namespace BackupUI.Windows
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error selecting disk: {ex.Message}",
-                        "Error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
+                    CustomDialogService.ShowError($"Error selecting disk: {ex.Message}",
+                        "Error");
                 }
             }
             else
@@ -1452,10 +1436,8 @@ namespace BackupUI.Windows
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error managing exclusions: {ex.Message}",
-                    "Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error managing exclusions: {ex.Message}",
+                    "Error");
             }
         }
 
@@ -1561,10 +1543,8 @@ namespace BackupUI.Windows
                 
                 if (selectedVolumes.Count == 0)
                 {
-                    MessageBox.Show("Please select at least one volume to clone.",
-                        "No Source Selected",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                    CustomDialogService.ShowWarning("Please select at least one volume to clone.",
+                        "No Source Selected");
                     volumeConfigShown = false;
                     return;
                 }
@@ -1576,10 +1556,8 @@ namespace BackupUI.Windows
                 
                 if (targetDiskSize <= 0)
                 {
-                    MessageBox.Show("Unable to determine target disk size.",
-                        "Invalid Target",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
+                    CustomDialogService.ShowError("Unable to determine target disk size.",
+                        "Invalid Target");
                     volumeConfigShown = false;
                     return;
                 }
@@ -1617,10 +1595,8 @@ namespace BackupUI.Windows
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[CheckAndShowVolumeConfig] ERROR: {ex.Message}\n{ex.StackTrace}");
-                MessageBox.Show($"Error showing volume configuration: {ex.Message}",
-                    "Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error showing volume configuration: {ex.Message}",
+                    "Error");
                 volumeConfigShown = false;
             }
         }
@@ -1848,16 +1824,14 @@ namespace BackupUI.Windows
 
                 await ExecuteBackupJob(job);
 
-                MessageBox.Show("Backup completed successfully!", "Success",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                CustomDialogService.ShowSuccess("Backup completed successfully!", "Success");
 
                 DialogResult = true;
                 Close();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Backup failed: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Backup failed: {ex.Message}", "Error");
             }
             finally
             {
@@ -2165,18 +2139,14 @@ namespace BackupUI.Windows
                 {
                     job.Id = existingJob.Id;
                     jobManager.UpdateJob(job);
-                    MessageBox.Show($"Backup job '{job.Name}' updated successfully!\n\nJob saved to:\nC:\\ProgramData\\BackupRestoreService\\jobs.json", 
-                        "Success",
-                        MessageBoxButton.OK, 
-                        MessageBoxImage.Information);
+                    CustomDialogService.ShowSuccess($"Backup job '{job.Name}' updated successfully!\n\nJob saved to:\nC:\\ProgramData\\BackupRestoreService\\jobs.json", 
+                        "Success");
                 }
                 else
                 {
                     jobManager.AddJob(job);
-                    MessageBox.Show($"Backup job '{job.Name}' created successfully!\n\nJob saved to:\nC:\\ProgramData\\BackupRestoreService\\jobs.json", 
-                        "Success",
-                        MessageBoxButton.OK, 
-                        MessageBoxImage.Information);
+                    CustomDialogService.ShowSuccess($"Backup job '{job.Name}' created successfully!\n\nJob saved to:\nC:\\ProgramData\\BackupRestoreService\\jobs.json", 
+                        "Success");
                 }
 
                 DialogResult = true;
@@ -2184,14 +2154,12 @@ namespace BackupUI.Windows
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"ERROR: Failed to save backup job!\n\n{ex.Message}\n\nPlease check:\n" +
+                CustomDialogService.ShowError($"ERROR: Failed to save backup job!\n\n{ex.Message}\n\nPlease check:\n" +
                     "1. You have administrator rights\n" +
                     "2. C:\\ProgramData folder is accessible\n" +
                     "3. Antivirus is not blocking the save\n\n" +
                     $"Technical details:\n{ex.InnerException?.Message}", 
-                    "Save Failed",
-                    MessageBoxButton.OK, 
-                    MessageBoxImage.Error);
+                    "Save Failed");
                 
                 System.Diagnostics.Debug.WriteLine($"SaveJob failed: {ex.Message}\n{ex.StackTrace}");
             }
@@ -2398,8 +2366,7 @@ namespace BackupUI.Windows
         {
             if (string.IsNullOrWhiteSpace(txtBackupName.Text))
             {
-                MessageBox.Show("Please enter a backup name.", "Validation Error",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                CustomDialogService.ShowWarning("Please enter a backup name.", "Validation Error");
                 return false;
             }
 
@@ -2408,8 +2375,7 @@ namespace BackupUI.Windows
             {
                 if (string.IsNullOrWhiteSpace(txtCloneDestination.Text))
                 {
-                    MessageBox.Show("Please select a physical disk destination.", "Validation Error",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    CustomDialogService.ShowWarning("Please select a physical disk destination.", "Validation Error");
                     return false;
                 }
             }
@@ -2418,8 +2384,7 @@ namespace BackupUI.Windows
             {
                 if (string.IsNullOrWhiteSpace(txtDestination.Text))
                 {
-                    MessageBox.Show("Please select a backup destination.", "Validation Error",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    CustomDialogService.ShowWarning("Please select a backup destination.", "Validation Error");
                     return false;
                 }
             }
@@ -2433,15 +2398,13 @@ namespace BackupUI.Windows
                 
                 if (selectedHyperV.Count == 0)
                 {
-                    MessageBox.Show("Please select at least one Hyper-V system to clone.", "Validation Error",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    CustomDialogService.ShowWarning("Please select at least one Hyper-V system to clone.", "Validation Error");
                     return false;
                 }
                 
                 if (selectedOther.Count > 0)
                 {
-                    MessageBox.Show("Clone Hyper-V System can only clone Hyper-V systems.\n\nPlease unselect disks, volumes, and folders.", "Validation Error",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    CustomDialogService.ShowWarning("Clone Hyper-V System can only clone Hyper-V systems.\n\nPlease unselect disks, volumes, and folders.", "Validation Error");
                     return false;
                 }
             }
@@ -2453,8 +2416,7 @@ namespace BackupUI.Windows
                 if (selectedHyperV.Count > 0)
                 {
                     var backupTypeName = GetBackupTypeName();
-                    MessageBox.Show($"{backupTypeName} cannot include Hyper-V systems.\n\nPlease use 'Clone Hyper-V System' for Hyper-V backups, or unselect Hyper-V systems.", "Validation Error",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    CustomDialogService.ShowWarning($"{backupTypeName} cannot include Hyper-V systems.\n\nPlease use 'Clone Hyper-V System' for Hyper-V backups, or unselect Hyper-V systems.", "Validation Error");
                     return false;
                 }
                 
@@ -2462,8 +2424,7 @@ namespace BackupUI.Windows
                 var anySelected = driveItems.Any(d => d.IsChecked == true || d.Children.Any(c => c.IsChecked == true));
                 if (!anySelected)
                 {
-                    MessageBox.Show("Please select at least one drive, volume, or folder to backup.", "Validation Error",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    CustomDialogService.ShowWarning("Please select at least one drive, volume, or folder to backup.", "Validation Error");
                     return false;
                 }
             }

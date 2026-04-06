@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-		static private string version_fallback_number = "6.1.1.38";
+			static private string version_fallback_number = "6.1.3.0";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,46 @@ namespace BackupUI
 
 /*
  *
+* Version 6.1.3.0 CUSTOM THEMED DIALOG SYSTEM - UI CONSISTENCY ENHANCEMENT:
+*                  Replaced all standard MessageBox dialogs with custom themed dialogs that match the
+*                  application's turquoise color scheme. Created complete dialog system with three components:
+*                  1) CUSTOMDIALOG.XAML: Borderless WPF window (WindowStyle="None", AllowsTransparency="True")
+*                  with turquoise theme (#F5FFFF background, #B0E0E6 headers, #20B2AA borders, #008B8B buttons,
+*                  #20B2AA hover). Three-row grid layout: header (40px) with title and close button, content
+*                  area with scrollable message and emoji icon, button panel (60px) with styled buttons.
+*                  Supports OK, OKCancel, YesNo, YesNoCancel button configurations. 2) CUSTOMDIALOG.XAML.CS:
+*                  Code-behind with Configure() method for message/title/buttons/icon setup. ConfigureIcon()
+*                  sets emoji icons (ℹ️ info, ⚠️ warning, ❌ error, ❓ question, ✅ success) with appropriate
+*                  colors. ConfigureButtons() manages button visibility/content. CustomDialogResult enum
+*                  (OK/Cancel/Yes/No/None) renamed from DialogResult to avoid conflict with WPF Window.DialogResult
+*                  property. Click handlers set both Result property and base.DialogResult for proper modal
+*                  behavior. 3) CUSTOMDIALOGSERVICE.CS: Static service class with helper methods (ShowInfo,
+*                  ShowSuccess, ShowWarning, ShowError, ShowQuestion, ShowConfirmation, ShowOKCancel) that
+*                  automatically detect owner window from Application.Current.MainWindow. MessageBox fallback
+*                  if custom dialog fails. Conversion utilities (FromMessageBoxResult, ToMessageBoxResult)
+*                  for compatibility. CONVERSIONS COMPLETED: Replaced 9 MessageBox calls - MainWindow.xaml.cs
+*                  (7 calls: unmount confirmation/success/errors, no mounted backups info, unmount all
+*                  confirmation/success), ImportBackupWindow.xaml.cs (1 call: import error). BENEFITS:
+*                  Consistent visual theme throughout application, modern borderless design, better UX with
+*                  emoji icons, automatic owner detection for proper modal behavior, easy-to-use service
+*                  class pattern. All alert dialogs now match app's turquoise color scheme. mdail 4/6/2026
+* Version 6.1.2.0 METADATA VERIFICATION FIX - PREVENT INVALID BACKUP FILES:
+*                  Fixed critical bug where backups completed successfully but failed verification with error -7
+*                  "No metadata found in image. Archive may be corrupted." Previously, WIMSetImageInformation() calls
+*                  in CaptureToWimImage() could fail silently - logging warnings but returning success markers (HANDLE)1.
+*                  This allowed invalid backup files (without metadata) to be created, which would only fail during
+*                  verification - wasting hours of backup time. THREE-PART FIX: 1) TWO-PATH METADATA SETTING: Try setting
+*                  metadata via image handle first (fast), then fallback to WIM file handle with proper <WIM><IMAGE
+*                  INDEX="N">...</IMAGE></WIM> XML format (more reliable). 2) VERIFICATION STEP: After setting metadata,
+*                  load image and call WIMGetImageInformation() to verify xmlSize > 0. This is the EXACT check that
+*                  VerifyBackup performs, ensuring we catch metadata failures immediately. 3) FAIL FAST: If metadata
+*                  verification fails, return INVALID_HANDLE_VALUE with clear error message "Failed to set metadata
+*                  for image. Archive will fail verification." This makes backup fail cleanly DURING CREATION instead
+*                  of during verification. IMPACT: Eliminates "backup succeeded but verification failed" scenarios.
+*                  Prevents wasting hours creating 150GB+ backups that will be deleted as corrupted. User-reported
+*                  issue where WDrive backup completed (35 minutes) but failed verification immediately - now caught
+*                  during backup creation with actionable error message. Metadata setting now has same reliability
+*                  as file capture. mdail 4/6/2026
 * Version 6.1.1.39 Fixed the textbox's background on the backup windows new getting overriden by the internal scrollviewer
 *                  which would set the background to MediumTurquoise which was too dark. Apartently windows applies a scrollerviewer
 *                  to textbox's in the background to handle wrapping and things like that. mdail 4/4/2026

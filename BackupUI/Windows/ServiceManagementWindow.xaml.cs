@@ -101,8 +101,7 @@ namespace BackupUI.Windows
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"ServiceManagement: RefreshStatusAsync error: {ex.Message}");
-                MessageBox.Show($"Failed to refresh status: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Failed to refresh status: {ex.Message}", "Error");
             }
         }
 
@@ -113,20 +112,17 @@ namespace BackupUI.Windows
                 bool success = await serviceManager.StartServiceAsync();
                 if (success)
                 {
-                    MessageBox.Show("Service started successfully.", "Success",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    CustomDialogService.ShowSuccess("Service started successfully.", "Success");
                     await RefreshStatusAsync();
                 }
                 else
                 {
-                    MessageBox.Show("Failed to start service.", "Error",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    CustomDialogService.ShowError("Failed to start service.", "Error");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to start service: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Failed to start service: {ex.Message}", "Error");
             }
         }
 
@@ -137,20 +133,17 @@ namespace BackupUI.Windows
                 bool success = await serviceManager.StopServiceAsync();
                 if (success)
                 {
-                    MessageBox.Show("Service stopped successfully.", "Success",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    CustomDialogService.ShowSuccess("Service stopped successfully.", "Success");
                     await RefreshStatusAsync();
                 }
                 else
                 {
-                    MessageBox.Show("Failed to stop service.", "Error",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    CustomDialogService.ShowError("Failed to stop service.", "Error");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to stop service: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Failed to stop service: {ex.Message}", "Error");
             }
         }
 
@@ -161,20 +154,17 @@ namespace BackupUI.Windows
                 bool success = await serviceManager.RestartServiceAsync();
                 if (success)
                 {
-                    MessageBox.Show("Service restarted successfully.", "Success",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    CustomDialogService.ShowSuccess("Service restarted successfully.", "Success");
                     await RefreshStatusAsync();
                 }
                 else
                 {
-                    MessageBox.Show("Failed to restart service.", "Error",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    CustomDialogService.ShowError("Failed to restart service.", "Error");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to restart service: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Failed to restart service: {ex.Message}", "Error");
             }
         }
 
@@ -186,8 +176,7 @@ namespace BackupUI.Windows
 
                 if (!File.Exists(servicePath))
                 {
-                    MessageBox.Show($"Service executable not found at: {servicePath}", "Error",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    CustomDialogService.ShowError($"Service executable not found at: {servicePath}", "Error");
                     return;
                 }
 
@@ -195,8 +184,7 @@ namespace BackupUI.Windows
                 bool installSuccess = await serviceManager.InstallServiceAsync(servicePath);
                 if (!installSuccess)
                 {
-                    MessageBox.Show("Failed to install service. Make sure you run as Administrator.", "Error",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    CustomDialogService.ShowError("Failed to install service. Make sure you run as Administrator.", "Error");
                     return;
                 }
 
@@ -209,52 +197,46 @@ namespace BackupUI.Windows
                 bool startSuccess = await serviceManager.StartServiceAsync();
                 if (startSuccess)
                 {
-                    MessageBox.Show("Service installed and started successfully!", "Success",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    CustomDialogService.ShowSuccess("Service installed and started successfully!", "Success");
                 }
                 else
                 {
                     // Installation succeeded but start failed - still a partial success
-                    MessageBox.Show("Service installed successfully, but failed to start automatically.\n\nPlease use the 'Start Service' button to start it manually.", 
-                        "Partial Success",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    CustomDialogService.ShowWarning("Service installed successfully, but failed to start automatically.\n\nPlease use the 'Start Service' button to start it manually.", 
+                        "Partial Success");
                 }
 
                 await RefreshStatusAsync();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to install service: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Failed to install service: {ex.Message}", "Error");
             }
         }
 
         private async void UninstallService_Click(object sender, RoutedEventArgs e)
         {
-            var result = MessageBox.Show("Are you sure you want to uninstall the service?",
-                "Confirm Uninstall", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var result = CustomDialogService.ShowQuestion("Are you sure you want to uninstall the service?",
+                "Confirm Uninstall");
 
-            if (result == MessageBoxResult.Yes)
+            if (result == CustomDialogResult.Yes)
             {
                 try
                 {
                     bool success = await serviceManager.UninstallServiceAsync();
                     if (success)
                     {
-                        MessageBox.Show("Service uninstalled successfully.", "Success",
-                            MessageBoxButton.OK, MessageBoxImage.Information);
+                        CustomDialogService.ShowSuccess("Service uninstalled successfully.", "Success");
                         await RefreshStatusAsync();
                     }
                     else
                     {
-                        MessageBox.Show("Failed to uninstall service. Make sure you run as Administrator.", "Error",
-                            MessageBoxButton.OK, MessageBoxImage.Error);
+                        CustomDialogService.ShowError("Failed to uninstall service. Make sure you run as Administrator.", "Error");
                     }
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Failed to uninstall service: {ex.Message}", "Error",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    CustomDialogService.ShowError($"Failed to uninstall service: {ex.Message}", "Error");
                 }
             }
         }
@@ -264,15 +246,13 @@ namespace BackupUI.Windows
             try
             {
                 // Confirm action with user
-                var result = MessageBox.Show(
+                var result = CustomDialogService.ShowQuestion(
                     "This will cancel all pending retry attempts for failed backups.\n\n" +
                     "Failed jobs will be rescheduled for their next normal run time.\n\n" +
                     "Do you want to continue?",
-                    "Abort Failed Retries",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
+                    "Abort Failed Retries");
 
-                if (result != MessageBoxResult.Yes)
+                if (result != CustomDialogResult.Yes)
                     return;
 
                 // Get the jobs.json file path (same location as service uses)
@@ -283,8 +263,7 @@ namespace BackupUI.Windows
 
                 if (!File.Exists(jobsFilePath))
                 {
-                    MessageBox.Show("No backup jobs found.", "Information",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    CustomDialogService.ShowInfo("No backup jobs found.", "Information");
                     return;
                 }
 
@@ -294,8 +273,7 @@ namespace BackupUI.Windows
 
                 if (jobs == null || jobs.Count == 0)
                 {
-                    MessageBox.Show("No backup jobs found.", "Information",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    CustomDialogService.ShowInfo("No backup jobs found.", "Information");
                     return;
                 }
 
@@ -335,16 +313,14 @@ namespace BackupUI.Windows
                     await File.WriteAllTextAsync(jobsFilePath, json);
 
                     // Suggest restarting service to immediately apply changes
-                    var restartResult = MessageBox.Show(
+                    var restartResult = CustomDialogService.ShowQuestion(
                         $"Aborted retry attempts for {abortedCount} job(s).\n\n" +
                         $"Jobs have been rescheduled for their next normal run time.\n\n" +
                         $"IMPORTANT: If the service is currently running a backup, it might retry once more.\n\n" +
                         $"Do you want to RESTART the service now to immediately stop all retries?",
-                        "Success - Restart Service?",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Question);
+                        "Success - Restart Service?");
 
-                    if (restartResult == MessageBoxResult.Yes)
+                    if (restartResult == CustomDialogResult.Yes)
                     {
                         // Restart service
                         var serviceManager = new BackupServiceManager();
@@ -359,25 +335,19 @@ namespace BackupUI.Windows
 
                             if (started)
                             {
-                                MessageBox.Show("Service restarted successfully.\nAll retries have been stopped.",
-                                    "Service Restarted",
-                                    MessageBoxButton.OK,
-                                    MessageBoxImage.Information);
+                                CustomDialogService.ShowSuccess("Service restarted successfully.\nAll retries have been stopped.",
+                                    "Service Restarted");
                             }
                             else
                             {
-                                MessageBox.Show("Service stopped but failed to restart.\nPlease start it manually.",
-                                    "Restart Failed",
-                                    MessageBoxButton.OK,
-                                    MessageBoxImage.Warning);
+                                CustomDialogService.ShowWarning("Service stopped but failed to restart.\nPlease start it manually.",
+                                    "Restart Failed");
                             }
                         }
                         else
                         {
-                            MessageBox.Show("Failed to stop service. Changes saved but may take effect on next service restart.",
-                                "Restart Failed",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Warning);
+                            CustomDialogService.ShowWarning("Failed to stop service. Changes saved but may take effect on next service restart.",
+                                "Restart Failed");
                         }
                     }
 
@@ -385,21 +355,17 @@ namespace BackupUI.Windows
                 }
                 else
                 {
-                    MessageBox.Show(
+                    CustomDialogService.ShowInfo(
                         "No jobs found in retry mode.\n\n" +
                         "All jobs are already scheduled for their normal run times.",
-                        "Information",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                        "Information");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
+                CustomDialogService.ShowError(
                     $"Failed to abort retries: {ex.Message}",
-                    "Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                    "Error");
             }
         }
 

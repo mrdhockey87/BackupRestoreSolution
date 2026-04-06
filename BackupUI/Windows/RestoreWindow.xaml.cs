@@ -45,15 +45,13 @@ namespace BackupUI.Windows
         {
             if (string.IsNullOrWhiteSpace(txtBackupSource.Text))
             {
-                MessageBox.Show("Please select a backup folder.", "Validation Error",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                CustomDialogService.ShowWarning("Please select a backup folder.", "Validation Error");
                 return;
             }
 
             if (!Directory.Exists(txtBackupSource.Text))
             {
-                MessageBox.Show("The selected backup folder does not exist.", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError("The selected backup folder does not exist.", "Error");
                 return;
             }
 
@@ -105,8 +103,7 @@ namespace BackupUI.Windows
                         
                         Dispatcher.Invoke(() =>
                         {
-                            MessageBox.Show($"Failed to load backup dates: {error}", "Error",
-                                MessageBoxButton.OK, MessageBoxImage.Error);
+                            CustomDialogService.ShowError($"Failed to load backup dates: {error}", "Error");
                         });
                     }
                 }
@@ -114,8 +111,7 @@ namespace BackupUI.Windows
                 {
                     Dispatcher.Invoke(() =>
                     {
-                        MessageBox.Show($"Failed to load backup dates: {ex.Message}", "Error",
-                            MessageBoxButton.OK, MessageBoxImage.Error);
+                        CustomDialogService.ShowError($"Failed to load backup dates: {ex.Message}", "Error");
                     });
                 }
             });
@@ -155,8 +151,7 @@ namespace BackupUI.Windows
         {
             if (lstBackupDates.SelectedItem == null)
             {
-                MessageBox.Show("Please select a backup date to restore from.", "Validation Error",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                CustomDialogService.ShowWarning("Please select a backup date to restore from.", "Validation Error");
                 return;
             }
 
@@ -204,8 +199,7 @@ namespace BackupUI.Windows
                         
                         Dispatcher.Invoke(() =>
                         {
-                            MessageBox.Show($"Failed to load backup contents: {error}", "Error",
-                                MessageBoxButton.OK, MessageBoxImage.Error);
+                            CustomDialogService.ShowError($"Failed to load backup contents: {error}", "Error");
                         });
                     }
                 }
@@ -213,8 +207,7 @@ namespace BackupUI.Windows
                 {
                     Dispatcher.Invoke(() =>
                     {
-                        MessageBox.Show($"Failed to load backup contents: {ex.Message}", "Error",
-                            MessageBoxButton.OK, MessageBoxImage.Error);
+                        CustomDialogService.ShowError($"Failed to load backup contents: {ex.Message}", "Error");
                     });
                 }
             });
@@ -475,8 +468,7 @@ namespace BackupUI.Windows
             
             if (!anySelected)
             {
-                MessageBox.Show("Please select at least one item to restore.", "Validation Error",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                CustomDialogService.ShowWarning("Please select at least one item to restore.", "Validation Error");
                 return;
             }
 

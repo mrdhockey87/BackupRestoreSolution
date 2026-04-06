@@ -91,7 +91,7 @@ namespace BackupUI
         {
             if (sender is System.Windows.Controls.Button btn && btn.Tag is System.Guid jobId)
             {
-                var result = MessageBox.Show(
+                var result = CustomDialogService.ShowQuestion(
                     "Are you sure you want to reset this job to its scheduled state?\n\n" +
                     "This will:\n" +
                     "  • Clear the 'IsCurrentlyRunning' flag\n" +
@@ -99,11 +99,9 @@ namespace BackupUI
                     "  • Recalculate next run time based on schedule\n\n" +
                     "This should only be done if the job is stuck in a 'Running' state when it's not actually running.\n\n" +
                     "If a backup is currently running, resetting could cause issues.",
-                    "Reset Job State",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning);
+                    "Reset Job State");
 
-                if (result == MessageBoxResult.Yes)
+                if (result == CustomDialogResult.Yes)
                 {
                     var job = jobManager.GetJob(jobId);
                     if (job != null)
@@ -164,28 +162,24 @@ namespace BackupUI
                         string nextRunMsg = job.NextScheduledRun.HasValue 
                             ? $"\nNext scheduled run: {job.NextScheduledRun.Value:yyyy-MM-dd HH:mm:ss}"
                             : "\nNo schedule configured.";
-                            
-                        MessageBox.Show(
+
+                        CustomDialogService.ShowInfo(
                             $"Job '{job.Name}' has been reset to scheduled state.\n\n" +
                             "State cleared:\n" +
                             "  • IsCurrentlyRunning = false\n" +
                             "  • ConsecutiveFailures = 0\n" +
                             "  • Next run time recalculated" +
                             nextRunMsg,
-                            "Job State Reset",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Information);
+                            "Job State Reset");
 
                         // Refresh the job list to show updated status
                         LoadBackupJobs();
                     }
                     else
                     {
-                        MessageBox.Show(
+                        CustomDialogService.ShowError(
                             "Could not find the specified job.",
-                            "Error",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Error);
+                            "Error");
                     }
                 }
             }
@@ -226,12 +220,10 @@ namespace BackupUI
                         // Log the failure to Activity tab
                         BackupLogger.LogError(job.Name, "Failed to communicate with BackupRestoreService - backup was not started");
 
-                        MessageBox.Show(
+                        CustomDialogService.ShowError(
                             "Failed to start backup. The service may be busy or not responding.\n\n" +
                             "Try again in a few moments, or restart the BackupRestoreService from Windows Services.",
-                            "Service Error",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Error);
+                            "Service Error");
                     }
                 }
             }
@@ -261,12 +253,10 @@ namespace BackupUI
                         // Show error on UI thread
                         _ = this.Dispatcher.BeginInvoke(new Action(() =>
                         {
-                            MessageBox.Show(
+                            CustomDialogService.ShowError(
                                 $"Failed to install service:\n\n{message}\n\n" +
                                 "Please ensure the application has Administrator privileges.",
-                                "Installation Failed",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Error);
+                                "Installation Failed");
                         }), System.Windows.Threading.DispatcherPriority.Background);
 
                         return false;
@@ -294,11 +284,9 @@ namespace BackupUI
                         // Show error on UI thread
                         _ = this.Dispatcher.BeginInvoke(new Action(() =>
                         {
-                            MessageBox.Show(
+                            CustomDialogService.ShowError(
                                 $"Failed to start service:\n\n{message}",
-                                "Start Failed",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Error);
+                                "Start Failed");
                         }), System.Windows.Threading.DispatcherPriority.Background);
 
                         return false;
@@ -315,11 +303,9 @@ namespace BackupUI
                 // Show error on UI thread
                 _ = this.Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    MessageBox.Show(
+                    CustomDialogService.ShowError(
                         $"Error checking service status:\n\n{ex.Message}",
-                        "Service Check Error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
+                        "Service Check Error");
                 }), System.Windows.Threading.DispatcherPriority.Background);
 
                 return false;
@@ -363,22 +349,18 @@ namespace BackupUI
                     if (!backupsExist)
                     {
                         // Simple confirmation - no backups exist
-                        var result = MessageBox.Show(
+                        var result = CustomDialogService.ShowQuestion(
                             $"Delete backup job '{job.Name}'?\n\n" +
                             $"Note: No backup files found at destination.",
-                            "Delete Backup Job",
-                            MessageBoxButton.YesNo,
-                            MessageBoxImage.Question);
+                            "Delete Backup Job");
 
-                        if (result == MessageBoxResult.Yes)
+                        if (result == CustomDialogResult.Yes)
                         {
                             jobManager.DeleteJob(jobId);
                             BackupLogger.LogInfo(job.Name, "Backup job deleted (no backup files existed)");
-                            MessageBox.Show(
+                            CustomDialogService.ShowInfo(
                                 $"Backup job '{job.Name}' has been deleted.",
-                                "Job Deleted",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Information);
+                                "Job Deleted");
                             LoadBackupJobs();
                         }
                         return;
@@ -471,16 +453,15 @@ namespace BackupUI
                         {
                             // Delete job and move backup files to recycle bin
                             DeleteJobAndBackupFiles(job);
-                        }
+                        }
+
                         {
                             // Delete job only
                             jobManager.DeleteJob(jobId);
                             BackupLogger.LogInfo(job.Name, "Backup job deleted (files preserved)");
-                            MessageBox.Show(
+                            CustomDialogService.ShowInfo(
                                 $"Backup job '{job.Name}' has been deleted.\nBackup files have been preserved.",
-                                "Job Deleted",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Information);
+                                "Job Deleted");
                         }
 
                         LoadBackupJobs();
@@ -573,32 +554,26 @@ namespace BackupUI
                 // Show appropriate message
                 if (filesDeleted)
                 {
-                    MessageBox.Show(
+                    CustomDialogService.ShowInfo(
                         $"Backup job '{job.Name}' has been deleted.\n\n" +
                         $"Backup files moved to Recycle Bin:\n{job.DestinationPath}\n\n" +
                         $"You can restore them from the Recycle Bin if needed.",
-                        "Job and Backups Deleted",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                        "Job and Backups Deleted");
                 }
                 else
                 {
-                    MessageBox.Show(
+                    CustomDialogService.ShowInfo(
                         $"Backup job '{job.Name}' has been deleted.\n\n" +
                         $"No backup files were found to delete.",
-                        "Job Deleted",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                        "Job Deleted");
                 }
             }
             catch (Exception ex)
             {
                 BackupLogger.LogError(job.Name, "Failed to delete backup files", ex.Message);
-                MessageBox.Show(
+                CustomDialogService.ShowError(
                     $"Error deleting backup files:\n{ex.Message}\n\nThe job has been removed, but backup files may still exist.",
-                    "Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                    "Error");
             }
         }
 
@@ -779,8 +754,8 @@ namespace BackupUI
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"LoadJobLogsTab: ERROR - {ex.Message}");
-                MessageBox.Show($"Error loading job logs: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error loading job logs: {ex.Message}",
+                    "Error");
             }
         }
 
@@ -843,8 +818,8 @@ namespace BackupUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error opening activity details: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error opening activity details: {ex.Message}",
+                    "Error");
             }
         }
 
@@ -860,15 +835,15 @@ namespace BackupUI
                 }
                 else
                 {
-                    MessageBox.Show("Unable to identify the job. Please try again.",
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    CustomDialogService.ShowWarning("Unable to identify the job. Please try again.",
+                        "Error");
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Exception in ViewJobDetailsFromTab_Click: {ex.Message}");
-                MessageBox.Show($"Error opening activity details: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error opening activity details: {ex.Message}",
+                    "Error");
             }
         }
 
@@ -895,7 +870,7 @@ namespace BackupUI
                     }
                     else
                     {
-                        MessageBox.Show("Job name is empty.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        CustomDialogService.ShowError("Job name is empty.", "Error");
                     }
                 }
                 else
@@ -907,8 +882,8 @@ namespace BackupUI
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Exception in JobLog_DoubleClickFromTab: {ex.Message}");
-                MessageBox.Show($"Error opening activity details: {ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error opening activity details: {ex.Message}",
+                    "Error");
             }
         }
 
@@ -1078,17 +1053,13 @@ namespace BackupUI
                     if (txtNoBackups != null)
                         txtNoBackups.Visibility = Visibility.Collapsed;
 
-                    MessageBox.Show($"Backup file added: {System.IO.Path.GetFileName(selectedFile)}",
-                                  "Backup Added",
-                                  MessageBoxButton.OK,
-                                  MessageBoxImage.Information);
+                    CustomDialogService.ShowSuccess($"Backup file added: {System.IO.Path.GetFileName(selectedFile)}",
+                                  "Backup Added");
                 }
                 else
                 {
-                    MessageBox.Show("This backup is already in the list.",
-                                  "Already Added",
-                                  MessageBoxButton.OK,
-                                  MessageBoxImage.Information);
+                    CustomDialogService.ShowInfo("This backup is already in the list.",
+                                  "Already Added");
                 }
             }
         }
@@ -1104,10 +1075,8 @@ namespace BackupUI
 
                     if (string.IsNullOrEmpty(wimPath))
                     {
-                        MessageBox.Show("Please select a backup point to mount.",
-                                      "No Backup Point Selected",
-                                      MessageBoxButton.OK,
-                                      MessageBoxImage.Warning);
+                        CustomDialogService.ShowWarning("Please select a backup point to mount.",
+                                      "No Backup Point Selected");
                         return;
                     }
 
@@ -1119,10 +1088,8 @@ namespace BackupUI
 
                     if (!countSuccess)
                     {
-                        MessageBox.Show($"Failed to check backup images:\n{countError}",
-                                      "Error",
-                                      MessageBoxButton.OK,
-                                      MessageBoxImage.Error);
+                        CustomDialogService.ShowError($"Failed to check backup images:\n{countError}",
+                                      "Error");
                         return;
                     }
 
@@ -1136,10 +1103,8 @@ namespace BackupUI
 
                         if (!infoSuccess || images.Count == 0)
                         {
-                            MessageBox.Show($"Failed to get image details:\n{infoError}",
-                                          "Error",
-                                          MessageBoxButton.OK,
-                                          MessageBoxImage.Error);
+                            CustomDialogService.ShowError($"Failed to get image details:\n{infoError}",
+                                          "Error");
                             return;
                         }
 
@@ -1222,40 +1187,32 @@ namespace BackupUI
 
                         if (success)
                         {
-                            MessageBox.Show($"Backup mounted successfully!\n\n" +
+                            CustomDialogService.ShowSuccess($"Backup mounted successfully!\n\n" +
                                           $"Mount Path: {mountPath}\n\n" +
                                           $"You can now browse the backup in Windows Explorer.\n" +
                                           $"Backup is READ-ONLY to prevent modifications.",
-                                          "Backup Mounted",
-                                          MessageBoxButton.OK,
-                                          MessageBoxImage.Information);
+                                          "Backup Mounted");
 
                             LoadMountedBackups();
                             OpenExplorer(mountPath);
                         }
                         else
                         {
-                            MessageBox.Show($"Failed to mount backup:\n{error}",
-                                          "Mount Error",
-                                          MessageBoxButton.OK,
-                                          MessageBoxImage.Error);
+                            CustomDialogService.ShowError($"Failed to mount backup:\n{error}",
+                                          "Mount Error");
                         }
                     }
                     catch (Exception ex)
                     {
                         progressWindow.CloseProgress();
-                        MessageBox.Show($"Error mounting backup:\n{ex.Message}",
-                                      "Error",
-                                      MessageBoxButton.OK,
-                                      MessageBoxImage.Error);
+                        CustomDialogService.ShowError($"Error mounting backup:\n{ex.Message}",
+                                      "Error");
                     }
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error initializing mount:\n{ex.Message}",
-                                  "Error",
-                                  MessageBoxButton.OK,
-                                  MessageBoxImage.Error);
+                    CustomDialogService.ShowError($"Error initializing mount:\n{ex.Message}",
+                                  "Error");
                 }
             }
         }
@@ -1264,13 +1221,11 @@ namespace BackupUI
         {
             if (sender is System.Windows.Controls.Button btn && btn.Tag is string mountPath)
             {
-                var result = MessageBox.Show(
+                var result = CustomDialogService.ShowQuestion(
                     $"Unmount backup from {mountPath}?",
-                    "Unmount Backup",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
+                    "Unmount Backup");
 
-                if (result == MessageBoxResult.Yes)
+                if (result == CustomDialogResult.Yes)
                 {
                     // Create and show progress window
                     var progressWindow = new BackupUI.Windows.MountProgressWindow
@@ -1298,26 +1253,20 @@ namespace BackupUI
                         if (success)
                         {
                             LoadMountedBackups();
-                            MessageBox.Show($"Backup unmounted successfully from {mountPath}",
-                                          "Success",
-                                          MessageBoxButton.OK,
-                                          MessageBoxImage.Information);
+                            CustomDialogService.ShowSuccess($"Backup unmounted successfully from {mountPath}",
+                                          "Success");
                         }
                         else
                         {
-                            MessageBox.Show($"Failed to unmount:\n{error}",
-                                          "Unmount Error",
-                                          MessageBoxButton.OK,
-                                          MessageBoxImage.Error);
+                            CustomDialogService.ShowError($"Failed to unmount:\n{error}",
+                                          "Unmount Error");
                         }
                     }
                     catch (Exception ex)
                     {
                         progressWindow.CloseProgress();
-                        MessageBox.Show($"Error unmounting backup:\n{ex.Message}",
-                                      "Error",
-                                      MessageBoxButton.OK,
-                                      MessageBoxImage.Error);
+                        CustomDialogService.ShowError($"Error unmounting backup:\n{ex.Message}",
+                                      "Error");
                     }
                 }
             }
@@ -1329,27 +1278,21 @@ namespace BackupUI
 
             if (mounted.Count == 0)
             {
-                MessageBox.Show("No mounted backups to unmount.",
-                              "No Mounted Backups",
-                              MessageBoxButton.OK,
-                              MessageBoxImage.Information);
+                CustomDialogService.ShowInfo("No mounted backups to unmount.",
+                              "No Mounted Backups");
                 return;
             }
 
-            var result = MessageBox.Show(
+            var result = CustomDialogService.ShowQuestion(
                 $"Unmount all {mounted.Count} mounted backup(s)?",
-                "Unmount All",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
+                "Unmount All");
 
-            if (result == MessageBoxResult.Yes)
+            if (result == CustomDialogResult.Yes)
             {
                 NativeBackupMountManager.UnmountAll();
                 LoadMountedBackups();
-                MessageBox.Show("All backups unmounted successfully.",
-                              "Success",
-                              MessageBoxButton.OK,
-                              MessageBoxImage.Information);
+                CustomDialogService.ShowSuccess("All backups unmounted successfully.",
+                              "Success");
             }
         }
 

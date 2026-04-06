@@ -58,8 +58,8 @@ namespace BackupUI.Windows
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading activities: {ex.Message}\n\nDetails: {ex.StackTrace}", 
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error loading activities: {ex.Message}\n\nDetails: {ex.StackTrace}", 
+                    "Error");
             }
         }
 
@@ -148,8 +148,8 @@ namespace BackupUI.Windows
 
             if (selectedLogs.Count == 0)
             {
-                MessageBox.Show("Please select activities to export.", 
-                    "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+                CustomDialogService.ShowInfo("Please select activities to export.", 
+                    "No Selection");
                 return;
             }
 
@@ -179,13 +179,13 @@ namespace BackupUI.Windows
                         ExportToText(selectedLogs, dialog.FileName);
                     }
 
-                    MessageBox.Show($"Successfully exported {selectedLogs.Count} activities to:\n{dialog.FileName}",
-                        "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                    CustomDialogService.ShowSuccess($"Successfully exported {selectedLogs.Count} activities to:\n{dialog.FileName}",
+                        "Export Complete");
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error exporting activities: {ex.Message}",
-                        "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    CustomDialogService.ShowError($"Error exporting activities: {ex.Message}",
+                        "Export Error");
                 }
             }
         }
@@ -206,19 +206,18 @@ namespace BackupUI.Windows
 
             if (selectedLogs.Count == 0)
             {
-                MessageBox.Show("Please select activities to delete.", 
-                    "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+                CustomDialogService.ShowInfo("Please select activities to delete.", 
+                    "No Selection");
                 return;
             }
 
-            var result = MessageBox.Show(
+            var result = CustomDialogService.ShowOKCancel(
                 $"Are you sure you want to delete {selectedLogs.Count} selected activity log(s)?\n\n" +
                 "This action cannot be undone.",
                 "Confirm Delete",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
+                DialogIcon.Warning);
 
-            if (result == MessageBoxResult.Yes)
+            if (result == CustomDialogResult.OK)
             {
                 try
                 {
@@ -232,16 +231,16 @@ namespace BackupUI.Windows
                         }
                     }
 
-                    MessageBox.Show($"Successfully deleted {deletedCount} activity log(s).",
-                        "Delete Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                    CustomDialogService.ShowSuccess($"Successfully deleted {deletedCount} activity log(s).",
+                        "Delete Complete");
 
                     // Refresh the display
                     LoadActivities();
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error deleting activities: {ex.Message}",
-                        "Delete Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    CustomDialogService.ShowError($"Error deleting activities: {ex.Message}",
+                        "Delete Error");
                 }
             }
         }
@@ -282,8 +281,8 @@ namespace BackupUI.Windows
 
             if (selectedLogs.Count == 0)
             {
-                MessageBox.Show("Please select activities to copy.",
-                    "No Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+                CustomDialogService.ShowInfo("Please select activities to copy.",
+                    "No Selection");
                 return;
             }
 
@@ -305,13 +304,13 @@ namespace BackupUI.Windows
 
                 Clipboard.SetText(text.ToString());
 
-                MessageBox.Show($"Copied {selectedLogs.Count} activity log(s) to clipboard.",
-                    "Copy Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                CustomDialogService.ShowSuccess($"Copied {selectedLogs.Count} activity log(s) to clipboard.",
+                    "Copy Complete");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error copying to clipboard: {ex.Message}",
-                    "Copy Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialogService.ShowError($"Error copying to clipboard: {ex.Message}",
+                    "Copy Error");
             }
         }
 

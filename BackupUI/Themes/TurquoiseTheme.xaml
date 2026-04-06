@@ -401,13 +401,12 @@
 		<Setter Property="BorderThickness" Value="1" />
 		<Setter Property="Padding" Value="5,3" />
 		<Style.Resources>
-			<!-- 
-		   This overrides the global ScrollViewer style ONLY for 
-		   the internal ScrollViewer inside this TextBox.
+			<!--
+				This overrides the global ScrollViewer style ONLY for
+				the internal ScrollViewer inside this TextBox.
 			-->
 			<Style TargetType="ScrollViewer">
-				<Setter Property="Background"
-						Value="Transparent" />
+				<Setter Property="Background" Value="Transparent" />
 			</Style>
 		</Style.Resources>
 	</Style>

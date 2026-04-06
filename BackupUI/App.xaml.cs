@@ -42,11 +42,9 @@ namespace BackupUI
                 catch (Exception)
                 {
                     // User cancelled the UAC prompt
-                    MessageBox.Show(
+                    CustomDialogService.ShowWarning(
                         "This application requires administrator privileges to access backup services, VSS snapshots, and Hyper-V.\n\nPlease run as Administrator.",
-                        "Administrator Rights Required",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                        "Administrator Rights Required");
                 }
 
                 // Shutdown the current non-elevated instance
@@ -110,11 +108,9 @@ namespace BackupUI
                     catch { }
                 }
 
-                MessageBox.Show(
+                CustomDialogService.ShowError(
                     $"Error during application startup: {ex.Message}",
-                    "Startup Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                    "Startup Error");
 
                 Shutdown();
             }
@@ -128,16 +124,14 @@ namespace BackupUI
                 
                 if (!File.Exists(dllPath))
                 {
-                    MessageBox.Show(
+                    CustomDialogService.ShowError(
                         $"Critical Error: BackupEngine.dll not found!\n\n" +
                         $"Expected location: {dllPath}\n\n" +
                         $"Please ensure:\n" +
                         $"1. BackupEngine project is built first\n" +
                         $"2. BackupEngine.dll is in the same directory as BackupUI.exe\n" +
                         $"3. Build the entire solution (Build ? Rebuild Solution)",
-                        "Missing DLL",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
+                        "Missing DLL");
                 }
                 else
                 {
@@ -147,11 +141,9 @@ namespace BackupUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
+                CustomDialogService.ShowError(
                     $"Error checking for BackupEngine.dll: {ex.Message}",
-                    "Initialization Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                    "Initialization Error");
             }
         }
 

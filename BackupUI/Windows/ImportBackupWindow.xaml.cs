@@ -187,11 +187,9 @@ namespace BackupUI.Windows
                     "Failed to import backup", 
                     ex.Message);
 
-                MessageBox.Show(
+                CustomDialogService.ShowError(
                     $"Failed to import backup:\n{ex.Message}",
-                    "Import Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                    "Import Error");
             }
         }
 

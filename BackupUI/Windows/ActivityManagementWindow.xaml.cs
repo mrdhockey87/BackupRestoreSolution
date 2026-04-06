@@ -145,13 +145,13 @@ namespace BackupUI.Windows
                         ExportToText(logs, dialog.FileName);
                     }
 
-                    MessageBox.Show($"Successfully exported {logs.Count} activities to:\n{dialog.FileName}",
-                        "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                    CustomDialogService.ShowSuccess($"Successfully exported {logs.Count} activities to:\n{dialog.FileName}",
+                        "Export Complete");
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error exporting activities: {ex.Message}",
-                        "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    CustomDialogService.ShowError($"Error exporting activities: {ex.Message}",
+                        "Export Error");
                 }
             }
         }
