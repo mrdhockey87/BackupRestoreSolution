@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		static public string version_word = "Version:";
-			static private string version_fallback_number = "6.1.3.0";
+			static private string version_fallback_number = "6.1.3.2";
 		// Get version from assembly - this will always match the project file version
 		static public string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,28 @@ namespace BackupUI
 
 /*
  *
+* Version 6.1.3.3 Changed the MinWidth to 250 for the CustomDialog to better fit smaller messages that might have 3 buttons. mdail 4/6/2026
+* Version 6.1.3.2 FILE ORGANIZATION & DIALOG UX IMPROVEMENTS: Moved CustomDialog files (CustomDialog.xaml, CustomDialog.xaml.cs) 
+*                  from root BackupUI\ directory to Windows\ subdirectory for consistent project structure - aligning with 36+ other 
+*                  window files. Moved CustomDialogService.cs to Services\ subdirectory alongside 10+ other service classes 
+*                  (BackupServiceClient, NotificationService, BackupMountManager, etc.). DIALOG RESTYLING: Enhanced CustomDialog UX 
+*                  with THREE key improvements: 1) Replaced ScrollViewer+TextBlock with read-only TextBox for message display - 
+*                  simpler markup (one control vs nested controls), built-in scrolling, and enables TEXT SELECTION/COPYING (critical 
+*                  for users copying error messages!). Styled with transparent background, no border, IsTabStop="False" to maintain 
+*                  read-only appearance. 2) Changed from fixed size (Height="250" Width="450") to AUTOMATIC SIZING - added 
+*                  SizeToContent="WidthAndHeight" with smart constraints (MinWidth="350" MaxWidth="600", MinHeight="200" MaxHeight="500"). 
+*                  Dialog now dynamically expands/shrinks based on message length while staying within readable bounds. Shows scrollbars 
+*                  in TextBox only when content exceeds MaxHeight. Benefits: Cleaner project organization (all windows in Windows\, all 
+*                  services in Services\), better maintainability, improved user experience (copy error messages, responsive sizing), 
+*                  modern dialog behavior. Production-ready enterprise standards! mdail 4/6/2026
+* Version 6.1.3.1 FILE ORGANIZATION: Moved ExclusionsManagementWindow files to Windows\ directory for consistent project 
+*                  structure! All window files now properly organized in BackupUI\Windows\ subdirectory. ExclusionsManagementWindow.xaml 
+*                  and ExclusionsManagementWindow.xaml.cs were previously in root BackupUI\ directory (organizational outlier). Now 
+*                  aligned with 36+ other window files (AboutWindow, ActivityDetailWindow, BackupProgressWindow, etc.) in Windows\ 
+*                  subdirectory. Benefits: Cleaner project structure (all windows in one location), better maintainability (easy to 
+*                  find window files), consistent with WPF best practices (organize by component type), IDE navigation improved 
+*                  (Solution Explorer shows Windows\ folder clearly). No code changes required - only file locations updated. 
+*                  Production-ready project organization following enterprise standards! mdail 4/6/2026
 * Version 6.1.3.0 CUSTOM THEMED DIALOG SYSTEM - UI CONSISTENCY ENHANCEMENT:
 *                  Replaced all standard MessageBox dialogs with custom themed dialogs that match the
 *                  application's turquoise color scheme. Created complete dialog system with three components:
