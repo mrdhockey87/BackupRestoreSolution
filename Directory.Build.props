@@ -6,7 +6,7 @@
              ALL PROJECTS (BackupUI, BackupService, BackupEngine) use this single version.
              Change version HERE and it updates everywhere automatically.
              Current Version: 6.1.3.4
-             Last Updated: 4/6/2026
+             Last Updated: 4/8/2026
 
              UPDATE VERSION IN ONE PLACE: Change ProductVersion property below.
              All version properties (Version, AssemblyVersion, FileVersion, 
