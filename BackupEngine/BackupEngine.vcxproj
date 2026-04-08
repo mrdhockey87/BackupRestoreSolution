@@ -71,6 +71,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="BackupEngine.h" />
+    <ClInclude Include="BackupEngine_Common.h" />
     <ClInclude Include="BrsFileManager.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="ShellExtension.h" />
@@ -79,6 +80,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BackupEngine.cpp" />
+    <ClCompile Include="BackupEngine_Common.cpp" />
     <ClCompile Include="BackupEngine_Exports.cpp" />
     <ClCompile Include="BackupFiles_Implementation.cpp" />
     <ClCompile Include="BackupInfo_Implementation.cpp" />

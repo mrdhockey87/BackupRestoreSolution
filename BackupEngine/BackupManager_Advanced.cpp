@@ -1,5 +1,6 @@
 // BackupManager_Advanced.cpp - Advanced backup functions (Volume, Disk, Incremental, Differential)
 #include "BackupEngine.h"
+#include "BackupEngine_Common.h"
 #include "VSSSnapshotManager.h"  // Add VSS support
 #include <Windows.h>
 #include <ShlObj.h>  // For SHGetFolderPathW
@@ -401,89 +402,6 @@ HANDLE CreateWimFile(const wchar_t* wimPath, bool compress, ProgressCallback cal
     return hWim;
 }
 
-// Helper function to match wildcard patterns (e.g., *.tmp, *.log, D:\Build\*.dll)
-bool MatchWildcard(const std::wstring& path, const std::wstring& pattern) {
-    // Simple wildcard matching: * = any characters
-    size_t asteriskPos = pattern.find(L'*');
-    if (asteriskPos == std::wstring::npos) {
-        // No wildcard - exact match
-        return path == pattern;
-    }
-
-    // Pattern like *.tmp - check if path ends with .tmp
-    if (asteriskPos == 0) {
-        std::wstring suffix = pattern.substr(1); // Get part after *
-        if (path.length() >= suffix.length()) {
-            return path.substr(path.length() - suffix.length()) == suffix;
-        }
-        return false;
-    }
-
-    // Pattern like D:\Build\*.dll - check prefix and suffix
-    std::wstring prefix = pattern.substr(0, asteriskPos);
-    std::wstring suffix = pattern.substr(asteriskPos + 1);
-
-    if (path.length() < prefix.length() + suffix.length()) {
-        return false;
-    }
-
-    bool prefixMatch = path.substr(0, prefix.length()) == prefix;
-    bool suffixMatch = path.substr(path.length() - suffix.length()) == suffix;
-
-    return prefixMatch && suffixMatch;
-}
-
-// Helper to check if a path matches any exclusion pattern
-bool IsPathExcluded(const std::wstring& path, const wchar_t** userExclusions, int userExclusionCount) {
-    // Convert to lowercase for case-insensitive comparison
-    std::wstring lowerPath = path;
-    std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), ::tolower);
-
-    // SYSTEM EXCLUSIONS - Always exclude these protected folders/files that cause backup failures
-    // NOTE: Windows\WinSxS is NOT excluded - it's required for proper system restoration
-    std::vector<std::wstring> systemExclusions = {
-        L"system volume information",  // VSS metadata, inaccessible
-        L"$recycle.bin",                // Recycle bin, not needed for restore
-        L"pagefile.sys",                // Virtual memory file, locked by OS
-        L"swapfile.sys",                // Swap file for Windows apps, locked by OS
-        L"hiberfil.sys"                 // Hibernation file, locked by OS
-    };
-
-    for (const auto& exclusion : systemExclusions) {
-        if (lowerPath.find(exclusion) != std::wstring::npos) {
-            return true;
-        }
-    }
-
-    // USER-DEFINED EXCLUSIONS - passed from C# via P/Invoke
-    // Check each user exclusion (supports wildcards like *.tmp, *.log, specific paths)
-    for (int i = 0; i < userExclusionCount; i++) {
-        std::wstring exclusion = userExclusions[i];
-        std::wstring lowerExclusion = exclusion;
-        std::transform(lowerExclusion.begin(), lowerExclusion.end(), 
-                      lowerExclusion.begin(), ::tolower);
-
-        // Check if exclusion is wildcard pattern (contains *)
-        if (lowerExclusion.find(L'*') != std::wstring::npos) {
-            // Pattern matching (e.g., *.tmp matches test.tmp)
-            if (MatchWildcard(lowerPath, lowerExclusion)) {
-                OutputDebugStringW((L"[BackupProgress] SKIPPING user-excluded pattern: " + 
-                                   path + L" matches " + exclusion).c_str());
-                return true;
-            }
-        } else {
-            // Exact path matching for files/folders (substring match like system exclusions)
-            if (lowerPath.find(lowerExclusion) != std::wstring::npos) {
-                OutputDebugStringW((L"[BackupProgress] SKIPPING user-excluded path: " + 
-                                   path + L" matches " + exclusion).c_str());
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
 // === FOLDER STRUCTURE PRESERVATION CALLBACKS ===
 // Context structure for folder-specific WIM capture filtering
 // Used when we need to capture a folder WITH its name in the structure
@@ -548,24 +466,10 @@ static DWORD WINAPI FolderFilterCallback(DWORD msgId, WPARAM wParam, LPARAM lPar
                     return WIM_MSG_SUCCESS;
                 }
 
-                // File IS in our target folder - check for system exclusions
-
-                // Exclude protected Windows folders
-                if (path.find(L"System Volume Information") != std::wstring::npos ||
-                    path.find(L"$RECYCLE.BIN") != std::wstring::npos) {
-                    LogDebug(L"FolderFilter: EXCLUDING system folder: " + path);
-                    *pbInclude = FALSE;
-                    return WIM_MSG_SUCCESS;
-                }
-
-                // Exclude locked system files
-                std::wstring lowerPath = path;
-                std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), ::tolower);
-
-                if (lowerPath.find(L"\\pagefile.sys") != std::wstring::npos ||
-                    lowerPath.find(L"\\swapfile.sys") != std::wstring::npos ||
-                    lowerPath.find(L"\\hiberfil.sys") != std::wstring::npos) {
-                    LogDebug(L"FolderFilter: EXCLUDING locked file: " + path);
+                // File IS in our target folder - check for system exclusions using shared utilities
+                // Note: FolderFilterCallback doesn't support user exclusions (pass nullptr, 0)
+                if (BackupEngine::Common::IsPathExcluded(path, nullptr, 0)) {
+                    LogDebug(L"FolderFilter: EXCLUDING system-protected file/folder: " + path);
                     *pbInclude = FALSE;
                     return WIM_MSG_SUCCESS;
                 }
@@ -665,7 +569,7 @@ std::vector<std::wstring> EnumerateIncludedFolders(const std::wstring& volumePat
             std::wstring itemName = entry.path().filename().wstring();
 
             // Check if this item is excluded
-            if (IsPathExcluded(itemPath, userExclusions, userExclusionCount)) {
+            if (BackupEngine::Common::IsPathExcluded(itemPath, userExclusions, userExclusionCount)) {
                 OutputDebugStringW((L"[EnumerateIncludedFolders] EXCLUDING: " + itemPath).c_str());
                 continue;
             }
@@ -720,25 +624,11 @@ static DWORD WINAPI BackupProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lP
                 // DEBUG: Log the file path being processed
                 OutputDebugStringW((L"[BackupProgressCallback] Processing file: " + path).c_str());
 
-                // **SYSTEM EXCLUSIONS - Filter protected folders/files that cause backup failures**
-
-                // Exclude protected Windows folders (ERROR_ACCESS_DENIED)
-                if (path.find(L"System Volume Information") != std::wstring::npos ||
-                    path.find(L"$RECYCLE.BIN") != std::wstring::npos) {
-                    OutputDebugStringW((L"[BackupProgress] EXCLUDING system folder: " + path).c_str());
-                    *pbInclude = FALSE;  // EXCLUDE this folder
-                    return WIM_MSG_SUCCESS;
-                }
-
-                // Exclude locked system files (pagefile, swapfile, hiberfil)
-                std::wstring lowerPath = path;
-                std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), ::tolower);
-
-                if (lowerPath.find(L"\\pagefile.sys") != std::wstring::npos ||
-                    lowerPath.find(L"\\swapfile.sys") != std::wstring::npos ||
-                    lowerPath.find(L"\\hiberfil.sys") != std::wstring::npos) {
-                    OutputDebugStringW((L"[BackupProgress] EXCLUDING locked file: " + path).c_str());
-                    *pbInclude = FALSE;  // EXCLUDE locked system files
+                // **SYSTEM EXCLUSIONS - Filter protected folders/files using centralized utilities**
+                // Note: BackupProgressCallback doesn't support user exclusions (pass nullptr, 0)
+                if (BackupEngine::Common::IsPathExcluded(path, nullptr, 0)) {
+                    OutputDebugStringW((L"[BackupProgress] EXCLUDING system-protected file/folder: " + path).c_str());
+                    *pbInclude = FALSE;  // EXCLUDE this file/folder
                     return WIM_MSG_SUCCESS;
                 }
 

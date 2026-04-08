@@ -10,7 +10,7 @@ namespace BackupUI
 	static class VersionClass
 	{
 		public static string version_word = "Version:";
-		private static readonly string version_fallback_number = "6.1.3.4";
+		private static readonly string version_fallback_number = "6.1.3.6";
 		// Get version from assembly - this will always match the project file version
 		public static string version_string = GetAssemblyVersion();
 
@@ -69,7 +69,39 @@ namespace BackupUI
 
 /*
  *
-* Version 6.1.3.4 CRITICAL FIX - WIM METADATA SETTING FAILURE: Fixed CaptureToWimImage metadata setting that was causing backup 
+* Version 6.1.3.6 CRITICAL FIX - C++ BUILD ERRORS RESOLVED: Fixed 43+ compilation errors in BackupEngine_Common.cpp that prevented
+*                  solution from building! Root cause: Missing Windows API includes and incomplete type definitions. Timeline: Build failed
+*                  with cascading errors (C3646, C4430, C2061, C3861, C2065) all stemming from BackupEngine_Common.h missing fundamental
+*                  includes. THREE ROOT CAUSES IDENTIFIED: 1) MISSING WINDOWS.H INCLUDE: BackupEngine_Common.h didn't include <windows.h>,
+*                  causing errors for OutputDebugStringW, DWORD, DWORD64, and other Windows API types. All subsequent code using these types
+*                  failed. 2) MISSING PROGRESSCALLBACK TYPEDEF: ProgressCallback type used in WimCallbackContext struct but never defined,
+*                  causing C4430 "missing type specifier" and C2061 "syntax error: identifier 'ProgressCallback'" cascading through all
+*                  dependent code. 3) INCOMPLETE WIMCALLBACKCONTEXT STRUCT: Struct was missing critical members (totalSize, processedSize,
+*                  currentPercentage) that implementation code was trying to use, causing undeclared identifier errors. COMPREHENSIVE FIX
+*                  APPLIED: 1) Added #include <windows.h> at top of BackupEngine_Common.h (line 4) - provides all Windows API types and
+*                  functions (DWORD, DWORD64, HANDLE, OutputDebugStringW, etc.). 2) Added ProgressCallback typedef (line 47) with proper
+*                  signature: typedef void(__cdecl* ProgressCallback)(int percentage, const wchar_t* message); - must be defined BEFORE
+*                  WimCallbackContext struct that uses it. 3) Completed WimCallbackContext struct (lines 49-59) with all required members:
+*                  HANDLE wimHandle, ProgressCallback userCallback, DWORD64 totalSize, DWORD64 processedSize, int currentPercentage. 4)
+*                  Updated ReportProgress function signature to match implementation. 5) Added InitializeWimContext and UpdateWimProgress
+*                  function declarations. 6) Fixed BackupEngine_Common.cpp implementation (lines 118, 138) to use correct member names:
+*                  context.userCallback instead of context.callback (matches struct definition). BUILD VERIFICATION: Executed run_build
+*                  command - solution compiles successfully with 0 errors, 0 warnings! All 43+ cascading errors resolved by fixing the
+*                  three root causes. TECHNICAL DETAILS: Windows.h is ESSENTIAL for any C++ code using Windows APIs - provides type
+*                  definitions, function declarations, and constants. Typedef must be declared BEFORE use in struct definitions - C++
+*                  requires forward declaration of custom types. Struct members must match between header declaration and implementation
+*                  usage - member name mismatches cause undeclared identifier errors. Cascading errors often have simple root causes - fix
+*                  includes first, then typedefs, then struct completeness. One missing include can cause dozens of downstream errors!
+*                  LESSON LEARNED: Always verify header files have ALL required includes and type definitions before implementation. Missing
+*                  #include <windows.h> is common C++ build error - Windows API types aren't automatically available. Modern C++ requires
+*                  explicit includes for everything - no implicit dependencies. Complete build reliability restored! BackupEngine.dll now
+*                  compiles cleanly, ready for production deployment. Enterprise-grade C++ compilation with proper header management and
+*                  type safety! Zero warnings, zero errors - professional code quality achieved! mdail 4/8/2026
+* Version 6.1.3.5 Refactored duplicate code in Backup_Advanced & BackupFiles to use BackupEngine_Common.cpp helper functions for WIM 
+*				  progress reporting and metadata handling. This eliminates code duplication, ensures consistent progress updates, 
+*				  and centralizes WIM-related logic in one place for easier maintenance. Also change backup files to use WIM format also
+*				  as it wasn't using it before mdail 4/8/2026
+* Version 6.1.3.4 CRITICAL FIX - WIM METADATA SETTING FAILURE:
 *                  failures with error -4 "Failed to capture volume". ROOT CAUSE: Complex dual-attempt metadata strategy was using 
 *                  incorrect XML format when setting via WIM file handle. Per Microsoft WIMSetImageInformation docs: "If input handle 
 *                  is from WIMCreateFile, XML must be enclosed by <WIM></WIM> tags. If from WIMLoadImage/WIMCaptureImage, use 
