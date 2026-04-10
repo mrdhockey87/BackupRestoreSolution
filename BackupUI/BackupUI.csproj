@@ -8,7 +8,7 @@
   <Platforms>x64</Platforms>
   <!-- ApplicationManifest removed - .res files are icon resources, not XML manifests -->
   <!-- Default manifest will be used for assembly identity and UAC settings -->
-  <ApplicationIcon>SSB_LogoWinIcos.ico</ApplicationIcon>
+  <ApplicationIcon>Assets\SSB_LogoWinIcos.ico</ApplicationIcon>
   <!-- Version, OutputPath, and Runtime config generation come from Directory.Build.props -->
 </PropertyGroup>
 <ItemGroup>
@@ -16,10 +16,10 @@
   <None Remove="Images\warning_icon.svg" />
 </ItemGroup>
 <ItemGroup>
-  <Resource Include="Assets\logo_medium.png" />
+  <Content Include="Assets\SSB_LogoWinIcos.ico" />
 </ItemGroup>
 <ItemGroup>
-  <Content Include="SSB_LogoWinIcos.ico" />
+  <Resource Include="Assets\logo_medium.png" />
 </ItemGroup>
   <ItemGroup>
     <PackageReference Include="SharpVectors.Wpf" Version="1.8.5" />

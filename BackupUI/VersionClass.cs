@@ -68,7 +68,11 @@ namespace BackupUI
 
 
 /*
- *
+* Version 6.1.3.8 Fix the icon location as it was looking for it outside the solution, it is now in the BackUI assests
+*				  folder for all porojects to reference. mdail 4/10/2026
+* Version 6.1.3.7 CRITICAL FIX - Changed the CreateFileW call in BackupManager_Advanced.cpp (lines 1436-1444) to use 0 
+*                 (no access rights) instead of GENERIC_READ. According to Microsoft documentation and code samples, 
+*                 IOCTL operations on volumes require opening the handle with zero access rights. mdail 4/10/2026
 * Version 6.1.3.6 CRITICAL FIX - C++ BUILD ERRORS RESOLVED: Fixed 43+ compilation errors in BackupEngine_Common.cpp that prevented
 *                  solution from building! Root cause: Missing Windows API includes and incomplete type definitions. Timeline: Build failed
 *                  with cascading errors (C3646, C4430, C2061, C3861, C2065) all stemming from BackupEngine_Common.h missing fundamental

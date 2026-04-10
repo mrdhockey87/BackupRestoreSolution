@@ -108,7 +108,7 @@
     <ResourceCompile Include="BackupEngine.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="D:\Downloads\SecureServerImages &amp; stuff\Assets\SSB_LogoWinIcos.ico" />
+    <Image Include="..\BackupUI\Assets\SSB_LogoWinIcos.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Import Project="..\packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets" Condition="Exists('..\packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets')" />

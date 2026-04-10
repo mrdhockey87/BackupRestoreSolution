@@ -1433,9 +1433,10 @@ extern "C" {
                 }
 
                 // Open the volume to query disk extents
+                // Note: Use 0 (no access) for IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS per Microsoft documentation
                 HANDLE hVolume = CreateFileW(
                     volumeNameCopy.c_str(),
-                    GENERIC_READ,
+                    0,  // No access required for IOCTL operations
                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                     NULL,
                     OPEN_EXISTING,
