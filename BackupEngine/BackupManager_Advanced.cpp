@@ -1280,6 +1280,18 @@ extern "C" {
                 return -3;
             }
 
+            // CRITICAL: Set temporary path for WIM API before capture operations
+            // WIM API requires temp directory for decompressing chunks and processing metadata
+            // Without this, WIMCaptureImage can fail with INVALID_HANDLE_VALUE after extended operation
+            wchar_t tempPath[MAX_PATH];
+            if (GetTempPathW(MAX_PATH, tempPath)) {
+                WIMSetTemporaryPath(hWim, tempPath);
+                LogInfo(L"BackupVolume: Set WIM temporary path for capture: " + std::wstring(tempPath));
+            }
+            else {
+                LogInfo(L"BackupVolume: Failed to get temporary path, WIM capture may be slower");
+            }
+
             // Ensure source path has trailing backslash for WIM API
             if (!actualSourcePath.empty() && actualSourcePath.back() != L'\\') {
                 actualSourcePath += L'\\';
@@ -1433,10 +1445,12 @@ extern "C" {
                 }
 
                 // Open the volume to query disk extents
-                // Note: Use 0 (no access) for IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS per Microsoft documentation
+                // CRITICAL FIX: Use FILE_READ_ATTRIBUTES instead of 0 (no access)
+                // Error: 1 (ERROR_INVALID_FUNCTION) occurs when opening volume with 0 access
+                // FILE_READ_ATTRIBUTES is the minimal access required for IOCTL operations on volumes
                 HANDLE hVolume = CreateFileW(
                     volumeNameCopy.c_str(),
-                    0,  // No access required for IOCTL operations
+                    FILE_READ_ATTRIBUTES,  // Minimal access required for IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS
                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                     NULL,
                     OPEN_EXISTING,
@@ -1518,6 +1532,18 @@ extern "C" {
             }
 
             if (logCallback) logCallback(1, L"WIM file created successfully", destFile.c_str());
+
+            // CRITICAL: Set temporary path for WIM API before backup operations
+            // WIM API requires temp directory for decompressing chunks and processing metadata
+            // Without this, WIMCaptureImage can fail with INVALID_HANDLE_VALUE after extended operation
+            wchar_t tempPath[MAX_PATH];
+            if (GetTempPathW(MAX_PATH, tempPath)) {
+                WIMSetTemporaryPath(hWim, tempPath);
+                LogInfo(L"BackupDisk: Set WIM temporary path: " + std::wstring(tempPath));
+            }
+            else {
+                LogInfo(L"BackupDisk: Failed to get temporary path, WIM backup may be slower");
+            }
 
             // Backup each volume as a separate image in the WIM file
             int volumeIndex = 0;
