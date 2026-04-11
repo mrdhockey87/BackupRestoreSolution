@@ -7,68 +7,75 @@ using System.Threading.Tasks;
 
 namespace BackupUI
 {
-	static class VersionClass
-	{
-		public static string version_word = "Version:";
-		private static readonly string version_fallback_number = "6.1.3.9";		
-		// Get version from assembly - this will always match the project file version
-		public static string version_string = GetAssemblyVersion();
+    static class VersionClass
+    {
+        public static string version_word = "Version:";
+        private static readonly string version_fallback_number = "6.1.3.11";		
+        // Get version from assembly - this will always match the project file version
+        public static string version_string = GetAssemblyVersion();
 
-		static public string GetVersion()
-		{
-			return string.Format("{0} {1}", VersionClass.version_word, VersionClass.version_string);
-		}
+        static public string GetVersion()
+        {
+            return string.Format("{0} {1}", VersionClass.version_word, VersionClass.version_string);
+        }
 
-		// Public so ServiceManagementWindow can access it
-		static public string GetAssemblyVersion()
-		{
-			try
-			{
-				Assembly assembly = Assembly.GetExecutingAssembly();
+        // Public so ServiceManagementWindow can access it
+        static public string GetAssemblyVersion()
+        {
+            try
+            {
+                Assembly assembly = Assembly.GetExecutingAssembly();
 
-			// Try to get the informational version first (this reads from the .csproj <Version> or <InformationalVersion>)
-			var infoVersionAttr = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
-			if (infoVersionAttr != null && !string.IsNullOrEmpty(infoVersionAttr.InformationalVersion))
-			{
-				// Strip Git commit hash if present (format: "4.8.3.2+e3d3b4c3af621b4af79aacab33b4f9ce955417c2")
-				string versionString = infoVersionAttr.InformationalVersion;
-				int plusIndex = versionString.IndexOf('+');
-				if (plusIndex > 0)
-				{
-					versionString = versionString[..plusIndex];
-				}
-				return versionString;
-			}
+            // Try to get the informational version first (this reads from the .csproj <Version> or <InformationalVersion>)
+            var infoVersionAttr = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+            if (infoVersionAttr != null && !string.IsNullOrEmpty(infoVersionAttr.InformationalVersion))
+            {
+                // Strip Git commit hash if present (format: "4.8.3.2+e3d3b4c3af621b4af79aacab33b4f9ce955417c2")
+                string versionString = infoVersionAttr.InformationalVersion;
+                int plusIndex = versionString.IndexOf('+');
+                if (plusIndex > 0)
+                {
+                    versionString = versionString[..plusIndex];
+                }
+                return versionString;
+            }
 
-				// Fall back to file version
-				var fileVersionAttr = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>();
-				if (fileVersionAttr != null && !string.IsNullOrEmpty(fileVersionAttr.Version))
-				{
-					return fileVersionAttr.Version;
-				}
+                // Fall back to file version
+                var fileVersionAttr = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>();
+                if (fileVersionAttr != null && !string.IsNullOrEmpty(fileVersionAttr.Version))
+                {
+                    return fileVersionAttr.Version;
+                }
 
-				// Fall back to assembly version
-				var version = assembly.GetName().Version;
-				if (version != null)
-				{
-					return version.ToString();
-				}
+                // Fall back to assembly version
+                var version = assembly.GetName().Version;
+                if (version != null)
+                {
+                    return version.ToString();
+                }
 
-			// Last resort fallback
-		return version_fallback_number;
-		}
-		catch
-		{
-			// Fallback version if assembly version fails
-			return version_fallback_number;
-			}
-		}
-	}
+            // Last resort fallback
+        return version_fallback_number;
+        }
+        catch
+        {
+            // Fallback version if assembly version fails
+            return version_fallback_number;
+            }
+        }
+    }
 }
 
 
 /*
  *
+* Version 6.1.3.11 CRITICAL FIX - Updated WIM callback exclusion handling to combine built-in program excludes 
+*                  with user-entered excludes during capture. Also fixed WIM callback error logging to use the 
+*                  real file path and Win32 error code/text, and to skip ignorable file-level errors instead of 
+*                  treating them as generic failures. mdail 4/11/2026
+* Version 6.1.3.10 CRITICAL FIX - Enhanced backup failure logging to preserve the real native WIM/Win32 error 
+*				   messages instead of overwriting them with generic volume capture failures. Also logs detailed 
+*				   callback, metadata, and system error text for easier troubleshooting. mdail 4/11/2026
 * Version 6.1.3.9 - CRITICAL BACKUP FIXES (April 11, 2026)
 *		           FIX #2 (CRITICAL): WIMSetTemporaryPath Missing During Backup Capture
 *	               Issue: Backups failed after 36+ minutes with return code -4
