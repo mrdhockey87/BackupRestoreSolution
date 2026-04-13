@@ -377,6 +377,36 @@ namespace {
     DWORD GetUnicodeXmlBufferSize(const std::wstring& xml) {
         return static_cast<DWORD>((xml.length() + 1) * sizeof(wchar_t));
     }
+
+    std::wstring TruncateForLog(const std::wstring& value, size_t maxLength = 512) {
+        if (value.length() <= maxLength) {
+            return value;
+        }
+
+        return value.substr(0, maxLength) + L"...(truncated)";
+    }
+
+    std::wstring UpsertImageXmlElement(const std::wstring& xml, const std::wstring& elementName, const std::wstring& elementValue) {
+        const std::wstring openTag = L"<" + elementName + L">";
+        const std::wstring closeTag = L"</" + elementName + L">";
+
+        size_t elementStart = xml.find(openTag);
+        if (elementStart != std::wstring::npos) {
+            size_t valueStart = elementStart + openTag.length();
+            size_t elementEnd = xml.find(closeTag, valueStart);
+            if (elementEnd != std::wstring::npos) {
+                return xml.substr(0, valueStart) + elementValue + xml.substr(elementEnd);
+            }
+        }
+
+        const std::wstring imageCloseTag = L"</IMAGE>";
+        size_t imageClose = xml.rfind(imageCloseTag);
+        if (imageClose != std::wstring::npos) {
+            return xml.substr(0, imageClose) + openTag + elementValue + closeTag + xml.substr(imageClose);
+        }
+
+        return L"<IMAGE>" + openTag + elementValue + closeTag + L"</IMAGE>";
+    }
 }
 // ============================================================================
 
@@ -1060,13 +1090,36 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
 
     if (hImageForMetadata && hImageForMetadata != INVALID_HANDLE_VALUE) {
         // STEP 3: Set metadata via image handle (standard approach per Microsoft docs)
-        std::wstring imageXml = L"<IMAGE><NAME>";
-        imageXml += sanitizedName;
-        imageXml += L"</NAME></IMAGE>";
+        std::wstring imageXml;
+        wchar_t* existingXmlInfo = nullptr;
+        DWORD existingXmlSize = 0;
+
+        if (WIMGetImageInformation(hImageForMetadata, reinterpret_cast<LPVOID*>(&existingXmlInfo), &existingXmlSize) &&
+            existingXmlInfo != nullptr && existingXmlSize >= sizeof(wchar_t)) {
+            std::wstring existingXml(existingXmlInfo);
+            imageXml = UpsertImageXmlElement(existingXml, L"NAME", sanitizedName);
+            LogInfo(L"CaptureToWimImage: Loaded existing image metadata XML (bytes=" + std::to_wstring(existingXmlSize) + L")");
+            LogInfo(L"CaptureToWimImage: Updated existing image XML for metadata write");
+            LocalFree(existingXmlInfo);
+            existingXmlInfo = nullptr;
+        } else {
+            DWORD existingXmlError = GetLastError();
+            if (existingXmlInfo != nullptr) {
+                LocalFree(existingXmlInfo);
+                existingXmlInfo = nullptr;
+            }
+
+            imageXml = L"<IMAGE><NAME>";
+            imageXml += sanitizedName;
+            imageXml += L"</NAME></IMAGE>";
+            LogWarning(L"CaptureToWimImage: Could not read existing image metadata XML, falling back to minimal XML",
+                       FormatDetailedErrorCode(L"WIMGetImageInformation before metadata update failed.", existingXmlError));
+        }
+
         DWORD imageXmlSize = GetUnicodeXmlBufferSize(imageXml);
 
         LogInfo(L"CaptureToWimImage: Setting metadata via loaded image handle...");
-        LogInfo(L"CaptureToWimImage: XML: " + imageXml);
+        LogInfo(L"CaptureToWimImage: XML: " + TruncateForLog(imageXml));
 
         if (WIMSetImageInformation(hImageForMetadata, const_cast<wchar_t*>(imageXml.c_str()), imageXmlSize)) {
             LogInfo(L"CaptureToWimImage: SUCCESS - Metadata set successfully");
@@ -1081,10 +1134,11 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         if (metadataSetSuccessfully) {
             LogInfo(L"CaptureToWimImage: Verifying metadata was set correctly...");
 
+            wchar_t* verifiedXmlInfo = nullptr;
             DWORD xmlSize = 0;
-            WIMGetImageInformation(hImageForMetadata, nullptr, &xmlSize);
 
-            if (xmlSize > 0) {
+            if (WIMGetImageInformation(hImageForMetadata, reinterpret_cast<LPVOID*>(&verifiedXmlInfo), &xmlSize) &&
+                verifiedXmlInfo != nullptr && xmlSize >= sizeof(wchar_t)) {
                 LogInfo(L"CaptureToWimImage: [VERIFICATION] SUCCESS - Metadata verified (XML size: " + 
                         std::to_wstring(xmlSize) + L" bytes)");
             } else {
@@ -1093,6 +1147,10 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
                          std::to_wstring(error) + L")");
                 metadataSetSuccessfully = false;
                 detailedFailureMessage = FormatDetailedErrorCode(L"CaptureToWimImage: WIMGetImageInformation verification failed.", error);
+            }
+
+            if (verifiedXmlInfo != nullptr) {
+                LocalFree(verifiedXmlInfo);
             }
         }
 

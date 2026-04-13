@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.12";		
+        private static readonly string version_fallback_number = "6.1.3.14";		
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,12 @@ namespace BackupUI
 
 /*
  *
+ * Version 6.1.3.14 CRITICAL FIX - Fixed metadata verification calling WIMGetImageInformation with an invalid null 
+ *                  output pointer, which was causing false backup failure with error 87 after the metadata write 
+ *                  succeeded. mdail 4/13/2026
+ * Version 6.1.3.13 CRITICAL FIX - Changed WIM metadata updates to load the existing image XML and only update the 
+ *                  NAME element before calling WIMSetImageInformation. This fixes BackupDisk and BackupVolume 
+ *                  metadata writes that were still failing with XML parse error 1465. mdail 4/13/2026
  * Version 6.1.3.12 CRITICAL FIX - Fixed WIMSetImageInformation XML buffer sizing to include the terminating Unicode null, 
  *                  which was causing error 1465 "Windows was unable to parse the requested XML data" during metadata writes. 
  *                  Also applied the same metadata XML sizing/sanitization fix to file backups. mdail 4/11/2026
