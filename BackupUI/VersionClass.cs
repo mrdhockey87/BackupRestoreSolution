@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.11";		
+        private static readonly string version_fallback_number = "6.1.3.12";		
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,7 +69,10 @@ namespace BackupUI
 
 /*
  *
-* Version 6.1.3.11 CRITICAL FIX - Updated WIM callback exclusion handling to combine built-in program excludes 
+ * Version 6.1.3.12 CRITICAL FIX - Fixed WIMSetImageInformation XML buffer sizing to include the terminating Unicode null, 
+ *                  which was causing error 1465 "Windows was unable to parse the requested XML data" during metadata writes. 
+ *                  Also applied the same metadata XML sizing/sanitization fix to file backups. mdail 4/11/2026
+ * Version 6.1.3.11 CRITICAL FIX - Updated WIM callback exclusion handling to combine built-in program excludes 
 *                  with user-entered excludes during capture. Also fixed WIM callback error logging to use the 
 *                  real file path and Win32 error code/text, and to skip ignorable file-level errors instead of 
 *                  treating them as generic failures. mdail 4/11/2026

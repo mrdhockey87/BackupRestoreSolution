@@ -373,6 +373,10 @@ namespace {
         }
         return result;
     }
+
+    DWORD GetUnicodeXmlBufferSize(const std::wstring& xml) {
+        return static_cast<DWORD>((xml.length() + 1) * sizeof(wchar_t));
+    }
 }
 // ============================================================================
 
@@ -1059,7 +1063,7 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         std::wstring imageXml = L"<IMAGE><NAME>";
         imageXml += sanitizedName;
         imageXml += L"</NAME></IMAGE>";
-        DWORD imageXmlSize = static_cast<DWORD>(imageXml.length() * sizeof(wchar_t));
+        DWORD imageXmlSize = GetUnicodeXmlBufferSize(imageXml);
 
         LogInfo(L"CaptureToWimImage: Setting metadata via loaded image handle...");
         LogInfo(L"CaptureToWimImage: XML: " + imageXml);

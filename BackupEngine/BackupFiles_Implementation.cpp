@@ -15,6 +15,26 @@ namespace fs = std::filesystem;
 extern void SetLastErrorMessage(const std::wstring& error);
 
 namespace {
+    std::wstring SanitizeXmlName(const std::wstring& input) {
+        std::wstring result;
+        result.reserve(input.size() + 16);
+        for (wchar_t c : input) {
+            switch (c) {
+                case L'&':  result += L"&amp;"; break;
+                case L'<':  result += L"&lt;"; break;
+                case L'>':  result += L"&gt;"; break;
+                case L'"':  result += L"&quot;"; break;
+                case L'\'': result += L"&apos;"; break;
+                default:    result += c; break;
+            }
+        }
+        return result;
+    }
+
+    DWORD GetUnicodeXmlBufferSize(const std::wstring& xml) {
+        return static_cast<DWORD>((xml.length() + 1) * sizeof(wchar_t));
+    }
+
     // Context structure for WIM capture with user exclusions
     struct FileBackupContext {
         const wchar_t** userExclusions;
@@ -203,10 +223,23 @@ extern "C" {
                 imageName = L"File Backup";
             }
 
-            std::wstring imageXml = L"<IMAGE><NAME>" + imageName + L"</NAME></IMAGE>";
-            DWORD xmlSize = static_cast<DWORD>(imageXml.length() * sizeof(wchar_t));
+            std::wstring sanitizedImageName = SanitizeXmlName(imageName);
+            std::wstring imageXml = L"<IMAGE><NAME>" + sanitizedImageName + L"</NAME></IMAGE>";
+            DWORD xmlSize = GetUnicodeXmlBufferSize(imageXml);
 
-            WIMSetImageInformation(hImage, const_cast<wchar_t*>(imageXml.c_str()), xmlSize);
+            if (!WIMSetImageInformation(hImage, const_cast<wchar_t*>(imageXml.c_str()), xmlSize)) {
+                DWORD error = ::GetLastError();
+                if (hImage != INVALID_HANDLE_VALUE) {
+                    WIMCloseHandle(hImage);
+                }
+                WIMCloseHandle(hWim);
+
+                std::wstring errorMsg = L"Failed to set backup metadata. ";
+                errorMsg += L"XML='" + imageXml + L"'. Error: " + std::to_wstring(error);
+                SetLastErrorMessage(errorMsg);
+                if (logCallback) logCallback(3, L"Failed to set backup metadata", errorMsg.c_str());
+                return -5;
+            }
 
             // Close handles
             if (hImage != INVALID_HANDLE_VALUE) {
