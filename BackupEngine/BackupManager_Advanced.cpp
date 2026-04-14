@@ -1174,6 +1174,15 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
         }
     }
 
+    // CRITICAL FIX: Always close the original capture image handle before returning.
+    // WIMCaptureImage/WIMLoadImage can return a real image handle even when we later
+    // return the special success marker. If left open, the service process keeps the
+    // archive locked and immediate verification/mount attempts fail with sharing violation.
+    if (hImage && hImage != INVALID_HANDLE_VALUE && hImage != (HANDLE)1) {
+        WIMCloseHandle(hImage);
+        hImage = (HANDLE)1;
+    }
+
     // Final result - FAIL if metadata was not set successfully
     if (!metadataSetSuccessfully) {
         LogError(L"CaptureToWimImage: CRITICAL - Metadata was NOT set successfully!");
