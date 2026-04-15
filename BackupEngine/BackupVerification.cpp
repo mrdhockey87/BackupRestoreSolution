@@ -257,11 +257,30 @@ extern "C" {
             }
 
             // Get image information (XML metadata)
+            wchar_t* imageXmlInfo = nullptr;
             DWORD xmlSize = 0;
-            WIMGetImageInformation(hImage, nullptr, &xmlSize);
+            if (!WIMGetImageInformation(hImage, reinterpret_cast<LPVOID*>(&imageXmlInfo), &xmlSize) ||
+                imageXmlInfo == nullptr ||
+                xmlSize < sizeof(wchar_t)) {
+                DWORD error = GetLastError();
+                swprintf_s(errorMsg, errorMsgSize,
+                    L"No metadata found in image. WIMGetImageInformation failed with error %u.", error);
+                if (imageXmlInfo != nullptr) {
+                    LocalFree(imageXmlInfo);
+                }
+                WIMCloseHandle(hImage);
+                WIMCloseHandle(hWim);
+                if (callback) {
+                    callback(0, errorMsg);
+                }
+                return -7;
+            }
 
-            if (xmlSize == 0) {
-                swprintf_s(errorMsg, errorMsgSize, L"No metadata found in image. Archive may be corrupted.");
+            std::wstring imageXml(imageXmlInfo);
+            LocalFree(imageXmlInfo);
+
+            if (imageXml.empty() || imageXml.find(L"<IMAGE") == std::wstring::npos) {
+                swprintf_s(errorMsg, errorMsgSize, L"Image metadata XML is empty or invalid. Archive may be corrupted.");
                 WIMCloseHandle(hImage);
                 WIMCloseHandle(hWim);
                 if (callback) {

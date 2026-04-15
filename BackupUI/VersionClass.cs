@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.15";		
+        private static readonly string version_fallback_number = "6.1.3.16";		
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,8 @@ namespace BackupUI
 
 /*
  *
+ * Version 6.1.3.16 CRITICAL FIX - Fixed WIM archive verification to read image metadata XML using a valid output
+ *                  buffer from WIMGetImageInformation, preventing false "No metadata found in image" failures. mdail 4/15/2026
  * Version 6.1.3.15 CRITICAL FIX - Closed the leaked WIM image handle after capture/metadata verification so the
  *                  service no longer keeps the new .ssb file locked. This fixes verify failures with error 32 and
  *                  avoids needing to restart the service before mounting the backup. mdail 4/14/2026
