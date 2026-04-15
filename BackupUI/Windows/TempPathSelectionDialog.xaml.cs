@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Forms;
 
@@ -7,18 +8,93 @@ namespace BackupUI.Windows
 {
     public partial class TempPathSelectionDialog : Window
     {
+        private static readonly string SavedTempPathSettingsPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "BackupRestoreApp",
+            "mount-temp-path.json");
+
         public string SelectedTempPath { get; private set; }
 
         public TempPathSelectionDialog()
         {
             InitializeComponent();
             
-            // Set default temp path
-            SelectedTempPath = Path.GetTempPath();
+            // Set initial temp path from saved settings when still valid, otherwise default
+            SelectedTempPath = GetInitialTempPath();
             txtTempPath.Text = SelectedTempPath;
             
             // Update space info
             UpdateSpaceInfo();
+        }
+
+        private static string GetInitialTempPath()
+        {
+            string defaultTempPath = EnsureTrailingBackslash(Path.GetTempPath());
+
+            try
+            {
+                if (!File.Exists(SavedTempPathSettingsPath))
+                {
+                    return defaultTempPath;
+                }
+
+                var json = File.ReadAllText(SavedTempPathSettingsPath);
+                var settings = JsonSerializer.Deserialize<TempPathSettings>(json);
+
+                if (settings != null && IsSavedPathStillValid(settings.LastTempPath))
+                {
+                    return EnsureTrailingBackslash(Path.GetFullPath(settings.LastTempPath!));
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TempPathDialog] Failed to load saved temp path: {ex.Message}");
+            }
+
+            return defaultTempPath;
+        }
+
+        private static bool IsSavedPathStillValid(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                string fullPath = Path.GetFullPath(path);
+                return Directory.Exists(fullPath);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string EnsureTrailingBackslash(string path)
+        {
+            return path.EndsWith("\\", StringComparison.Ordinal) ? path : path + "\\";
+        }
+
+        private void SaveSelectedTempPath()
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(SavedTempPathSettingsPath)!);
+
+                var settings = new TempPathSettings
+                {
+                    LastTempPath = SelectedTempPath
+                };
+
+                var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(SavedTempPathSettingsPath, json);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TempPathDialog] Failed to save temp path: {ex.Message}");
+            }
         }
 
         private void UpdateSpaceInfo()
@@ -88,13 +164,7 @@ namespace BackupUI.Windows
 
                 if (result == System.Windows.Forms.DialogResult.OK)
                 {
-                    SelectedTempPath = dialog.SelectedPath;
-
-                    // Ensure path ends with backslash
-                    if (!SelectedTempPath.EndsWith("\\"))
-                    {
-                        SelectedTempPath += "\\";
-                    }
+                    SelectedTempPath = EnsureTrailingBackslash(dialog.SelectedPath);
 
                     txtTempPath.Text = SelectedTempPath;
                     System.Diagnostics.Debug.WriteLine($"[TempPathDialog] SelectedTempPath set to: {SelectedTempPath}");
@@ -165,6 +235,8 @@ namespace BackupUI.Windows
                 System.Diagnostics.Debug.WriteLine($"[TempPathDialog] Write test successful for: {SelectedTempPath}");
                 System.Diagnostics.Debug.WriteLine($"[TempPathDialog] Returning DialogResult=true with path: {SelectedTempPath}");
 
+                SaveSelectedTempPath();
+
                 DialogResult = true;
                 Close();
             }
@@ -183,6 +255,11 @@ namespace BackupUI.Windows
         {
             DialogResult = false;
             Close();
+        }
+
+        private sealed class TempPathSettings
+        {
+            public string? LastTempPath { get; set; }
         }
     }
 }

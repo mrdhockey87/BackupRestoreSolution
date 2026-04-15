@@ -48,6 +48,8 @@ namespace BackupUI.Services
                 if (job.Id == Guid.Empty)
                     job.Id = Guid.NewGuid();
 
+                ApplyScheduleState(job);
+
                 jobs.Add(job);
                 SaveJobs();
                 
@@ -68,6 +70,9 @@ namespace BackupUI.Services
                 var existingJob = jobs.FirstOrDefault(j => j.Id == job.Id);
                 if (existingJob != null)
                 {
+                    PreserveExecutionState(existingJob, job);
+                    ApplyScheduleState(job, existingJob);
+
                     jobs.Remove(existingJob);
                     jobs.Add(job);
                     SaveJobs();
@@ -154,6 +159,107 @@ namespace BackupUI.Services
             {
                 System.Diagnostics.Debug.WriteLine($"CRITICAL ERROR in SaveJobs: {ex.Message}\nStack: {ex.StackTrace}");
                 throw new Exception($"Failed to save jobs file: {ex.Message}\nPath: {JobsFilePath}", ex);
+            }
+        }
+
+        private static void PreserveExecutionState(BackupJob existingJob, BackupJob updatedJob)
+        {
+            updatedJob.LastRunTime = existingJob.LastRunTime;
+            updatedJob.ConsecutiveFailures = existingJob.ConsecutiveFailures;
+            updatedJob.IsCurrentlyRunning = existingJob.IsCurrentlyRunning;
+            updatedJob.ForceFullBackupOnNextRun = existingJob.ForceFullBackupOnNextRun;
+        }
+
+        private static void ApplyScheduleState(BackupJob job, BackupJob? existingJob = null)
+        {
+            if (job.Schedule == null || !job.Schedule.Enabled)
+            {
+                job.NextScheduledRun = null;
+                if (job.Schedule != null)
+                {
+                    job.Schedule.NextRunTime = null;
+                }
+
+                return;
+            }
+
+            bool scheduleChanged = existingJob == null || HasScheduleChanged(existingJob.Schedule, job.Schedule);
+
+            if (!scheduleChanged && existingJob != null)
+            {
+                job.NextScheduledRun = existingJob.NextScheduledRun;
+                job.Schedule.NextRunTime = existingJob.Schedule?.NextRunTime ?? existingJob.NextScheduledRun;
+                return;
+            }
+
+            var nextRun = CalculateNextRunTime(job.Schedule, isInitialCalculation: true);
+            job.NextScheduledRun = nextRun;
+            job.Schedule.NextRunTime = nextRun;
+        }
+
+        private static bool HasScheduleChanged(BackupSchedule? existingSchedule, BackupSchedule? updatedSchedule)
+        {
+            if (existingSchedule == null || updatedSchedule == null)
+            {
+                return existingSchedule != updatedSchedule;
+            }
+
+            if (existingSchedule.Enabled != updatedSchedule.Enabled ||
+                existingSchedule.Frequency != updatedSchedule.Frequency ||
+                existingSchedule.Time != updatedSchedule.Time ||
+                existingSchedule.DayOfMonth != updatedSchedule.DayOfMonth)
+            {
+                return true;
+            }
+
+            var existingDays = existingSchedule.DaysOfWeek.OrderBy(day => day).ToList();
+            var updatedDays = updatedSchedule.DaysOfWeek.OrderBy(day => day).ToList();
+
+            return !existingDays.SequenceEqual(updatedDays);
+        }
+
+        private static DateTime? CalculateNextRunTime(BackupSchedule schedule, bool isInitialCalculation)
+        {
+            var now = DateTime.Now;
+            var scheduledTime = now.Date.Add(schedule.Time);
+
+            switch (schedule.Frequency)
+            {
+                case ScheduleFrequency.Daily:
+                    if (isInitialCalculation && scheduledTime <= now)
+                    {
+                        return scheduledTime.AddDays(1);
+                    }
+
+                    return scheduledTime > now ? scheduledTime : scheduledTime.AddDays(1);
+
+                case ScheduleFrequency.Weekly:
+                    var nextWeeklyRun = scheduledTime > now ? scheduledTime : scheduledTime.AddDays(1);
+                    while (!schedule.DaysOfWeek.Contains(nextWeeklyRun.DayOfWeek))
+                    {
+                        nextWeeklyRun = nextWeeklyRun.AddDays(1);
+                    }
+
+                    return nextWeeklyRun;
+
+                case ScheduleFrequency.Monthly:
+                    int day = Math.Max(1, Math.Min(schedule.DayOfMonth, DateTime.DaysInMonth(now.Year, now.Month)));
+                    var nextMonthlyRun = new DateTime(now.Year, now.Month, day, schedule.Time.Hours, schedule.Time.Minutes, 0);
+                    if (nextMonthlyRun <= now)
+                    {
+                        var nextMonth = now.AddMonths(1);
+                        day = Math.Max(1, Math.Min(schedule.DayOfMonth, DateTime.DaysInMonth(nextMonth.Year, nextMonth.Month)));
+                        nextMonthlyRun = new DateTime(nextMonth.Year, nextMonth.Month, day, schedule.Time.Hours, schedule.Time.Minutes, 0);
+                    }
+
+                    return nextMonthlyRun;
+
+                case ScheduleFrequency.Once:
+                    schedule.Enabled = false;
+                    return null;
+
+                default:
+                    return null;
             }
         }
     }

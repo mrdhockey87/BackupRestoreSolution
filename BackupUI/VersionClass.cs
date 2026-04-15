@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.16";		
+        private static readonly string version_fallback_number = "6.1.3.18";		
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,10 @@ namespace BackupUI
 
 /*
  *
+ * Version 6.1.3.18 Fixed edited scheduled jobs to recalculate the next scheduled run time when the schedule time
+ *                  changes instead of showing Not scheduled. mdail 4/15/2026
+ * Version 6.1.3.17 Remember the last valid temp path used on the mount screen and fall back to the default temp path
+ *                  if the saved path is no longer valid. mdail 4/15/2026
  * Version 6.1.3.16 CRITICAL FIX - Fixed WIM archive verification to read image metadata XML using a valid output
  *                  buffer from WIMGetImageInformation, preventing false "No metadata found in image" failures. mdail 4/15/2026
  * Version 6.1.3.15 CRITICAL FIX - Closed the leaked WIM image handle after capture/metadata verification so the
