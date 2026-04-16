@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.18";		
+        private static readonly string version_fallback_number = "6.1.3.24";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,16 @@ namespace BackupUI
 
 /*
  *
+ * Version 6.1.3.24 Fixed incremental and differential disk backups to prioritize drive letters (W:\) over volume GUIDs 
+ *                  for VSS compatibility, resolving VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER errors for physical drives. mdail 4/16/2026
+ * Version 6.1.3.23 Enhanced VSS error diagnostics with specific handling for HRESULT 0x80042308 (VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER)
+ *                  to explain that VSS cannot snapshot physical drives directly. mdail 4/16/2026
+ * Version 6.1.3.22 Enhanced incremental disk backup error diagnostics with detailed VSS and WIM capture logging, 
+ *                  improved VSS snapshot cleanup, and made VSS success mandatory for incremental consistency. mdail 4/15/2026
+ * Version 6.1.3.21 Fixed the service crash for scheduled disk incremental and differential backups by correcting the native interop signature. mdail 4/15/2026
+ * Version 6.1.3.20 Allow typed schedule minutes and expand the minute list to 00-59 on the new and edit backup pages. mdail 4/15/2026
+ * Version 6.1.3.19 Fixed scheduled jobs to reload updated schedules in the service and auto-open the progress window
+ *                  when a scheduled backup is already running. mdail 4/15/2026
  * Version 6.1.3.18 Fixed edited scheduled jobs to recalculate the next scheduled run time when the schedule time
  *                  changes instead of showing Not scheduled. mdail 4/15/2026
  * Version 6.1.3.17 Remember the last valid temp path used on the mount screen and fall back to the default temp path

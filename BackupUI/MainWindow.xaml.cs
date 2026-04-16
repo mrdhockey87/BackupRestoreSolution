@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using BackupCommon;
 using BackupUI.Models;
 using BackupUI.Services;
@@ -18,8 +19,13 @@ namespace BackupUI
     public partial class MainWindow : Window
     {
         private readonly JobManager jobManager = new();
+        private readonly BackupServiceClient backupServiceClient = new();
         private ObservableCollection<BackupJobViewModel> backupJobs = new();
         private JobLogSummary? selectedJobLog = null;  // Track selected job in Activity tab
+        private readonly Dictionary<Guid, BackupProgressWindow> activeBackupProgressWindows = new();
+        private readonly HashSet<Guid> suppressedAutoOpenProgressJobs = new();
+        private readonly DispatcherTimer runningBackupMonitorTimer;
+        private bool isCheckingForRunningBackups;
 
         public MainWindow()
         {
@@ -34,16 +40,27 @@ namespace BackupUI
             timer.Interval = TimeSpan.FromSeconds(30);
             timer.Tick += (s, e) => UpdateActivityTabWarning();
             timer.Start();
+
+            runningBackupMonitorTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(5)
+            };
+            runningBackupMonitorTimer.Tick += async (s, e) => await CheckForRunningBackupsAsync();
+            runningBackupMonitorTimer.Start();
         }
 
-        private void Window_Loaded(object sender, RoutedEventArgs e)
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
             // Restore saved window position
             WindowPositionManager.RestoreMainWindowPosition(this);
+
+            await CheckForRunningBackupsAsync();
         }
 
         private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
         {
+            runningBackupMonitorTimer.Stop();
+
             // Save window position for next time
             WindowPositionManager.SaveMainWindowPosition(this);
         }
@@ -85,6 +102,105 @@ namespace BackupUI
         private void RefreshJobs_Click(object sender, RoutedEventArgs e)
         {
             LoadBackupJobs();
+        }
+
+        private async Task CheckForRunningBackupsAsync()
+        {
+            if (isCheckingForRunningBackups)
+            {
+                return;
+            }
+
+            isCheckingForRunningBackups = true;
+
+            try
+            {
+                var jobs = jobManager.GetAllJobs();
+                var runningJobs = jobs.Where(job => job.IsCurrentlyRunning).ToList();
+                var runningJobIds = runningJobs.Select(job => job.Id).ToHashSet();
+
+                suppressedAutoOpenProgressJobs.RemoveWhere(jobId => !runningJobIds.Contains(jobId));
+
+                foreach (var job in runningJobs)
+                {
+                    if (activeBackupProgressWindows.ContainsKey(job.Id) || suppressedAutoOpenProgressJobs.Contains(job.Id))
+                    {
+                        continue;
+                    }
+
+                    var progress = await backupServiceClient.GetProgressAsync(job.Id);
+                    if (progress?.IsRunning == true)
+                    {
+                        ShowBackupProgressWindow(job.Id, job.Name);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error checking for running backups: {ex.Message}");
+            }
+            finally
+            {
+                isCheckingForRunningBackups = false;
+            }
+        }
+
+        private void ShowBackupProgressWindow(Guid jobId, string jobName)
+        {
+            var existingOpenWindow = Application.Current.Windows
+                .OfType<BackupProgressWindow>()
+                .FirstOrDefault(window => window.JobId == jobId);
+
+            if (existingOpenWindow != null)
+            {
+                if (!activeBackupProgressWindows.ContainsKey(jobId))
+                {
+                    TrackBackupProgressWindow(existingOpenWindow);
+                }
+
+                existingOpenWindow.Activate();
+                return;
+            }
+
+            if (activeBackupProgressWindows.TryGetValue(jobId, out var existingWindow))
+            {
+                if (!existingWindow.IsVisible)
+                {
+                    existingWindow.Show();
+                }
+
+                existingWindow.Activate();
+                return;
+            }
+
+            var progressWindow = new BackupProgressWindow(jobId, jobName);
+            WindowPositionManager.SetChildWindowPosition(progressWindow, this);
+            TrackBackupProgressWindow(progressWindow);
+
+            progressWindow.Show();
+        }
+
+        private void TrackBackupProgressWindow(BackupProgressWindow progressWindow)
+        {
+            activeBackupProgressWindows[progressWindow.JobId] = progressWindow;
+            progressWindow.Closed += BackupProgressWindow_Closed;
+        }
+
+        private void BackupProgressWindow_Closed(object? sender, EventArgs e)
+        {
+            if (sender is not BackupProgressWindow progressWindow)
+            {
+                return;
+            }
+
+            activeBackupProgressWindows.Remove(progressWindow.JobId);
+
+            if (progressWindow.WasClosedWhileBackupRunning)
+            {
+                suppressedAutoOpenProgressJobs.Add(progressWindow.JobId);
+            }
+
+            progressWindow.Closed -= BackupProgressWindow_Closed;
         }
 
         private void ResetRunningFlag_Click(object sender, RoutedEventArgs e)
@@ -203,17 +319,13 @@ namespace BackupUI
                     BackupLogger.LogInfo(job.Name, $"User initiated manual backup (Run Now clicked)");
 
                     // Send job to service and show progress window (no confirmation needed)
-                    var serviceClient = new Services.BackupServiceClient();
-                    var success = await serviceClient.RunBackupNowAsync(jobId);
+                    var success = await backupServiceClient.RunBackupNowAsync(jobId);
 
                     if (success)
                     {
                         BackupLogger.LogInfo(job.Name, "Service accepted backup request - backup is starting");
 
-                        // Show non-modal progress window
-                        var progressWindow = new Windows.BackupProgressWindow(jobId, job.Name);
-                        WindowPositionManager.SetChildWindowPosition(progressWindow, this);
-                        progressWindow.Show();
+                        ShowBackupProgressWindow(jobId, job.Name);
                     }
                     else
                     {

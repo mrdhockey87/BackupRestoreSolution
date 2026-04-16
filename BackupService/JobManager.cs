@@ -23,25 +23,30 @@ namespace BackupService
 
         public List<BackupJob> GetAllJobs()
         {
+            LoadJobs();
             return jobs.ToList();
         }
 
         public BackupJob? GetJob(Guid id)
         {
+            LoadJobs();
             return jobs.FirstOrDefault(j => j.Id == id);
         }
 
         public List<BackupJob> GetScheduledJobs()
         {
+            LoadJobs();
             return jobs.Where(j => j.Schedule != null && j.Schedule.Enabled).ToList();
         }
 
         public List<BackupJob> GetJobsDueForExecution()
         {
+            LoadJobs();
+
             var now = DateTime.Now;
             var dueJobs = new List<BackupJob>();
 
-            foreach (var job in GetScheduledJobs())
+            foreach (var job in jobs.Where(j => j.Schedule != null && j.Schedule.Enabled))
             {
                 if (job.Schedule == null)
                     continue;
@@ -80,13 +85,22 @@ namespace BackupService
 
         public void UpdateJobAfterExecution(BackupJob job, bool success = true)
         {
-            job.LastRunTime = DateTime.Now;
-            job.IsCurrentlyRunning = false; // Mark job as no longer running
+            LoadJobs();
+
+            var currentJob = jobs.FirstOrDefault(j => j.Id == job.Id);
+            if (currentJob == null)
+            {
+                currentJob = job;
+                jobs.Add(currentJob);
+            }
+
+            currentJob.LastRunTime = DateTime.Now;
+            currentJob.IsCurrentlyRunning = false; // Mark job as no longer running
 
             if (!success)
             {
                 // Increment consecutive failure counter
-                job.ConsecutiveFailures++;
+                currentJob.ConsecutiveFailures++;
 
                 // Exponential backoff retry logic:
                 // 1st failure: +15 minutes
@@ -97,19 +111,19 @@ namespace BackupService
                 DateTime retryTime;
                 string retryMessage;
 
-                if (job.ConsecutiveFailures == 1)
+                if (currentJob.ConsecutiveFailures == 1)
                 {
                     // First failure: retry in 15 minutes
                     retryTime = DateTime.Now.AddMinutes(15);
                     retryMessage = $"First failure. Will retry in 15 minutes at {retryTime:HH:mm:ss}.";
                 }
-                else if (job.ConsecutiveFailures == 2)
+                else if (currentJob.ConsecutiveFailures == 2)
                 {
                     // Second failure: retry in 30 minutes
                     retryTime = DateTime.Now.AddMinutes(30);
                     retryMessage = $"Second failure. Will retry in 30 minutes at {retryTime:HH:mm:ss}.";
                 }
-                else if (job.ConsecutiveFailures == 3)
+                else if (currentJob.ConsecutiveFailures == 3)
                 {
                     // Third failure: retry in 1 hour (last chance before giving up)
                     retryTime = DateTime.Now.AddHours(1);
@@ -118,12 +132,12 @@ namespace BackupService
                 else
                 {
                     // After 3 failures: Give up and wait for next scheduled day
-                    CalculateNextRunTime(job, isInitialCalculation: false);
-                    retryTime = job.NextScheduledRun ?? DateTime.Now.AddDays(1);
+                    CalculateNextRunTime(currentJob, isInitialCalculation: false);
+                    retryTime = currentJob.NextScheduledRun ?? DateTime.Now.AddDays(1);
 
                     BackupLogger.LogError(
-                        jobName: job.Name,
-                        message: $"⛔ RETRY LIMIT REACHED - Failed {job.ConsecutiveFailures} times. No more automatic retries.",
+                        jobName: currentJob.Name,
+                        message: $"⛔ RETRY LIMIT REACHED - Failed {currentJob.ConsecutiveFailures} times. No more automatic retries.",
                         details: $"Next scheduled backup: {retryTime:yyyy-MM-dd HH:mm:ss}. Please investigate the failure cause before next backup attempt."
                     );
 
@@ -132,46 +146,46 @@ namespace BackupService
                 }
 
                 // Check if retry time would be after the next natural schedule
-                var nextNaturalSchedule = CalculateNaturalNextRunTime(job);
+                var nextNaturalSchedule = CalculateNaturalNextRunTime(currentJob);
                 if (nextNaturalSchedule.HasValue && retryTime >= nextNaturalSchedule.Value)
                 {
                     // Retry time is past natural schedule, just use natural schedule
-                    job.NextScheduledRun = nextNaturalSchedule.Value;
-                    job.ConsecutiveFailures = 0; // Reset since we're using natural schedule
+                    currentJob.NextScheduledRun = nextNaturalSchedule.Value;
+                    currentJob.ConsecutiveFailures = 0; // Reset since we're using natural schedule
 
                     BackupLogger.LogWarning(
-                        jobName: job.Name,
+                        jobName: currentJob.Name,
                         message: $"Backup failed but retry time is past next scheduled backup. Using natural schedule instead.",
-                        details: $"Next backup: {job.NextScheduledRun:yyyy-MM-dd HH:mm:ss}"
+                        details: $"Next backup: {currentJob.NextScheduledRun:yyyy-MM-dd HH:mm:ss}"
                     );
                 }
                 else
                 {
                     // Use retry time
-                    job.NextScheduledRun = retryTime;
+                    currentJob.NextScheduledRun = retryTime;
 
                     BackupLogger.LogWarning(
-                        jobName: job.Name,
-                        message: $"Backup attempt {job.ConsecutiveFailures} of 3 failed. {retryMessage}",
-                        details: $"Next retry: {job.NextScheduledRun:yyyy-MM-dd HH:mm:ss}"
+                        jobName: currentJob.Name,
+                        message: $"Backup attempt {currentJob.ConsecutiveFailures} of 3 failed. {retryMessage}",
+                        details: $"Next retry: {currentJob.NextScheduledRun:yyyy-MM-dd HH:mm:ss}"
                     );
                 }
             }
             else
             {
                 // Backup succeeded
-                var hadFailures = job.ConsecutiveFailures > 0;
-                job.ConsecutiveFailures = 0; // Reset failure counter
+                var hadFailures = currentJob.ConsecutiveFailures > 0;
+                currentJob.ConsecutiveFailures = 0; // Reset failure counter
 
                 // Calculate next normal run time
-                CalculateNextRunTime(job, isInitialCalculation: false);
+                CalculateNextRunTime(currentJob, isInitialCalculation: false);
 
                 if (hadFailures)
                 {
                     BackupLogger.LogSuccess(
-                        jobName: job.Name,
+                        jobName: currentJob.Name,
                         message: "✓ Backup succeeded after previous failures. Failure counter reset.",
-                        details: $"Next scheduled backup: {job.NextScheduledRun:yyyy-MM-dd HH:mm:ss}"
+                        details: $"Next scheduled backup: {currentJob.NextScheduledRun:yyyy-MM-dd HH:mm:ss}"
                     );
                 }
             }
@@ -274,7 +288,27 @@ namespace BackupService
 
         public void SaveJob(BackupJob job)
         {
-            // Just save the in-memory list (job is already in list by reference)
+            LoadJobs();
+
+            var existingJob = jobs.FirstOrDefault(j => j.Id == job.Id);
+            if (existingJob == null)
+            {
+                jobs.Add(job);
+            }
+            else
+            {
+                existingJob.LastRunTime = job.LastRunTime;
+                existingJob.NextScheduledRun = job.NextScheduledRun;
+                existingJob.IsCurrentlyRunning = job.IsCurrentlyRunning;
+                existingJob.ConsecutiveFailures = job.ConsecutiveFailures;
+                existingJob.ForceFullBackupOnNextRun = job.ForceFullBackupOnNextRun;
+
+                if (existingJob.Schedule != null && job.Schedule != null)
+                {
+                    existingJob.Schedule.NextRunTime = job.Schedule.NextRunTime;
+                }
+            }
+
             SaveJobs();
         }
 

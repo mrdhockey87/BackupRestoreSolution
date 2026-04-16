@@ -21,6 +21,9 @@ namespace BackupUI.Windows
         private bool _isCompleted;
         private bool _abortRequested;
 
+        public Guid JobId => _jobId;
+        public bool WasClosedWhileBackupRunning => !_isCompleted && !_abortRequested;
+
         public BackupProgressWindow(Guid jobId, string jobName)
         {
             InitializeComponent();

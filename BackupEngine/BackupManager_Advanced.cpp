@@ -1945,7 +1945,35 @@ extern "C" {
                     {
                         for (DWORD i = 0; i < pExtents->NumberOfDiskExtents; i++) {
                             if (pExtents->Extents[i].DiskNumber == static_cast<DWORD>(diskNumber)) {
-                                std::wstring volPath = volumeNameCopy + L"\\";
+                                // PRIORITY FIX: Try to get drive letter instead of volume GUID
+                                // VSS works better with drive letters (C:\, D:\) than volume GUIDs
+                                wchar_t driveLetters[256] = { 0 }; // Buffer for multiple drive letters
+                                DWORD driveLetterLen = 0;
+
+                                // Restore trailing slash for GetVolumePathNamesForVolumeNameW API
+                                std::wstring volumeWithSlash = volumeName;
+                                if (!volumeWithSlash.empty() && volumeWithSlash.back() != L'\\') {
+                                    volumeWithSlash += L'\\';
+                                }
+
+                                BOOL success = GetVolumePathNamesForVolumeNameW(
+                                    volumeWithSlash.c_str(),
+                                    driveLetters,
+                                    ARRAYSIZE(driveLetters),
+                                    &driveLetterLen
+                                );
+
+                                std::wstring volPath;
+                                if (success && driveLetterLen > 1 && driveLetters[0] != L'\0') {
+                                    // Use first drive letter found (preferred for VSS compatibility)
+                                    volPath = driveLetters;  // Already includes trailing backslash
+                                    LogInfo(L"BackupDiskIncremental: Found drive letter " + volPath + L" for volume " + volumeNameCopy);
+                                } else {
+                                    // Fall back to volume GUID path
+                                    volPath = volumeNameCopy + L"\\";
+                                    LogInfo(L"BackupDiskIncremental: No drive letter found, using volume GUID " + volPath);
+                                }
+
                                 volumes.push_back(volPath);
                                 break;
                             }
@@ -1973,6 +2001,8 @@ extern "C" {
                 callback(15, L"Opening existing backup for incremental...");
             }
 
+            LogInfo(L"BackupDiskIncremental: Opening existing WIM file: " + destFile);
+
             // When opening existing WIM, compression type must be 0 (read from file)
             // Passing WIM_COMPRESS_LZMS/NONE when opening existing WIM causes error -4!
             // NOTE: WIM_FLAG_VERIFY removed - can cause ERROR_INVALID_PARAMETER (87) on valid files
@@ -1991,9 +2021,24 @@ extern "C" {
                 DWORD wimError = GetLastError();
                 std::wstring err = L"Failed to open existing backup for incremental. WIM Error: " + 
                                   std::to_wstring(wimError) + 
+                                  L". File: " + destFile +
                                   L". Ensure full backup exists and is not corrupted.";
+                LogError(L"BackupDiskIncremental: " + err);
                 SetLastErrorMessage(err);
                 return -4;
+            }
+
+            // Check existing images in the WIM
+            DWORD existingImageCount = CountWimImages(hWim);
+            LogInfo(L"BackupDiskIncremental: Existing WIM contains " + 
+                   std::to_wstring(existingImageCount) + L" image(s)");
+
+            if (existingImageCount == 0) {
+                WIMCloseHandle(hWim);
+                std::wstring err = L"Base WIM file contains no images. Cannot create incremental backup.";
+                LogError(L"BackupDiskIncremental: " + err);
+                SetLastErrorMessage(err);
+                return -5;
             }
 
             // WIM API automatically handles incremental images when appending to existing WIM
@@ -2017,6 +2062,8 @@ extern "C" {
 
                 wchar_t snapshotPath[MAX_PATH] = { 0 };
                 std::wstring actualSourcePath = volume + L"\\";
+                std::wstring vssError;
+                bool vssSucceeded = false;
 
                 if (SUCCEEDED(hr)) {
                     hr = vssManager.CreateVolumeSnapshot(actualSourcePath.c_str(), snapshotPath, MAX_PATH);
@@ -2027,7 +2074,58 @@ extern "C" {
                         if (!actualSourcePath.empty() && actualSourcePath.back() != L'\\') {
                             actualSourcePath += L'\\';
                         }
+                        vssSucceeded = true;
+                        LogInfo(L"BackupDiskIncremental: VSS snapshot created successfully for volume " + 
+                               std::to_wstring(volumeIndex) + L": " + actualSourcePath);
                     }
+                    else {
+                        vssError = L"VSS CreateVolumeSnapshot failed with HRESULT: 0x" + 
+                                  std::to_wstring(static_cast<unsigned long>(hr));
+
+                        // Provide specific guidance for common VSS errors
+                        if (hr == 0x80042308) { // VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER
+                            vssError += L" (VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER)";
+                            LogError(L"BackupDiskIncremental: VSS does not support direct physical drive snapshots");
+                            LogError(L"BackupDiskIncremental: Physical drives (\\\\.\\\PHYSICALDRIVE*) cannot be snapshotted via VSS");
+                            LogError(L"BackupDiskIncremental: Consider backing up individual mounted volumes instead");
+                        }
+                        else if (hr == 0x80042306) { // VSS_E_PROVIDER_VETO
+                            vssError += L" (VSS_E_PROVIDER_VETO - Provider error, check event logs)";
+                        }
+                        else if (hr == 0x80070005) { // E_ACCESSDENIED
+                            vssError += L" (E_ACCESSDENIED - Insufficient privileges for VSS operations)";
+                        }
+
+                        LogError(L"BackupDiskIncremental: " + vssError);
+                        LogError(L"BackupDiskIncremental: VSS snapshot creation failed - cannot proceed with incremental disk backup");
+                    }
+                }
+                else {
+                    vssError = L"VSS Initialize failed with HRESULT: 0x" + 
+                              std::to_wstring(static_cast<unsigned long>(hr));
+                    LogError(L"BackupDiskIncremental: " + vssError);
+                    LogError(L"BackupDiskIncremental: VSS initialization failed - cannot proceed with incremental disk backup");
+                }
+
+                // For physical drive backups, VSS failure is critical as we need consistent disk state
+                if (!vssSucceeded) {
+                    WIMCloseHandle(hWim);
+                    std::wstring err = L"Critical: VSS snapshot creation failed for incremental disk backup. ";
+
+                    // Provide specific error message based on the VSS failure
+                    if (hr == 0x80042308) {
+                        err += L"VSS does not support physical drive snapshots (\\\\.\\\PHYSICALDRIVE* paths). ";
+                        err += L"To perform disk-level incremental backups, consider: ";
+                        err += L"1) Backing up individual mounted volumes on the disk, or ";
+                        err += L"2) Using full disk backup without VSS (less consistent but possible). ";
+                    } else {
+                        err += L"Incremental disk backups require VSS for consistency. ";
+                    }
+
+                    err += vssError;
+                    LogError(L"BackupDiskIncremental: " + err);
+                    SetLastErrorMessage(err);
+                    return -7;  // New error code for VSS failure
                 }
 
                 // Capture new image referencing previous images
@@ -2035,15 +2133,39 @@ extern "C" {
                                         L" Volume " + std::to_wstring(volumeIndex) + 
                                         L" (Incremental)";
 
+                LogInfo(L"BackupDiskIncremental: Attempting to capture incremental image " + 
+                       std::to_wstring(volumeIndex) + L" from source: " + actualSourcePath);
+
                 // The WIM_FLAG_REFERENCE in WIMCreateFile automatically makes new images reference existing ones
                 HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), 
                                                  imageName.c_str(), callback);
 
                 if (!hImage || hImage == INVALID_HANDLE_VALUE) {
+                    DWORD captureError = GetLastError();
+
+                    // Clean up VSS snapshot before returning (only if VSS succeeded initially)
+                    if (vssSucceeded) {
+                        vssManager.Cleanup();
+                    }
+
                     WIMCloseHandle(hWim);
+
                     std::wstring err = L"Failed to capture incremental image " + std::to_wstring(volumeIndex);
+                    err += L". WIM capture error: " + std::to_wstring(captureError);
+                    err += L". Source path: " + actualSourcePath;
+
+                    if (!vssError.empty()) {
+                        err += L". VSS Error: " + vssError;
+                    }
+
+                    LogError(L"BackupDiskIncremental: " + err);
                     SetLastErrorMessage(err);
                     return -6;
+                }
+
+                // Clean up VSS snapshot after successful capture (only if VSS succeeded initially)
+                if (vssSucceeded) {
+                    vssManager.Cleanup();
                 }
 
                 WIMCloseHandle(hImage);
@@ -2146,7 +2268,35 @@ extern "C" {
                     {
                         for (DWORD i = 0; i < pExtents->NumberOfDiskExtents; i++) {
                             if (pExtents->Extents[i].DiskNumber == static_cast<DWORD>(diskNumber)) {
-                                std::wstring volPath = volumeNameCopy + L"\\";
+                                // PRIORITY FIX: Try to get drive letter instead of volume GUID
+                                // VSS works better with drive letters (C:\, D:\) than volume GUIDs
+                                wchar_t driveLetters[256] = { 0 }; // Buffer for multiple drive letters
+                                DWORD driveLetterLen = 0;
+
+                                // Restore trailing slash for GetVolumePathNamesForVolumeNameW API
+                                std::wstring volumeWithSlash = volumeName;
+                                if (!volumeWithSlash.empty() && volumeWithSlash.back() != L'\\') {
+                                    volumeWithSlash += L'\\';
+                                }
+
+                                BOOL success = GetVolumePathNamesForVolumeNameW(
+                                    volumeWithSlash.c_str(),
+                                    driveLetters,
+                                    ARRAYSIZE(driveLetters),
+                                    &driveLetterLen
+                                );
+
+                                std::wstring volPath;
+                                if (success && driveLetterLen > 1 && driveLetters[0] != L'\0') {
+                                    // Use first drive letter found (preferred for VSS compatibility)
+                                    volPath = driveLetters;  // Already includes trailing backslash
+                                    LogInfo(L"BackupDiskDifferential: Found drive letter " + volPath + L" for volume " + volumeNameCopy);
+                                } else {
+                                    // Fall back to volume GUID path
+                                    volPath = volumeNameCopy + L"\\";
+                                    LogInfo(L"BackupDiskDifferential: No drive letter found, using volume GUID " + volPath);
+                                }
+
                                 volumes.push_back(volPath);
                                 break;
                             }

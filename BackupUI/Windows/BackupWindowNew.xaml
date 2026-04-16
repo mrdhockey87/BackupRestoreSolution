@@ -341,7 +341,9 @@
 									<ComboBox
 										Name="cmbMinute"
 										Width="60"
-										Margin="0,0,10,0" />
+										Margin="0,0,10,0"
+										IsEditable="True"
+										IsTextSearchEnabled="False" />
 									<ComboBox Name="cmbAmPm" Width="60">
 										<ComboBoxItem Content="AM" />
 										<ComboBoxItem Content="PM" />

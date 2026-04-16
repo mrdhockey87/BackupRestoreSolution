@@ -45,11 +45,17 @@ namespace BackupService
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupDiskIncremental(int diskNumber, string destPath, bool includeSystemState, 
-            bool compress, ProgressCallback? callback);
+            bool compress,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
+            int userExclusionCount,
+            ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupDiskDifferential(int diskNumber, string destPath, bool includeSystemState, 
-            bool compress, ProgressCallback? callback);
+            bool compress,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
+            int userExclusionCount,
+            ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupHyperVVM(string vmName, string destPath, ProgressCallback? callback);
@@ -550,7 +556,8 @@ namespace BackupService
                     if (File.Exists(destPath))
                     {
                         logger?.Invoke($"Creating incremental disk backup (WIM referential): {diskNumber}");
-                        result = BackupDiskIncremental(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+                        result = BackupDiskIncremental(diskNumber, destPath, job.IncludeSystemState, job.CompressData,
+                            exclusionsArray, exclusionCount, callback);
 
                         if (result != 0)
                         {
@@ -616,7 +623,8 @@ namespace BackupService
                     if (File.Exists(destPath))
                     {
                         logger?.Invoke($"Creating differential disk backup (WIM referential): {diskNumber}");
-                        result = BackupDiskDifferential(diskNumber, destPath, job.IncludeSystemState, job.CompressData, callback);
+                        result = BackupDiskDifferential(diskNumber, destPath, job.IncludeSystemState, job.CompressData,
+                            exclusionsArray, exclusionCount, callback);
 
                         if (result != 0)
                         {

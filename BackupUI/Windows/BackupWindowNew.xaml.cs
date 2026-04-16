@@ -409,11 +409,11 @@ namespace BackupUI.Windows
             cmbHour.SelectedIndex = 1; // 2 (default)
 
             // Populate minutes
-            for (int i = 0; i < 60; i += 15)
+            for (int i = 0; i < 60; i++)
             {
                 cmbMinute.Items.Add(i.ToString("D2"));
             }
-            cmbMinute.SelectedIndex = 0;
+            cmbMinute.Text = "00";
 
             // Set default AM/PM (AM)
             cmbAmPm.SelectedIndex = 0; // AM
@@ -2198,18 +2198,9 @@ namespace BackupUI.Windows
             // Schedule
             if (chkEnableSchedule.IsChecked == true)
             {
-                // Convert 12-hour time with AM/PM to 24-hour format
-                int hour12 = int.Parse(cmbHour.SelectedItem?.ToString() ?? "2");
-                string ampm = ((ComboBoxItem)cmbAmPm.SelectedItem)?.Content?.ToString() ?? "AM";
-                int hour24;
-                
-                if (ampm == "AM")
+                if (!TryGetScheduledTime(out var hour24, out var minute))
                 {
-                    hour24 = hour12 == 12 ? 0 : hour12;
-                }
-                else // PM
-                {
-                    hour24 = hour12 == 12 ? 12 : hour12 + 12;
+                    throw new InvalidOperationException("The scheduled time is invalid.");
                 }
                 
                 job.Schedule = new BackupSchedule
@@ -2219,7 +2210,7 @@ namespace BackupUI.Windows
                     Frequency = (ScheduleFrequency)cmbFrequency.SelectedIndex,
                     Time = new TimeSpan(
                         hour24,
-                        int.Parse(cmbMinute.SelectedItem?.ToString() ?? "0"),
+                        minute,
                         0)
                 };
 
@@ -2429,6 +2420,48 @@ namespace BackupUI.Windows
                 }
             }
 
+            if (chkEnableSchedule.IsChecked == true && !TryGetScheduledTime(out _, out _))
+            {
+                CustomDialogService.ShowWarning("Please enter a valid scheduled time. Minutes must be between 00 and 59.", "Validation Error");
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryGetScheduledTime(out int hour24, out int minute)
+        {
+            hour24 = 0;
+            minute = 0;
+
+            var hourText = cmbHour.Text;
+            if (string.IsNullOrWhiteSpace(hourText))
+            {
+                hourText = cmbHour.SelectedItem?.ToString();
+            }
+
+            if (!int.TryParse(hourText, out var hour12) || hour12 < 1 || hour12 > 12)
+            {
+                return false;
+            }
+
+            if (!int.TryParse(cmbMinute.Text, out minute) || minute < 0 || minute > 59)
+            {
+                return false;
+            }
+
+            var ampm = ((ComboBoxItem)cmbAmPm.SelectedItem)?.Content?.ToString() ?? "AM";
+
+            if (ampm == "AM")
+            {
+                hour24 = hour12 == 12 ? 0 : hour12;
+            }
+            else
+            {
+                hour24 = hour12 == 12 ? 12 : hour12 + 12;
+            }
+
+            cmbMinute.Text = minute.ToString("D2");
             return true;
         }
 

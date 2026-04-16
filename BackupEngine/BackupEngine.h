@@ -59,6 +59,26 @@ extern "C" {
         ProgressCallback callback,
         LogCallback logCallback);
 
+    // Backup an entire disk incrementally by appending referential images to an existing archive
+    BACKUPENGINE_API int BackupDiskIncremental(
+        int diskNumber,
+        const wchar_t* destPath,
+        bool includeSystemState,
+        bool compress,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
+        ProgressCallback callback);
+
+    // Backup an entire disk differentially by appending images relative to the base archive
+    BACKUPENGINE_API int BackupDiskDifferential(
+        int diskNumber,
+        const wchar_t* destPath,
+        bool includeSystemState,
+        bool compress,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
+        ProgressCallback callback);
+
     // Create incremental backup (only changed files since last backup)
     BACKUPENGINE_API int CreateIncrementalBackup(
         const wchar_t* sourcePath,
