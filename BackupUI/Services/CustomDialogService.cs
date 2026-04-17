@@ -18,11 +18,27 @@ namespace BackupUI
         }
 
         /// <summary>
+        /// Shows an information dialog with specified owner window
+        /// </summary>
+        public static void ShowInfo(Window owner, string message, string title = "Information")
+        {
+            Show(owner, message, title, DialogButtons.OK, DialogIcon.Information);
+        }
+
+        /// <summary>
         /// Shows a success dialog
         /// </summary>
         public static void ShowSuccess(string message, string title = "Success")
         {
             Show(message, title, DialogButtons.OK, DialogIcon.Success);
+        }
+
+        /// <summary>
+        /// Shows a success dialog with specified owner window
+        /// </summary>
+        public static void ShowSuccess(Window owner, string message, string title = "Success")
+        {
+            Show(owner, message, title, DialogButtons.OK, DialogIcon.Success);
         }
 
         /// <summary>
@@ -34,11 +50,27 @@ namespace BackupUI
         }
 
         /// <summary>
+        /// Shows a warning dialog with specified owner window
+        /// </summary>
+        public static void ShowWarning(Window owner, string message, string title = "Warning")
+        {
+            Show(owner, message, title, DialogButtons.OK, DialogIcon.Warning);
+        }
+
+        /// <summary>
         /// Shows an error dialog
         /// </summary>
         public static void ShowError(string message, string title = "Error")
         {
             Show(message, title, DialogButtons.OK, DialogIcon.Error);
+        }
+
+        /// <summary>
+        /// Shows an error dialog with specified owner window
+        /// </summary>
+        public static void ShowError(Window owner, string message, string title = "Error")
+        {
+            Show(owner, message, title, DialogButtons.OK, DialogIcon.Error);
         }
 
         /// <summary>
@@ -50,6 +82,14 @@ namespace BackupUI
         }
 
         /// <summary>
+        /// Shows a question dialog with Yes/No buttons and specified owner window
+        /// </summary>
+        public static CustomDialogResult ShowQuestion(Window owner, string message, string title = "Question")
+        {
+            return Show(owner, message, title, DialogButtons.YesNo, DialogIcon.Question);
+        }
+
+        /// <summary>
         /// Shows a confirmation dialog with Yes/No/Cancel buttons
         /// </summary>
         public static CustomDialogResult ShowConfirmation(string message, string title = "Confirm")
@@ -58,11 +98,27 @@ namespace BackupUI
         }
 
         /// <summary>
+        /// Shows a confirmation dialog with Yes/No/Cancel buttons and specified owner window
+        /// </summary>
+        public static CustomDialogResult ShowConfirmation(Window owner, string message, string title = "Confirm")
+        {
+            return Show(owner, message, title, DialogButtons.YesNoCancel, DialogIcon.Question);
+        }
+
+        /// <summary>
         /// Shows a dialog with OK/Cancel buttons
         /// </summary>
         public static CustomDialogResult ShowOKCancel(string message, string title = "Confirm", DialogIcon icon = DialogIcon.Question)
         {
             return Show(message, title, DialogButtons.OKCancel, icon);
+        }
+
+        /// <summary>
+        /// Shows a dialog with OK/Cancel buttons and specified owner window
+        /// </summary>
+        public static CustomDialogResult ShowOKCancel(Window owner, string message, string title = "Confirm", DialogIcon icon = DialogIcon.Question)
+        {
+            return Show(owner, message, title, DialogButtons.OKCancel, icon);
         }
 
         /// <summary>

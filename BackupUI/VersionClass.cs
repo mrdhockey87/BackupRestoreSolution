@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.26";
+        private static readonly string version_fallback_number = "6.1.3.27";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,8 @@ namespace BackupUI
 
 /*
  *
+ * Version 6.1.3.27 Enhanced custom alert dialogs to follow main window position and remain on top during minimization/restoration. 
+ *                  All verification and operation dialogs now use proper owner window relationships for consistent positioning. mdail 4/17/2026
  * Version 6.1.3.26 Added new Verify tab to BackupUI for backup verification functionality. Provides backup listing, browse
  *                  capability, and verification execution with progress tracking similar to Mount Backups tab. mdail 4/17/2026
  * Version 6.1.3.25 CRITICAL FIX - Fixed AccessViolationException crash in BackupDiskIncremental by correcting 
