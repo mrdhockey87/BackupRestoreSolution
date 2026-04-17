@@ -1948,7 +1948,7 @@ extern "C" {
                                 // PRIORITY FIX: Try to get drive letter instead of volume GUID
                                 // VSS works better with drive letters (C:\, D:\) than volume GUIDs
                                 wchar_t driveLetters[256] = { 0 }; // Buffer for multiple drive letters
-                                DWORD driveLetterLen = 0;
+                                DWORD driveLetterLen = ARRAYSIZE(driveLetters); // INPUT: Buffer size
 
                                 // Restore trailing slash for GetVolumePathNamesForVolumeNameW API
                                 std::wstring volumeWithSlash = volumeName;
@@ -2271,7 +2271,7 @@ extern "C" {
                                 // PRIORITY FIX: Try to get drive letter instead of volume GUID
                                 // VSS works better with drive letters (C:\, D:\) than volume GUIDs
                                 wchar_t driveLetters[256] = { 0 }; // Buffer for multiple drive letters
-                                DWORD driveLetterLen = 0;
+                                DWORD driveLetterLen = ARRAYSIZE(driveLetters); // INPUT: Buffer size
 
                                 // Restore trailing slash for GetVolumePathNamesForVolumeNameW API
                                 std::wstring volumeWithSlash = volumeName;

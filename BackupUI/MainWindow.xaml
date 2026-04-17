@@ -591,6 +591,117 @@
 							Visibility="Collapsed" />
 					</Grid>
 				</TabItem>
+				<!--  Verify Backups Tab  -->
+				<TabItem Header="Verify">
+					<Grid>
+						<Grid.RowDefinitions>
+							<RowDefinition Height="Auto" />
+							<RowDefinition Height="*" />
+							<RowDefinition Height="200" />
+						</Grid.RowDefinitions>
+						<!--  Header  -->
+						<StackPanel
+							Grid.Row="0"
+							Margin="10,10,10,5"
+							Background="{StaticResource PanelBackground}"
+							Orientation="Horizontal">
+							<TextBlock
+								Margin="10,10,20,10"
+								VerticalAlignment="Center"
+								FontSize="16"
+								FontWeight="Bold"
+								Text="Verify Backup Integrity" />
+							<Button
+								Width="100"
+								Height="30"
+								Margin="5,5"
+								Click="RefreshVerifyBackups_Click"
+								Content="Refresh" />
+							<Button
+								Width="100"
+								Height="30"
+								Margin="5,5"
+								Click="BrowseVerifyBackup_Click"
+								Content="Browse..." />
+						</StackPanel>
+						<!--  Available Backups for Verification  -->
+						<GroupBox
+							Grid.Row="1"
+							Margin="10"
+							Header="Available Backups">
+							<Grid>
+								<Grid.RowDefinitions>
+									<RowDefinition Height="*" />
+									<RowDefinition Height="Auto" />
+								</Grid.RowDefinitions>
+								<DataGrid
+									Name="dgVerifyBackups"
+									Grid.Row="0"
+									AlternatingRowBackground="{StaticResource AlternateRowBackground}"
+									AutoGenerateColumns="False"
+									GridLinesVisibility="All"
+									HeadersVisibility="Column"
+									IsReadOnly="True"
+									SelectionMode="Single">
+									<DataGrid.Columns>
+										<DataGridTextColumn
+											Width="200"
+											Binding="{Binding BackupName}"
+											Header="Backup Name" />
+										<DataGridTextColumn
+											Width="100"
+											Binding="{Binding BackupType}"
+											Header="Type" />
+										<DataGridTextColumn
+											Width="140"
+											Binding="{Binding BackupDate, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+											Header="Date" />
+										<DataGridTextColumn
+											Width="*"
+											Binding="{Binding BackupPath}"
+											Header="Path" />
+										<DataGridTemplateColumn Width="100" Header="Action">
+											<DataGridTemplateColumn.CellTemplate>
+												<DataTemplate>
+													<Button
+														Width="80"
+														Height="25"
+														Click="VerifyBackup_Click"
+														Content="Verify"
+														Tag="{Binding}" />
+												</DataTemplate>
+											</DataGridTemplateColumn.CellTemplate>
+										</DataGridTemplateColumn>
+									</DataGrid.Columns>
+								</DataGrid>
+							</Grid>
+						</GroupBox>
+						<!--  Verification Results  -->
+						<GroupBox
+							Grid.Row="2"
+							Margin="10"
+							Header="Verification Results">
+							<ScrollViewer VerticalScrollBarVisibility="Auto">
+								<TextBlock
+									Name="txtVerificationResults"
+									Margin="10"
+									FontFamily="Consolas"
+									FontSize="12"
+									Text="Click Verify on a backup to check its integrity..."
+									TextWrapping="Wrap" />
+							</ScrollViewer>
+						</GroupBox>
+						<TextBlock
+							Name="txtNoVerifyBackups"
+							Grid.Row="1"
+							HorizontalAlignment="Center"
+							VerticalAlignment="Center"
+							FontSize="14"
+							Foreground="{StaticResource SecondaryText}"
+							Text="No backups available to verify."
+							Visibility="Collapsed" />
+					</Grid>
+				</TabItem>
 				<TabItem Header="Restore">
 					<TextBlock
 						HorizontalAlignment="Center"

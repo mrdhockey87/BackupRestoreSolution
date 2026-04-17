@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.24";
+        private static readonly string version_fallback_number = "6.1.3.26";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,10 @@ namespace BackupUI
 
 /*
  *
+ * Version 6.1.3.26 Added new Verify tab to BackupUI for backup verification functionality. Provides backup listing, browse
+ *                  capability, and verification execution with progress tracking similar to Mount Backups tab. mdail 4/17/2026
+ * Version 6.1.3.25 CRITICAL FIX - Fixed AccessViolationException crash in BackupDiskIncremental by correcting 
+ *                  GetVolumePathNamesForVolumeNameW buffer size parameter usage. mdail 4/17/2026
  * Version 6.1.3.24 Fixed incremental and differential disk backups to prioritize drive letters (W:\) over volume GUIDs 
  *                  for VSS compatibility, resolving VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER errors for physical drives. mdail 4/16/2026
  * Version 6.1.3.23 Enhanced VSS error diagnostics with specific handling for HRESULT 0x80042308 (VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER)

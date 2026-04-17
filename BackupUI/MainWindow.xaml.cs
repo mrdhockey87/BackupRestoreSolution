@@ -815,6 +815,11 @@ namespace BackupUI
                     LoadAvailableBackups();
                     LoadMountedBackups();
                 }
+                else if (tabControl.SelectedIndex == 3) // Verify tab
+                {
+                    System.Diagnostics.Debug.WriteLine("TabControl_SelectionChanged: Verify tab selected, refreshing");
+                    LoadVerifyBackups();
+                }
             }
         }
 
@@ -1547,6 +1552,237 @@ namespace BackupUI
                 System.Diagnostics.Debug.WriteLine($"Failed to open Explorer: {ex.Message}");
             }
         }
+
+        #region Backup Verification Tab Methods
+
+        private void LoadVerifyBackups()
+        {
+            if (dgVerifyBackups == null)
+                return;
+
+            var backups = new System.Collections.Generic.List<AvailableBackupInfo>();
+
+            try
+            {
+                // Scan backup directories for .ssb (WIM) files
+                var jobs = jobManager.GetAllJobs();
+
+                foreach (var job in jobs)
+                {
+                    string destPath = job.DestinationPath;
+
+                    if (System.IO.Directory.Exists(destPath))
+                    {
+                        // Find .ssb (WIM backup) files
+                        var ssbFiles = System.IO.Directory.GetFiles(destPath, "*.ssb", System.IO.SearchOption.AllDirectories);
+
+                        foreach (var ssb in ssbFiles)
+                        {
+                            var fileInfo = new System.IO.FileInfo(ssb);
+
+                            backups.Add(new AvailableBackupInfo
+                            {
+                                BackupName = job.Name,
+                                BackupType = GetBackupTypeFromFilename(System.IO.Path.GetFileNameWithoutExtension(ssb)),
+                                BackupDate = fileInfo.LastWriteTime,
+                                BackupPath = ssb
+                            });
+                        }
+                    }
+                }
+
+                dgVerifyBackups.ItemsSource = backups;
+
+                if (txtNoVerifyBackups != null)
+                    txtNoVerifyBackups.Visibility = backups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading backups for verification: {ex.Message}");
+                if (txtVerificationResults != null)
+                {
+                    txtVerificationResults.Text = $"Error loading backups: {ex.Message}";
+                    txtVerificationResults.Foreground = new SolidColorBrush(Colors.Red);
+                }
+            }
+        }
+
+        private void RefreshVerifyBackups_Click(object sender, RoutedEventArgs e)
+        {
+            LoadVerifyBackups();
+            if (txtVerificationResults != null)
+            {
+                txtVerificationResults.Text = "Click Verify on a backup to check its integrity...";
+                txtVerificationResults.Foreground = new SolidColorBrush(Colors.Black);
+            }
+        }
+
+        private void BrowseVerifyBackup_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Select Backup File to Verify",
+                Filter = "Silver State Backup Files (*.ssb)|*.ssb|All Files (*.*)|*.*",
+                DefaultExt = ".ssb",
+                Multiselect = false
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                string selectedFile = openFileDialog.FileName;
+                var fileInfo = new System.IO.FileInfo(selectedFile);
+
+                // Add to verification backups list
+                var backups = dgVerifyBackups.ItemsSource as System.Collections.Generic.List<AvailableBackupInfo>;
+                if (backups == null)
+                {
+                    backups = new System.Collections.Generic.List<AvailableBackupInfo>();
+                }
+
+                // Check if already in list
+                bool exists = false;
+                foreach (var b in backups)
+                {
+                    if (b.BackupPath.Equals(selectedFile, StringComparison.OrdinalIgnoreCase))
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+
+                if (!exists)
+                {
+                    backups.Add(new AvailableBackupInfo
+                    {
+                        BackupName = System.IO.Path.GetFileNameWithoutExtension(selectedFile),
+                        BackupType = GetBackupTypeFromFilename(System.IO.Path.GetFileNameWithoutExtension(selectedFile)),
+                        BackupDate = fileInfo.LastWriteTime,
+                        BackupPath = selectedFile
+                    });
+
+                    dgVerifyBackups.ItemsSource = null; // Force refresh
+                    dgVerifyBackups.ItemsSource = backups;
+
+                    if (txtNoVerifyBackups != null)
+                        txtNoVerifyBackups.Visibility = Visibility.Collapsed;
+
+                    CustomDialogService.ShowSuccess($"Backup file added for verification: {System.IO.Path.GetFileName(selectedFile)}",
+                              "Backup Added");
+                }
+                else
+                {
+                    CustomDialogService.ShowInfo("This backup is already in the list.",
+                              "Already Added");
+                }
+            }
+        }
+
+        private async void VerifyBackup_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.Tag is AvailableBackupInfo backup)
+            {
+                try
+                {
+                    if (txtVerificationResults != null)
+                    {
+                        txtVerificationResults.Text = $"Verifying backup: {backup.BackupName}\nPath: {backup.BackupPath}\n\nStarting verification process...";
+                        txtVerificationResults.Foreground = new SolidColorBrush(Colors.Blue);
+                    }
+
+                    // Create progress window
+                    var progressWindow = new MountProgressWindow
+                    {
+                        Owner = this,
+                        Title = $"Verifying Backup - {backup.BackupName}",
+                        ShowInTaskbar = false,
+                        WindowStartupLocation = WindowStartupLocation.CenterOwner
+                    };
+
+                    progressWindow.SetBackupName($"Verifying {backup.BackupName}");
+                    progressWindow.Show();
+
+                    var verificationResult = new StringBuilder();
+                    verificationResult.AppendLine($"Verification started at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    verificationResult.AppendLine($"Backup: {backup.BackupName}");
+                    verificationResult.AppendLine($"Type: {backup.BackupType}");
+                    verificationResult.AppendLine($"Path: {backup.BackupPath}");
+                    verificationResult.AppendLine(new string('-', 60));
+
+                    try
+                    {
+                        // Run verification asynchronously
+                        await Task.Run(() =>
+                        {
+                            int result = BackupEngineInterop.VerifyBackup(
+                                backup.BackupPath,
+                                (percentage, message) =>
+                                {
+                                    // Update progress on UI thread
+                                    Dispatcher.Invoke(() =>
+                                    {
+                                        progressWindow.SetStatus(message, percentage);
+                                        verificationResult.AppendLine($"[{percentage}%] {message}");
+
+                                        // Update results display in real-time
+                                        if (txtVerificationResults != null)
+                                        {
+                                            txtVerificationResults.Text = verificationResult.ToString();
+                                        }
+                                    });
+                                });
+
+                            return result;
+                        });
+
+                        // Close progress window
+                        progressWindow.CloseProgress();
+
+                        // Update final results
+                        verificationResult.AppendLine(new string('-', 60));
+                        verificationResult.AppendLine($"Verification completed at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+
+                        if (txtVerificationResults != null)
+                        {
+                            txtVerificationResults.Text = verificationResult.ToString();
+                            txtVerificationResults.Foreground = new SolidColorBrush(Colors.Green);
+                        }
+
+                        CustomDialogService.ShowSuccess($"Backup verification completed successfully!\n\nBackup: {backup.BackupName}\n\nThe backup integrity has been verified and is valid.",
+                                      "Verification Complete");
+                    }
+                    catch (Exception verifyEx)
+                    {
+                        progressWindow.CloseProgress();
+
+                        verificationResult.AppendLine(new string('-', 60));
+                        verificationResult.AppendLine($"ERROR: {verifyEx.Message}");
+                        verificationResult.AppendLine($"Verification failed at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+
+                        if (txtVerificationResults != null)
+                        {
+                            txtVerificationResults.Text = verificationResult.ToString();
+                            txtVerificationResults.Foreground = new SolidColorBrush(Colors.Red);
+                        }
+
+                        CustomDialogService.ShowError($"Backup verification failed:\n{verifyEx.Message}",
+                                      "Verification Error");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (txtVerificationResults != null)
+                    {
+                        txtVerificationResults.Text = $"Error initializing verification:\n{ex.Message}";
+                        txtVerificationResults.Foreground = new SolidColorBrush(Colors.Red);
+                    }
+
+                    CustomDialogService.ShowError($"Error initializing verification:\n{ex.Message}",
+                                  "Error");
+                }
+            }
+        }
+
+        #endregion
     }
 
     // ViewModel for displaying backup jobs
