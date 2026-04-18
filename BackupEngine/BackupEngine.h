@@ -67,7 +67,8 @@ extern "C" {
         bool compress,
         const wchar_t** userExclusions,
         int userExclusionCount,
-        ProgressCallback callback);
+        ProgressCallback callback,
+        LogCallback logCallback);
 
     // Backup an entire disk differentially by appending images relative to the base archive
     BACKUPENGINE_API int BackupDiskDifferential(
@@ -77,7 +78,8 @@ extern "C" {
         bool compress,
         const wchar_t** userExclusions,
         int userExclusionCount,
-        ProgressCallback callback);
+        ProgressCallback callback,
+        LogCallback logCallback);
 
     // Create incremental backup (only changed files since last backup)
     BACKUPENGINE_API int CreateIncrementalBackup(

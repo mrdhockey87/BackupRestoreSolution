@@ -38,7 +38,7 @@ namespace BackupUI
             }
         }
 
-        private void Owner_StateChanged(object sender, EventArgs e)
+        private void Owner_StateChanged(object? sender, EventArgs e)
         {
             if (this.Owner != null)
             {
@@ -60,7 +60,7 @@ namespace BackupUI
             }
         }
 
-        private void Owner_Activated(object sender, EventArgs e)
+        private void Owner_Activated(object? sender, EventArgs e)
         {
             // When owner window is activated, ensure dialog is on top
             if (this.IsVisible)

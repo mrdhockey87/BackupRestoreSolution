@@ -1876,7 +1876,8 @@ extern "C" {
         bool compress,
         const wchar_t** userExclusions,
         int userExclusionCount,
-        ProgressCallback callback) {
+        ProgressCallback callback,
+        LogCallback logCallback) {
 
         if (!destPath || diskNumber < 0) {
             SetLastErrorMessage(L"Invalid parameters");
@@ -1892,7 +1893,7 @@ extern "C" {
                 if (callback) {
                     callback(0, L"No base backup found - creating initial full backup...");
                 }
-                return BackupDisk(diskNumber, destPath, includeSystemState, compress, userExclusions, userExclusionCount, callback, nullptr);
+                return BackupDisk(diskNumber, destPath, includeSystemState, compress, userExclusions, userExclusionCount, callback, logCallback);
             }
 
             if (callback) {
@@ -1948,7 +1949,7 @@ extern "C" {
                                 // PRIORITY FIX: Try to get drive letter instead of volume GUID
                                 // VSS works better with drive letters (C:\, D:\) than volume GUIDs
                                 wchar_t driveLetters[256] = { 0 }; // Buffer for multiple drive letters
-                                DWORD driveLetterLen = ARRAYSIZE(driveLetters); // INPUT: Buffer size
+                                DWORD driveLetterLen = ARRAYSIZE(driveLetters); // Buffer size for API
 
                                 // Restore trailing slash for GetVolumePathNamesForVolumeNameW API
                                 std::wstring volumeWithSlash = volumeName;
@@ -1959,8 +1960,8 @@ extern "C" {
                                 BOOL success = GetVolumePathNamesForVolumeNameW(
                                     volumeWithSlash.c_str(),
                                     driveLetters,
-                                    ARRAYSIZE(driveLetters),
-                                    &driveLetterLen
+                                    ARRAYSIZE(driveLetters), // Use constant for buffer size
+                                    &driveLetterLen          // API will write actual length here
                                 );
 
                                 std::wstring volPath;
@@ -2086,7 +2087,7 @@ extern "C" {
                         if (hr == 0x80042308) { // VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER
                             vssError += L" (VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER)";
                             LogError(L"BackupDiskIncremental: VSS does not support direct physical drive snapshots");
-                            LogError(L"BackupDiskIncremental: Physical drives (\\\\.\\\PHYSICALDRIVE*) cannot be snapshotted via VSS");
+                            LogError(L"BackupDiskIncremental: Physical drives (\\\\?\\PHYSICALDRIVE*) cannot be snapshotted via VSS");
                             LogError(L"BackupDiskIncremental: Consider backing up individual mounted volumes instead");
                         }
                         else if (hr == 0x80042306) { // VSS_E_PROVIDER_VETO
@@ -2114,7 +2115,7 @@ extern "C" {
 
                     // Provide specific error message based on the VSS failure
                     if (hr == 0x80042308) {
-                        err += L"VSS does not support physical drive snapshots (\\\\.\\\PHYSICALDRIVE* paths). ";
+                        err += L"VSS does not support physical drive snapshots (\\\\?\\PHYSICALDRIVE* paths). ";
                         err += L"To perform disk-level incremental backups, consider: ";
                         err += L"1) Backing up individual mounted volumes on the disk, or ";
                         err += L"2) Using full disk backup without VSS (less consistent but possible). ";
@@ -2199,7 +2200,8 @@ extern "C" {
         bool compress,
         const wchar_t** userExclusions,
         int userExclusionCount,
-        ProgressCallback callback) {
+        ProgressCallback callback,
+        LogCallback logCallback) {
 
         if (!destPath || diskNumber < 0) {
             SetLastErrorMessage(L"Invalid parameters");
@@ -2215,7 +2217,7 @@ extern "C" {
                 if (callback) {
                     callback(0, L"No base backup found - creating initial full backup...");
                 }
-                return BackupDisk(diskNumber, destPath, includeSystemState, compress, userExclusions, userExclusionCount, callback, nullptr);
+                return BackupDisk(diskNumber, destPath, includeSystemState, compress, userExclusions, userExclusionCount, callback, logCallback);
             }
 
             if (callback) {
@@ -2271,7 +2273,7 @@ extern "C" {
                                 // PRIORITY FIX: Try to get drive letter instead of volume GUID
                                 // VSS works better with drive letters (C:\, D:\) than volume GUIDs
                                 wchar_t driveLetters[256] = { 0 }; // Buffer for multiple drive letters
-                                DWORD driveLetterLen = ARRAYSIZE(driveLetters); // INPUT: Buffer size
+                                DWORD driveLetterLen = ARRAYSIZE(driveLetters); // Buffer size for API
 
                                 // Restore trailing slash for GetVolumePathNamesForVolumeNameW API
                                 std::wstring volumeWithSlash = volumeName;
@@ -2282,8 +2284,8 @@ extern "C" {
                                 BOOL success = GetVolumePathNamesForVolumeNameW(
                                     volumeWithSlash.c_str(),
                                     driveLetters,
-                                    ARRAYSIZE(driveLetters),
-                                    &driveLetterLen
+                                    ARRAYSIZE(driveLetters), // Use constant for buffer size
+                                    &driveLetterLen          // API will write actual length here
                                 );
 
                                 std::wstring volPath;

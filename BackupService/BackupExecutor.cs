@@ -48,14 +48,14 @@ namespace BackupService
             bool compress,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
             int userExclusionCount,
-            ProgressCallback? callback);
+            ProgressCallback? callback, LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupDiskDifferential(int diskNumber, string destPath, bool includeSystemState, 
             bool compress,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
             int userExclusionCount,
-            ProgressCallback? callback);
+            ProgressCallback? callback, LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupHyperVVM(string vmName, string destPath, ProgressCallback? callback);
@@ -557,7 +557,7 @@ namespace BackupService
                     {
                         logger?.Invoke($"Creating incremental disk backup (WIM referential): {diskNumber}");
                         result = BackupDiskIncremental(diskNumber, destPath, job.IncludeSystemState, job.CompressData,
-                            exclusionsArray, exclusionCount, callback);
+                            exclusionsArray, exclusionCount, callback, logCallback);
 
                         if (result != 0)
                         {
@@ -624,7 +624,7 @@ namespace BackupService
                     {
                         logger?.Invoke($"Creating differential disk backup (WIM referential): {diskNumber}");
                         result = BackupDiskDifferential(diskNumber, destPath, job.IncludeSystemState, job.CompressData,
-                            exclusionsArray, exclusionCount, callback);
+                            exclusionsArray, exclusionCount, callback, logCallback);
 
                         if (result != 0)
                         {
