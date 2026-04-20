@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.29";
+        private static readonly string version_fallback_number = "6.1.3.31";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,7 +68,15 @@ namespace BackupUI
 
 
 /*
- *
+ * Version 6.1.3.32 Added mixed mode debugging to the BackupCommon and the BackupService projects to allow stepping into 
+ *                  the native C++ code from Visual Studio when debugging backup operations. This enables easier troubleshooting
+ *                  of critical backup failures and better understanding of the backup process flow across the managed/unmanaged 
+ *                  boundary. mdail 4/20/2026
+ * Version 6.1.3.31 CRITICAL FIX - Fixed AccessViolationException in BackupDiskIncremental by storing P/Invoke delegates 
+ *                  as instance variables to prevent premature garbage collection during unmanaged calls. Added parameter 
+ *                  validation and defensive checks to prevent memory corruption. mdail 4/20/2026
+ * Version 6.1.3.30 Enhanced unmount confirmation dialogs to remind users to close Windows Explorer windows 
+ *                  browsing mounted files before unmounting to prevent access conflicts. mdail 4/30/2026
  * Version 6.1.3.29 CRITICAL FIX - Fixed AccessViolationException crash in BackupDiskIncremental by correcting 
  *                  GetVolumePathNamesForVolumeNameW buffer parameter usage and adding missing LogCallback parameters 
  *                  to P/Invoke signatures. Prevents memory corruption during incremental disk backups. mdail 4/18/2026

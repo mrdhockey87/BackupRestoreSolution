@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "BackupService": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}

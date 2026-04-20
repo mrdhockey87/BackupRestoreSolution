@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "BackupCommon": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}

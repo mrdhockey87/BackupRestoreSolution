@@ -24,6 +24,11 @@ namespace BackupService
             [MarshalAs(UnmanagedType.LPWStr)] string message,
             [MarshalAs(UnmanagedType.LPWStr)] string details);
 
+        // Instance variables to keep delegates alive during P/Invoke calls
+        // This prevents AccessViolationException due to premature garbage collection
+        private ProgressCallback? _currentProgressCallback;
+        private LogCallback? _currentLogCallback;
+
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupFiles(string sourcePath, string destPath,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
@@ -268,7 +273,7 @@ namespace BackupService
                             logger?.Invoke($"Creating Hyper-V backup file: {Path.GetFileName(newBackupPath)}");
 
                             progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {vm}...");
-                            int result = BackupHyperVVM(vm, newBackupPath, nativeCallback);
+                            int result = BackupHyperVVM(vm, newBackupPath, _currentProgressCallback);
 
                             if (result != 0)
                             {
@@ -465,8 +470,10 @@ namespace BackupService
         {
             int result;
 
-            // Create logging callback for C++ to send logs to BackupLogger
-            LogCallback logCallback = LogFromEngine;
+            // Store delegates as instance variables to prevent garbage collection during P/Invoke
+            // This prevents AccessViolationException caused by delegate cleanup mid-operation
+            _currentLogCallback = LogFromEngine;
+            _currentProgressCallback = callback;
 
             // Convert user exclusions to array for P/Invoke (empty array if null)
             string[] exclusionsArray = job.UserExclusions?.ToArray() ?? Array.Empty<string>();
@@ -517,7 +524,7 @@ namespace BackupService
                         logger?.Invoke($"[DIAGNOSTIC] About to call BackupDisk({diskNumber}, {destPath}, {job.IncludeSystemState}, {job.CompressData}, exclusions: {exclusionCount})");
 
                         result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
-                                          exclusionsArray, exclusionCount, callback, logCallback);
+                                          exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
 
                         // DIAGNOSTIC: Log result code immediately
                         logger?.Invoke($"[DIAGNOSTIC] BackupDisk returned: {result}");
@@ -532,12 +539,12 @@ namespace BackupService
                     {
                         logger?.Invoke($"Backing up volume: {sourcePath}");
                         result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
-                                            exclusionsArray, exclusionCount, callback, logCallback);
+                                            exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
                     }
                     else
                     {
                         logger?.Invoke($"Backing up files: {sourcePath}");
-                        result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback, logCallback);
+                        result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
                     }
                     break;
 
@@ -557,7 +564,7 @@ namespace BackupService
                     {
                         logger?.Invoke($"Creating incremental disk backup (WIM referential): {diskNumber}");
                         result = BackupDiskIncremental(diskNumber, destPath, job.IncludeSystemState, job.CompressData,
-                            exclusionsArray, exclusionCount, callback, logCallback);
+                            exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
 
                         if (result != 0)
                         {
@@ -568,7 +575,7 @@ namespace BackupService
                     {
                         logger?.Invoke($"No base backup found. Creating initial full backup: {diskNumber}");
                         result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
-                                          exclusionsArray, exclusionCount, callback, logCallback);
+                                          exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
 
                         if (result != 0)
                         {
@@ -591,11 +598,11 @@ namespace BackupService
                         if (job.Target == BackupTarget.Volume)
                         {
                             result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
-                                                exclusionsArray, exclusionCount, callback, logCallback);
+                                                exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
                         }
                         else
                         {
-                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback, logCallback);
+                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
                         }
                     }
                     else
@@ -603,7 +610,7 @@ namespace BackupService
                         // Find the most recent backup (could be full, incremental, or differential) to base the incremental on
                         var lastBackup = FindLastBackup(job.DestinationPath, job.Name) ?? fullBackupBase;
                         logger?.Invoke($"Creating incremental backup from: {lastBackup}");
-                        result = CreateIncrementalBackup(sourcePath, destPath, lastBackup, callback);
+                        result = CreateIncrementalBackup(sourcePath, destPath, lastBackup, _currentProgressCallback);
                     }
                 }
                 break;
@@ -624,7 +631,7 @@ namespace BackupService
                     {
                         logger?.Invoke($"Creating differential disk backup (WIM referential): {diskNumber}");
                         result = BackupDiskDifferential(diskNumber, destPath, job.IncludeSystemState, job.CompressData,
-                            exclusionsArray, exclusionCount, callback, logCallback);
+                            exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
 
                         if (result != 0)
                         {
@@ -635,7 +642,7 @@ namespace BackupService
                     {
                         logger?.Invoke($"No base backup found. Creating initial full backup: {diskNumber}");
                         result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
-                                          exclusionsArray, exclusionCount, callback, logCallback);
+                                          exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
 
                         if (result != 0)
                         {
@@ -658,17 +665,17 @@ namespace BackupService
                         if (job.Target == BackupTarget.Volume)
                         {
                             result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
-                                                exclusionsArray, exclusionCount, callback, logCallback);
+                                                exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
                         }
                         else
                         {
-                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, callback, logCallback);
+                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
                         }
                     }
                     else
                     {
                         logger?.Invoke($"Creating differential backup from: {fullBackup}");
-                        result = CreateDifferentialBackup(sourcePath, destPath, fullBackup, callback);
+                        result = CreateDifferentialBackup(sourcePath, destPath, fullBackup, _currentProgressCallback);
                     }
                 }
                 break;
@@ -677,6 +684,11 @@ namespace BackupService
                     result = -1;
                     break;
             }
+
+            // Clear delegate references to allow garbage collection
+            // This prevents memory leaks after backup operations complete
+            _currentProgressCallback = null;
+            _currentLogCallback = null;
 
             return result;
         }

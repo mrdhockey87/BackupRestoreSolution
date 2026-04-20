@@ -1338,8 +1338,8 @@ namespace BackupUI
         {
             if (sender is System.Windows.Controls.Button btn && btn.Tag is string mountPath)
             {
-                var result = CustomDialogService.ShowQuestion(
-                    $"Unmount backup from {mountPath}?",
+                var result = CustomDialogService.ShowQuestion(this,
+                    $"Unmount backup from {mountPath}?\n\nIMPORTANT: Please close all Windows Explorer windows that are browsing mounted files before proceeding.",
                     "Unmount Backup");
 
                 if (result == CustomDialogResult.Yes)
@@ -1401,7 +1401,7 @@ namespace BackupUI
             }
 
             var result = CustomDialogService.ShowQuestion(this,
-                $"Unmount all {mounted.Count} mounted backup(s)?",
+                $"Unmount all {mounted.Count} mounted backup(s)?\n\nIMPORTANT: Please close all Windows Explorer windows that are browsing mounted files before proceeding.",
                 "Unmount All");
 
             if (result == CustomDialogResult.Yes)
