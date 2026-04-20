@@ -35,29 +35,33 @@ namespace BackupService
             int userExclusionCount, ProgressCallback? callback, LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        private static extern int BackupVolume(string volumePath, string destPath, bool includeSystemState, 
-            bool compress,
+        private static extern int BackupVolume(string volumePath, string destPath,
+            [MarshalAs(UnmanagedType.I1)] bool includeSystemState,
+            [MarshalAs(UnmanagedType.I1)] bool compress,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
             int userExclusionCount,
             ProgressCallback? callback, LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        private static extern int BackupDisk(int diskNumber, string destPath, bool includeSystemState, 
-            bool compress,
+        private static extern int BackupDisk(int diskNumber, string destPath,
+            [MarshalAs(UnmanagedType.I1)] bool includeSystemState,
+            [MarshalAs(UnmanagedType.I1)] bool compress,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
             int userExclusionCount,
             ProgressCallback? callback, LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        private static extern int BackupDiskIncremental(int diskNumber, string destPath, bool includeSystemState, 
-            bool compress,
+        private static extern int BackupDiskIncremental(int diskNumber, string destPath,
+            [MarshalAs(UnmanagedType.I1)] bool includeSystemState,
+            [MarshalAs(UnmanagedType.I1)] bool compress,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
             int userExclusionCount,
             ProgressCallback? callback, LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        private static extern int BackupDiskDifferential(int diskNumber, string destPath, bool includeSystemState, 
-            bool compress,
+        private static extern int BackupDiskDifferential(int diskNumber, string destPath,
+            [MarshalAs(UnmanagedType.I1)] bool includeSystemState,
+            [MarshalAs(UnmanagedType.I1)] bool compress,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
             int userExclusionCount,
             ProgressCallback? callback, LogCallback? logCallback);
