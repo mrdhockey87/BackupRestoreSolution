@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.33";
+        private static readonly string version_fallback_number = "6.1.3.34";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,6 +68,9 @@ namespace BackupUI
 
 
 /*
+ * Version 6.1.3.34 CRITICAL FIX - Disabled the per-file WIM capture callback during incremental and
+ *                  differential disk append operations to avoid the remaining native callback-related
+ *                  AccessViolation crash while preserving high-level backup progress updates. mdail 4/21/2026
  * Version 6.1.3.33 CRITICAL FIX - Corrected C# P/Invoke bool marshaling for BackupVolume, BackupDisk,
  *                  BackupDiskIncremental, and BackupDiskDifferential to match native C++ bool size and
  *                  prevent stack corruption/AccessViolation crashes during disk backup operations. mdail 4/20/2026

@@ -2139,7 +2139,7 @@ extern "C" {
 
                 // The WIM_FLAG_REFERENCE in WIMCreateFile automatically makes new images reference existing ones
                 HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), 
-                                                 imageName.c_str(), callback);
+                                                 imageName.c_str(), nullptr);
 
                 if (!hImage || hImage == INVALID_HANDLE_VALUE) {
                     DWORD captureError = GetLastError();
@@ -2388,7 +2388,7 @@ extern "C" {
 
                 // The WIM_FLAG_REFERENCE makes new images reference the first (full) backup
                 HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), 
-                                                 imageName.c_str(), callback);
+                                                 imageName.c_str(), nullptr);
 
                 if (!hImage || hImage == INVALID_HANDLE_VALUE) {
                     WIMCloseHandle(hWim);
