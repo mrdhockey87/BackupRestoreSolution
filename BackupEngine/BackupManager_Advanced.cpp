@@ -1911,19 +1911,18 @@ extern "C" {
             }
 
             do {
-                size_t len = wcslen(volumeName);
-                if (len > 0 && volumeName[len - 1] == L'\\') {
-                    volumeName[len - 1] = L'\0';
+                std::wstring volumeNameCopy = volumeName;
+                if (!volumeNameCopy.empty() && volumeNameCopy.back() == L'\\') {
+                    volumeNameCopy.pop_back();
                 }
 
-                std::wstring volumeNameCopy = volumeName;
                 if (volumeNameCopy.size() > 4 && volumeNameCopy.substr(0, 4) == L"\\\\?\\") {
                     volumeNameCopy = volumeNameCopy.substr(4);
                 }
 
                 HANDLE hVolume = CreateFileW(
-                    volumeName,
-                    GENERIC_READ,
+                    volumeNameCopy.c_str(),
+                    FILE_READ_ATTRIBUTES,
                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                     NULL,
                     OPEN_EXISTING,
@@ -1952,7 +1951,7 @@ extern "C" {
                                 DWORD driveLetterLen = ARRAYSIZE(driveLetters); // Buffer size for API
 
                                 // Restore trailing slash for GetVolumePathNamesForVolumeNameW API
-                                std::wstring volumeWithSlash = volumeName;
+                                std::wstring volumeWithSlash = volumeNameCopy;
                                 if (!volumeWithSlash.empty() && volumeWithSlash.back() != L'\\') {
                                     volumeWithSlash += L'\\';
                                 }
@@ -2062,7 +2061,10 @@ extern "C" {
                 HRESULT hr = vssManager.Initialize();
 
                 wchar_t snapshotPath[MAX_PATH] = { 0 };
-                std::wstring actualSourcePath = volume + L"\\";
+                std::wstring actualSourcePath = volume;
+                if (!actualSourcePath.empty() && actualSourcePath.back() != L'\\') {
+                    actualSourcePath += L'\\';
+                }
                 std::wstring vssError;
                 bool vssSucceeded = false;
 
@@ -2169,7 +2171,9 @@ extern "C" {
                     vssManager.Cleanup();
                 }
 
-                WIMCloseHandle(hImage);
+                if (hImage != (HANDLE)1 && hImage != NULL) {
+                    WIMCloseHandle(hImage);
+                }
             }
 
             if (callback) {
@@ -2235,19 +2239,18 @@ extern "C" {
             }
 
             do {
-                size_t len = wcslen(volumeName);
-                if (len > 0 && volumeName[len - 1] == L'\\') {
-                    volumeName[len - 1] = L'\0';
+                std::wstring volumeNameCopy = volumeName;
+                if (!volumeNameCopy.empty() && volumeNameCopy.back() == L'\\') {
+                    volumeNameCopy.pop_back();
                 }
 
-                std::wstring volumeNameCopy = volumeName;
                 if (volumeNameCopy.size() > 4 && volumeNameCopy.substr(0, 4) == L"\\\\?\\") {
                     volumeNameCopy = volumeNameCopy.substr(4);
                 }
 
                 HANDLE hVolume = CreateFileW(
-                    volumeName,
-                    GENERIC_READ,
+                    volumeNameCopy.c_str(),
+                    FILE_READ_ATTRIBUTES,
                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                     NULL,
                     OPEN_EXISTING,
@@ -2276,7 +2279,7 @@ extern "C" {
                                 DWORD driveLetterLen = ARRAYSIZE(driveLetters); // Buffer size for API
 
                                 // Restore trailing slash for GetVolumePathNamesForVolumeNameW API
-                                std::wstring volumeWithSlash = volumeName;
+                                std::wstring volumeWithSlash = volumeNameCopy;
                                 if (!volumeWithSlash.empty() && volumeWithSlash.back() != L'\\') {
                                     volumeWithSlash += L'\\';
                                 }
@@ -2367,7 +2370,10 @@ extern "C" {
                 HRESULT hr = vssManager.Initialize();
 
                 wchar_t snapshotPath[MAX_PATH] = { 0 };
-                std::wstring actualSourcePath = volume + L"\\";
+                std::wstring actualSourcePath = volume;
+                if (!actualSourcePath.empty() && actualSourcePath.back() != L'\\') {
+                    actualSourcePath += L'\\';
+                }
 
                 if (SUCCEEDED(hr)) {
                     hr = vssManager.CreateVolumeSnapshot(actualSourcePath.c_str(), snapshotPath, MAX_PATH);
@@ -2397,7 +2403,9 @@ extern "C" {
                     return -6;
                 }
 
-                WIMCloseHandle(hImage);
+                if (hImage != (HANDLE)1 && hImage != NULL) {
+                    WIMCloseHandle(hImage);
+                }
             }
 
             if (callback) {
