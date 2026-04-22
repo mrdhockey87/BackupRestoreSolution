@@ -1911,17 +1911,13 @@ extern "C" {
             }
 
             do {
-                std::wstring volumeNameCopy = volumeName;
-                if (!volumeNameCopy.empty() && volumeNameCopy.back() == L'\\') {
-                    volumeNameCopy.pop_back();
-                }
-
-                if (volumeNameCopy.size() > 4 && volumeNameCopy.substr(0, 4) == L"\\\\?\\") {
-                    volumeNameCopy = volumeNameCopy.substr(4);
+                std::wstring volumeOpenPath = volumeName;
+                if (!volumeOpenPath.empty() && volumeOpenPath.back() == L'\\') {
+                    volumeOpenPath.pop_back();
                 }
 
                 HANDLE hVolume = CreateFileW(
-                    volumeNameCopy.c_str(),
+                    volumeOpenPath.c_str(),
                     FILE_READ_ATTRIBUTES,
                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                     NULL,
@@ -1951,7 +1947,7 @@ extern "C" {
                                 DWORD driveLetterLen = ARRAYSIZE(driveLetters); // Buffer size for API
 
                                 // Restore trailing slash for GetVolumePathNamesForVolumeNameW API
-                                std::wstring volumeWithSlash = volumeNameCopy;
+                                std::wstring volumeWithSlash = volumeOpenPath;
                                 if (!volumeWithSlash.empty() && volumeWithSlash.back() != L'\\') {
                                     volumeWithSlash += L'\\';
                                 }
@@ -1967,10 +1963,10 @@ extern "C" {
                                 if (success && driveLetterLen > 1 && driveLetters[0] != L'\0') {
                                     // Use first drive letter found (preferred for VSS compatibility)
                                     volPath = driveLetters;  // Already includes trailing backslash
-                                    LogInfo(L"BackupDiskIncremental: Found drive letter " + volPath + L" for volume " + volumeNameCopy);
+                                    LogInfo(L"BackupDiskIncremental: Found drive letter " + volPath + L" for volume " + volumeOpenPath);
                                 } else {
                                     // Fall back to volume GUID path
-                                    volPath = volumeNameCopy + L"\\";
+                                    volPath = volumeWithSlash;
                                     LogInfo(L"BackupDiskIncremental: No drive letter found, using volume GUID " + volPath);
                                 }
 
@@ -2239,17 +2235,13 @@ extern "C" {
             }
 
             do {
-                std::wstring volumeNameCopy = volumeName;
-                if (!volumeNameCopy.empty() && volumeNameCopy.back() == L'\\') {
-                    volumeNameCopy.pop_back();
-                }
-
-                if (volumeNameCopy.size() > 4 && volumeNameCopy.substr(0, 4) == L"\\\\?\\") {
-                    volumeNameCopy = volumeNameCopy.substr(4);
+                std::wstring volumeOpenPath = volumeName;
+                if (!volumeOpenPath.empty() && volumeOpenPath.back() == L'\\') {
+                    volumeOpenPath.pop_back();
                 }
 
                 HANDLE hVolume = CreateFileW(
-                    volumeNameCopy.c_str(),
+                    volumeOpenPath.c_str(),
                     FILE_READ_ATTRIBUTES,
                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                     NULL,
@@ -2279,7 +2271,7 @@ extern "C" {
                                 DWORD driveLetterLen = ARRAYSIZE(driveLetters); // Buffer size for API
 
                                 // Restore trailing slash for GetVolumePathNamesForVolumeNameW API
-                                std::wstring volumeWithSlash = volumeNameCopy;
+                                std::wstring volumeWithSlash = volumeOpenPath;
                                 if (!volumeWithSlash.empty() && volumeWithSlash.back() != L'\\') {
                                     volumeWithSlash += L'\\';
                                 }
@@ -2295,10 +2287,10 @@ extern "C" {
                                 if (success && driveLetterLen > 1 && driveLetters[0] != L'\0') {
                                     // Use first drive letter found (preferred for VSS compatibility)
                                     volPath = driveLetters;  // Already includes trailing backslash
-                                    LogInfo(L"BackupDiskDifferential: Found drive letter " + volPath + L" for volume " + volumeNameCopy);
+                                    LogInfo(L"BackupDiskDifferential: Found drive letter " + volPath + L" for volume " + volumeOpenPath);
                                 } else {
                                     // Fall back to volume GUID path
-                                    volPath = volumeNameCopy + L"\\";
+                                    volPath = volumeWithSlash;
                                     LogInfo(L"BackupDiskDifferential: No drive letter found, using volume GUID " + volPath);
                                 }
 

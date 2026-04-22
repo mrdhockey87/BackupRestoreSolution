@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.35";
+        private static readonly string version_fallback_number = "6.1.3.36";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,6 +68,8 @@ namespace BackupUI
 
 
 /*
+ * Version 6.1.3.36 Fixed incremental & differential disk backup volume detection by keeping the \?\ 
+ *                  volume path intact when opening the volume. mdail 4/22/2026
  * Version 6.1.3.35 CRITICAL FIX - Fixed incremental and differential disk backups by preserving the
  *                  volume enumeration buffer, normalizing capture paths, and not closing the special
  *                  WIM success marker handle returned after a successful append. mdail 4/22/2026
