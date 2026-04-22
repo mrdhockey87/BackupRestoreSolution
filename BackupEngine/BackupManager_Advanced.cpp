@@ -2050,6 +2050,7 @@ extern "C" {
                     std::wstring msg = L"Creating incremental image " + std::to_wstring(volumeIndex) + 
                                       L" of " + std::to_wstring(volumes.size()) + L"...";
                     callback(progressBase, msg.c_str());
+                    callback(progressBase + 5, L"Creating VSS snapshot for incremental image...");
                 }
 
                 // Create VSS snapshot
@@ -2127,6 +2128,10 @@ extern "C" {
                     return -7;  // New error code for VSS failure
                 }
 
+                if (callback) {
+                    callback(progressBase + 10, L"VSS snapshot created. Appending incremental image to backup archive...");
+                }
+
                 // Capture new image referencing previous images
                 std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + 
                                         L" Volume " + std::to_wstring(volumeIndex) + 
@@ -2137,7 +2142,7 @@ extern "C" {
 
                 // The WIM_FLAG_REFERENCE in WIMCreateFile automatically makes new images reference existing ones
                 HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), 
-                                                 imageName.c_str(), nullptr);
+                                                 imageName.c_str(), callback);
 
                 if (!hImage || hImage == INVALID_HANDLE_VALUE) {
                     DWORD captureError = GetLastError();
@@ -2355,6 +2360,7 @@ extern "C" {
                     std::wstring msg = L"Creating differential image " + std::to_wstring(volumeIndex) + 
                                       L" of " + std::to_wstring(volumes.size()) + L"...";
                     callback(progressBase, msg.c_str());
+                    callback(progressBase + 5, L"Creating VSS snapshot for differential image...");
                 }
 
                 // Create VSS snapshot
@@ -2379,6 +2385,10 @@ extern "C" {
                     }
                 }
 
+                if (callback) {
+                    callback(progressBase + 10, L"VSS snapshot created. Appending differential image to backup archive...");
+                }
+
                 // Capture new image referencing base backup (differential)
                 std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + 
                                         L" Volume " + std::to_wstring(volumeIndex) + 
@@ -2386,7 +2396,7 @@ extern "C" {
 
                 // The WIM_FLAG_REFERENCE makes new images reference the first (full) backup
                 HANDLE hImage = CaptureToWimImage(hWim, actualSourcePath.c_str(), 
-                                                 imageName.c_str(), nullptr);
+                                                 imageName.c_str(), callback);
 
                 if (!hImage || hImage == INVALID_HANDLE_VALUE) {
                     WIMCloseHandle(hWim);
