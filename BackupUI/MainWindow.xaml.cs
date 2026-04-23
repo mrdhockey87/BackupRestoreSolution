@@ -739,9 +739,11 @@ namespace BackupUI
 
         private void Restore_Click(object sender, RoutedEventArgs e)
         {
-            var window = new RestoreWindowNew();
-            WindowPositionManager.SetChildWindowPosition(window, this);
-            window.ShowDialog();
+            if (mainTabControl != null)
+            {
+                mainTabControl.SelectedIndex = 4; // Restore tab
+                LoadRestoreBackups();
+            }
         }
 
         private void ManageSchedules_Click(object sender, RoutedEventArgs e)
@@ -820,7 +822,183 @@ namespace BackupUI
                     System.Diagnostics.Debug.WriteLine("TabControl_SelectionChanged: Verify tab selected, refreshing");
                     LoadVerifyBackups();
                 }
+                else if (tabControl.SelectedIndex == 4) // Restore tab
+                {
+                    System.Diagnostics.Debug.WriteLine("TabControl_SelectionChanged: Restore tab selected, refreshing");
+                    LoadRestoreBackups();
+                }
             }
+        }
+
+        private void LoadRestoreBackups()
+        {
+            if (dgRestoreBackups == null)
+                return;
+
+            var backups = new List<AvailableBackupInfo>();
+
+            try
+            {
+                var jobs = jobManager.GetAllJobs();
+
+                foreach (var job in jobs)
+                {
+                    string destPath = job.DestinationPath;
+
+                    if (!Directory.Exists(destPath))
+                    {
+                        continue;
+                    }
+
+                    var ssbFiles = Directory.GetFiles(destPath, "*.ssb", SearchOption.AllDirectories);
+                    foreach (var ssb in ssbFiles)
+                    {
+                        var fileInfo = new FileInfo(ssb);
+                        backups.Add(new AvailableBackupInfo
+                        {
+                            BackupName = job.Name,
+                            BackupType = GetBackupTypeFromFilename(Path.GetFileNameWithoutExtension(ssb)),
+                            BackupDate = fileInfo.LastWriteTime,
+                            BackupPath = ssb,
+                            IsEncrypted = BackupEncryptionService.IsEncryptedBackupFile(ssb),
+                            ProtectedEncryptionPassword = job.ProtectedEncryptionPassword
+                        });
+                    }
+                }
+
+                dgRestoreBackups.ItemsSource = backups;
+
+                if (txtNoRestoreBackups != null)
+                {
+                    txtNoRestoreBackups.Visibility = backups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
+
+                if (txtRestoreTabStatus != null)
+                {
+                    txtRestoreTabStatus.Text = backups.Count == 0
+                        ? "No backups were found. Create a backup first, then return here to restore it."
+                        : "Select a backup to open the restore workflow. Restoring the boot/system drive requires the Linux recovery environment.";
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading backups for restore: {ex.Message}");
+                if (txtRestoreTabStatus != null)
+                {
+                    txtRestoreTabStatus.Text = $"Error loading restore backups: {ex.Message}";
+                }
+            }
+        }
+
+        private void RefreshRestoreBackups_Click(object sender, RoutedEventArgs e)
+        {
+            LoadRestoreBackups();
+        }
+
+        private void RestoreBackupFromTab_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button btn || btn.Tag is not AvailableBackupInfo backup)
+            {
+                CustomDialogService.ShowWarning(this, "Please select a valid backup to restore.", "Restore Error");
+                return;
+            }
+
+            try
+            {
+                bool isBootRelatedBackup = IsBootRelatedBackup(backup);
+                bool requireAlternateDestination = false;
+
+                if (isBootRelatedBackup)
+                {
+                    var result = CustomDialogService.ShowQuestion(
+                        this,
+                        "This backup includes the currently booted disk/volume.\n\nDo you want to restore it to a non-boot disk/volume from Windows?",
+                        "Boot Drive Restore Detected");
+
+                    if (result == CustomDialogResult.No)
+                    {
+                        CustomDialogService.ShowWarning(
+                            this,
+                            "To restore the currently booted disk/volume in place, boot from the recovery disk and perform the restore from there.",
+                            "Recovery Disk Required");
+                        return;
+                    }
+
+                    if (result != CustomDialogResult.Yes)
+                    {
+                        return;
+                    }
+
+                    requireAlternateDestination = true;
+                }
+
+                var window = new RestoreWindowNew(backup, requireAlternateDestination);
+                WindowPositionManager.SetChildWindowPosition(window, this);
+                window.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                CustomDialogService.ShowError(this, $"Error opening restore workflow: {ex.Message}", "Restore Error");
+            }
+        }
+
+        private bool IsBootRelatedBackup(AvailableBackupInfo backup)
+        {
+            var jobs = jobManager.GetAllJobs();
+            var matchingJob = jobs.FirstOrDefault(j =>
+                string.Equals(j.Name, backup.BackupName, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(j.DestinationPath) &&
+                backup.BackupPath.StartsWith(j.DestinationPath, StringComparison.OrdinalIgnoreCase));
+
+            if (matchingJob == null)
+            {
+                return false;
+            }
+
+            if (matchingJob.Target == BackupTarget.Disk)
+            {
+                return true;
+            }
+
+            foreach (var sourcePath in matchingJob.SourcePaths)
+            {
+                if (string.IsNullOrWhiteSpace(sourcePath))
+                {
+                    continue;
+                }
+
+                bool isBootVolume = false;
+
+                try
+                {
+                    if (sourcePath.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase) ||
+                        sourcePath.EndsWith(":", StringComparison.OrdinalIgnoreCase) ||
+                        sourcePath.EndsWith(@":\", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int result = BackupEngineInterop.IsBootVolume(sourcePath, out isBootVolume);
+                        if (result == 0 && isBootVolume)
+                        {
+                            return true;
+                        }
+                    }
+                    else
+                    {
+                        string systemRoot = Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? string.Empty;
+                        string sourceRoot = Path.GetPathRoot(sourcePath)?.TrimEnd('\\') ?? string.Empty;
+                        if (!string.IsNullOrWhiteSpace(systemRoot) &&
+                            string.Equals(systemRoot, sourceRoot, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"IsBootRelatedBackup warning for '{sourcePath}': {ex.Message}");
+                }
+            }
+
+            return false;
         }
 
         // NEW: Load job logs for Activity tab
@@ -1004,8 +1182,114 @@ namespace BackupUI
             }
         }
 
-        // Export functionality removed from job summary - users should open ActivityDetailWindow first
-        // Export is available in ActivityDetailWindow with full multi-select functionality
+        private void ExportJobLogFromTab_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is Button btn && btn.Tag is string jobName && !string.IsNullOrEmpty(jobName))
+                {
+                    var allLogs = BackupLogger.GetRecentLogs(10000);
+                    var jobLogs = allLogs.Where(l => l.JobName == jobName).ToList();
+
+                    if (jobLogs.Count == 0)
+                    {
+                        CustomDialogService.ShowInfo(this, "No activities found for this job.", "No Data");
+                        return;
+                    }
+
+                    var exportDialog = new ExportOptionsDialog { Owner = this };
+                    if (exportDialog.ShowDialog() == true)
+                    {
+                        ExportActivitiesFromTab(jobLogs, exportDialog.ExportFormat, $"{jobName}_activities");
+                    }
+                }
+                else
+                {
+                    CustomDialogService.ShowWarning(this, "Unable to identify the job. Please try again.", "Error");
+                }
+            }
+            catch (Exception ex)
+            {
+                CustomDialogService.ShowError(this, $"Error exporting activity details: {ex.Message}", "Export Error");
+            }
+        }
+
+        private void ExportActivitiesFromTab(List<BackupLogEntry> logs, string format, string suggestedName)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = suggestedName,
+                Filter = format == "CSV"
+                    ? "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*"
+                    : "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+                DefaultExt = format == "CSV" ? ".csv" : ".txt"
+            };
+
+            if (dialog.ShowDialog(this) == true)
+            {
+                if (format == "CSV")
+                {
+                    ExportActivitiesToCsvFromTab(logs, dialog.FileName);
+                }
+                else
+                {
+                    ExportActivitiesToTextFromTab(logs, dialog.FileName);
+                }
+
+                CustomDialogService.ShowSuccess(this, $"Successfully exported {logs.Count} activities to:\n{dialog.FileName}", "Export Complete");
+            }
+        }
+
+        private static void ExportActivitiesToCsvFromTab(List<BackupLogEntry> logs, string filePath)
+        {
+            var csv = new StringBuilder();
+            csv.AppendLine("Timestamp,Job Name,Level,Message,Details,Backup Path,Validation Passed");
+
+            foreach (var log in logs.OrderBy(l => l.Timestamp))
+            {
+                csv.AppendLine($"\"{log.Timestamp:yyyy-MM-dd HH:mm:ss}\"," +
+                              $"\"{EscapeCsvForTab(log.JobName)}\"," +
+                              $"\"{log.Level}\"," +
+                              $"\"{EscapeCsvForTab(log.Message)}\"," +
+                              $"\"{EscapeCsvForTab(log.Details)}\"," +
+                              $"\"{EscapeCsvForTab(log.BackupPath)}\"," +
+                              $"\"{log.ValidationPassed}\"");
+            }
+
+            File.WriteAllText(filePath, csv.ToString(), Encoding.UTF8);
+        }
+
+        private static void ExportActivitiesToTextFromTab(List<BackupLogEntry> logs, string filePath)
+        {
+            var text = new StringBuilder();
+            text.AppendLine("===== BACKUP ACTIVITY LOG =====");
+            text.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            text.AppendLine($"Total Entries: {logs.Count}");
+            text.AppendLine("================================");
+            text.AppendLine();
+
+            foreach (var log in logs.OrderBy(l => l.Timestamp))
+            {
+                text.AppendLine($"[{log.Timestamp:yyyy-MM-dd HH:mm:ss}] [{log.Level}] {log.JobName}");
+                text.AppendLine($"  Message: {log.Message}");
+                if (!string.IsNullOrEmpty(log.Details))
+                    text.AppendLine($"  Details: {log.Details}");
+                if (!string.IsNullOrEmpty(log.BackupPath))
+                    text.AppendLine($"  Backup Path: {log.BackupPath}");
+                text.AppendLine($"  Validation: {(log.ValidationPassed ? "PASSED" : "FAILED")}");
+                text.AppendLine();
+            }
+
+            File.WriteAllText(filePath, text.ToString(), Encoding.UTF8);
+        }
+
+        private static string EscapeCsvForTab(string? value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            return value.Replace("\"", "\"\"").Replace("\n", " ").Replace("\r", "");
+        }
 
         // Update Activity tab header with warning icon if there are unread errors
         private void UpdateActivityTabWarning()

@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.42";
+        private static readonly string version_fallback_number = "6.2.3.45";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,6 +68,11 @@ namespace BackupUI
 
 
 /*
+ * Version 6.2.3.45 Updated the restore workflow so Restore tab selections preload into RestoreWindowNew, boot-drive restores
+ *                  are routed to safe alternate-target or recovery-disk handling, and disk/volume restores now support target
+ *                  selection, destructive warnings, and current-item restore progress updates. mdail 4/23/2026
+ * Version 6.1.3.44 Restored the Export button to the main Activity tab so it shows beside View Details in the Actions column
+ *                  and can export job activity logs directly from the main window. mdail 4/23/2026
  * Version 6.1.3.42 Fixed the New/Edit Backup window sizing so the Schedule section stays visible when encryption is enabled
  *                  and the form returns to its normal height when encryption is unchecked. mdail 4/23/2026
  * Version 6.1.3.41 Added encrypted/password-required indicators to Mount & Verify and updated the Linux recovery tools to

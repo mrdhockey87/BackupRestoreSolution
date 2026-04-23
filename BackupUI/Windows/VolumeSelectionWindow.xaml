@@ -1,0 +1,31 @@
+<Window x:Class="BackupUI.Windows.VolumeSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select Target Volume"
+        Height="420"
+        Width="700"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Text="Select the target volume to be formatted and restored."
+                   Margin="0,0,0,10"
+                   FontWeight="SemiBold"
+                   TextWrapping="Wrap"/>
+
+        <ListBox x:Name="lstVolumes"
+                 Grid.Row="1"
+                 SelectionChanged="VolumeList_SelectionChanged"
+                 DisplayMemberPath="DisplayName"/>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="btnSelect" Width="100" Height="30" Margin="0,0,10,0" Content="Select" Click="Select_Click" IsEnabled="False"/>
+            <Button Width="100" Height="30" Content="Cancel" Click="Cancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -43,7 +43,7 @@
                   CanUserResizeColumns="True"
                   MouseDoubleClick="JobLog_DoubleClick">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Job Name" Binding="{Binding JobName}" Width="200"/>
+                <DataGridTextColumn Header="Job Name" Binding="{Binding JobName}" Width="170"/>
                 <DataGridTextColumn Header="Total Activities" Binding="{Binding TotalActivities}" Width="120" HeaderStringFormat="Total Activities"/>
                 <DataGridTextColumn Header="Last Activity" Binding="{Binding LastActivity, StringFormat='{}{0:MM/dd/yyyy HH:mm:ss}'}" Width="150"/>
                 <DataGridTextColumn Header="Success Count" Binding="{Binding SuccessCount}" Width="110">
@@ -70,7 +70,7 @@
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
-                <DataGridTemplateColumn Header="Actions" Width="*">
+                <DataGridTemplateColumn Header="Actions" Width="200">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">

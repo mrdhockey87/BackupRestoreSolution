@@ -57,6 +57,20 @@ namespace BackupUI.Services
             ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int RestoreVolume(
+            string backupPath,
+            string targetVolume,
+            bool restoreSystemState,
+            ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int RestoreDisk(
+            string backupPath,
+            int targetDiskNumber,
+            bool restoreSystemState,
+            ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int RestoreSystemState(
             string backupPath,
             string targetVolume,
