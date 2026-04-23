@@ -16,6 +16,7 @@ namespace BackupUI.Windows
         private bool isValidBackup = false;
         private bool isBrsFormat = false;
         private bool isCompressed = false;
+        private bool isEncrypted = false;
         private string backupName = "";
         private string backupType = "";
         private DateTime backupDate = DateTime.Now;
@@ -51,6 +52,17 @@ namespace BackupUI.Windows
                 btnImport.IsEnabled = false;
                 isValidBackup = false;
 
+                isEncrypted = BackupEncryptionService.IsEncryptedBackupFile(filePath);
+                string validationPath = filePath;
+                string? temporaryPath = null;
+
+                if (isEncrypted)
+                {
+                    using var preparedBackup = EncryptedBackupFileService.PrepareForRead(this, filePath, Path.GetFileNameWithoutExtension(filePath));
+                    validationPath = preparedBackup.WorkingPath;
+                    temporaryPath = preparedBackup.WorkingPath;
+                }
+
                 // P/Invoke to C++ validation
                 bool isBrs = false;
                 bool compressed = false;
@@ -58,7 +70,7 @@ namespace BackupUI.Windows
 
                 // Call C++ BrsFileManager::ValidateBackupFile
                 bool valid = NativeBrsValidator.ValidateBackupFile(
-                    filePath,
+                    validationPath,
                     out isBrs,
                     out compressed,
                     out backupName,
@@ -86,6 +98,7 @@ namespace BackupUI.Windows
                     txtTimestamp.Text = backupDate.ToString("yyyy-MM-dd HH:mm:ss");
                     txtSize.Text = FormatBytes(backupSize);
                     txtCompressed.Text = compressed ? "Yes" : "No";
+                    txtEncrypted.Text = isEncrypted ? "Yes" : "No";
 
                     grpBackupInfo.Visibility = Visibility.Visible;
                     btnImport.IsEnabled = true;
@@ -157,7 +170,8 @@ namespace BackupUI.Windows
                     DestinationPath = txtFilePath.Text,
                     SourcePaths = new System.Collections.Generic.List<string>(),
                     IsImported = true, // Flag to indicate imported backup
-                    Schedule = null // No schedule for imported backups
+                    Schedule = null, // No schedule for imported backups
+                    EncryptBackup = isEncrypted
                 };
 
                 // Save job

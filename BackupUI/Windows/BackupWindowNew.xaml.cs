@@ -18,12 +18,19 @@ namespace BackupUI.Windows
 {
     public partial class BackupWindowNew : Window
     {
+        private const double DefaultWindowHeight = 850;
+        private const double EncryptionExpandedWindowHeight = 980;
+
         private ObservableCollection<DriveTreeItem> driveItems = new();
         private readonly JobManager jobManager = new();
         private BackupJob? existingJob = null;
         private BackupJob? _editingJob = null;  // Track job being edited
         private List<string>? _pathsToPreselect = null;  // Paths to pre-select after tree loads
         private List<string>? _tempUserExclusions = null;  // Temporary storage for exclusions before job created
+        private bool _hasSavedEncryptionPassword;
+        private bool _isUpdatingEncryptionPasswordDisplay;
+        private string? _decryptedEncryptionPassword;
+        private bool _windowHeightWasAutoAdjusted;
 
         // Volume configuration tracking
         private bool hasSourceSelected = false;
@@ -48,6 +55,7 @@ namespace BackupUI.Windows
             {
                 InitializeComponent();
                 InitializeScheduleControls();
+                AdjustWindowHeightForEncryption();
                 
                 // Load drives after window is fully loaded
                 Loaded += BackupWindowNew_Loaded;
@@ -104,6 +112,17 @@ namespace BackupUI.Windows
             chkCompress.IsChecked = job.CompressData;
             chkVerify.IsChecked = job.VerifyAfterBackup;
             txtRetainCount.Text = job.RetainFullBackupCount.ToString();
+            chkEncryptBackup.IsChecked = job.EncryptBackup;
+
+            _hasSavedEncryptionPassword = job.EncryptBackup && !string.IsNullOrWhiteSpace(job.ProtectedEncryptionPassword);
+            UpdateEncryptionUiState();
+
+            if (_hasSavedEncryptionPassword)
+            {
+                pwdEncryptionPassword.Password = "********";
+                txtEncryptionPasswordVisible.Text = "********";
+                pnlVerifyEncryptionPassword.Visibility = Visibility.Collapsed;
+            }
 
             // Show retention settings if Full backup type
             if (pnlRetentionSettings != null)
@@ -1800,6 +1819,165 @@ namespace BackupUI.Windows
             pnlSchedule.IsEnabled = chkEnableSchedule.IsChecked == true;
         }
 
+        private void EncryptBackup_CheckedChanged(object sender, RoutedEventArgs e)
+        {
+            UpdateEncryptionUiState();
+            AdjustWindowHeightForEncryption();
+        }
+
+        private void UpdateEncryptionUiState()
+        {
+            if (pnlEncryptionSettings == null)
+            {
+                return;
+            }
+
+            bool encryptionEnabled = chkEncryptBackup.IsChecked == true;
+            pnlEncryptionSettings.Visibility = encryptionEnabled ? Visibility.Visible : Visibility.Collapsed;
+
+            bool passwordLocked = encryptionEnabled && _hasSavedEncryptionPassword;
+            if (pwdEncryptionPassword != null)
+            {
+                pwdEncryptionPassword.IsEnabled = !passwordLocked;
+            }
+
+            if (txtEncryptionPasswordVisible != null)
+            {
+                txtEncryptionPasswordVisible.IsReadOnly = passwordLocked;
+            }
+
+            if (chkShowEncryptionPassword != null)
+            {
+                chkShowEncryptionPassword.IsEnabled = encryptionEnabled;
+            }
+
+            if (pnlVerifyEncryptionPassword != null)
+            {
+                pnlVerifyEncryptionPassword.Visibility = encryptionEnabled && !_hasSavedEncryptionPassword
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+
+            if (!encryptionEnabled)
+            {
+                chkShowEncryptionPassword.IsChecked = false;
+                ClearEncryptionPasswordEntry();
+            }
+        }
+
+        private void AdjustWindowHeightForEncryption()
+        {
+            double targetHeight = chkEncryptBackup.IsChecked == true
+                ? EncryptionExpandedWindowHeight
+                : DefaultWindowHeight;
+
+            double maxHeight = SystemParameters.WorkArea.Height - 20;
+            MaxHeight = maxHeight;
+            double adjustedHeight = Math.Min(targetHeight, maxHeight);
+
+            if (chkEncryptBackup.IsChecked == true)
+            {
+                if (Height < adjustedHeight)
+                {
+                    Height = adjustedHeight;
+                    _windowHeightWasAutoAdjusted = true;
+                }
+            }
+            else if (_windowHeightWasAutoAdjusted)
+            {
+                Height = adjustedHeight;
+                _windowHeightWasAutoAdjusted = false;
+            }
+        }
+
+        private void ShowEncryptionPassword_CheckedChanged(object sender, RoutedEventArgs e)
+        {
+            if (_isUpdatingEncryptionPasswordDisplay)
+            {
+                return;
+            }
+
+            _isUpdatingEncryptionPasswordDisplay = true;
+            try
+            {
+                bool showPassword = chkShowEncryptionPassword.IsChecked == true;
+
+                if (showPassword)
+                {
+                    if (_hasSavedEncryptionPassword && _editingJob != null && string.IsNullOrWhiteSpace(_decryptedEncryptionPassword))
+                    {
+                        _decryptedEncryptionPassword = BackupEncryptionService.UnprotectPassword(_editingJob.ProtectedEncryptionPassword);
+                    }
+
+                    txtEncryptionPasswordVisible.Text = _hasSavedEncryptionPassword
+                        ? _decryptedEncryptionPassword ?? string.Empty
+                        : pwdEncryptionPassword.Password;
+                    txtEncryptionPasswordVisible.Visibility = Visibility.Visible;
+                    pwdEncryptionPassword.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    pwdEncryptionPassword.Visibility = Visibility.Visible;
+                    txtEncryptionPasswordVisible.Visibility = Visibility.Collapsed;
+
+                    if (_hasSavedEncryptionPassword)
+                    {
+                        pwdEncryptionPassword.Password = "********";
+                        txtEncryptionPasswordVisible.Text = "********";
+                    }
+                    else
+                    {
+                        pwdEncryptionPassword.Password = txtEncryptionPasswordVisible.Text;
+                    }
+                }
+            }
+            finally
+            {
+                _isUpdatingEncryptionPasswordDisplay = false;
+            }
+        }
+
+        private void EncryptionPassword_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            if (_isUpdatingEncryptionPasswordDisplay || _hasSavedEncryptionPassword)
+            {
+                return;
+            }
+
+            _isUpdatingEncryptionPasswordDisplay = true;
+            txtEncryptionPasswordVisible.Text = pwdEncryptionPassword.Password;
+            _isUpdatingEncryptionPasswordDisplay = false;
+        }
+
+        private void EncryptionPasswordVisible_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isUpdatingEncryptionPasswordDisplay || _hasSavedEncryptionPassword)
+            {
+                return;
+            }
+
+            _isUpdatingEncryptionPasswordDisplay = true;
+            pwdEncryptionPassword.Password = txtEncryptionPasswordVisible.Text;
+            _isUpdatingEncryptionPasswordDisplay = false;
+        }
+
+        private void ClearEncryptionPasswordEntry()
+        {
+            pwdEncryptionPassword.Password = string.Empty;
+            txtEncryptionPasswordVisible.Text = string.Empty;
+            pwdVerifyEncryptionPassword.Password = string.Empty;
+        }
+
+        private string GetEnteredEncryptionPassword()
+        {
+            if (_hasSavedEncryptionPassword && _editingJob != null)
+            {
+                return _editingJob.ProtectedEncryptionPassword;
+            }
+
+            return BackupEncryptionService.ProtectPassword(pwdEncryptionPassword.Password);
+        }
+
         private void Frequency_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (cmbFrequency == null || pnlWeekly == null || pnlMonthly == null) 
@@ -2022,6 +2200,13 @@ namespace BackupUI.Windows
                         progressBar.Value = 100;
                         txtProgress.Text = "Backup completed!";
                     });
+
+                    if (job.EncryptBackup)
+                    {
+                        string backupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+                        string password = BackupEncryptionService.UnprotectPassword(job.ProtectedEncryptionPassword);
+                        BackupEncryptionService.EncryptFile(backupPath, backupPath, password);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -2139,12 +2324,16 @@ namespace BackupUI.Windows
                 {
                     job.Id = existingJob.Id;
                     jobManager.UpdateJob(job);
+                    _hasSavedEncryptionPassword = job.EncryptBackup && !string.IsNullOrWhiteSpace(job.ProtectedEncryptionPassword);
+                    UpdateEncryptionUiState();
                     CustomDialogService.ShowSuccess($"Backup job '{job.Name}' updated successfully!\n\nJob saved to:\nC:\\ProgramData\\BackupRestoreService\\jobs.json", 
                         "Success");
                 }
                 else
                 {
                     jobManager.AddJob(job);
+                    _hasSavedEncryptionPassword = job.EncryptBackup && !string.IsNullOrWhiteSpace(job.ProtectedEncryptionPassword);
+                    UpdateEncryptionUiState();
                     CustomDialogService.ShowSuccess($"Backup job '{job.Name}' created successfully!\n\nJob saved to:\nC:\\ProgramData\\BackupRestoreService\\jobs.json", 
                         "Success");
                 }
@@ -2178,6 +2367,8 @@ namespace BackupUI.Windows
                 DestinationPath = rbCloneDisk?.IsChecked == true ? txtCloneDestination.Text : txtDestination.Text,
                 CompressData = chkCompress.IsChecked == true,
                 VerifyAfterBackup = chkVerify.IsChecked == true,
+                EncryptBackup = chkEncryptBackup.IsChecked == true,
+                ProtectedEncryptionPassword = chkEncryptBackup.IsChecked == true ? GetEnteredEncryptionPassword() : string.Empty,
                 RetainFullBackupCount = int.TryParse(txtRetainCount.Text, out int retainCount) ? Math.Max(1, retainCount) : 1
             };
 
@@ -2424,6 +2615,21 @@ namespace BackupUI.Windows
             {
                 CustomDialogService.ShowWarning("Please enter a valid scheduled time. Minutes must be between 00 and 59.", "Validation Error");
                 return false;
+            }
+
+            if (chkEncryptBackup.IsChecked == true && !_hasSavedEncryptionPassword)
+            {
+                if (string.IsNullOrWhiteSpace(pwdEncryptionPassword.Password))
+                {
+                    CustomDialogService.ShowWarning("Please enter a password for backup encryption.", "Validation Error");
+                    return false;
+                }
+
+                if (pwdEncryptionPassword.Password != pwdVerifyEncryptionPassword.Password)
+                {
+                    CustomDialogService.ShowWarning("The encryption passwords do not match.", "Validation Error");
+                    return false;
+                }
             }
 
             return true;

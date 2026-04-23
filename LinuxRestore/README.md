@@ -1,6 +1,6 @@
 # Backup & Restore - Linux Recovery USB
 
-**Version 5.13.7.0** (Updated with WIM/.ssb backup support)
+**Version 5.13.7.0** (Updated with WIM/.ssb backup support and encrypted backup restore support)
 
 A lightweight, bootable Linux-based restore solution that works with backups created by the Backup & Restore Windows application.
 
@@ -11,6 +11,7 @@ A lightweight, bootable Linux-based restore solution that works with backups cre
 ✓ **Fast Boot** - Alpine Linux boots in seconds  
 ✓ **NTFS Support** - Can restore to Windows partitions  
 ✓ **WIM Support** - Extracts .ssb/.wim backup files (NEW in 5.13.7.0)
+✓ **Encrypted Backup Support** - Prompts for password and restores AES-128 encrypted .ssb backups
 ✓ **Intelligent Restore** - Auto-detects disk/volume/file backups
 ✓ **Two Interfaces** - Terminal UI (TUI) or command-line (CLI)  
 ✓ **Self-Contained** - Everything needed on one USB drive  
@@ -58,6 +59,32 @@ sudo pacman -S wimlib
 ```
 
 Without wimlib, only legacy folder-based backups can be restored.
+
+**For encrypted `.ssb` backup support, install Python 3 and PyCryptodome:**
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install python3 python3-pip
+python3 -m pip install pycryptodome
+
+# Fedora/RHEL
+sudo dnf install python3 python3-pip
+python3 -m pip install pycryptodome
+
+# Arch Linux
+sudo pacman -S python python-pip
+python3 -m pip install pycryptodome
+
+# Alpine
+apk add python3 py3-pip
+python3 -m pip install pycryptodome
+```
+
+Encrypted restores require:
+- `python3`
+- the `Crypto` module from **PyCryptodome**
+
+Without these packages, encrypted backups cannot be listed or restored.
 
 ---
 
@@ -167,17 +194,20 @@ Command-line interface:
 **Ubuntu/Debian:**
 ```bash
 sudo apt-get update
-sudo apt-get install build-essential cmake libncurses5-dev ntfs-3g
+sudo apt-get install build-essential cmake libncurses5-dev ntfs-3g python3 python3-pip wimtools
+python3 -m pip install pycryptodome
 ```
 
 **Fedora/RHEL:**
 ```bash
-sudo dnf install gcc-c++ cmake ncurses-devel ntfs-3g
+sudo dnf install gcc-c++ cmake ncurses-devel ntfs-3g python3 python3-pip wimlib-utils
+python3 -m pip install pycryptodome
 ```
 
 **Alpine:**
 ```bash
-apk add build-base cmake ncurses-dev ntfs-3g
+apk add build-base cmake ncurses-dev ntfs-3g python3 py3-pip wimlib
+python3 -m pip install pycryptodome
 ```
 
 ### Build
@@ -328,6 +358,24 @@ modprobe fuse
 - Ensure running as root
 - Mount with: `ntfs-3g /dev/sda1 /mnt/target -o rw,force`
 
+### "Failed to decrypt encrypted backup"
+
+**Problem:** Encrypted `.ssb` backup cannot be opened in the Linux recovery environment  
+**Solution:**
+- Verify the backup password is correct
+- Ensure `python3` is installed
+- Ensure the `Crypto` module is available:
+
+```bash
+python3 -c "from Crypto.Cipher import AES; print('PyCryptodome OK')"
+```
+
+- If the import fails, install it:
+
+```bash
+python3 -m pip install pycryptodome
+```
+
 ### Restore Fails with "No space"
 
 **Problem:** Target drive is full  
@@ -414,6 +462,7 @@ reboot
 - Backups are restored with original permissions
 - NTFS ACLs are preserved
 - File ownership maintained
+- Encrypted `.ssb` backups require the correct password before Linux recovery tools can list or restore them
 
 ### Boot Security
 - Secure Boot compatible (with signed kernel)
@@ -440,7 +489,6 @@ reboot
 **Version 4.7.0:**
 - [ ] GUI (GTK+ or Qt)
 - [ ] Network boot (PXE)
-- [ ] Encrypted backup support
 - [ ] Multi-language support
 - [ ] Automatic hardware detection
 

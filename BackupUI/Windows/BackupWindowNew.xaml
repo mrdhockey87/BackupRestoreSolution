@@ -301,6 +301,60 @@
 								Note: When keeping more than 1 backup, date/time will be added to backup names. Old backups are only deleted after successful verification.
 							</TextBlock>
 						</StackPanel>
+
+						<StackPanel Margin="0,15,0,15">
+							<CheckBox
+								Name="chkEncryptBackup"
+								Margin="0,0,0,10"
+								Content="Encrypt Backup"
+								Checked="EncryptBackup_CheckedChanged"
+								Unchecked="EncryptBackup_CheckedChanged" />
+
+							<StackPanel Name="pnlEncryptionSettings" Visibility="Collapsed">
+								<TextBlock Margin="0,0,0,5" Text="Password for Encryption:" />
+								<Grid Margin="0,0,0,10">
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="Auto" />
+									</Grid.ColumnDefinitions>
+
+									<PasswordBox
+										Name="pwdEncryptionPassword"
+										Grid.Column="0"
+										Height="25"
+										PasswordChanged="EncryptionPassword_PasswordChanged" />
+									<TextBox
+										Name="txtEncryptionPasswordVisible"
+										Grid.Column="0"
+										Height="25"
+										Visibility="Collapsed"
+										TextChanged="EncryptionPasswordVisible_TextChanged" />
+									<CheckBox
+										Name="chkShowEncryptionPassword"
+										Grid.Column="1"
+										Margin="10,0,0,0"
+										VerticalAlignment="Center"
+										Content="Show Password"
+										Checked="ShowEncryptionPassword_CheckedChanged"
+										Unchecked="ShowEncryptionPassword_CheckedChanged" />
+								</Grid>
+
+								<StackPanel Name="pnlVerifyEncryptionPassword">
+									<TextBlock Margin="0,0,0,5" Text="Verify Password:" />
+									<PasswordBox
+										Name="pwdVerifyEncryptionPassword"
+										Height="25"
+										Margin="0,0,0,5" />
+								</StackPanel>
+
+								<TextBlock
+									Name="txtEncryptionInfo"
+									FontSize="10"
+									Foreground="Gray"
+									TextWrapping="Wrap"
+									Text="Encrypted backups use AES-128. Stored scheduled-backup passwords are protected with Windows DPAPI LocalMachine." />
+							</StackPanel>
+						</StackPanel>
 					</StackPanel>
 				</GroupBox>
 

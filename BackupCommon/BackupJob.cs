@@ -38,5 +38,9 @@ namespace BackupCommon
 
         // User-defined exclusions (editable by user)
         public List<string> UserExclusions { get; set; } = new(); // Files, folders, or patterns (*.tmp) to exclude from backup
+
+        // Optional AES-128 backup encryption settings
+        public bool EncryptBackup { get; set; } = false;
+        public string ProtectedEncryptionPassword { get; set; } = string.Empty;
     }
 }

@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.1.3.38";
+        private static readonly string version_fallback_number = "6.1.3.42";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,6 +68,14 @@ namespace BackupUI
 
 
 /*
+ * Version 6.1.3.42 Fixed the New/Edit Backup window sizing so the Schedule section stays visible when encryption is enabled
+ *                  and the form returns to its normal height when encryption is unchecked. mdail 4/23/2026
+ * Version 6.1.3.41 Added encrypted/password-required indicators to Mount & Verify and updated the Linux recovery tools to
+ *                  prompt for backup passwords before listing or restoring encrypted .ssb backups. mdail 4/23/2026
+ * Version 6.1.3.40 Added AES-128 backup encryption with DPAPI LocalMachine password protection, encrypted backup prompts,
+ *                  and New/Edit Backup page controls for masked passwords with non-persistent show-password behavior. mdail 4/23/2026
+ * Version 6.1.3.39 Fixed mounted restore point details so each image shows its own timestamp, the correct backup type,
+ *                  and the job name in the description instead of always showing the first backup details. mdail 4/23/2026
  * Version 6.1.3.38 Re-enabled the WIM capture progress callback for incremental & differential disk backups so they report
  *                  file names during capture the same way the full backup path does. mdail 4/22/2026
  * Version 6.1.3.37 Added safe progress updates during incremental & differential disk image append operations so the UI no longer

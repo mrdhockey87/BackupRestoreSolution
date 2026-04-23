@@ -1161,7 +1161,8 @@ namespace BackupUI
                         BackupName = System.IO.Path.GetFileNameWithoutExtension(selectedFile),
                         BackupType = GetBackupTypeFromFilename(System.IO.Path.GetFileNameWithoutExtension(selectedFile)),
                         BackupDate = fileInfo.LastWriteTime,
-                        BackupPath = selectedFile
+                        BackupPath = selectedFile,
+                        IsEncrypted = BackupEncryptionService.IsEncryptedBackupFile(selectedFile)
                     });
 
                     dgAvailableBackups.ItemsSource = null; // Force refresh
@@ -1288,16 +1289,22 @@ namespace BackupUI
                         System.Diagnostics.Debug.WriteLine($"[Mount] Calling NativeBackupMountManager.MountBackupAsync...");
                         System.Diagnostics.Debug.WriteLine($"[Mount] Parameters: wimPath={wimPath}, backupName={backup.BackupName}, backupType={backup.BackupType}, imageIndex={selectedImageIndex}, tempPath={selectedTempPath}");
 
-                        var (success, mountPath, error) = await NativeBackupMountManager.MountBackupAsync(
+                        using var preparedBackup = EncryptedBackupFileService.PrepareForRead(
+                            this,
                             wimPath,
                             backup.BackupName,
+                            backup.ProtectedEncryptionPassword);
+
+                        var (success, mountPath, error) = await NativeBackupMountManager.MountBackupAsync(
+                            preparedBackup.WorkingPath,
+                            backup.BackupName,
                             backup.BackupType,
-                            selectedImageIndex,  // Use selected image index
-                            (percentage, message) =>  // Updated to receive percentage and message
+                            selectedImageIndex,
+                            (percentage, message) =>
                             {
                                 progressWindow.SetStatus(message, percentage);
                             },
-                            selectedTempPath);  // Pass user-selected temp path
+                            selectedTempPath);
 
                         // Close progress window
                         progressWindow.CloseProgress();
@@ -1462,7 +1469,9 @@ namespace BackupUI
                                 BackupName = job.Name,
                                 BackupType = GetBackupTypeFromFilename(System.IO.Path.GetFileNameWithoutExtension(ssb)),
                                 BackupDate = fileInfo.LastWriteTime,
-                                BackupPath = ssb
+                                BackupPath = ssb,
+                                IsEncrypted = BackupEncryptionService.IsEncryptedBackupFile(ssb),
+                                ProtectedEncryptionPassword = job.ProtectedEncryptionPassword
                             });
                         }
                     }
@@ -1657,7 +1666,8 @@ namespace BackupUI
                         BackupName = System.IO.Path.GetFileNameWithoutExtension(selectedFile),
                         BackupType = GetBackupTypeFromFilename(System.IO.Path.GetFileNameWithoutExtension(selectedFile)),
                         BackupDate = fileInfo.LastWriteTime,
-                        BackupPath = selectedFile
+                        BackupPath = selectedFile,
+                        IsEncrypted = BackupEncryptionService.IsEncryptedBackupFile(selectedFile)
                     });
 
                     dgVerifyBackups.ItemsSource = null; // Force refresh
@@ -1713,17 +1723,21 @@ namespace BackupUI
                         // Run verification asynchronously
                         int verificationResult_Code = await Task.Run(() =>
                         {
-                            int result = BackupEngineInterop.VerifyBackup(
+                            using var preparedBackup = EncryptedBackupFileService.PrepareForRead(
+                                this,
                                 backup.BackupPath,
+                                backup.BackupName,
+                                backup.ProtectedEncryptionPassword);
+
+                            int result = BackupEngineInterop.VerifyBackup(
+                                preparedBackup.WorkingPath,
                                 (percentage, message) =>
                                 {
-                                    // Update progress on UI thread
                                     Dispatcher.Invoke(() =>
                                     {
                                         progressWindow.SetStatus(message, percentage);
                                         verificationResult.AppendLine($"[{percentage}%] {message}");
 
-                                        // Update results display in real-time
                                         if (txtVerificationResults != null)
                                         {
                                             txtVerificationResults.Text = verificationResult.ToString();

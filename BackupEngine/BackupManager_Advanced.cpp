@@ -63,6 +63,24 @@ namespace {
         return value;
     }
 
+    std::wstring FormatCurrentImageTimestamp() {
+        SYSTEMTIME localTime{};
+        GetLocalTime(&localTime);
+
+        wchar_t buffer[32] = {};
+        swprintf_s(
+            buffer,
+            L"%04u-%02u-%02u %02u:%02u:%02u",
+            localTime.wYear,
+            localTime.wMonth,
+            localTime.wDay,
+            localTime.wHour,
+            localTime.wMinute,
+            localTime.wSecond);
+
+        return buffer;
+    }
+
     std::wstring FormatSystemErrorMessage(DWORD errorCode) {
         if (errorCode == ERROR_SUCCESS) {
             return L"The operation completed successfully.";
@@ -1065,9 +1083,17 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
     DWORD imageIndex = CountWimImages(hWim);
     LogInfo(L"CaptureToWimImage: New image index: " + std::to_wstring(imageIndex));
 
-    // Sanitize the image name to escape XML special characters
-    std::wstring sanitizedName = SanitizeXmlName(imageName);
+    std::wstring displayName = std::wstring(imageName) + L" - " + FormatCurrentImageTimestamp();
+    std::wstring descriptionText = GetCurrentJobName();
+    if (descriptionText.empty()) {
+        descriptionText = imageName;
+    }
+
+    // Sanitize the image metadata to escape XML special characters
+    std::wstring sanitizedName = SanitizeXmlName(displayName);
+    std::wstring sanitizedDescription = SanitizeXmlName(descriptionText);
     LogInfo(L"CaptureToWimImage: Setting metadata with sanitized name: " + sanitizedName);
+    LogInfo(L"CaptureToWimImage: Setting metadata description: " + sanitizedDescription);
 
     // ==============================================================================
     // METADATA SETTING STRATEGY - SIMPLIFIED APPROACH
@@ -1098,6 +1124,7 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
             existingXmlInfo != nullptr && existingXmlSize >= sizeof(wchar_t)) {
             std::wstring existingXml(existingXmlInfo);
             imageXml = UpsertImageXmlElement(existingXml, L"NAME", sanitizedName);
+            imageXml = UpsertImageXmlElement(imageXml, L"DESCRIPTION", sanitizedDescription);
             LogInfo(L"CaptureToWimImage: Loaded existing image metadata XML (bytes=" + std::to_wstring(existingXmlSize) + L")");
             LogInfo(L"CaptureToWimImage: Updated existing image XML for metadata write");
             LocalFree(existingXmlInfo);
@@ -1111,7 +1138,9 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
 
             imageXml = L"<IMAGE><NAME>";
             imageXml += sanitizedName;
-            imageXml += L"</NAME></IMAGE>";
+            imageXml += L"</NAME><DESCRIPTION>";
+            imageXml += sanitizedDescription;
+            imageXml += L"</DESCRIPTION></IMAGE>";
             LogWarning(L"CaptureToWimImage: Could not read existing image metadata XML, falling back to minimal XML",
                        FormatDetailedErrorCode(L"WIMGetImageInformation before metadata update failed.", existingXmlError));
         }

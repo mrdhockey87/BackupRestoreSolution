@@ -488,6 +488,10 @@
 											Width="100"
 											Binding="{Binding BackupType}"
 											Header="Type" />
+                                 <DataGridTextColumn
+										Width="90"
+										Binding="{Binding EncryptionStatus}"
+										Header="Encrypted" />
 										<DataGridTextColumn
 											Width="140"
 											Binding="{Binding BackupDate, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
@@ -652,6 +656,10 @@
 											Width="100"
 											Binding="{Binding BackupType}"
 											Header="Type" />
+                                 <DataGridTextColumn
+										Width="90"
+										Binding="{Binding EncryptionStatus}"
+										Header="Encrypted" />
 										<DataGridTextColumn
 											Width="140"
 											Binding="{Binding BackupDate, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"

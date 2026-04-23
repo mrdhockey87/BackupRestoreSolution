@@ -17,6 +17,22 @@ void printHeader() {
     std::cout << "\n";
 }
 
+void ensureBackupPassword(RestoreEngine& engine, const std::string& backupPath) {
+    std::ifstream file(backupPath, std::ios::binary);
+    if (!file) {
+        return;
+    }
+
+    char header[7] = { 0 };
+    file.read(header, sizeof(header));
+    if (file.gcount() == sizeof(header) && std::strncmp(header, "SSBAES1", sizeof(header)) == 0) {
+        std::string password;
+        std::cout << "Encrypted backup detected. Enter password: ";
+        std::getline(std::cin, password);
+        engine.SetBackupPassword(password);
+    }
+}
+
 void printUsage() {
     std::cout << "Usage:\n";
     std::cout << "  restore_cli [options]\n\n";
@@ -204,6 +220,7 @@ void runInteractive(RestoreEngine& engine) {
     }
 
     selectedBackupPath = dates[selection - 1].path;
+    ensureBackupPassword(engine, selectedBackupPath);
     std::cout << "Selected: " << selectedBackupPath << "\n\n";
 
     // Step 2: Select items to restore

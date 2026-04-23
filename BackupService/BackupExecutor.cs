@@ -29,6 +29,20 @@ namespace BackupService
         private ProgressCallback? _currentProgressCallback;
         private LogCallback? _currentLogCallback;
 
+        private static void EncryptBackupFileIfNeeded(BackupJob job, string backupPath, Action<int, string>? progressCallback, Action<string>? logger)
+        {
+            if (!job.EncryptBackup)
+            {
+                return;
+            }
+
+            progressCallback?.Invoke(88, "Encrypting backup archive with AES-128...");
+            logger?.Invoke("Encrypting backup archive with AES-128...");
+            string password = BackupEncryptionService.UnprotectPassword(job.ProtectedEncryptionPassword);
+            BackupEncryptionService.EncryptFile(backupPath, backupPath, password);
+            logger?.Invoke("Backup archive encrypted successfully.");
+        }
+
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupFiles(string sourcePath, string destPath,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
@@ -382,6 +396,11 @@ namespace BackupService
 
                         // Verification succeeded!
                         logger?.Invoke($"Backup verification PASSED: {errorMsg}");
+                    }
+
+                    if (newBackupPath != null)
+                    {
+                        EncryptBackupFileIfNeeded(job, newBackupPath, progressCallback, logger);
                     }
 
                     // If we forced a full backup for auto-recovery, restore original type for future backups

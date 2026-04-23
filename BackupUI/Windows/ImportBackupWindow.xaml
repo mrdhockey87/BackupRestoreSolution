@@ -69,6 +69,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Format:" FontWeight="SemiBold" Margin="0,5"/>
@@ -88,6 +89,9 @@
 
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="Compressed:" FontWeight="SemiBold" Margin="0,5"/>
                         <TextBlock Grid.Row="5" Grid.Column="1" Name="txtCompressed" Text="-" Margin="0,5"/>
+
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Encrypted:" FontWeight="SemiBold" Margin="0,5"/>
+                        <TextBlock Grid.Row="6" Grid.Column="1" Name="txtEncrypted" Text="-" Margin="0,5"/>
                     </Grid>
                 </GroupBox>
             </Grid>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -593,37 +594,42 @@ namespace BackupUI.Services
 
                     if (WimMount_GetImageInfo(wimPath, i, name, 256, description, 1024, errorMsg, 512))
                     {
-                        // Parse description for date and type
-                        // Description format from C++: "Disk 5 Volume 1 (Full)" or "Disk 5 Volume 1 (Incremental)"
+                        // Parse metadata returned from C++
+                        // Name format: "Disk 5 Volume 1 (Incremental) - 2026-04-22 13:45:10"
+                        // Description format: job name (for newer backups)
+                        string imageName = name.ToString();
                         string desc = description.ToString();
                         string type = "Full"; // Default
                         DateTime imageDate = DateTime.Now; // Default to now if can't parse
 
-                        // Extract backup type from description (text in parentheses)
-                        if (desc.Contains("(") && desc.Contains(")"))
+                        if (string.IsNullOrWhiteSpace(desc) || desc.Equals("No description", StringComparison.OrdinalIgnoreCase))
                         {
-                            int start = desc.LastIndexOf('(') + 1;
-                            int end = desc.LastIndexOf(')');
-                            if (end > start)
-                            {
-                                type = desc.Substring(start, end - start).Trim();
-                            }
+                            desc = Path.GetFileNameWithoutExtension(wimPath);
                         }
 
-                        // Try to extract date from name if it contains timestamp
-                        // Name format might be like "Disk 5 Volume 1 - 2026-03-10 15:30:45"
-                        if (name.ToString().Contains("-") && name.ToString().Contains(":"))
+                        string nameWithoutTimestamp = imageName;
+
+                        // Extract date from the image name suffix
+                        int dashIndex = imageName.LastIndexOf(" - ", StringComparison.Ordinal);
+                        if (dashIndex > 0 && dashIndex + 3 < imageName.Length)
                         {
-                            // Attempt to parse datetime from name
-                            string nameParts = name.ToString();
-                            int dashIndex = nameParts.LastIndexOf(" - ");
-                            if (dashIndex > 0 && dashIndex + 3 < nameParts.Length)
+                            string dateStr = imageName.Substring(dashIndex + 3).Trim();
+                            if (DateTime.TryParse(dateStr, out DateTime parsed))
                             {
-                                string dateStr = nameParts.Substring(dashIndex + 3);
-                                if (DateTime.TryParse(dateStr, out DateTime parsed))
-                                {
-                                    imageDate = parsed;
-                                }
+                                imageDate = parsed;
+                            }
+
+                            nameWithoutTimestamp = imageName.Substring(0, dashIndex).TrimEnd();
+                        }
+
+                        // Extract backup type from the base image name (text in parentheses)
+                        if (nameWithoutTimestamp.Contains("(") && nameWithoutTimestamp.Contains(")"))
+                        {
+                            int start = nameWithoutTimestamp.LastIndexOf('(') + 1;
+                            int end = nameWithoutTimestamp.LastIndexOf(')');
+                            if (end > start)
+                            {
+                                type = nameWithoutTimestamp.Substring(start, end - start).Trim();
                             }
                         }
 

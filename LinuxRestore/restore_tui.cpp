@@ -27,6 +27,20 @@ private:
     bool restoreToOriginal = true;
     int currentStep = 1; // 1=Select Date, 2=Select Items, 3=Select Destination
 
+    void EnsurePasswordForSelectedBackup() {
+        std::ifstream file(selectedBackupPath, std::ios::binary);
+        if (!file) {
+            return;
+        }
+
+        char header[7] = { 0 };
+        file.read(header, sizeof(header));
+        if (file.gcount() == sizeof(header) && std::strncmp(header, "SSBAES1", sizeof(header)) == 0) {
+            std::string password = PromptForPassword("Encrypted backup detected. Enter password:");
+            engine->SetBackupPassword(password);
+        }
+    }
+
     void InitializeUI() {
         initscr();
         cbreak();
@@ -429,6 +443,27 @@ private:
         curs_set(0);
         
         return std::string(path);
+    }
+
+    std::string PromptForPassword(const std::string& prompt) {
+        echo();
+        curs_set(1);
+
+        wclear(mainWin);
+        box(mainWin, 0, 0);
+        ShowTitle();
+
+        mvwprintw(mainWin, 4, 2, "%s", prompt.c_str());
+        mvwprintw(mainWin, 6, 2, "Password: ");
+        wrefresh(mainWin);
+
+        char password[256];
+        wgetnstr(mainWin, password, sizeof(password) - 1);
+
+        noecho();
+        curs_set(0);
+
+        return std::string(password);
     }
 
     bool ConfirmRestore() {

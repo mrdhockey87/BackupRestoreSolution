@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
+using BackupCommon;
 using BackupUI.Services;
 using MessageBox = System.Windows.MessageBox;
 
@@ -244,7 +245,8 @@ namespace BackupUI.Windows
                 try
                 {
                     var buffer = new StringBuilder(32768);
-                    int result = BackupEngineInterop.ListBackupContents(backupFile, buffer, buffer.Capacity);
+                    using var preparedBackup = EncryptedBackupFileService.PrepareForRead(this, backupFile, Path.GetFileNameWithoutExtension(backupFile));
+                    int result = BackupEngineInterop.ListBackupContents(preparedBackup.WorkingPath, buffer, buffer.Capacity);
 
                     if (result == 0)
                     {
@@ -337,8 +339,9 @@ namespace BackupUI.Windows
 
             await Task.Run(() =>
             {
+                using var preparedBackup = EncryptedBackupFileService.PrepareForRead(this, selectedPoint.FilePath, Path.GetFileNameWithoutExtension(selectedPoint.FilePath));
                 var result = BackupEngineInterop.RestoreFiles(
-                    selectedPoint.FilePath,
+                    preparedBackup.WorkingPath,
                     destination,
                     chkOverwrite.IsChecked == true,
                     (percent, message) =>

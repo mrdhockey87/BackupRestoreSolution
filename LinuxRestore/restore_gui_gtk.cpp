@@ -46,6 +46,40 @@ private:
     
     int currentStep = 0; // 0=Step1, 1=Step2, 2=Step3
 
+    void ensurePasswordForSelectedBackup() {
+        std::ifstream file(selectedBackupPath, std::ios::binary);
+        if (!file) {
+            return;
+        }
+
+        char header[7] = { 0 };
+        file.read(header, sizeof(header));
+        if (file.gcount() == sizeof(header) && std::strncmp(header, "SSBAES1", sizeof(header)) == 0) {
+            GtkWidget* dialog = gtk_dialog_new_with_buttons(
+                "Encrypted Backup Password",
+                GTK_WINDOW(window),
+                GTK_DIALOG_MODAL,
+                "_Cancel", GTK_RESPONSE_CANCEL,
+                "_OK", GTK_RESPONSE_OK,
+                NULL);
+
+            GtkWidget* content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+            GtkWidget* label = gtk_label_new("Enter the password for this encrypted backup:");
+            GtkWidget* entry = gtk_entry_new();
+            gtk_entry_set_visibility(GTK_ENTRY(entry), FALSE);
+            gtk_box_pack_start(GTK_BOX(content), label, FALSE, FALSE, 5);
+            gtk_box_pack_start(GTK_BOX(content), entry, FALSE, FALSE, 5);
+            gtk_widget_show_all(dialog);
+
+            if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_OK) {
+                const char* password = gtk_entry_get_text(GTK_ENTRY(entry));
+                engine.SetBackupPassword(password ? password : "");
+            }
+
+            gtk_widget_destroy(dialog);
+        }
+    }
+
     // Callbacks
     static void onBrowseBackup(GtkWidget *widget, gpointer data) {
         RestoreGUI* gui = static_cast<RestoreGUI*>(data);
@@ -98,6 +132,8 @@ private:
         gtk_tree_model_get(model, &iter, 3, &path, -1);
         gui->selectedBackupPath = path;
         g_free(path);
+
+        gui->ensurePasswordForSelectedBackup();
 
         gui->loadBackupContents();
         gtk_stack_set_visible_child_name(GTK_STACK(gui->stack), "step2");

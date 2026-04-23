@@ -11,6 +11,7 @@
 #include <ctime>
 #include <algorithm>
 #include <functional>
+#include <array>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -24,6 +25,10 @@ class RestoreEngine {
 private:
     ProgressCallback progressCallback;
     std::string lastError;
+    std::string backupPassword;
+    bool backupPasswordVerified = false;
+
+    static constexpr const char* EncryptedHeader = "SSBAES1";
 
     void SetError(const std::string& error) {
         lastError = error;
@@ -35,6 +40,110 @@ private:
             progressCallback(percentage, message.c_str());
         }
         std::cout << "[" << percentage << "%] " << message << std::endl;
+    }
+
+    bool IsEncryptedBackup(const std::string& path) {
+        std::ifstream file(path, std::ios::binary);
+        if (!file) {
+            return false;
+        }
+
+        std::array<char, 7> header{};
+        file.read(header.data(), header.size());
+        return file.gcount() == static_cast<std::streamsize>(header.size()) &&
+               std::memcmp(header.data(), EncryptedHeader, header.size()) == 0;
+    }
+
+    bool EnsurePasswordAvailable() {
+        if (!backupPassword.empty()) {
+            return true;
+        }
+
+        if (progressCallback) {
+            progressCallback(0, "Encrypted backup detected - password required.");
+        }
+
+        std::cout << "Encrypted backup detected. Enter password: ";
+        std::getline(std::cin, backupPassword);
+
+        if (backupPassword.empty()) {
+            SetError("Encryption password is required for this backup.");
+            return false;
+        }
+
+        return true;
+    }
+
+    std::string CreateTempPath(const std::string& originalPath) {
+        char tmpl[] = "/tmp/backup_restore_XXXXXX";
+        int fd = mkstemp(tmpl);
+        if (fd < 0) {
+            throw std::runtime_error("Failed to create temporary file for encrypted backup.");
+        }
+        close(fd);
+
+        std::string tempPath = std::string(tmpl) + ".ssb";
+        rename(tmpl, tempPath.c_str());
+        return tempPath;
+    }
+
+    bool DecryptEncryptedBackup(const std::string& encryptedPath, const std::string& outputPath) {
+        if (!EnsurePasswordAvailable()) {
+            return false;
+        }
+
+        std::string command = "python3 -c \"from pathlib import Path; import hashlib, sys; from Crypto.Cipher import AES; from Crypto.Util.Padding import unpad; "
+            "password=sys.argv[1].encode('utf-8'); src=Path(sys.argv[2]); dst=Path(sys.argv[3]); data=src.read_bytes(); "
+            "assert data[:7]==b'SSBAES1'; salt=data[7:23]; iv=data[23:39]; enc=data[39:]; "
+            "key=hashlib.pbkdf2_hmac('sha256', password, salt, 100000, 16); "
+            "cipher=AES.new(key, AES.MODE_CBC, iv); dst.write_bytes(unpad(cipher.decrypt(enc), AES.block_size))\" '" +
+            backupPassword + "' '" + encryptedPath + "' '" + outputPath + "' 2>/tmp/backup_restore_decrypt.log";
+
+        int result = system(command.c_str());
+        if (result != 0) {
+            backupPassword.clear();
+            backupPasswordVerified = false;
+            SetError("Failed to decrypt encrypted backup. The password may be incorrect.");
+            return false;
+        }
+
+        backupPasswordVerified = true;
+        return true;
+    }
+
+    template<typename Func>
+    auto WithPreparedBackup(const std::string& backupPath, Func func) -> decltype(func(backupPath)) {
+        if (!fs::is_regular_file(backupPath) || !IsEncryptedBackup(backupPath)) {
+            return func(backupPath);
+        }
+
+        ReportProgress(2, "Decrypting encrypted backup to temporary working file...");
+        std::string tempPath = CreateTempPath(backupPath);
+
+        try {
+            if (!DecryptEncryptedBackup(backupPath, tempPath)) {
+                BackupCleanup(tempPath);
+                return decltype(func(backupPath))();
+            }
+
+            auto result = func(tempPath);
+            BackupCleanup(tempPath);
+            return result;
+        }
+        catch (...) {
+            BackupCleanup(tempPath);
+            throw;
+        }
+    }
+
+    void BackupCleanup(const std::string& path) {
+        try {
+            if (!path.empty() && fs::exists(path)) {
+                fs::remove(path);
+            }
+        }
+        catch (...) {
+        }
     }
 
     // NEW: Check if file is WIM format (.ssb or .wim)
@@ -195,26 +304,46 @@ public:
 
     std::string GetLastError() const { return lastError; }
 
+    void SetBackupPassword(const std::string& password) {
+        backupPassword = password;
+        backupPasswordVerified = !password.empty();
+    }
+
     // Restore files from backup to destination
     // Now supports both folder-based backups AND WIM (.ssb) backups
     int RestoreFiles(const std::string& backupPath, 
                      const std::string& destPath, 
                      bool overwriteExisting) {
         try {
-            ReportProgress(0, "Starting file restore...");
+            return WithPreparedBackup<int>(backupPath, [&](const std::string& workingPath) {
+                ReportProgress(0, "Starting file restore...");
 
-            // Verify backup exists
-            if (!fs::exists(backupPath)) {
-                SetError("Backup path does not exist: " + backupPath);
-                return -1;
-            }
+                if (!fs::exists(workingPath)) {
+                    SetError("Backup path does not exist: " + workingPath);
+                    return -1;
+                }
 
-            // Check if this is a WIM backup
-            if (fs::is_regular_file(backupPath) && IsWimBackup(backupPath)) {
-                // NEW: Handle WIM backup
-                ReportProgress(5, "Detected WIM backup format");
+                if (fs::is_regular_file(workingPath) && IsWimBackup(workingPath)) {
+                    ReportProgress(5, "Detected WIM backup format");
 
-                // Create destination directory
+                    try {
+                        fs::create_directories(destPath);
+                    } catch (const std::exception& e) {
+                        SetError(std::string("Failed to create destination: ") + e.what());
+                        return -1;
+                    }
+
+                    int result = ExtractWimBackup(workingPath, destPath);
+                    if (result != 0) {
+                        return result;
+                    }
+
+                    ReportProgress(100, "WIM restore complete!");
+                    return 0;
+                }
+
+                ReportProgress(5, "Detected folder-based backup (legacy format)");
+
                 try {
                     fs::create_directories(destPath);
                 } catch (const std::exception& e) {
@@ -222,125 +351,94 @@ public:
                     return -1;
                 }
 
-                // Extract WIM
-                int result = ExtractWimBackup(backupPath, destPath);
-                if (result != 0) {
-                    return result;
-                }
+                ReportProgress(10, "Scanning backup files...");
 
-                ReportProgress(100, "WIM restore complete!");
-                return 0;
-            }
+                std::vector<fs::path> filesToRestore;
+                uintmax_t totalSize = 0;
 
-            // OLD: Handle folder-based backup (legacy support)
-            ReportProgress(5, "Detected folder-based backup (legacy format)");
-
-            // Create destination directory
-            try {
-                fs::create_directories(destPath);
-            } catch (const std::exception& e) {
-                SetError(std::string("Failed to create destination: ") + e.what());
-                return -1;
-            }
-
-            ReportProgress(10, "Scanning backup files...");
-
-            // Collect all files to restore
-            std::vector<fs::path> filesToRestore;
-            uintmax_t totalSize = 0;
-
-            if (fs::is_directory(backupPath)) {
-                for (const auto& entry : fs::recursive_directory_iterator(backupPath)) {
-                    if (entry.is_regular_file()) {
-                        filesToRestore.push_back(entry.path());
-                        totalSize += entry.file_size();
+                if (fs::is_directory(workingPath)) {
+                    for (const auto& entry : fs::recursive_directory_iterator(workingPath)) {
+                        if (entry.is_regular_file()) {
+                            filesToRestore.push_back(entry.path());
+                            totalSize += entry.file_size();
+                        }
                     }
+                } else if (fs::is_regular_file(workingPath)) {
+                    filesToRestore.push_back(workingPath);
+                    totalSize = fs::file_size(workingPath);
                 }
-            } else if (fs::is_regular_file(backupPath)) {
-                filesToRestore.push_back(backupPath);
-                totalSize = fs::file_size(backupPath);
-            }
 
-            if (filesToRestore.empty()) {
-                SetError("No files found in backup");
-                return -1;
-            }
+                if (filesToRestore.empty()) {
+                    SetError("No files found in backup");
+                    return -1;
+                }
 
-            ReportProgress(20, "Found " + std::to_string(filesToRestore.size()) + " files to restore");
+                ReportProgress(20, "Found " + std::to_string(filesToRestore.size()) + " files to restore");
 
-            // Restore files
-            uintmax_t copiedSize = 0;
-            int filesRestored = 0;
+                uintmax_t copiedSize = 0;
+                int filesRestored = 0;
 
-            for (const auto& sourceFile : filesToRestore) {
-                try {
-                    // Calculate relative path
-                    fs::path relativePath = fs::relative(sourceFile, backupPath);
-                    fs::path destFile = fs::path(destPath) / relativePath;
+                for (const auto& sourceFile : filesToRestore) {
+                    try {
+                        fs::path relativePath = fs::relative(sourceFile, workingPath);
+                        fs::path destFile = fs::path(destPath) / relativePath;
 
-                    // Create destination directory
-                    fs::create_directories(destFile.parent_path());
+                        fs::create_directories(destFile.parent_path());
 
-                    // Check if file exists
-                    if (fs::exists(destFile) && !overwriteExisting) {
+                        if (fs::exists(destFile) && !overwriteExisting) {
+                            continue;
+                        }
+
+                        fs::copy(sourceFile, destFile,
+                            overwriteExisting ? fs::copy_options::overwrite_existing
+                                             : fs::copy_options::skip_existing);
+
+                        try {
+                            struct stat sourceStat;
+                            if (stat(sourceFile.c_str(), &sourceStat) == 0) {
+                                chmod(destFile.c_str(), sourceStat.st_mode);
+
+                                struct timespec times[2];
+                                times[0].tv_sec = sourceStat.st_atime;
+                                times[0].tv_nsec = 0;
+                                times[1].tv_sec = sourceStat.st_mtime;
+                                times[1].tv_nsec = 0;
+                                utimensat(AT_FDCWD, destFile.c_str(), times, 0);
+                            }
+                        } catch (...) {
+                        }
+
+                        filesRestored++;
+                        copiedSize += fs::file_size(sourceFile);
+
+                        int progress = 20 + (int)((copiedSize * 70) / totalSize);
+                        if (filesRestored % 10 == 0) {
+                            std::string msg = "Restored " + std::to_string(filesRestored) +
+                                            " of " + std::to_string(filesToRestore.size()) + " files";
+                            ReportProgress(progress, msg);
+                        }
+
+                    } catch (const std::exception& e) {
+                        std::cerr << "Warning: Failed to restore " << sourceFile << ": " << e.what() << std::endl;
                         continue;
                     }
-
-                    // Copy file
-                    fs::copy(sourceFile, destFile, 
-                        overwriteExisting ? fs::copy_options::overwrite_existing 
-                                         : fs::copy_options::skip_existing);
-
-                    // Copy permissions and timestamps
-                    try {
-                        struct stat sourceStat;
-                        if (stat(sourceFile.c_str(), &sourceStat) == 0) {
-                            chmod(destFile.c_str(), sourceStat.st_mode);
-                            
-                            struct timespec times[2];
-                            times[0].tv_sec = sourceStat.st_atime;
-                            times[0].tv_nsec = 0;
-                            times[1].tv_sec = sourceStat.st_mtime;
-                            times[1].tv_nsec = 0;
-                            utimensat(AT_FDCWD, destFile.c_str(), times, 0);
-                        }
-                    } catch (...) {
-                        // Ignore attribute errors
-                    }
-
-                    filesRestored++;
-                    copiedSize += fs::file_size(sourceFile);
-
-                    // Update progress
-                    int progress = 20 + (int)((copiedSize * 70) / totalSize);
-                    if (filesRestored % 10 == 0) {
-                        std::string msg = "Restored " + std::to_string(filesRestored) + 
-                                        " of " + std::to_string(filesToRestore.size()) + " files";
-                        ReportProgress(progress, msg);
-                    }
-
-                } catch (const std::exception& e) {
-                    std::cerr << "Warning: Failed to restore " << sourceFile << ": " << e.what() << std::endl;
-                    continue;
                 }
-            }
 
-            ReportProgress(90, "Verifying restore...");
+                ReportProgress(90, "Verifying restore...");
 
-            // Quick verification
-            int verifiedFiles = 0;
-            for (const auto& sourceFile : filesToRestore) {
-                fs::path relativePath = fs::relative(sourceFile, backupPath);
-                fs::path destFile = fs::path(destPath) / relativePath;
+                int verifiedFiles = 0;
+                for (const auto& sourceFile : filesToRestore) {
+                    fs::path relativePath = fs::relative(sourceFile, workingPath);
+                    fs::path destFile = fs::path(destPath) / relativePath;
 
-                if (fs::exists(destFile)) {
-                    verifiedFiles++;
+                    if (fs::exists(destFile)) {
+                        verifiedFiles++;
+                    }
                 }
-            }
 
-            ReportProgress(100, "Restore completed! Restored " + std::to_string(filesRestored) + " files");
-
-            return 0;
+                ReportProgress(100, "Restore completed! Restored " + std::to_string(filesRestored) + " files");
+                return 0;
+            });
 
         } catch (const std::exception& e) {
             SetError(std::string("Exception during restore: ") + e.what());
@@ -438,70 +536,122 @@ public:
         std::vector<BackupDate> dates;
 
         try {
-            if (!fs::exists(backupPath) || !fs::is_directory(backupPath)) {
-                SetError("Backup path does not exist or is not a directory");
+            if (!fs::exists(backupPath)) {
+                SetError("Backup path does not exist.");
+                return dates;
+            }
+
+            if (fs::is_regular_file(backupPath)) {
+                BackupDate date;
+                auto fileName = fs::path(backupPath).filename().string();
+                std::string lowerFileName = fileName;
+                std::transform(lowerFileName.begin(), lowerFileName.end(), lowerFileName.begin(), ::tolower);
+
+                if (lowerFileName.find("incremental") != std::string::npos) {
+                    date.type = "Incremental";
+                } else if (lowerFileName.find("differential") != std::string::npos) {
+                    date.type = "Differential";
+                } else {
+                    date.type = "Full";
+                }
+
+                uintmax_t totalSize = fs::file_size(backupPath);
+                if (totalSize < 1024) {
+                    date.size = std::to_string(totalSize) + " B";
+                } else if (totalSize < 1024 * 1024) {
+                    date.size = std::to_string(totalSize / 1024) + " KB";
+                } else if (totalSize < 1024 * 1024 * 1024) {
+                    date.size = std::to_string(totalSize / (1024 * 1024)) + " MB";
+                } else {
+                    double gb = static_cast<double>(totalSize) / (1024.0 * 1024.0 * 1024.0);
+                    char buf[32];
+                    snprintf(buf, sizeof(buf), "%.2f GB", gb);
+                    date.size = buf;
+                }
+
+                auto ftime = fs::last_write_time(backupPath);
+                auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                    ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
+                time_t cftime = std::chrono::system_clock::to_time_t(sctp);
+                struct tm timeinfo;
+                localtime_r(&cftime, &timeinfo);
+
+                char dateStr[128];
+                strftime(dateStr, sizeof(dateStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
+                date.date = dateStr;
+                date.path = backupPath;
+                dates.push_back(date);
+                return dates;
+            }
+
+            if (!fs::is_directory(backupPath)) {
+                SetError("Backup path is not a directory or backup file.");
                 return dates;
             }
 
             for (const auto& entry : fs::directory_iterator(backupPath)) {
-                if (entry.is_directory()) {
-                    std::string folderName = entry.path().filename().string();
-                    
-                    // Check if it looks like a backup folder
-                    std::string type = "Full";
-                    if (folderName.find("Full") != std::string::npos) {
-                        type = "Full";
-                    } else if (folderName.find("Incremental") != std::string::npos) {
-                        type = "Incremental";
-                    } else if (folderName.find("Differential") != std::string::npos) {
-                        type = "Differential";
-                    } else {
-                        continue; // Not a backup folder
-                    }
+                if (!entry.is_directory() && !entry.is_regular_file()) {
+                    continue;
+                }
 
-                    // Get folder size
-                    uintmax_t totalSize = 0;
-                    try {
+                std::string folderName = entry.path().filename().string();
+                std::string type = "Full";
+
+                if (folderName.find("Full") != std::string::npos) {
+                    type = "Full";
+                } else if (folderName.find("Incremental") != std::string::npos || folderName.find("incremental") != std::string::npos) {
+                    type = "Incremental";
+                } else if (folderName.find("Differential") != std::string::npos || folderName.find("differential") != std::string::npos) {
+                    type = "Differential";
+                } else if (entry.is_regular_file() && (entry.path().extension() == ".ssb" || entry.path().extension() == ".wim")) {
+                    type = "Full";
+                } else {
+                    continue;
+                }
+
+                uintmax_t totalSize = 0;
+                try {
+                    if (entry.is_directory()) {
                         for (const auto& file : fs::recursive_directory_iterator(entry.path())) {
                             if (fs::is_regular_file(file)) {
                                 totalSize += fs::file_size(file);
                             }
                         }
-                    } catch (...) {}
-
-                    // Format size
-                    std::string sizeStr;
-                    if (totalSize < 1024) {
-                        sizeStr = std::to_string(totalSize) + " B";
-                    } else if (totalSize < 1024 * 1024) {
-                        sizeStr = std::to_string(totalSize / 1024) + " KB";
-                    } else if (totalSize < 1024 * 1024 * 1024) {
-                        sizeStr = std::to_string(totalSize / (1024 * 1024)) + " MB";
                     } else {
-                        double gb = static_cast<double>(totalSize) / (1024.0 * 1024.0 * 1024.0);
-                        char buf[32];
-                        snprintf(buf, sizeof(buf), "%.2f GB", gb);
-                        sizeStr = buf;
+                        totalSize = fs::file_size(entry.path());
                     }
+                } catch (...) {}
 
-                    // Get modification time
-                    auto ftime = fs::last_write_time(entry.path());
-                    auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                        ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
-                    time_t cftime = std::chrono::system_clock::to_time_t(sctp);
-                    struct tm timeinfo;
-                    localtime_r(&cftime, &timeinfo);
-
-                    char dateStr[128];
-                    strftime(dateStr, sizeof(dateStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
-
-                    BackupDate date;
-                    date.date = dateStr;
-                    date.type = type;
-                    date.size = sizeStr;
-                    date.path = entry.path().string();
-                    dates.push_back(date);
+                std::string sizeStr;
+                if (totalSize < 1024) {
+                    sizeStr = std::to_string(totalSize) + " B";
+                } else if (totalSize < 1024 * 1024) {
+                    sizeStr = std::to_string(totalSize / 1024) + " KB";
+                } else if (totalSize < 1024 * 1024 * 1024) {
+                    sizeStr = std::to_string(totalSize / (1024 * 1024)) + " MB";
+                } else {
+                    double gb = static_cast<double>(totalSize) / (1024.0 * 1024.0 * 1024.0);
+                    char buf[32];
+                    snprintf(buf, sizeof(buf), "%.2f GB", gb);
+                    sizeStr = buf;
                 }
+
+                auto ftime = fs::last_write_time(entry.path());
+                auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                    ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
+                time_t cftime = std::chrono::system_clock::to_time_t(sctp);
+                struct tm timeinfo;
+                localtime_r(&cftime, &timeinfo);
+
+                char dateStr[128];
+                strftime(dateStr, sizeof(dateStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
+
+                BackupDate date;
+                date.date = dateStr;
+                date.type = type;
+                date.size = sizeStr;
+                date.path = entry.path().string();
+                dates.push_back(date);
             }
 
             // Sort by date (newest first)
@@ -532,31 +682,63 @@ public:
         std::vector<RestoreItem> tree;
 
         try {
-            if (!fs::exists(backupPath)) {
-                SetError("Backup path does not exist");
-                return tree;
-            }
+            WithPreparedBackup<int>(backupPath, [&](const std::string& workingPath) {
+                if (!fs::exists(workingPath)) {
+                    SetError("Backup path does not exist");
+                    return 0;
+                }
 
-            // Build tree from backup contents
-            // For simplicity, we'll create a flat list of drives/volumes
-            // In production, this would parse the backup metadata
-
-            if (fs::is_directory(backupPath)) {
-                for (const auto& entry : fs::directory_iterator(backupPath)) {
-                    RestoreItem item;
-                    item.name = entry.path().filename().string();
-                    item.path = entry.path().string();
-                    item.type = entry.is_directory() ? "Folder" : "File";
-                    item.checked = false;
-
-                    // Add children if directory
-                    if (entry.is_directory()) {
-                        item.children = BuildTreeRecursive(entry.path().string(), 1);
+                if (fs::is_regular_file(workingPath) && IsWimBackup(workingPath)) {
+                    std::string command = "wimlib-imagex dir '" + workingPath + "' 1 2>/dev/null";
+                    FILE* pipe = popen(command.c_str(), "r");
+                    if (!pipe) {
+                        SetError("Failed to read WIM contents.");
+                        return 0;
                     }
 
-                    tree.push_back(item);
+                    char buffer[1024];
+                    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+                        std::string line(buffer);
+                        if (line.empty() || line.find("Directory listing") != std::string::npos || line.find("------") != std::string::npos) {
+                            continue;
+                        }
+
+                        line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+                        line.erase(std::remove(line.begin(), line.end(), '\n'), line.end());
+                        if (line.empty()) {
+                            continue;
+                        }
+
+                        RestoreItem item;
+                        item.name = line;
+                        item.path = line;
+                        item.type = "Item";
+                        item.checked = false;
+                        tree.push_back(item);
+                    }
+
+                    pclose(pipe);
+                    return 0;
                 }
-            }
+
+                if (fs::is_directory(workingPath)) {
+                    for (const auto& entry : fs::directory_iterator(workingPath)) {
+                        RestoreItem item;
+                        item.name = entry.path().filename().string();
+                        item.path = entry.path().string();
+                        item.type = entry.is_directory() ? "Folder" : "File";
+                        item.checked = false;
+
+                        if (entry.is_directory()) {
+                            item.children = BuildTreeRecursive(entry.path().string(), 1);
+                        }
+
+                        tree.push_back(item);
+                    }
+                }
+
+                return 0;
+            });
 
         } catch (const std::exception& e) {
             SetError(std::string("Failed to build restore tree: ") + e.what());

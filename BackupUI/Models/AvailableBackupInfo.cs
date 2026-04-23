@@ -12,6 +12,9 @@ namespace BackupUI.Models
         public string BackupType { get; set; } = ""; // Full, Incremental, Differential
         public DateTime BackupDate { get; set; }
         public string BackupPath { get; set; } = "";
+        public bool IsEncrypted { get; set; }
+        public string ProtectedEncryptionPassword { get; set; } = "";
+        public string EncryptionStatus => IsEncrypted ? "Yes / Password" : "No";
         public List<BackupPoint> BackupPoints { get; set; } = new();
     }
 
