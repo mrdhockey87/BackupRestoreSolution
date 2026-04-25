@@ -619,6 +619,11 @@ private:
         g_signal_connect(radioNew, "toggled", G_CALLBACK(onDestLocationChanged), this);
         gtk_box_pack_start(GTK_BOX(box), radioNew, FALSE, FALSE, 0);
 
+        radioDisk = gtk_radio_button_new_with_label_from_widget(
+            GTK_RADIO_BUTTON(radioOriginal), "Metadata-driven disk reconstruction restore");
+        g_signal_connect(radioDisk, "toggled", G_CALLBACK(onDestLocationChanged), this);
+        gtk_box_pack_start(GTK_BOX(box), radioDisk, FALSE, FALSE, 0);
+
         // Destination path
         GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
         GtkWidget *lblDest = gtk_label_new("Destination:");
@@ -644,6 +649,11 @@ private:
             "Preserve file permissions and ownership");
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(chkPreservePerms), TRUE);
         gtk_box_pack_start(GTK_BOX(box), chkPreservePerms, FALSE, FALSE, 0);
+
+        // Disk mapping guidance
+        lblDiskMapping = gtk_label_new("For disk reconstruction restore, select a target disk device (e.g. /dev/sda) and the restore engine will rebuild the partition layout from backup metadata.");
+        gtk_label_set_line_wrap(GTK_LABEL(lblDiskMapping), TRUE);
+        gtk_box_pack_start(GTK_BOX(box), lblDiskMapping, FALSE, FALSE, 8);
 
         // Spacer
         GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);

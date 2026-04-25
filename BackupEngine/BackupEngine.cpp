@@ -105,6 +105,12 @@ public:
                 FileEntry fe = fileQueue.front();
                 fileQueue.pop();
 
+                if (progressCallback) {
+                    fs::path relativePath = fs::relative(fe.source, source);
+                    std::wstring currentItem = L"Restoring: " + relativePath.wstring();
+                    progressCallback((int)((processedFiles * 100) / (totalFiles > 0 ? totalFiles : 1)), currentItem.c_str());
+                }
+
                 // Create destination directory if needed
                 fs::path destDir = fs::path(fe.dest).parent_path();
                 if (!fs::exists(destDir)) {

@@ -177,6 +177,28 @@ extern "C" {
         int errorMsgSize,
         ProgressCallback callback);
 
+    // Check the health of a backup image using DISM
+    // Returns: 0 = Healthy, 1 = Repairable, 2 = NonRepairable, negative = error
+    BACKUPENGINE_API int CheckBackupImageHealth(
+        const wchar_t* backupPath,
+        int imageIndex,
+        bool scanImage,
+        wchar_t* healthMessage,
+        int healthMessageSize,
+        ProgressCallback callback);
+
+    // Repair a backup image using DISM RestoreHealth
+    // Returns: 0 = Healthy after repair, 1 = Repairable, 2 = NonRepairable, negative = error
+    BACKUPENGINE_API int RestoreBackupImageHealth(
+        const wchar_t* backupPath,
+        int imageIndex,
+        const wchar_t** sourcePaths,
+        int sourcePathCount,
+        bool limitAccess,
+        wchar_t* healthMessage,
+        int healthMessageSize,
+        ProgressCallback callback);
+
     // Enumerate all volumes on the system
     BACKUPENGINE_API int EnumerateVolumes(
         wchar_t* buffer,

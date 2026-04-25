@@ -13,6 +13,24 @@ namespace fs = std::filesystem;
 extern void SetLastErrorMessage(const std::wstring& error);
 
 namespace {
+    std::wstring ExtractXmlElementValue(const std::wstring& xml, const std::wstring& elementName) {
+        const std::wstring openTag = L"<" + elementName + L">";
+        const std::wstring closeTag = L"</" + elementName + L">";
+
+        size_t start = xml.find(openTag);
+        if (start == std::wstring::npos) {
+            return L"";
+        }
+
+        start += openTag.length();
+        size_t end = xml.find(closeTag, start);
+        if (end == std::wstring::npos || end <= start) {
+            return L"";
+        }
+
+        return xml.substr(start, end - start);
+    }
+
     // Helper function to restore system state from backup
     bool RestoreSystemStateFiles(const std::wstring& backupPath, ProgressCallback callback) {
         try {
@@ -255,6 +273,12 @@ extern "C" {
 
                     fs::path relativePath = fs::relative(sourceFile, backupPath);
                     fs::path destFile = fs::path(volumePath) / relativePath;
+
+                    if (callback) {
+                        std::wstring currentItem = L"Restoring: " + relativePath.wstring();
+                        int percent = 10 + (int)((processedFiles * 70) / (totalFiles > 0 ? totalFiles : 1));
+                        callback(percent, currentItem.c_str());
+                    }
 
                     // Create destination directory
                     fs::create_directories(destFile.parent_path());
@@ -560,6 +584,10 @@ extern "C" {
             if (descStart != std::wstring::npos && descEnd != std::wstring::npos) {
                 descStart += 13; // Skip "<DESCRIPTION>"
                 std::wstring desc = xml.substr(descStart, descEnd - descStart);
+                std::wstring metadataFragment = ExtractXmlElementValue(xml, L"BACKUPRESTOREMETADATA");
+                if (!metadataFragment.empty()) {
+                    desc += L"|BACKUPRESTOREMETADATA|" + metadataFragment;
+                }
                 wcsncpy_s(imageDescription, imageDescriptionSize, desc.c_str(), _TRUNCATE);
             }
             else {

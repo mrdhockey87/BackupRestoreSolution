@@ -23,6 +23,23 @@ typedef void (*ProgressCallback)(int percentage, const char* message);
 
 class RestoreEngine {
 private:
+    struct RestoreVolumePlan {
+        int imageIndex = 0;
+        int sourceDiskNumber = -1;
+        unsigned long long sourceDiskSizeBytes = 0;
+        std::string sourceVolumeGuidPath;
+        std::string sourceVolumeMountPath;
+        std::string sourceVolumeLabel;
+        std::string sourceFileSystem;
+        std::string partitionStyle;
+        unsigned long partitionNumber = 0;
+        unsigned long long partitionOffsetBytes = 0;
+        unsigned long long partitionLengthBytes = 0;
+        std::string partitionType;
+        bool isBootVolume = false;
+        bool isSystemVolume = false;
+    };
+
     ProgressCallback progressCallback;
     std::string lastError;
     std::string backupPassword;
@@ -40,6 +57,338 @@ private:
             progressCallback(percentage, message.c_str());
         }
         std::cout << "[" << percentage << "%] " << message << std::endl;
+    }
+
+    static std::string Trim(const std::string& value) {
+        size_t start = value.find_first_not_of(" \t\r\n");
+        size_t end = value.find_last_not_of(" \t\r\n");
+        if (start == std::string::npos || end == std::string::npos || end < start) {
+            return {};
+        }
+        return value.substr(start, end - start + 1);
+    }
+
+    static bool LooksLikeBlockDevice(const std::string& path) {
+        return path.rfind("/dev/", 0) == 0;
+    }
+
+    static std::string CaptureCommandOutput(const std::string& cmd) {
+        std::array<char, 1024> buffer{};
+        std::string output;
+        FILE* pipe = popen(cmd.c_str(), "r");
+        if (!pipe) {
+            return output;
+        }
+        while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+            output += buffer.data();
+        }
+        pclose(pipe);
+        return output;
+    }
+
+    bool ParseRestoreMetadataBlob(const std::string& blob, RestoreVolumePlan& plan) {
+        auto readTag = [&](const std::string& tag) -> std::string {
+            const std::string open = "<" + tag + ">";
+            const std::string close = "</" + tag + ">";
+            size_t start = blob.find(open);
+            if (start == std::string::npos) return {};
+            start += open.size();
+            size_t end = blob.find(close, start);
+            if (end == std::string::npos || end < start) return {};
+            return Trim(blob.substr(start, end - start));
+        };
+
+        std::string diskNumber = readTag("SOURCE_DISK_NUMBER");
+        if (diskNumber.empty()) {
+            return false;
+        }
+
+    bool IsMetadataAwareWimBackup(const std::string& path) {
+        if (!IsWimBackup(path)) {
+            return false;
+        }
+
+        std::string info = CaptureCommandOutput("wimlib-imagex info '" + path + "' --detailed 2>/dev/null");
+        return info.find("BACKUPRESTOREMETADATA") != std::string::npos;
+    }
+
+        try {
+            plan.sourceDiskNumber = std::stoi(diskNumber);
+            plan.sourceDiskSizeBytes = std::stoull(readTag("SOURCE_DISK_SIZE_BYTES"));
+            plan.sourceVolumeGuidPath = readTag("SOURCE_VOLUME_GUID_PATH");
+            plan.sourceVolumeMountPath = readTag("SOURCE_VOLUME_MOUNT_PATH");
+            plan.sourceVolumeLabel = readTag("SOURCE_VOLUME_LABEL");
+            plan.sourceFileSystem = readTag("SOURCE_FILESYSTEM");
+            plan.partitionStyle = readTag("PARTITION_STYLE");
+            plan.partitionNumber = static_cast<unsigned long>(std::stoul(readTag("PARTITION_NUMBER").empty() ? "0" : readTag("PARTITION_NUMBER")));
+            plan.partitionOffsetBytes = std::stoull(readTag("PARTITION_OFFSET_BYTES"));
+            plan.partitionLengthBytes = std::stoull(readTag("PARTITION_LENGTH_BYTES"));
+            plan.partitionType = readTag("PARTITION_TYPE");
+            std::string isBoot = readTag("IS_BOOT_VOLUME");
+            std::string isSystem = readTag("IS_SYSTEM_VOLUME");
+            plan.isBootVolume = (isBoot == "true" || isBoot == "1");
+            plan.isSystemVolume = (isSystem == "true" || isSystem == "1");
+            std::string imageIndex = readTag("VOLUME_INDEX");
+            plan.imageIndex = imageIndex.empty() ? 0 : std::stoi(imageIndex);
+            return true;
+        }
+        catch (...) {
+            return false;
+        }
+    }
+
+    int RestoreDisk(const std::string& backupPath,
+                    const std::string& targetDisk,
+                    ProgressCallback callback) {
+        try {
+            return WithPreparedBackup<int>(backupPath, [&](const std::string& workingPath) {
+                if (!fs::exists(workingPath)) {
+                    SetError("Backup path does not exist: " + workingPath);
+                    return -1;
+                }
+
+                if (fs::is_regular_file(workingPath) && IsMetadataAwareWimBackup(workingPath)) {
+                    return RestoreDiskFromMetadata(workingPath, targetDisk, callback);
+                }
+
+                if (fs::is_regular_file(workingPath) && IsWimBackup(workingPath)) {
+                    SetError("Legacy WIM backups without reconstruction metadata are not supported for disk restore.");
+                    return -2;
+                }
+
+                SetError("Disk restore requires metadata-aware WIM backups.");
+                return -3;
+            });
+        } catch (const std::exception& e) {
+            SetError(std::string("Exception during disk restore: ") + e.what());
+            return -99;
+        }
+    }
+
+    std::vector<RestoreVolumePlan> GetWimRestorePlan(const std::string& wimPath) {
+        std::vector<RestoreVolumePlan> plans;
+
+        std::string info = CaptureCommandOutput("wimlib-imagex info '" + wimPath + "' --detailed 2>/dev/null");
+        if (info.empty()) {
+            return plans;
+        }
+
+        const std::string marker = "BACKUPRESTOREMETADATA";
+        size_t searchPos = 0;
+        while (true) {
+            size_t markerPos = info.find(marker, searchPos);
+            if (markerPos == std::string::npos) {
+                break;
+            }
+
+            size_t imageStart = info.rfind("Image ", markerPos);
+            int imageIndex = 0;
+            if (imageStart != std::string::npos) {
+                size_t numStart = imageStart + 6;
+                size_t numEnd = info.find_first_not_of("0123456789", numStart);
+                try {
+                    imageIndex = std::stoi(info.substr(numStart, numEnd - numStart));
+                }
+                catch (...) {
+                    imageIndex = static_cast<int>(plans.size()) + 1;
+                }
+            }
+
+            size_t blobStart = info.rfind("<BACKUPRESTOREMETADATA>", markerPos);
+            size_t blobEnd = info.find("</BACKUPRESTOREMETADATA>", markerPos);
+            if (blobStart == std::string::npos || blobEnd == std::string::npos) {
+                searchPos = markerPos + marker.size();
+                continue;
+            }
+
+            blobEnd += std::string("</BACKUPRESTOREMETADATA>").size();
+            std::string blob = info.substr(blobStart, blobEnd - blobStart);
+            RestoreVolumePlan plan;
+            if (ParseRestoreMetadataBlob(blob, plan)) {
+                if (imageIndex > 0) {
+                    plan.imageIndex = imageIndex;
+                }
+                plans.push_back(plan);
+            }
+
+            searchPos = blobEnd;
+        }
+
+        std::sort(plans.begin(), plans.end(), [](const RestoreVolumePlan& a, const RestoreVolumePlan& b) {
+            return a.partitionNumber < b.partitionNumber;
+        });
+
+        return plans;
+    }
+
+    unsigned long long GetDeviceSizeBytes(const std::string& device) {
+        std::string cmd = "blockdev --getsize64 '" + device + "' 2>/dev/null";
+        std::string output = Trim(CaptureCommandOutput(cmd));
+        if (output.empty()) {
+            return 0;
+        }
+
+    int RestoreDiskFromMetadata(const std::string& wimPath,
+                                const std::string& targetDisk,
+                                ProgressCallback callback) {
+        auto plans = GetWimRestorePlan(wimPath);
+        if (plans.empty()) {
+            SetError("No reconstruction metadata found in WIM backup.");
+            return -1;
+        }
+
+        if (!LooksLikeBlockDevice(targetDisk)) {
+            SetError("Target disk must be a block device path like /dev/sdX");
+            return -2;
+        }
+
+        if (callback) {
+            callback(0, "Starting metadata-driven disk reconstruction...");
+        }
+
+        std::vector<std::string> partitions;
+        if (!FormatTargetDisk(targetDisk, plans, partitions)) {
+            return -3;
+        }
+
+        if (partitions.size() != plans.size()) {
+            SetError("Partition creation mismatch during disk reconstruction.");
+            return -4;
+        }
+
+        for (size_t i = 0; i < plans.size(); ++i) {
+            const auto& plan = plans[i];
+            const auto& partitionDevice = partitions[i];
+            std::string mountPoint = "/mnt/backup_restore_partition_" + std::to_string(i + 1);
+
+            if (callback) {
+                callback(10 + static_cast<int>((i * 80) / plans.size()), "Restoring partition " + std::to_string(plan.partitionNumber == 0 ? i + 1 : plan.partitionNumber));
+            }
+
+            if (!MountAndRestorePartition(partitionDevice, mountPoint, plan, wimPath)) {
+                return -5;
+            }
+
+            if (callback) {
+                callback(10 + static_cast<int>(((i + 1) * 80) / plans.size()), "Restored partition " + std::to_string(plan.partitionNumber == 0 ? i + 1 : plan.partitionNumber));
+            }
+        }
+
+        if (callback) {
+            callback(100, "Disk reconstruction restore completed successfully");
+        }
+
+        return 0;
+    }
+        try {
+            return std::stoull(output);
+        }
+        catch (...) {
+            return 0;
+        }
+    }
+
+    bool RunCommand(const std::string& cmd, std::string* output = nullptr) {
+        std::string fullCmd = cmd + " 2>&1";
+        std::string result = CaptureCommandOutput(fullCmd);
+        if (output) {
+            *output = result;
+        }
+        return true;
+    }
+
+    bool FormatTargetDisk(const std::string& device, const std::vector<RestoreVolumePlan>& plans, std::vector<std::string>& partitions) {
+        if (device.empty() || plans.empty()) {
+            SetError("Invalid disk formatting request");
+            return false;
+        }
+
+        unsigned long long targetSize = GetDeviceSizeBytes(device);
+        unsigned long long sourceTotal = 0;
+        for (const auto& p : plans) {
+            sourceTotal += p.partitionLengthBytes > 0 ? p.partitionLengthBytes : 0;
+        }
+
+        if (sourceTotal == 0) {
+            sourceTotal = 1;
+        }
+
+        std::string partitionTable = plans.front().partitionStyle == "MBR" ? "msdos" : "gpt";
+        RunCommand("parted -s '" + device + "' mklabel " + partitionTable);
+
+        unsigned long long startMiB = 1;
+        const unsigned long long minMiB = 1;
+        for (size_t i = 0; i < plans.size(); ++i) {
+            auto& plan = plans[i];
+            unsigned long long scaledBytes = plan.partitionLengthBytes;
+            if (targetSize > 0 && sourceTotal > targetSize) {
+                scaledBytes = (plan.partitionLengthBytes * targetSize) / sourceTotal;
+            }
+
+            unsigned long long lengthMiB = std::max<unsigned long long>(minMiB, scaledBytes / (1024ULL * 1024ULL));
+            unsigned long long endMiB = startMiB + lengthMiB;
+            if (i == plans.size() - 1 && targetSize > 0) {
+                unsigned long long diskMiB = targetSize / (1024ULL * 1024ULL);
+                if (diskMiB > startMiB) {
+                    endMiB = diskMiB - 1;
+                }
+            }
+
+            std::string partName = plan.sourceFileSystem.empty() ? "part" : plan.sourceFileSystem;
+            std::string mkpart = "parted -s '" + device + "' mkpart " + partName + " " + std::to_string(startMiB) + "MiB " + std::to_string(endMiB) + "MiB";
+            RunCommand(mkpart);
+
+            if (plans.front().partitionStyle == "GPT") {
+                if (plan.isBootVolume) {
+                    RunCommand("parted -s '" + device + "' set " + std::to_string(i + 1) + " esp on");
+                }
+                if (plan.isSystemVolume) {
+                    RunCommand("parted -s '" + device + "' set " + std::to_string(i + 1) + " boot on");
+                }
+            }
+
+            std::string partitionPath = device + std::to_string(i + 1);
+            if (device.find("nvme") != std::string::npos || device.find("mmcblk") != std::string::npos) {
+                partitionPath = device + "p" + std::to_string(i + 1);
+            }
+            partitions.push_back(partitionPath);
+            startMiB = endMiB + 1;
+        }
+
+        return true;
+    }
+
+    bool MountAndRestorePartition(const std::string& partitionDevice, const std::string& mountPoint, const RestoreVolumePlan& plan, const std::string& wimPath) {
+        fs::create_directories(mountPoint);
+
+        std::string fsType = plan.sourceFileSystem;
+        std::transform(fsType.begin(), fsType.end(), fsType.begin(), ::tolower);
+
+        if (fsType.find("fat") != std::string::npos) {
+            RunCommand("mkfs.vfat -F 32 '" + partitionDevice + "'");
+        } else if (fsType.find("ext") != std::string::npos) {
+            RunCommand("mkfs.ext4 -F '" + partitionDevice + "'");
+        } else {
+            RunCommand("mkfs.ntfs -f '" + partitionDevice + "'");
+        }
+
+        std::string mountCmd = "mount '" + partitionDevice + "' '" + mountPoint + "'";
+        if (system(mountCmd.c_str()) != 0) {
+            SetError("Failed to mount partition for restore: " + partitionDevice);
+            return false;
+        }
+
+        std::string extractCmd = "wimlib-imagex extract '" + wimPath + "' " + std::to_string(plan.imageIndex) + " '" + mountPoint + "' --preserve-modes --preserve-timestamps";
+        if (system(extractCmd.c_str()) != 0) {
+            std::string umountCmd = "umount '" + mountPoint + "'";
+            system(umountCmd.c_str());
+            SetError("Failed to extract WIM image to partition: " + mountPoint);
+            return false;
+        }
+
+        system(("sync '" + mountPoint + "'").c_str());
+        system(("umount '" + mountPoint + "'").c_str());
+        return true;
     }
 
     bool IsEncryptedBackup(const std::string& path) {
@@ -321,6 +670,16 @@ public:
                 if (!fs::exists(workingPath)) {
                     SetError("Backup path does not exist: " + workingPath);
                     return -1;
+                }
+
+                if (fs::is_regular_file(workingPath) && IsMetadataAwareWimBackup(workingPath)) {
+                    ReportProgress(4, "Detected metadata-aware WIM backup");
+                    int result = ExtractWimBackup(workingPath, destPath);
+                    if (result != 0) {
+                        return result;
+                    }
+                    ReportProgress(100, "WIM restore complete!");
+                    return 0;
                 }
 
                 if (fs::is_regular_file(workingPath) && IsWimBackup(workingPath)) {
@@ -831,23 +1190,23 @@ public:
                             hasSystemState = fs::exists(sourcePath + "/SystemState");
                         } catch (...) {}
 
-                        if (hasDiskImage) {
-                            // This is a disk backup - needs special handling
-                            if (callback) {
-                                callback(percentage, "Disk image detected: " + item);
-                                callback(percentage, "WARNING: Disk restore requires root privileges and target device");
-                                callback(percentage, "Skipping automatic disk restore - use manual dd or restore tools");
-                            }
-                            
-                            // For Linux, we can't automatically restore disk images without:
-                            // 1. Root privileges
-                            // 2. Target device specification
-                            // 3. Confirmation to overwrite
-                            // So we log a warning and skip, or could implement dd command
-                            
-                            // Optional: implement disk restore for Linux
-                            // This would require: sudo dd if=disk_0.img of=/dev/sdX bs=1M status=progress
+                if (hasDiskImage) {
+                    if (callback) {
+                        callback(percentage, "Disk image detected: " + item);
+                    }
+
+                    if (IsMetadataAwareWimBackup(sourcePath)) {
+                        if (callback) {
+                            callback(percentage, "Metadata-aware disk restore available");
                         }
+                        RestoreDisk(sourcePath, targetPath, callback);
+                    } else {
+                        if (callback) {
+                            callback(percentage, "WARNING: Legacy disk backups without reconstruction metadata cannot be restored automatically");
+                            callback(percentage, "Skipping automatic disk restore - create a new backup with reconstruction metadata");
+                        }
+                    }
+                }
                         else if (hasSystemState) {
                             // This is a Windows system state backup
                             // Linux can't restore Windows registry/BCD, but can restore files

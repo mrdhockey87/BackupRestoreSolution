@@ -18,6 +18,22 @@ namespace BackupEngine {
         return true;
     }
 
+    static std::wstring SanitizeMountName(const wchar_t* backupName) {
+        if (!backupName || wcslen(backupName) == 0) {
+            return L"Backup";
+        }
+
+        std::wstring sanitized(backupName);
+        const std::wstring invalidChars = L"<>:\"/\\|?*";
+        for (auto& ch : sanitized) {
+            if (invalidChars.find(ch) != std::wstring::npos) {
+                ch = L'_';
+            }
+        }
+
+        return sanitized;
+    }
+
     void WimMountManager::Cleanup() {
         if (initialized) {
             UnmountAll();
@@ -606,12 +622,14 @@ namespace BackupEngine {
         // We don't care about the result - if it already exists, that's fine
         CreateDirectoryW(mountBase.c_str(), nullptr);
 
+        std::wstring safeName = SanitizeMountName(backupName);
+
         // Create unique mount point using backup name + image index + timestamp
         SYSTEMTIME st;
         GetSystemTime(&st);
 
         std::wstringstream ss;
-        ss << mountBase << backupName << L"_Image" << imageIndex << L"_"
+        ss << mountBase << safeName << L"_Image" << imageIndex << L"_"
            << st.wYear << std::setw(2) << std::setfill(L'0') << st.wMonth
            << std::setw(2) << st.wDay << L"_"
            << std::setw(2) << st.wHour << std::setw(2) << st.wMinute

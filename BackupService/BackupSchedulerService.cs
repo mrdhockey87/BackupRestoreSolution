@@ -170,6 +170,53 @@ namespace BackupService
                         }
                     });
 
+                // If backup succeeded and verification is requested, run verification
+                if (success && job.VerifyAfterBackup && !_progressTracker.GetCancellationToken(job.Id).IsCancellationRequested)
+                {
+                    _logger.LogInformation("Starting verification after backup completion for job: {jobName}", job.Name);
+                    LogToFile($"Starting verification after backup completion for: {job.Name}");
+                    BackupLogger.LogInfo(job.Name, "Starting backup verification after completion");
+
+                    // Transition to verification phase
+                    _progressTracker.StartVerification(job.Id);
+
+                    bool verifySuccess = await _backupExecutor.VerifyBackupWithProgress(
+                        job,
+                        (percentage, message) => _progressTracker.UpdateProgress(job.Id, percentage, message),
+                        _progressTracker.GetCancellationToken(job.Id),
+                        message => {
+                            LogToFile(message);
+                            if (message.Contains("fail", StringComparison.OrdinalIgnoreCase) || 
+                                message.Contains("error", StringComparison.OrdinalIgnoreCase))
+                            {
+                                BackupLogger.LogError(job.Name, message);
+                            }
+                            else if (message.Contains("success", StringComparison.OrdinalIgnoreCase) || 
+                                     message.Contains("completed", StringComparison.OrdinalIgnoreCase))
+                            {
+                                BackupLogger.LogSuccess(job.Name, message);
+                            }
+                            else
+                            {
+                                BackupLogger.LogInfo(job.Name, message);
+                            }
+                        });
+
+                    if (verifySuccess)
+                    {
+                        _logger.LogInformation("Verification completed successfully for job: {jobName}", job.Name);
+                        LogToFile($"Verification completed successfully for: {job.Name}");
+                        BackupLogger.LogSuccess(job.Name, "Backup verification completed successfully");
+                    }
+                    else
+                    {
+                        _logger.LogError("Verification failed for job: {jobName}", job.Name);
+                        LogToFile($"Verification failed for: {job.Name}");
+                        BackupLogger.LogError(job.Name, "Backup verification failed");
+                        success = false; // Mark overall job as failed if verification fails
+                    }
+                }
+
                 _progressTracker.CompleteJob(job.Id, success);
 
                 if (success)

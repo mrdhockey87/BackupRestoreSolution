@@ -69,6 +69,16 @@ namespace BackupUI.Windows
                         txtCurrentFile.Text = "";
                     }
 
+                    // Update window title based on phase
+                    if (progress.IsVerifying)
+                    {
+                        Title = $"Verification Progress: {_jobName}";
+                    }
+                    else if (progress.IsRunning)
+                    {
+                        Title = $"Backup Progress: {_jobName}";
+                    }
+
                     if (!progress.IsRunning)
                     {
                         _progressTimer.Stop();

@@ -72,6 +72,7 @@ namespace BackupUI.Windows
     {
         public int ImageIndex { get; set; }
         public DateTime ImageDate { get; set; }
+        public string Name { get; set; } = string.Empty;
         public string ImageType { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
     }

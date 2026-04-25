@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using BackupCommon;
 
@@ -13,6 +15,195 @@ namespace BackupUI.Services
     /// </summary>
     public class NativeBackupMountManager
     {
+        public sealed class ImageRestoreMetadata
+        {
+            public int SourceDiskNumber { get; set; }
+            public ulong SourceDiskSizeBytes { get; set; }
+            public string SourceVolumeGuidPath { get; set; } = string.Empty;
+            public string SourceVolumeMountPath { get; set; } = string.Empty;
+            public string SourceVolumeLabel { get; set; } = string.Empty;
+            public string SourceFileSystem { get; set; } = string.Empty;
+            public string PartitionStyle { get; set; } = string.Empty;
+            public uint PartitionNumber { get; set; }
+            public ulong PartitionOffsetBytes { get; set; }
+            public ulong PartitionLengthBytes { get; set; }
+            public string PartitionType { get; set; } = string.Empty;
+            public bool IsBootVolume { get; set; }
+            public bool IsSystemVolume { get; set; }
+            public int VolumeIndex { get; set; }
+        }
+
+        public sealed class WimImageInfoResult
+        {
+            public int ImageIndex { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public string Description { get; set; } = string.Empty;
+            public ImageRestoreMetadata? RestoreMetadata { get; set; }
+        }
+
+        public sealed class RestoreDiskPlan
+        {
+            public int SourceDiskNumber { get; set; }
+            public int ImageIndex { get; set; }
+            public string ImageName { get; set; } = string.Empty;
+            public string ImageDescription { get; set; } = string.Empty;
+            public List<RestoreVolumePlan> Volumes { get; set; } = new();
+            public bool HasMetadata => Volumes.Count > 0 || SourceDiskNumber >= 0;
+        }
+
+        public sealed class RestoreVolumePlan
+        {
+            public int VolumeIndex { get; set; }
+            public string SourceVolumeGuidPath { get; set; } = string.Empty;
+            public string SourceVolumeMountPath { get; set; } = string.Empty;
+            public string SourceVolumeLabel { get; set; } = string.Empty;
+            public string SourceFileSystem { get; set; } = string.Empty;
+            public string PartitionStyle { get; set; } = string.Empty;
+            public uint PartitionNumber { get; set; }
+            public ulong PartitionOffsetBytes { get; set; }
+            public ulong PartitionLengthBytes { get; set; }
+            public string PartitionType { get; set; } = string.Empty;
+            public bool IsBootVolume { get; set; }
+            public bool IsSystemVolume { get; set; }
+        }
+
+        private sealed class MountPathWatcher : IDisposable
+        {
+            private readonly Action<int, string>? _progressCallback;
+            private readonly string _rootPath;
+            private readonly object _syncLock = new();
+            private FileSystemWatcher? _watcher;
+            private Timer? _debounceTimer;
+            private string? _pendingPath;
+            private string? _lastReportedPath;
+            private bool _disposed;
+
+            public MountPathWatcher(string rootPath, Action<int, string>? progressCallback)
+            {
+                _rootPath = rootPath;
+                _progressCallback = progressCallback;
+            }
+
+            public void Start()
+            {
+                if (_progressCallback == null || string.IsNullOrWhiteSpace(_rootPath) || !Directory.Exists(_rootPath))
+                {
+                    return;
+                }
+
+                _debounceTimer = new Timer(FlushPendingPath, null, Timeout.Infinite, Timeout.Infinite);
+                _watcher = new FileSystemWatcher(_rootPath)
+                {
+                    IncludeSubdirectories = true,
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size,
+                    EnableRaisingEvents = true
+                };
+
+                _watcher.Created += OnPathChanged;
+                _watcher.Changed += OnPathChanged;
+                _watcher.Renamed += OnPathRenamed;
+            }
+
+            private void OnPathChanged(object sender, FileSystemEventArgs e)
+            {
+                QueuePath(e.FullPath);
+            }
+
+            private void OnPathRenamed(object sender, RenamedEventArgs e)
+            {
+                QueuePath(e.FullPath);
+            }
+
+            private void QueuePath(string fullPath)
+            {
+                if (_disposed || string.IsNullOrWhiteSpace(fullPath))
+                {
+                    return;
+                }
+
+                if (Directory.Exists(fullPath) || File.Exists(fullPath))
+                {
+                    string relativePath;
+                    try
+                    {
+                        relativePath = Path.GetRelativePath(_rootPath, fullPath);
+                    }
+                    catch
+                    {
+                        relativePath = Path.GetFileName(fullPath);
+                    }
+
+                    lock (_syncLock)
+                    {
+                        _pendingPath = relativePath;
+                        _debounceTimer?.Change(150, Timeout.Infinite);
+                    }
+                }
+            }
+
+            private void FlushPendingPath(object? state)
+            {
+                string? pathToReport;
+
+                lock (_syncLock)
+                {
+                    pathToReport = _pendingPath;
+                    _pendingPath = null;
+                }
+
+                if (string.IsNullOrWhiteSpace(pathToReport) || string.Equals(pathToReport, _lastReportedPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _lastReportedPath = pathToReport;
+                _progressCallback?.Invoke(65, $"Processing: {pathToReport}");
+            }
+
+            public void Dispose()
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
+
+                if (_watcher != null)
+                {
+                    _watcher.EnableRaisingEvents = false;
+                    _watcher.Created -= OnPathChanged;
+                    _watcher.Changed -= OnPathChanged;
+                    _watcher.Renamed -= OnPathRenamed;
+                    _watcher.Dispose();
+                    _watcher = null;
+                }
+
+                _debounceTimer?.Dispose();
+                _debounceTimer = null;
+            }
+        }
+
+        private static string? TryPredictMountPath(string backupName, int imageIndex, string? tempPath)
+        {
+            try
+            {
+                string rootPath = string.IsNullOrWhiteSpace(tempPath)
+                    ? Path.Combine(Path.GetTempPath(), "BackupMounts")
+                    : Path.Combine(tempPath, "BackupMounts");
+
+                string sanitizedName = string.IsNullOrWhiteSpace(backupName)
+                    ? "Backup"
+                    : new string(backupName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch).ToArray());
+
+                return rootPath;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         // Progress callback delegate matching C++ signature
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
@@ -251,6 +442,12 @@ namespace BackupUI.Services
                                 progressCallback?.Invoke(percentage, message ?? "Processing...");
                             };
                         }
+
+                        string? predictedMountPath = TryPredictMountPath(backupName, imageIndex, tempPath);
+                        using var mountWatcher = !string.IsNullOrWhiteSpace(predictedMountPath)
+                            ? new MountPathWatcher(predictedMountPath, progressCallback)
+                            : null;
+                        mountWatcher?.Start();
 
                         bool success = WimMount_MountWim(
                             wimPath,
@@ -594,11 +791,17 @@ namespace BackupUI.Services
 
                     if (WimMount_GetImageInfo(wimPath, i, name, 256, description, 1024, errorMsg, 512))
                     {
+                        string imageName = name.ToString();
+                        string desc = description.ToString();
+
+                        if (desc.Contains("|BACKUPRESTOREMETADATA|", StringComparison.Ordinal))
+                        {
+                            desc = desc.Split(new[] { "|BACKUPRESTOREMETADATA|" }, StringSplitOptions.None)[0];
+                        }
+
                         // Parse metadata returned from C++
                         // Name format: "Disk 5 Volume 1 (Incremental) - 2026-04-22 13:45:10"
                         // Description format: job name (for newer backups)
-                        string imageName = name.ToString();
-                        string desc = description.ToString();
                         string type = "Full"; // Default
                         DateTime imageDate = DateTime.Now; // Default to now if can't parse
 
@@ -637,6 +840,7 @@ namespace BackupUI.Services
                         {
                             ImageIndex = i,
                             ImageDate = imageDate,
+                            Name = imageName,
                             ImageType = type,
                             Description = desc
                         });
@@ -649,6 +853,134 @@ namespace BackupUI.Services
             {
                 return (false, new List<Windows.BackupImageInfo>(), ex.Message);
             }
+        }
+
+        public static (bool Success, List<WimImageInfoResult> Images, string Error) GetImageInfoWithRestoreMetadata(string wimPath)
+        {
+            var (success, images, error) = GetImageInfo(wimPath);
+            if (!success)
+            {
+                return (false, new List<WimImageInfoResult>(), error);
+            }
+
+            var results = new List<WimImageInfoResult>();
+            foreach (var image in images)
+            {
+                var result = new WimImageInfoResult
+                {
+                    ImageIndex = image.ImageIndex,
+                    Name = image.Name,
+                    Description = image.Description,
+                    RestoreMetadata = ParseRestoreMetadata(image.Description)
+                };
+
+                if (result.RestoreMetadata != null && result.Description.Contains("|BACKUPRESTOREMETADATA|", StringComparison.Ordinal))
+                {
+                    result.Description = result.Description.Split(new[] { "|BACKUPRESTOREMETADATA|" }, StringSplitOptions.None)[0];
+                }
+
+                results.Add(result);
+            }
+
+            return (true, results, string.Empty);
+        }
+
+        private static ImageRestoreMetadata? ParseRestoreMetadata(string description)
+        {
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return null;
+            }
+
+            const string marker = "|BACKUPRESTOREMETADATA|";
+            int markerIndex = description.IndexOf(marker, StringComparison.Ordinal);
+            if (markerIndex < 0)
+            {
+                return null;
+            }
+
+            string metadataBlob = description[(markerIndex + marker.Length)..];
+
+            string Read(string tag)
+            {
+                string open = $"<{tag}>";
+                string close = $"</{tag}>";
+                int start = metadataBlob.IndexOf(open, StringComparison.OrdinalIgnoreCase);
+                if (start < 0) return string.Empty;
+                start += open.Length;
+                int end = metadataBlob.IndexOf(close, start, StringComparison.OrdinalIgnoreCase);
+                return end > start ? metadataBlob[start..end] : string.Empty;
+            }
+
+            var metadata = new ImageRestoreMetadata();
+            _ = int.TryParse(Read("SOURCE_DISK_NUMBER"), out var diskNumber);
+            metadata.SourceDiskNumber = diskNumber;
+            _ = ulong.TryParse(Read("SOURCE_DISK_SIZE_BYTES"), out var diskSize);
+            metadata.SourceDiskSizeBytes = diskSize;
+            metadata.SourceVolumeGuidPath = Read("SOURCE_VOLUME_GUID_PATH");
+            metadata.SourceVolumeMountPath = Read("SOURCE_VOLUME_MOUNT_PATH");
+            metadata.SourceVolumeLabel = Read("SOURCE_VOLUME_LABEL");
+            metadata.SourceFileSystem = Read("SOURCE_FILESYSTEM");
+            metadata.PartitionStyle = Read("PARTITION_STYLE");
+            _ = uint.TryParse(Read("PARTITION_NUMBER"), out var partitionNumber);
+            metadata.PartitionNumber = partitionNumber;
+            _ = ulong.TryParse(Read("PARTITION_OFFSET_BYTES"), out var partitionOffset);
+            metadata.PartitionOffsetBytes = partitionOffset;
+            _ = ulong.TryParse(Read("PARTITION_LENGTH_BYTES"), out var partitionLength);
+            metadata.PartitionLengthBytes = partitionLength;
+            metadata.PartitionType = Read("PARTITION_TYPE");
+            metadata.IsBootVolume = string.Equals(Read("IS_BOOT_VOLUME"), "true", StringComparison.OrdinalIgnoreCase);
+            metadata.IsSystemVolume = string.Equals(Read("IS_SYSTEM_VOLUME"), "true", StringComparison.OrdinalIgnoreCase);
+            _ = int.TryParse(Read("VOLUME_INDEX"), out var volumeIndex);
+            metadata.VolumeIndex = volumeIndex;
+            return metadata;
+        }
+
+        public static (bool Success, RestoreDiskPlan Plan, string Error) BuildDiskRestorePlan(string wimPath)
+        {
+            var plan = new RestoreDiskPlan();
+
+            var (success, images, error) = GetImageInfoWithRestoreMetadata(wimPath);
+            if (!success)
+            {
+                return (false, plan, error);
+            }
+
+            foreach (var image in images)
+            {
+                if (image.RestoreMetadata == null)
+                {
+                    continue;
+                }
+
+                plan.SourceDiskNumber = image.RestoreMetadata.SourceDiskNumber;
+                plan.ImageIndex = image.ImageIndex;
+                plan.ImageName = image.Name;
+                plan.ImageDescription = image.Description;
+
+                plan.Volumes.Add(new RestoreVolumePlan
+                {
+                    VolumeIndex = image.RestoreMetadata.VolumeIndex,
+                    SourceVolumeGuidPath = image.RestoreMetadata.SourceVolumeGuidPath,
+                    SourceVolumeMountPath = image.RestoreMetadata.SourceVolumeMountPath,
+                    SourceVolumeLabel = image.RestoreMetadata.SourceVolumeLabel,
+                    SourceFileSystem = image.RestoreMetadata.SourceFileSystem,
+                    PartitionStyle = image.RestoreMetadata.PartitionStyle,
+                    PartitionNumber = image.RestoreMetadata.PartitionNumber,
+                    PartitionOffsetBytes = image.RestoreMetadata.PartitionOffsetBytes,
+                    PartitionLengthBytes = image.RestoreMetadata.PartitionLengthBytes,
+                    PartitionType = image.RestoreMetadata.PartitionType,
+                    IsBootVolume = image.RestoreMetadata.IsBootVolume,
+                    IsSystemVolume = image.RestoreMetadata.IsSystemVolume
+                });
+            }
+
+            if (plan.Volumes.Count == 0)
+            {
+                return (false, plan, "No disk reconstruction metadata found in the backup.");
+            }
+
+            return (true, plan, string.Empty);
         }
     }
 }

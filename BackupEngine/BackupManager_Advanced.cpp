@@ -56,6 +56,23 @@ static std::wstring GetCurrentJobName() {
 // Uses same JSON format as BackupLogger.cs for consistency with backup logs
 // ============================================================================
 namespace {
+    struct DiskVolumeRestoreMetadata {
+        int sourceDiskNumber = -1;
+        unsigned long long sourceDiskSizeBytes = 0;
+        std::wstring sourceVolumeGuidPath;
+        std::wstring sourceVolumeMountPath;
+        std::wstring sourceVolumeLabel;
+        std::wstring sourceFileSystem;
+        std::wstring partitionStyle;
+        unsigned long partitionNumber = 0;
+        unsigned long long partitionOffsetBytes = 0;
+        unsigned long long partitionLengthBytes = 0;
+        std::wstring partitionType;
+        bool isBootVolume = false;
+        bool isSystemVolume = false;
+        int volumeIndex = 0;
+    };
+
     std::wstring TrimTrailingWhitespace(std::wstring value) {
         while (!value.empty() && (value.back() == L'\r' || value.back() == L'\n' || value.back() == L' ' || value.back() == L'\t')) {
             value.pop_back();
@@ -424,6 +441,104 @@ namespace {
         }
 
         return L"<IMAGE>" + openTag + elementValue + closeTag + L"</IMAGE>";
+    }
+
+    std::wstring AppendImageXmlFragment(const std::wstring& xml, const std::wstring& fragment) {
+        if (fragment.empty()) {
+            return xml;
+        }
+
+        const std::wstring imageCloseTag = L"</IMAGE>";
+        size_t imageClose = xml.rfind(imageCloseTag);
+        if (imageClose != std::wstring::npos) {
+            return xml.substr(0, imageClose) + fragment + xml.substr(imageClose);
+        }
+
+        return L"<IMAGE>" + fragment + L"</IMAGE>";
+    }
+
+    std::wstring FormatGuidValue(const GUID& guid) {
+        wchar_t buffer[64] = {};
+        swprintf_s(
+            buffer,
+            L"%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX",
+            guid.Data1,
+            guid.Data2,
+            guid.Data3,
+            guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
+            guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+        return buffer;
+    }
+
+    unsigned long long GetDiskSizeBytes(int diskNumber) {
+        std::wstring diskPath = L"\\\\.\\PhysicalDrive" + std::to_wstring(diskNumber);
+        HANDLE hDisk = CreateFileW(
+            diskPath.c_str(),
+            FILE_READ_ATTRIBUTES,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            nullptr,
+            OPEN_EXISTING,
+            0,
+            nullptr);
+
+        if (hDisk == INVALID_HANDLE_VALUE) {
+            return 0;
+        }
+
+        DISK_GEOMETRY_EX geometry = {};
+        DWORD bytesReturned = 0;
+        unsigned long long sizeBytes = 0;
+        if (DeviceIoControl(
+            hDisk,
+            IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,
+            nullptr,
+            0,
+            &geometry,
+            sizeof(geometry),
+            &bytesReturned,
+            nullptr)) {
+            sizeBytes = static_cast<unsigned long long>(geometry.DiskSize.QuadPart);
+        }
+
+        CloseHandle(hDisk);
+        return sizeBytes;
+    }
+
+    std::wstring GetSystemRootVolume() {
+        wchar_t windowsDirectory[MAX_PATH] = {};
+        if (GetWindowsDirectoryW(windowsDirectory, MAX_PATH) == 0) {
+            return L"";
+        }
+
+        std::wstring root = windowsDirectory;
+        if (root.length() >= 2) {
+            root = root.substr(0, 2);
+        }
+        return root;
+    }
+
+    std::wstring BuildDiskVolumeMetadataFragment(const DiskVolumeRestoreMetadata& metadata) {
+        auto boolText = [](bool value) { return value ? L"true" : L"false"; };
+
+        std::wstring fragment = L"<BACKUPRESTOREMETADATA>";
+        fragment += L"<SCHEMA_VERSION>1</SCHEMA_VERSION>";
+        fragment += L"<BACKUP_KIND>DISK_VOLUME_IMAGE</BACKUP_KIND>";
+        fragment += L"<SOURCE_DISK_NUMBER>" + std::to_wstring(metadata.sourceDiskNumber) + L"</SOURCE_DISK_NUMBER>";
+        fragment += L"<SOURCE_DISK_SIZE_BYTES>" + std::to_wstring(metadata.sourceDiskSizeBytes) + L"</SOURCE_DISK_SIZE_BYTES>";
+        fragment += L"<SOURCE_VOLUME_GUID_PATH>" + SanitizeXmlName(metadata.sourceVolumeGuidPath) + L"</SOURCE_VOLUME_GUID_PATH>";
+        fragment += L"<SOURCE_VOLUME_MOUNT_PATH>" + SanitizeXmlName(metadata.sourceVolumeMountPath) + L"</SOURCE_VOLUME_MOUNT_PATH>";
+        fragment += L"<SOURCE_VOLUME_LABEL>" + SanitizeXmlName(metadata.sourceVolumeLabel) + L"</SOURCE_VOLUME_LABEL>";
+        fragment += L"<SOURCE_FILESYSTEM>" + SanitizeXmlName(metadata.sourceFileSystem) + L"</SOURCE_FILESYSTEM>";
+        fragment += L"<PARTITION_STYLE>" + SanitizeXmlName(metadata.partitionStyle) + L"</PARTITION_STYLE>";
+        fragment += L"<PARTITION_NUMBER>" + std::to_wstring(metadata.partitionNumber) + L"</PARTITION_NUMBER>";
+        fragment += L"<PARTITION_OFFSET_BYTES>" + std::to_wstring(metadata.partitionOffsetBytes) + L"</PARTITION_OFFSET_BYTES>";
+        fragment += L"<PARTITION_LENGTH_BYTES>" + std::to_wstring(metadata.partitionLengthBytes) + L"</PARTITION_LENGTH_BYTES>";
+        fragment += L"<PARTITION_TYPE>" + SanitizeXmlName(metadata.partitionType) + L"</PARTITION_TYPE>";
+        fragment += L"<IS_BOOT_VOLUME>" + std::wstring(boolText(metadata.isBootVolume)) + L"</IS_BOOT_VOLUME>";
+        fragment += L"<IS_SYSTEM_VOLUME>" + std::wstring(boolText(metadata.isSystemVolume)) + L"</IS_SYSTEM_VOLUME>";
+        fragment += L"<VOLUME_INDEX>" + std::to_wstring(metadata.volumeIndex) + L"</VOLUME_INDEX>";
+        fragment += L"</BACKUPRESTOREMETADATA>";
+        return fragment;
     }
 }
 // ============================================================================
@@ -911,7 +1026,7 @@ DWORD CountWimImages(HANDLE hWim) {
 
 // Helper to capture path into WIM image
 // Adds image metadata and returns image handle (must be closed by caller)
-HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* imageName, ProgressCallback callback, const wchar_t* folderName = nullptr, const wchar_t** userExclusions = nullptr, int userExclusionCount = 0) {
+HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* imageName, ProgressCallback callback, const wchar_t* folderName = nullptr, const wchar_t** userExclusions = nullptr, int userExclusionCount = 0, const wchar_t* customMetadataXml = nullptr) {
     if (!hWim || !sourcePath || !imageName) {
         SetLastErrorMessage(L"Invalid parameters for image capture");
         return INVALID_HANDLE_VALUE;
@@ -1125,6 +1240,9 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
             std::wstring existingXml(existingXmlInfo);
             imageXml = UpsertImageXmlElement(existingXml, L"NAME", sanitizedName);
             imageXml = UpsertImageXmlElement(imageXml, L"DESCRIPTION", sanitizedDescription);
+            if (customMetadataXml && wcslen(customMetadataXml) > 0) {
+                imageXml = AppendImageXmlFragment(imageXml, customMetadataXml);
+            }
             LogInfo(L"CaptureToWimImage: Loaded existing image metadata XML (bytes=" + std::to_wstring(existingXmlSize) + L")");
             LogInfo(L"CaptureToWimImage: Updated existing image XML for metadata write");
             LocalFree(existingXmlInfo);
@@ -1140,7 +1258,11 @@ HANDLE CaptureToWimImage(HANDLE hWim, const wchar_t* sourcePath, const wchar_t* 
             imageXml += sanitizedName;
             imageXml += L"</NAME><DESCRIPTION>";
             imageXml += sanitizedDescription;
-            imageXml += L"</DESCRIPTION></IMAGE>";
+            imageXml += L"</DESCRIPTION>";
+            if (customMetadataXml && wcslen(customMetadataXml) > 0) {
+                imageXml += customMetadataXml;
+            }
+            imageXml += L"</IMAGE>";
             LogWarning(L"CaptureToWimImage: Could not read existing image metadata XML, falling back to minimal XML",
                        FormatDetailedErrorCode(L"WIMGetImageInformation before metadata update failed.", existingXmlError));
         }
@@ -1625,9 +1747,11 @@ extern "C" {
             std::wstring enumMsg = L"Enumerating volumes on Disk " + std::to_wstring(diskNumber);
             if (logCallback) logCallback(0, enumMsg.c_str(), L"");
 
-            std::vector<std::wstring> volumes;
+            std::vector<DiskVolumeRestoreMetadata> diskVolumeMetadata;
             wchar_t volumeName[MAX_PATH];
             HANDLE hFind = FindFirstVolumeW(volumeName, ARRAYSIZE(volumeName));
+            const std::wstring systemRoot = GetSystemRootVolume();
+            const unsigned long long sourceDiskSizeBytes = GetDiskSizeBytes(diskNumber);
 
             if (hFind == INVALID_HANDLE_VALUE) {
                 DWORD err = GetLastError();
@@ -1681,7 +1805,71 @@ extern "C" {
                                 // This volume is on our target disk!
                                 // Add with trailing backslash for BackupVolume
                                 std::wstring volPath = volumeNameCopy + L"\\";
-                                volumes.push_back(volPath);
+                                DiskVolumeRestoreMetadata metadata;
+                                metadata.sourceDiskNumber = diskNumber;
+                                metadata.sourceDiskSizeBytes = sourceDiskSizeBytes;
+                                metadata.sourceVolumeGuidPath = volPath;
+                                metadata.sourceVolumeMountPath = volPath;
+
+                                wchar_t pathNames[MAX_PATH] = {};
+                                DWORD pathNamesLength = 0;
+                                if (GetVolumePathNamesForVolumeNameW(volumeName, pathNames, ARRAYSIZE(pathNames), &pathNamesLength) &&
+                                    pathNamesLength > 0 && pathNames[0] != L'\0') {
+                                    metadata.sourceVolumeMountPath = pathNames;
+                                }
+
+                                wchar_t volumeLabel[MAX_PATH] = {};
+                                wchar_t fileSystemName[MAX_PATH] = {};
+                                DWORD serialNumber = 0;
+                                DWORD maxComponentLength = 0;
+                                DWORD fileSystemFlags = 0;
+                                GetVolumeInformationW(
+                                    metadata.sourceVolumeMountPath.c_str(),
+                                    volumeLabel,
+                                    ARRAYSIZE(volumeLabel),
+                                    &serialNumber,
+                                    &maxComponentLength,
+                                    &fileSystemFlags,
+                                    fileSystemName,
+                                    ARRAYSIZE(fileSystemName));
+                                metadata.sourceVolumeLabel = volumeLabel;
+                                metadata.sourceFileSystem = fileSystemName;
+
+                                PARTITION_INFORMATION_EX partitionInfo = {};
+                                if (DeviceIoControl(
+                                    hVolume,
+                                    IOCTL_DISK_GET_PARTITION_INFO_EX,
+                                    nullptr,
+                                    0,
+                                    &partitionInfo,
+                                    sizeof(partitionInfo),
+                                    &bytesReturned,
+                                    nullptr)) {
+                                    metadata.partitionNumber = partitionInfo.PartitionNumber;
+                                    metadata.partitionOffsetBytes = static_cast<unsigned long long>(partitionInfo.StartingOffset.QuadPart);
+                                    metadata.partitionLengthBytes = static_cast<unsigned long long>(partitionInfo.PartitionLength.QuadPart);
+                                    metadata.partitionStyle = partitionInfo.PartitionStyle == PARTITION_STYLE_GPT
+                                        ? L"GPT"
+                                        : (partitionInfo.PartitionStyle == PARTITION_STYLE_MBR ? L"MBR" : L"RAW");
+                                    if (partitionInfo.PartitionStyle == PARTITION_STYLE_GPT) {
+                                        metadata.partitionType = L"GPT:" + FormatGuidValue(partitionInfo.Gpt.PartitionType);
+                                    }
+                                    else if (partitionInfo.PartitionStyle == PARTITION_STYLE_MBR) {
+                                        metadata.partitionType = L"MBR:" + std::to_wstring(partitionInfo.Mbr.PartitionType);
+                                    }
+                                }
+
+                                std::wstring mountRoot = metadata.sourceVolumeMountPath;
+                                if (!mountRoot.empty() && mountRoot.back() == L'\\') {
+                                    mountRoot.pop_back();
+                                }
+                                metadata.isSystemVolume = !systemRoot.empty() &&
+                                    mountRoot.rfind(systemRoot, 0) == 0;
+                                metadata.isBootVolume = metadata.isSystemVolume ||
+                                    GetFileAttributesW((metadata.sourceVolumeMountPath + L"bootmgr").c_str()) != INVALID_FILE_ATTRIBUTES ||
+                                    GetFileAttributesW((metadata.sourceVolumeMountPath + L"Boot\\BCD").c_str()) != INVALID_FILE_ATTRIBUTES;
+
+                                diskVolumeMetadata.push_back(metadata);
                                 std::wstring volMsg = L"Found volume on Disk " + std::to_wstring(diskNumber);
                                 if (logCallback) logCallback(0, volMsg.c_str(), volPath.c_str());
                                 break; // Only add once even if multiple extents
@@ -1705,10 +1893,10 @@ extern "C" {
 
             FindVolumeClose(hFind);
 
-            std::wstring enumCompleteMsg = L"Volume enumeration complete. Found " + std::to_wstring(volumes.size()) + L" volumes";
+            std::wstring enumCompleteMsg = L"Volume enumeration complete. Found " + std::to_wstring(diskVolumeMetadata.size()) + L" volumes";
             if (logCallback) logCallback(0, enumCompleteMsg.c_str(), L"");
 
-            if (volumes.empty()) {
+            if (diskVolumeMetadata.empty()) {
                 std::wstring errMsg = L"No volumes found on Disk " + std::to_wstring(diskNumber);
                 SetLastErrorMessage(errMsg);
                 if (logCallback) logCallback(3, L"BackupDisk: No volumes found", errMsg.c_str());
@@ -1716,7 +1904,7 @@ extern "C" {
             }
 
             if (callback) {
-                std::wstring msg = L"Found " + std::to_wstring(volumes.size()) + L" volume(s) on disk " + std::to_wstring(diskNumber);
+                std::wstring msg = L"Found " + std::to_wstring(diskVolumeMetadata.size()) + L" volume(s) on disk " + std::to_wstring(diskNumber);
                 callback(10, msg.c_str());
             }
 
@@ -1750,18 +1938,20 @@ extern "C" {
 
             // Backup each volume as a separate image in the WIM file
             int volumeIndex = 0;
-            for (const auto& volume : volumes) {
+            for (auto& metadata : diskVolumeMetadata) {
+                const auto& volume = metadata.sourceVolumeGuidPath;
                 volumeIndex++;
-                int progressBase = 20 + (volumeIndex - 1) * (60 / static_cast<int>(volumes.size()));
+                metadata.volumeIndex = volumeIndex;
+                int progressBase = 20 + (volumeIndex - 1) * (60 / static_cast<int>(diskVolumeMetadata.size()));
 
                 if (callback) {
                     std::wstring msg = L"Backing up volume " + std::to_wstring(volumeIndex) + 
-                                      L" of " + std::to_wstring(volumes.size()) + L"...";
+                                      L" of " + std::to_wstring(diskVolumeMetadata.size()) + L"...";
                     callback(progressBase, msg.c_str());
                 }
 
                 // Create VSS snapshot for this volume
-                LogInfo(L"BackupDisk: Processing volume " + std::to_wstring(volumeIndex) + L"/" + std::to_wstring(volumes.size()) + L": " + volume);
+                LogInfo(L"BackupDisk: Processing volume " + std::to_wstring(volumeIndex) + L"/" + std::to_wstring(diskVolumeMetadata.size()) + L": " + volume);
 
                 BackupEngine::VSSSnapshotManager vssManager;
                 HRESULT hr = vssManager.Initialize();
@@ -1795,6 +1985,7 @@ extern "C" {
 
                 // Create image name for this volume
                 std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + L" Volume " + std::to_wstring(volumeIndex);
+                std::wstring metadataFragment = BuildDiskVolumeMetadataFragment(metadata);
                 LogInfo(L"BackupDisk: Capturing entire volume as single image: " + imageName);
                 LogInfo(L"BackupDisk: Source path: " + actualSourcePath);
 
@@ -1807,7 +1998,8 @@ extern "C" {
                     callback,
                     nullptr,
                     userExclusions,
-                    userExclusionCount);
+                    userExclusionCount,
+                    metadataFragment.c_str());
 
                 // CaptureToWimImage returns:
                 //   - INVALID_HANDLE_VALUE (0xFFFFFFFF) on failure

@@ -102,6 +102,33 @@ namespace BackupService
             int errorMsgSize, 
             ProgressCallback? callback);
 
+        public enum DismImageHealthState
+        {
+            Healthy = 0,
+            Repairable = 1,
+            NonRepairable = 2
+        }
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private static extern int CheckBackupImageHealth(
+            string backupPath,
+            int imageIndex,
+            [MarshalAs(UnmanagedType.I1)] bool scanImage,
+            StringBuilder healthMessage,
+            int healthMessageSize,
+            ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private static extern int RestoreBackupImageHealth(
+            string backupPath,
+            int imageIndex,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[]? sourcePaths,
+            int sourcePathCount,
+            [MarshalAs(UnmanagedType.I1)] bool limitAccess,
+            StringBuilder healthMessage,
+            int healthMessageSize,
+            ProgressCallback? callback);
+
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern void GetLastErrorMessage(StringBuilder buffer, int bufferSize);
 
@@ -303,100 +330,9 @@ namespace BackupService
                         }
                     }
 
-                    // Verify backup if requested
-                    if (job.VerifyAfterBackup && !cancellationToken.IsCancellationRequested)
-                    {
-                        logger?.Invoke("Verifying backup archive...");
-                        progressCallback?.Invoke(90, "Verifying SSB archive integrity...");
-
-                        // For disk backups, count expected images (one per volume)
-                        // For other backups, pass -1 to skip image count validation
-                        int expectedImageCount = -1;
-
-                        if (job.Target == BackupTarget.Disk && job.SourcePaths != null && job.SourcePaths.Count > 0)
-                        {
-                            // Extract disk number to count volumes
-                            int diskNumber = ExtractDiskNumber(job.SourcePaths[0]);
-                            if (diskNumber >= 0)
-                            {
-                                // For now, we don't have volume count - pass -1 to skip validation
-                                // Future enhancement: query WMI for actual volume count
-                                expectedImageCount = -1;
-                            }
-                        }
-
-                        // Use enhanced WIM archive verification
-                        var errorMsg = new StringBuilder(1024);
-                        int verifyResult = VerifyWimArchive(
-                            newBackupPath,  // Direct .ssb file path
-                            expectedImageCount,  // Expected image count (or -1 to skip)
-                            errorMsg,
-                            errorMsg.Capacity,
-                            nativeCallback
-                        );
-
-                        if (verifyResult != 0)
-                        {
-                            logger?.Invoke($"[VERIFICATION FAILED] Result code: {verifyResult}");
-                            logger?.Invoke($"[VERIFICATION FAILED] Error: {errorMsg}");
-                            logger?.Invoke($"[VERIFICATION FAILED] The backup file will be DELETED because verification failed");
-                            logger?.Invoke($"[VERIFICATION FAILED] This is why no backup file exists in target directory");
-
-                            // Auto-recovery: If incremental/differential failed verification,
-                            // force FULL backup on next run to rebuild the backup chain
-                            if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
-                            {
-                                job.ForceFullBackupOnNextRun = true;
-                                logger?.Invoke($"AUTO-RECOVERY: Next backup will be FULL to rebuild backup chain");
-
-                                // Save job with updated flag
-                                try
-                                {
-                                    var jobManager = new JobManager();
-                                    jobManager.UpdateJob(job);
-                                    logger?.Invoke("Job updated with ForceFullBackupOnNextRun flag");
-                                }
-                                catch (Exception saveEx)
-                                {
-                                    logger?.Invoke($"Warning: Failed to save ForceFullBackupOnNextRun flag: {saveEx.Message}");
-                                }
-                            }
-
-                            // COMMENTED OUT FOR DEBUGGING: Delete the failed backup FILE
-                            // DISABLED to allow testing if backup files are actually mountable despite verification errors
-                            /*
-                            if (newBackupPath != null && File.Exists(newBackupPath))
-                            {
-                                try
-                                {
-                                    var fileInfo = new FileInfo(newBackupPath);
-                                    var fileSize = fileInfo.Length;
-                                    logger?.Invoke($"[CLEANUP] Deleting failed backup: {Path.GetFileName(newBackupPath)} ({fileSize:N0} bytes)");
-                                    File.Delete(newBackupPath);
-                                    logger?.Invoke($"[CLEANUP] Failed backup deleted successfully");
-                                }
-                                catch (Exception ex)
-                                {
-                                    logger?.Invoke($"[WARNING] Could not delete failed backup: {ex.Message}");
-                                }
-                            }
-                            */
-
-                            // Log file preservation for analysis
-                            if (newBackupPath != null && File.Exists(newBackupPath))
-                            {
-                                var fileInfo = new FileInfo(newBackupPath);
-                                var fileSize = fileInfo.Length;
-                                logger?.Invoke($"[DEBUG] Failed backup preserved for analysis: {Path.GetFileName(newBackupPath)} ({fileSize:N0} bytes)");
-                                logger?.Invoke($"[DEBUG] You can attempt to mount this file to verify if it's actually valid");
-                            }
-
-                            return false;
-                        }
-
-                        // Verification succeeded!
-                        logger?.Invoke($"Backup verification PASSED: {errorMsg}");
-                    }
+                    // Note: Verification moved to separate phase after backup completion
+                    // This allows the UI to show backup progress completion before transitioning to verification
+                    // The BackupSchedulerService will call VerifyBackupWithProgress if job.VerifyAfterBackup is true
 
                     if (newBackupPath != null)
                     {
@@ -458,6 +394,146 @@ namespace BackupService
         public async Task<bool> ExecuteBackupJob(BackupJob job, Action<string>? logger = null)
         {
             return await ExecuteBackupJobWithProgress(job, null, CancellationToken.None, logger);
+        }
+
+        /// <summary>
+        /// Executes verification on a completed backup with progress tracking
+        /// </summary>
+        public async Task<bool> VerifyBackupWithProgress(
+            BackupJob job,
+            Action<int, string>? progressCallback,
+            CancellationToken cancellationToken,
+            Action<string>? logger = null)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    logger?.Invoke($"Starting backup verification for: {job.Name}");
+                    progressCallback?.Invoke(0, "Initializing verification...");
+
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        logger?.Invoke("Verification cancelled by user");
+                        return false;
+                    }
+
+                    // Build backup file path
+                    string backupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+                    
+                    if (!File.Exists(backupPath))
+                    {
+                        logger?.Invoke($"[ERROR] Backup file not found: {backupPath}");
+                        return false;
+                    }
+
+                    logger?.Invoke($"Verifying backup file: {Path.GetFileName(backupPath)}");
+                    progressCallback?.Invoke(10, "Verifying SSB archive integrity...");
+
+                    // Create native progress callback
+                    ProgressCallback nativeCallback = (percentage, message) =>
+                    {
+                        // Map verification progress to 10-90% range (reservation for health check)
+                        int mappedPercentage = 10 + (int)(percentage * 0.8);
+                        progressCallback?.Invoke(mappedPercentage, message ?? $"Verifying: {percentage}%");
+                    };
+
+                    // Store delegate to prevent GC
+                    _currentProgressCallback = nativeCallback;
+
+                    // Determine expected image count
+                    int expectedImageCount = -1;
+                    if (job.Target == BackupTarget.Disk && job.SourcePaths?.Count > 0)
+                    {
+                        int diskNumber = ExtractDiskNumber(job.SourcePaths[0]);
+                        if (diskNumber >= 0)
+                        {
+                            expectedImageCount = -1; // Future: query actual volume count
+                        }
+                    }
+
+                    // Verify WIM archive
+                    var errorMsg = new StringBuilder(1024);
+                    int verifyResult = VerifyWimArchive(
+                        backupPath,
+                        expectedImageCount,
+                        errorMsg,
+                        errorMsg.Capacity,
+                        _currentProgressCallback
+                    );
+
+                    if (verifyResult != 0)
+                    {
+                        logger?.Invoke($"[VERIFICATION FAILED] Result code: {verifyResult}");
+                        logger?.Invoke($"[VERIFICATION FAILED] Error: {errorMsg}");
+                        return false;
+                    }
+
+                    logger?.Invoke($"Archive verification PASSED: {errorMsg}");
+                    progressCallback?.Invoke(90, "Checking image health...");
+
+                    // Check image health
+                    var healthMsg = new StringBuilder(1024);
+                    int healthState = CheckBackupImageHealth(
+                        backupPath,
+                        1,
+                        true,
+                        healthMsg,
+                        healthMsg.Capacity,
+                        _currentProgressCallback);
+
+                    if (healthState < 0)
+                    {
+                        logger?.Invoke($"[DISM VERIFY FAILED] Result code: {healthState}");
+                        logger?.Invoke($"[DISM VERIFY FAILED] {healthMsg}");
+                        return false;
+                    }
+
+                    if (healthState == (int)DismImageHealthState.Repairable)
+                    {
+                        logger?.Invoke($"[DISM] Image is repairable. Attempting RestoreHealth: {healthMsg}");
+                        progressCallback?.Invoke(95, "Repairing image...");
+
+                        var repairMsg = new StringBuilder(1024);
+                        int repairResult = RestoreBackupImageHealth(
+                            backupPath,
+                            1,
+                            null,
+                            0,
+                            false,
+                            repairMsg,
+                            repairMsg.Capacity,
+                            _currentProgressCallback);
+
+                        if (repairResult != 0)
+                        {
+                            logger?.Invoke($"[DISM REPAIR FAILED] Result code: {repairResult}");
+                            logger?.Invoke($"[DISM REPAIR FAILED] {repairMsg}");
+                            return false;
+                        }
+
+                        logger?.Invoke($"[DISM] Repair completed: {repairMsg}");
+                    }
+                    else if (healthState == (int)DismImageHealthState.NonRepairable)
+                    {
+                        logger?.Invoke($"[DISM VERIFY FAILED] Image is non-repairable: {healthMsg}");
+                        return false;
+                    }
+                    else
+                    {
+                        logger?.Invoke($"[DISM VERIFY PASSED] {healthMsg}");
+                    }
+
+                    progressCallback?.Invoke(100, "Verification completed successfully!");
+                    logger?.Invoke($"Backup verification completed successfully: {job.Name}");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    logger?.Invoke($"Verification failed with exception: {ex.Message}");
+                    return false;
+                }
+            }, cancellationToken);
         }
 
         private string? _currentJobName;

@@ -1,6 +1,6 @@
 // LinuxRestore/restore_cli.cpp
-// Command-line interface for Linux restore - Version 4.7.1.0
-// Enhanced with backup date selection, item selection, and destination mapping
+// Command-line interface for Linux restore - Version 4.7.2.0
+// Enhanced with backup date selection, item selection, destination mapping, and metadata-driven disk restore mapping
 
 #include <iostream>
 #include <string>
@@ -12,7 +12,7 @@ void printHeader() {
     std::cout << "\n";
     std::cout << "========================================\n";
     std::cout << " Backup & Restore - Linux Recovery CLI\n";
-    std::cout << " Version 4.7.1.0\n";
+    std::cout << " Version 4.7.2.0\n";
     std::cout << "========================================\n";
     std::cout << "\n";
 }
@@ -46,6 +46,7 @@ void printUsage() {
     std::cout << "  --interactive                 Interactive mode with menus\n";
     std::cout << "  --list-disks                  List available disks\n";
     std::cout << "  --mount <device> <path>       Mount NTFS partition\n";
+    std::cout << "  --restore-disk <backup> <device>  Metadata-driven disk reconstruction restore\n";
     std::cout << "  --unmount <path>              Unmount partition\n";
     std::cout << "  --help                        Show this help message\n";
     std::cout << "\nExamples:\n";
@@ -53,6 +54,26 @@ void printUsage() {
     std::cout << "  restore_cli --show-contents /media/backup/Full_20260130\n";
     std::cout << "  restore_cli --restore /media/backup/Full_20260130 --items \"/dev/sda1,/home\" --dest /mnt/restore\n";
     std::cout << "  restore_cli --interactive\n\n";
+}
+
+void performDiskRestore(RestoreEngine& engine, const std::string& backupPath, const std::string& targetDisk) {
+    std::cout << "\nStarting metadata-driven disk restore...\n";
+    std::cout << "Backup:      " << backupPath << "\n";
+    std::cout << "Target disk: " << targetDisk << "\n\n";
+
+    auto callback = [](int percent, const std::string& msg) {
+        printf("\r[%3d%%] %-70s", percent, msg.c_str());
+        fflush(stdout);
+    };
+
+    int result = engine.RestoreDisk(backupPath, targetDisk, callback);
+
+    std::cout << "\n\n";
+    if (result == 0) {
+        std::cout << "? Disk restore completed successfully!\n";
+    } else {
+        std::cerr << "? Disk restore failed: " << engine.GetLastError() << "\n";
+    }
 }
 
 void printTree(const std::vector<RestoreEngine::RestoreItem>& items, int indent) {
@@ -374,6 +395,16 @@ int main(int argc, char* argv[]) {
         }
 
         performRestore(engine, backupPath, items, dest, overwrite);
+        return 0;
+    }
+
+    // Restore disk using metadata-driven layout reconstruction
+    if (command == "--restore-disk" && argc >= 4) {
+        printHeader();
+        std::string backupPath = argv[2];
+        std::string targetDisk = argv[3];
+        ensureBackupPassword(engine, backupPath);
+        performDiskRestore(engine, backupPath, targetDisk);
         return 0;
     }
 

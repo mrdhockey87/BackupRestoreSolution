@@ -355,7 +355,8 @@ private:
         
         std::vector<std::string> options = {
             "Restore to original location",
-            "Restore to new location"
+            "Restore to new location",
+            "Metadata-driven disk reconstruction restore"
         };
 
         while (true) {
@@ -375,10 +376,13 @@ private:
                 }
             }
 
-            if (!restoreToOriginal) {
+                if (!restoreToOriginal && selected != 2) {
                 mvwprintw(mainWin, startY + 4, 4, "Destination path: %s", 
                     restoreDestination.empty() ? "(not set)" : restoreDestination.c_str());
                 mvwprintw(mainWin, startY + 5, 4, "Press 'P' to set path");
+                } else if (selected == 2) {
+                    mvwprintw(mainWin, startY + 4, 4, "Disk mapping uses backup metadata and target disk selection");
+                    mvwprintw(mainWin, startY + 5, 4, "Press 'D' to set target disk device");
             }
 
             int helpY = getmaxy(mainWin) - 4;
@@ -400,13 +404,19 @@ private:
                     break;
                 case 'p':
                 case 'P':
-                    if (!restoreToOriginal) {
+                    if (!restoreToOriginal && selected != 2) {
                         restoreDestination = PromptForPath("Enter restore destination path:");
+                    }
+                    break;
+                case 'd':
+                case 'D':
+                    if (selected == 2) {
+                        restoreDestination = PromptForPath("Enter target disk device (e.g. /dev/sda):");
                     }
                     break;
                 case 'r':
                 case 'R':
-                    if (restoreToOriginal || !restoreDestination.empty()) {
+                    if (restoreToOriginal || !restoreDestination.empty() || selected == 2) {
                         return ConfirmRestore();
                     } else {
                         UpdateStatus("Please set destination path", true);

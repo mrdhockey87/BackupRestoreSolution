@@ -29,6 +29,18 @@ namespace BackupService
             _cancellationTokens[jobId] = new CancellationTokenSource();
         }
 
+        public void StartVerification(Guid jobId)
+        {
+            if (_runningJobs.TryGetValue(jobId, out var state))
+            {
+                state.IsVerifying = true;
+                state.IsRunning = true;
+                state.Percentage = 0;
+                state.Message = "Starting verification...";
+                state.CurrentFile = "";
+            }
+        }
+
         public void UpdateProgress(Guid jobId, int percentage, string message)
         {
             if (_runningJobs.TryGetValue(jobId, out var state))
@@ -61,6 +73,7 @@ namespace BackupService
             if (_runningJobs.TryGetValue(jobId, out var state))
             {
                 state.IsRunning = false;
+                state.IsVerifying = false;
                 state.Success = success;
                 state.ErrorMessage = errorMessage;
                 state.EndTime = DateTime.Now;
@@ -91,7 +104,8 @@ namespace BackupService
                     Message = state.Message,
                     CurrentFile = state.CurrentFile,  // NEW: Include current file in progress
                     Success = state.Success,
-                    ErrorMessage = state.ErrorMessage
+                    ErrorMessage = state.ErrorMessage,
+                    IsVerifying = state.IsVerifying  // NEW: Include verification phase
                 };
             }
 
@@ -133,6 +147,7 @@ namespace BackupService
             public DateTime StartTime { get; set; }
             public DateTime LastUpdate { get; set; }
             public DateTime? EndTime { get; set; }
+            public bool IsVerifying { get; set; }  // NEW: Track if in verification phase
         }
     }
 }

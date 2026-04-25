@@ -64,10 +64,61 @@ namespace BackupUI.Services
             ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int RestoreVolumeFromImage(
+            string wimPath,
+            int imageIndex,
+            string targetVolume,
+            bool restoreSystemState,
+            ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int RestoreDisk(
             string backupPath,
             int targetDiskNumber,
             bool restoreSystemState,
+            ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int RestoreDiskFromImage(
+            string wimPath,
+            int imageIndex,
+            int targetDiskNumber,
+            bool restoreSystemState,
+            ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int VerifyWimArchive(
+            string archivePath,
+            int expectedImageCount,
+            StringBuilder errorMsg,
+            int errorMsgSize,
+            ProgressCallback? callback);
+
+        public enum DismImageHealthState
+        {
+            Healthy = 0,
+            Repairable = 1,
+            NonRepairable = 2
+        }
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int CheckBackupImageHealth(
+            string backupPath,
+            int imageIndex,
+            [MarshalAs(UnmanagedType.I1)] bool scanImage,
+            StringBuilder healthMessage,
+            int healthMessageSize,
+            ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int RestoreBackupImageHealth(
+            string backupPath,
+            int imageIndex,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[]? sourcePaths,
+            int sourcePathCount,
+            [MarshalAs(UnmanagedType.I1)] bool limitAccess,
+            StringBuilder healthMessage,
+            int healthMessageSize,
             ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]

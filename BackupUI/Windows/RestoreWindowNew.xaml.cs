@@ -33,6 +33,7 @@ namespace BackupUI.Windows
         private RestoreTargetKind _restoreTargetKind = RestoreTargetKind.FileOrFolder;
         private string? _selectedTargetPath;
         private int? _selectedTargetDiskNumber;
+        private NativeBackupMountManager.RestoreDiskPlan? _diskRestorePlan;
 
         public RestoreWindowNew()
         {
@@ -338,12 +339,36 @@ namespace BackupUI.Windows
                                 lstBackupItems.SelectedIndex = 0;
                             }
 
+                            LoadDiskRestorePlan(preparedBackup.WorkingPath);
                             UpdateSelectedRestoreTargetKind();
                         });
                     }
                 }
                 catch { }
             });
+        }
+
+        private void LoadDiskRestorePlan(string backupPath)
+        {
+            try
+            {
+                var planResult = NativeBackupMountManager.BuildDiskRestorePlan(backupPath);
+                _diskRestorePlan = planResult.Success ? planResult.Plan : null;
+
+                if (planResult.Success && planResult.Plan.HasMetadata)
+                {
+                    txtDestinationHelp.Text = $"Disk reconstruction metadata detected for Disk {planResult.Plan.SourceDiskNumber}. Select a target disk/volume to map the restored layout.";
+                }
+                else if (!string.IsNullOrWhiteSpace(planResult.Error))
+                {
+                    Debug.WriteLine($"LoadDiskRestorePlan: {planResult.Error}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"LoadDiskRestorePlan exception: {ex.Message}");
+                _diskRestorePlan = null;
+            }
         }
 
         private void RestoreLocation_Changed(object sender, RoutedEventArgs e)
@@ -371,6 +396,7 @@ namespace BackupUI.Windows
                     _selectedTargetDiskNumber = diskWindow.SelectedDisk.DiskIndex;
                     _selectedTargetPath = diskWindow.SelectedDisk.DisplayName;
                     txtRestoreDestination.Text = diskWindow.SelectedDisk.DisplayName;
+                    _restoreTargetKind = RestoreTargetKind.Disk;
                 }
                 return;
             }
@@ -382,6 +408,7 @@ namespace BackupUI.Windows
                 {
                     _selectedTargetPath = volumeWindow.SelectedVolume.VolumePath;
                     txtRestoreDestination.Text = volumeWindow.SelectedVolume.DisplayName;
+                    _restoreTargetKind = RestoreTargetKind.Volume;
                 }
                 return;
             }
@@ -457,8 +484,20 @@ namespace BackupUI.Windows
                     Dispatcher.Invoke(() =>
                     {
                         progressBar.Value = percent;
-                        txtProgress.Text = message;
-                        txtCurrentRestoreItem.Text = message;
+                        if (!string.IsNullOrWhiteSpace(message) && message.StartsWith("Restoring:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            txtCurrentRestoreItem.Text = message;
+                        }
+                        else
+                        {
+                            txtProgress.Text = message;
+                            if (!string.IsNullOrWhiteSpace(message) &&
+                                !message.Contains("Restoring", StringComparison.OrdinalIgnoreCase) &&
+                                !message.Contains("Processing", StringComparison.OrdinalIgnoreCase))
+                            {
+                                txtCurrentRestoreItem.Text = string.Empty;
+                            }
+                        }
                     });
                 };
 
@@ -466,20 +505,44 @@ namespace BackupUI.Windows
                 {
                     case RestoreTargetKind.Disk:
                         PrepareDiskTarget();
-                        result = BackupEngineInterop.RestoreDisk(
-                            preparedBackup.WorkingPath,
-                            _selectedTargetDiskNumber ?? -1,
-                            false,
-                            callback);
+                        if (_diskRestorePlan?.HasMetadata == true)
+                        {
+                            result = BackupEngineInterop.RestoreDiskFromImage(
+                                preparedBackup.WorkingPath,
+                                _diskRestorePlan.ImageIndex,
+                                _selectedTargetDiskNumber ?? -1,
+                                false,
+                                callback);
+                        }
+                        else
+                        {
+                            result = BackupEngineInterop.RestoreDisk(
+                                preparedBackup.WorkingPath,
+                                _selectedTargetDiskNumber ?? -1,
+                                false,
+                                callback);
+                        }
                         break;
 
                     case RestoreTargetKind.Volume:
                         PrepareVolumeTarget();
-                        result = BackupEngineInterop.RestoreVolume(
-                            preparedBackup.WorkingPath,
-                            _selectedTargetPath ?? string.Empty,
-                            false,
-                            callback);
+                        if (_diskRestorePlan?.HasMetadata == true)
+                        {
+                            result = BackupEngineInterop.RestoreVolumeFromImage(
+                                preparedBackup.WorkingPath,
+                                _diskRestorePlan.ImageIndex,
+                                _selectedTargetPath ?? string.Empty,
+                                false,
+                                callback);
+                        }
+                        else
+                        {
+                            result = BackupEngineInterop.RestoreVolume(
+                                preparedBackup.WorkingPath,
+                                _selectedTargetPath ?? string.Empty,
+                                false,
+                                callback);
+                        }
                         break;
 
                     default:
@@ -555,6 +618,11 @@ namespace BackupUI.Windows
                 MessageBox.Show("Please select the target volume to restore to.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
+            }
+
+            if (_diskRestorePlan?.HasMetadata == true)
+            {
+                txtDestinationHelp.Text = $"Disk reconstruction plan loaded for Disk {_diskRestorePlan.SourceDiskNumber}. The target layout will be rebuilt from metadata and user-selected partition sizing.";
             }
 
             return true;
