@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.48";
+        private static readonly string version_fallback_number = "6.2.3.49";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,6 +68,8 @@ namespace BackupUI
 
 
 /*
+ * Version 6.2.3.49 Renamed the Schedules tab/menu entry to Service Status in the UI while preserving the schedule
+ *                  management action and keeping the backup/service navigation clearer. mdail 4/25/2026
  * Version 6.2.3.48 Wired backup-completion verification path so when VerifyAfterBackup is enabled, the backup progress
  *                  window transitions from backup to verification phase, updates its title, and shows verification progress
  *                  separately after backup completion. mdail 4/25/2026
@@ -631,4 +633,3 @@ namespace BackupUI
  *                 file in the backup set and the give the user a list of possible restore options available for the backup files, ie: if it
  *                 is only a full backup, or different points in a incremental or differential backup set.
  */
- *

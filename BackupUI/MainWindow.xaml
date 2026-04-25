@@ -22,7 +22,7 @@
 				<MenuItem Click="NewBackup_Click" Header="_New Backup..." />
 				<MenuItem Click="Restore_Click" Header="_Restore..." />
 			</MenuItem>
-			<MenuItem Header="_Schedules">
+          <MenuItem Header="_Service Status">
 				<MenuItem Click="ManageSchedules_Click" Header="_Manage Schedules..." />
 			</MenuItem>
 			<MenuItem Header="_Activity">
