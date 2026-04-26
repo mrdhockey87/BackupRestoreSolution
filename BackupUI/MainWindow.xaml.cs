@@ -1983,16 +1983,16 @@ namespace BackupUI
                         txtVerificationResults.Foreground = new SolidColorBrush(Colors.Blue);
                     }
 
-                    // Create progress window
                     var progressWindow = new MountProgressWindow
                     {
                         Owner = this,
-                        Title = $"Verifying Backup - {backup.BackupName}",
+                        Title = $"Verify Backup - {backup.BackupName}",
                         ShowInTaskbar = false,
                         WindowStartupLocation = WindowStartupLocation.CenterOwner
                     };
 
                     progressWindow.SetBackupName($"Verifying {backup.BackupName}");
+                    progressWindow.SetStatus("Preparing verification...", -1);
                     progressWindow.Show();
 
                     var verificationResult = new StringBuilder();
@@ -2002,10 +2002,21 @@ namespace BackupUI
                     verificationResult.AppendLine($"Path: {backup.BackupPath}");
                     verificationResult.AppendLine(new string('-', 60));
 
+                    void UpdateVerificationLog(string message)
+                    {
+                        verificationResult.AppendLine(message);
+
+                        if (txtVerificationResults != null)
+                        {
+                            txtVerificationResults.Text = verificationResult.ToString();
+                        }
+                    }
+
                     try
                     {
-                        // Run verification asynchronously
-                        int verificationResult_Code = await Task.Run(() =>
+                        var repairChoice = CustomDialogResult.No;
+
+                        int verificationResultCode = await Task.Run(() =>
                         {
                             using var preparedBackup = EncryptedBackupFileService.PrepareForRead(
                                 this,
@@ -2013,15 +2024,20 @@ namespace BackupUI
                                 backup.BackupName,
                                 backup.ProtectedEncryptionPassword);
 
-                            int result = BackupEngineInterop.VerifyBackup(
+                            var healthMessage = new StringBuilder(1024);
+
+                            int checkResult = BackupEngineInterop.DismCheckImageHealth(
                                 preparedBackup.WorkingPath,
+                                1,
+                                true,
+                                healthMessage,
+                                healthMessage.Capacity,
                                 (percentage, message) =>
                                 {
                                     Dispatcher.Invoke(() =>
                                     {
                                         progressWindow.SetStatus(message, percentage);
                                         verificationResult.AppendLine($"[{percentage}%] {message}");
-
                                         if (txtVerificationResults != null)
                                         {
                                             txtVerificationResults.Text = verificationResult.ToString();
@@ -2029,18 +2045,89 @@ namespace BackupUI
                                     });
                                 });
 
-                            return result;
+                            Dispatcher.Invoke(() =>
+                            {
+                                progressWindow.SetStatus(healthMessage.ToString(), checkResult == 0 ? 100 : -1);
+                                UpdateVerificationLog($"DISM health check result: {checkResult}");
+                                UpdateVerificationLog($"Health details: {healthMessage}");
+                            });
+
+                            if (checkResult == 0)
+                            {
+                                return 0;
+                            }
+
+                            Dispatcher.Invoke(() => progressWindow.SetStatus("Verification failed.", -1));
+                            return checkResult;
                         });
 
-                        // Close progress window
-                        progressWindow.CloseProgress();
+                        if (verificationResultCode != 0)
+                        {
+                            repairChoice = CustomDialogService.ShowQuestion(
+                                this,
+                                "Verification failed. Attempt to repair corrupted backup file?",
+                                "Repair Backup File");
 
-                        // Update final results based on verification result
+                            if (repairChoice == CustomDialogResult.Yes)
+                            {
+                                progressWindow.SetStatus("Attempting repair of corrupted backup file...", -1);
+
+                                int repairResultCode = await Task.Run(() =>
+                                {
+                                    using var preparedBackup = EncryptedBackupFileService.PrepareForRead(
+                                        this,
+                                        backup.BackupPath,
+                                        backup.BackupName,
+                                        backup.ProtectedEncryptionPassword);
+
+                                    var repairMessage = new StringBuilder(1024);
+
+                                    int repairResult = BackupEngineInterop.DismRestoreImageHealth(
+                                        preparedBackup.WorkingPath,
+                                        1,
+                                        null,
+                                        0,
+                                        false,
+                                        repairMessage,
+                                        repairMessage.Capacity,
+                                        (percentage, message) =>
+                                        {
+                                            Dispatcher.Invoke(() =>
+                                            {
+                                                progressWindow.SetStatus(message, percentage);
+                                                verificationResult.AppendLine($"[{percentage}%] {message}");
+                                                if (txtVerificationResults != null)
+                                                {
+                                                    txtVerificationResults.Text = verificationResult.ToString();
+                                                }
+                                            });
+                                        });
+
+                                    Dispatcher.Invoke(() =>
+                                    {
+                                        UpdateVerificationLog($"DISM repair result: {repairResult}");
+                                        UpdateVerificationLog($"Repair details: {repairMessage}");
+                                        progressWindow.SetStatus(
+                                            repairResult == 0 ? "Repair completed successfully." : "Repair failed.",
+                                            repairResult == 0 ? 100 : -1);
+                                    });
+
+                                    return repairResult;
+                                });
+
+                                verificationResultCode = repairResultCode;
+                            }
+
+                            if (repairChoice != CustomDialogResult.Yes)
+                            {
+                                UpdateVerificationLog("Repair declined by user.");
+                            }
+                        }
+
                         verificationResult.AppendLine(new string('-', 60));
 
-                        if (verificationResult_Code == 0)
+                        if (verificationResultCode == 0)
                         {
-                            // Success
                             verificationResult.AppendLine($"Verification completed successfully at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                             verificationResult.AppendLine("RESULT: BACKUP IS VALID");
 
@@ -2050,19 +2137,14 @@ namespace BackupUI
                                 txtVerificationResults.Foreground = new SolidColorBrush(Colors.Green);
                             }
 
-                            CustomDialogService.ShowSuccess(this, $"Backup verification completed successfully!\n\nBackup: {backup.BackupName}\n\nThe backup integrity has been verified and is valid.",
-                                          "Verification Complete");
+                            CustomDialogService.ShowSuccess(this,
+                                $"Backup verification completed successfully!\n\nBackup: {backup.BackupName}\n\nThe backup integrity has been verified and is valid.",
+                                "Verification Complete");
                         }
                         else
                         {
-                            // Failure
-                            string errorMessage = verificationResult_Code == -1 ? "Backup path does not exist" : 
-                                                 verificationResult_Code == -99 ? "Error during backup verification" : 
-                                                 $"Unknown error (code: {verificationResult_Code})";
-
-                            verificationResult.AppendLine($"Verification failed at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                            verificationResult.AppendLine($"ERROR: {errorMessage}");
-                            verificationResult.AppendLine("RESULT: BACKUP IS INVALID OR CORRUPTED");
+                            verificationResult.AppendLine($"Verification completed with errors at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                            verificationResult.AppendLine($"RESULT: BACKUP FAILED VERIFICATION (CODE {verificationResultCode})");
 
                             if (txtVerificationResults != null)
                             {
@@ -2070,14 +2152,13 @@ namespace BackupUI
                                 txtVerificationResults.Foreground = new SolidColorBrush(Colors.Red);
                             }
 
-                            CustomDialogService.ShowError(this, $"Backup verification failed!\n\nBackup: {backup.BackupName}\nError: {errorMessage}\n\nThe backup may be corrupted or inaccessible.",
-                                          "Verification Failed");
+                            CustomDialogService.ShowError(this,
+                                $"Backup verification failed!\n\nBackup: {backup.BackupName}\n\nThe backup may be corrupted or inaccessible.",
+                                "Verification Failed");
                         }
                     }
                     catch (Exception verifyEx)
                     {
-                        progressWindow.CloseProgress();
-
                         verificationResult.AppendLine(new string('-', 60));
                         verificationResult.AppendLine($"ERROR: {verifyEx.Message}");
                         verificationResult.AppendLine($"Verification failed at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
@@ -2088,8 +2169,13 @@ namespace BackupUI
                             txtVerificationResults.Foreground = new SolidColorBrush(Colors.Red);
                         }
 
-                        CustomDialogService.ShowError($"Backup verification failed:\n{verifyEx.Message}",
-                                      "Verification Error");
+                        CustomDialogService.ShowError(this,
+                            $"Backup verification failed:\n{verifyEx.Message}",
+                            "Verification Error");
+                    }
+                    finally
+                    {
+                        progressWindow.CloseProgress();
                     }
                 }
                 catch (Exception ex)

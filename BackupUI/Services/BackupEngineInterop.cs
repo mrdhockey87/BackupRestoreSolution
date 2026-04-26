@@ -222,6 +222,31 @@ namespace BackupUI.Services
             bool preservePermissions,
             ProgressCallback? callback);
 
+        // DISM-style wrappers for verify/repair flows used by the Verify tab
+        public static int DismCheckImageHealth(
+            string backupPath,
+            int imageIndex,
+            bool scanImage,
+            StringBuilder healthMessage,
+            int healthMessageSize,
+            ProgressCallback? callback)
+        {
+            return CheckBackupImageHealth(backupPath, imageIndex, scanImage, healthMessage, healthMessageSize, callback);
+        }
+
+        public static int DismRestoreImageHealth(
+            string backupPath,
+            int imageIndex,
+            string[]? sourcePaths,
+            int sourcePathCount,
+            bool limitAccess,
+            StringBuilder healthMessage,
+            int healthMessageSize,
+            ProgressCallback? callback)
+        {
+            return RestoreBackupImageHealth(backupPath, imageIndex, sourcePaths, sourcePathCount, limitAccess, healthMessage, healthMessageSize, callback);
+        }
+
         // Job context functions - tells C++ engine which job is running for logging
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern void SetCurrentJobName(string jobName);
