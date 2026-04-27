@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup>
   <OutputType>WinExe</OutputType>
   <TargetFramework>net8.0-windows</TargetFramework>
@@ -63,13 +63,14 @@
     </None>
   </ItemGroup>
   
-  <!-- Copy BackupEngine.dll to centralized output directory after C++ build -->
+  <!-- Copy SecureServerBackupEngine.dll to centralized output directory after C++ build -->
   <Target Name="CopyBackupEngine" AfterTargets="Build">
     <ItemGroup>
-      <BackupEngineDll Include="$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll" />
+      <BackupEngineDll Include="$(SolutionDir)artifacts\bin\$(Configuration)\SecureServerBackupEngine.dll" />
     </ItemGroup>
-    <Copy SourceFiles="@(BackupEngineDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
-    <Message Text="Copied BackupEngine.dll to centralized output: $(OutDir)" Importance="high" Condition="Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
-    <Warning Text="BackupEngine.dll not found - Build BackupEngine C++ project first!" Condition="!Exists('$(SolutionDir)artifacts\bin\$(Configuration)\BackupEngine.dll')" />
+    <Copy SourceFiles="@(BackupEngineDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(SolutionDir)artifacts\bin\$(Configuration)\SecureServerBackupEngine.dll')" />
+    <Message Text="Copied SecureServerBackupEngine.dll to centralized output: $(OutDir)" Importance="high" Condition="Exists('$(SolutionDir)artifacts\bin\$(Configuration)\SecureServerBackupEngine.dll')" />
+    <Warning Text="SecureServerBackupEngine.dll not found - Build BackupEngine C++ project first!" Condition="!Exists('$(SolutionDir)artifacts\bin\$(Configuration)\SecureServerBackupEngine.dll')" />
   </Target>
 </Project>
+

@@ -10,7 +10,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
-    <None Update="$(SolutionDir)bin\$(Configuration)\BackupEngine.dll">
+    <None Update="$(SolutionDir)bin\$(Configuration)\SecureServerBackupEngine.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

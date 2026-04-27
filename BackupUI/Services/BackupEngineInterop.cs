@@ -6,7 +6,7 @@ namespace SecureServerBackup.Services
 {
     public class BackupEngineInterop
     {
-        private const string DllName = "BackupEngine.dll";
+        private const string DllName = "SecureServerBackupEngine.dll";
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);

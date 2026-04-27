@@ -2,10 +2,13 @@
 # Version 5.13.7.0 - Added WIM (.ssb) support via wimlib
 
 cmake_minimum_required(VERSION 3.10)
-project(BackupRestoreLinux VERSION 5.13.7)
+project(SecureServerBackupLinuxRestore VERSION 5.13.7)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(SSB_RESTORE_TUI_NAME SecureServerBackupLinuxRestore)
+set(SSB_RESTORE_CLI_NAME SecureServerBackupLinuxRestoreCli)
+set(SSB_RESTORE_GUI_NAME SecureServerBackupLinuxRestoreGui)
 
 # Find required packages
 find_package(Curses REQUIRED)
@@ -27,11 +30,11 @@ target_link_libraries(restore_engine
 )
 
 # Terminal UI Application (ncurses TUI)
-add_executable(restore_tui
+add_executable(${SSB_RESTORE_TUI_NAME}
     restore_tui.cpp
 )
 
-target_link_libraries(restore_tui
+target_link_libraries(${SSB_RESTORE_TUI_NAME}
     restore_engine
     ${CURSES_LIBRARIES}
     ncurses
@@ -39,11 +42,11 @@ target_link_libraries(restore_tui
 )
 
 # CLI Application (simpler, no ncurses)
-add_executable(restore_cli
+add_executable(${SSB_RESTORE_CLI_NAME}
     restore_cli.cpp
 )
 
-target_link_libraries(restore_cli
+target_link_libraries(${SSB_RESTORE_CLI_NAME}
     restore_engine
 )
 
@@ -54,27 +57,27 @@ if(PKG_CONFIG_FOUND)
     if(GTK3_FOUND)
         message(STATUS "GTK+ 3 found - Building GUI version")
         
-        add_executable(restore_gui
+        add_executable(${SSB_RESTORE_GUI_NAME}
             restore_gui_gtk.cpp
         )
         
-        target_include_directories(restore_gui PRIVATE ${GTK3_INCLUDE_DIRS})
-        target_link_directories(restore_gui PRIVATE ${GTK3_LIBRARY_DIRS})
-        target_link_libraries(restore_gui
+        target_include_directories(${SSB_RESTORE_GUI_NAME} PRIVATE ${GTK3_INCLUDE_DIRS})
+        target_link_directories(${SSB_RESTORE_GUI_NAME} PRIVATE ${GTK3_LIBRARY_DIRS})
+        target_link_libraries(${SSB_RESTORE_GUI_NAME}
             restore_engine
             ${GTK3_LIBRARIES}
         )
         
-        target_compile_options(restore_gui PRIVATE ${GTK3_CFLAGS_OTHER})
+        target_compile_options(${SSB_RESTORE_GUI_NAME} PRIVATE ${GTK3_CFLAGS_OTHER})
         
-        install(TARGETS restore_gui RUNTIME DESTINATION bin)
+        install(TARGETS ${SSB_RESTORE_GUI_NAME} RUNTIME DESTINATION bin)
     else()
         message(STATUS "GTK+ 3 not found - Skipping GUI version (install libgtk-3-dev)")
     endif()
 endif()
 
 # Installation
-install(TARGETS restore_tui restore_cli
+install(TARGETS ${SSB_RESTORE_TUI_NAME} ${SSB_RESTORE_CLI_NAME}
     RUNTIME DESTINATION bin
 )
 

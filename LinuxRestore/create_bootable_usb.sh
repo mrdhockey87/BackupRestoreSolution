@@ -18,6 +18,8 @@ fi
 DEVICE=$1
 USB_LABEL="RESTORE_USB"
 MOUNT_POINT="/tmp/restore_usb_$$"
+RESTORE_TUI_BINARY="SecureServerBackupLinuxRestore"
+RESTORE_CLI_BINARY="SecureServerBackupLinuxRestoreCli"
 
 echo "====================================="
 echo "Creating Bootable Recovery USB"
@@ -78,8 +80,8 @@ dd if=/usr/lib/syslinux/mbr/mbr.bin of=$DEVICE bs=440 count=1 conv=notrunc
 
 echo "Step 8: Copying restore application..."
 mkdir -p $MOUNT_POINT/restore
-cp dist/restore_tui $MOUNT_POINT/restore/
-cp dist/restore_cli $MOUNT_POINT/restore/
+cp dist/$RESTORE_TUI_BINARY $MOUNT_POINT/restore/
+cp dist/$RESTORE_CLI_BINARY $MOUNT_POINT/restore/
 chmod +x $MOUNT_POINT/restore/*
 
 echo "Step 9: Creating autostart script..."
@@ -100,7 +102,7 @@ apk add ntfs-3g ntfs-3g-progs --no-cache
 
 # Start restore UI
 cd /media/usb/restore
-./restore_tui
+./SecureServerBackupLinuxRestore || ./SecureServerBackupLinuxRestoreCli
 
 echo ""
 echo "Press any key to shutdown..."

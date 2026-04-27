@@ -23,5 +23,5 @@
     <ProjectReference Include="..\BackupCommon\BackupCommon.csproj" />
   </ItemGroup>
   
-  <!-- BackupEngine.dll will be copied by BackupUI project to centralized output -->
+  <!-- SecureServerBackupEngine.dll will be copied by BackupUI project to centralized output -->
 </Project>

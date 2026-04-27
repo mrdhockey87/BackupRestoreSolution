@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.62";
+        private static readonly string version_fallback_number = "6.2.3.65";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,15 @@ namespace SecureServerBackup
 
 /*
  * 
+ * Version 6.2.3.65 Cleaned the remaining old BackupEngine.dll project references so all runtime and project copy paths
+ *                  now consistently use SecureServerBackupEngine.dll, and kept the native DLL icon/resource fixes in place.
+ *                  mdail 4/27/2026
+ * Version 6.2.3.64 Renamed the native engine output to SecureServerBackupEngine and changed the LinuxRestore
+ *                  outputs plus the recovery ISO to SecureServerBackup naming without breaking the managed apps
+ *                  or recovery build scripts. mdail 4/27/2026
+ * Version 6.2.3.63 Renamed the native engine output to SecureServerBackupEngine.dll and changed the LinuxRestore
+ *                  outputs and recovery ISO to SecureServerBackup naming so the managed apps and recovery build scripts
+ *                  keep working with the new branding. mdail 4/27/2026
  * Version 6.2.3.62 Allow the next run time to be change for a one time run time without having to change the scheduled
  *                  run, however try to limit it so it does not go past another scheduled run. Clarified the schedule 
  *                  next-run edit prompt to state that the override is one time only and the job returns to its normal 
@@ -672,6 +681,6 @@ namespace SecureServerBackup
  *                 The restore option as it is now if the app hasnâ€™t run a backup throws a error and stops the app, it should give a normal 
  *                 windows drive/folder/file selector so the user can select a backup file to restore, The back files need to be restorable 
  *                 without any information for the application, and if a backup files is selected the application needs to scan for the last 
- *                 file in the backup set and the give the user a list of possible restore options available for the backup files, ie: if it
- *                 is only a full backup, or different points in a incremental or differential backup set.
+ *                 file in the backup set and the give the user a list of possible restore options available for the backup files, ie: if it is only a full backup, or different points in a incremental or differential backup set.
  */
+

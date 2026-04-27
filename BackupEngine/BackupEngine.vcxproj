@@ -21,6 +21,7 @@
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <!-- PlatformToolset is centralized in Directory.Build.props -->
     <CharacterSet>Unicode</CharacterSet>
+    <TargetName>SecureServerBackupEngine</TargetName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <!-- OutDir and IntDir are managed centrally in Directory.Build.props/targets -->

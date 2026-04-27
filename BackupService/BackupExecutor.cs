@@ -13,7 +13,7 @@ namespace SecureServerBackupService
 {
     public class BackupExecutor
     {
-        private const string DllName = "BackupEngine.dll";
+        private const string DllName = "SecureServerBackupEngine.dll";
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
@@ -873,3 +873,4 @@ namespace SecureServerBackupService
         // Each backup type overwrites its own file
     }
 }
+

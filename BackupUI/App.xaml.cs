@@ -74,8 +74,8 @@ namespace SecureServerBackup
                 splash.UpdateStatus("Checking components...");
                 await Task.Delay(500); // Brief delay to show status
 
-                // Check if BackupEngine.dll exists
-                splash.UpdateStatus("Verifying BackupEngine.dll...");
+                // Check if SecureServerBackupEngine.dll exists
+                splash.UpdateStatus("Verifying SecureServerBackupEngine.dll...");
                 CheckBackupEngineDll();
                 await Task.Delay(300);
 
@@ -120,29 +120,29 @@ namespace SecureServerBackup
         {
             try
             {
-                var dllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BackupEngine.dll");
+                var dllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SecureServerBackupEngine.dll");
                 
                 if (!File.Exists(dllPath))
                 {
                     CustomDialogService.ShowError(
-                        $"Critical Error: BackupEngine.dll not found!\n\n" +
+                        $"Critical Error: SecureServerBackupEngine.dll not found!\n\n" +
                         $"Expected location: {dllPath}\n\n" +
                         $"Please ensure:\n" +
                         $"1. BackupEngine project is built first\n" +
-                        $"2. BackupEngine.dll is in the same directory as BackupUI.exe\n" +
+                        $"2. SecureServerBackupEngine.dll is in the same directory as BackupUI.exe\n" +
                         $"3. Build the entire solution (Build ? Rebuild Solution)",
                         "Missing DLL");
                 }
                 else
                 {
                     // DLL exists, log its location for debugging
-                    Debug.WriteLine($"BackupEngine.dll found at: {dllPath}");
+                    Debug.WriteLine($"SecureServerBackupEngine.dll found at: {dllPath}");
                 }
             }
             catch (Exception ex)
             {
                 CustomDialogService.ShowError(
-                    $"Error checking for BackupEngine.dll: {ex.Message}",
+                    $"Error checking for SecureServerBackupEngine.dll: {ex.Message}",
                     "Initialization Error");
             }
         }

@@ -38,10 +38,10 @@ Write-Host "✓ BackupEngine built successfully" -ForegroundColor Green
 Write-Host ""
 
 # Step 2: Copy DLL to artifacts
-Write-Host "Step 2: Copying BackupEngine.dll to artifacts..." -ForegroundColor Cyan
-$sourceDll = Join-Path $solutionDir "BackupEngine\x64\Release\BackupEngine.dll"
+Write-Host "Step 2: Copying SecureServerBackupEngine.dll to artifacts..." -ForegroundColor Cyan
+$sourceDll = Join-Path $solutionDir "artifacts\bin\Release\SecureServerBackupEngine.dll"
 $destDir = Join-Path $solutionDir "artifacts\bin\Release"
-$destDll = Join-Path $destDir "BackupEngine.dll"
+$destDll = Join-Path $destDir "SecureServerBackupEngine.dll"
 
 if (Test-Path $sourceDll) {
     New-Item -ItemType Directory -Path $destDir -Force | Out-Null
@@ -49,7 +49,7 @@ if (Test-Path $sourceDll) {
     Write-Host "✓ Copied $sourceDll" -ForegroundColor Green
     Write-Host "  → $destDll" -ForegroundColor Gray
 } else {
-    Write-Host "✗ BackupEngine.dll not found at: $sourceDll" -ForegroundColor Red
+    Write-Host "✗ SecureServerBackupEngine.dll not found at: $sourceDll" -ForegroundColor Red
     exit 1
 }
 Write-Host ""
@@ -89,7 +89,7 @@ $requiredFiles = @(
     "BackupService.dll",
     "BackupService.runtimeconfig.json",
     "BackupService.deps.json",
-    "BackupEngine.dll"
+    "SecureServerBackupEngine.dll"
 )
 
 $allGood = $true
@@ -112,10 +112,11 @@ if ($allGood) {
     Write-Host "You can now run:" -ForegroundColor Yellow
     Write-Host "  $releaseDir\BackupUI.exe" -ForegroundColor White
     Write-Host ""
-    Write-Host "No more 'BackupEngine.dll not found' error!" -ForegroundColor Green
+    Write-Host "No more 'SecureServerBackupEngine.dll not found' error!" -ForegroundColor Green
 } else {
     Write-Host "=== BUILD INCOMPLETE ===" -ForegroundColor Red
     Write-Host "Some files are missing. Check errors above." -ForegroundColor Yellow
 }
 
 Write-Host ""
+

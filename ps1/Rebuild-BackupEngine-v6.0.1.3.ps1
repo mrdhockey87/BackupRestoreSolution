@@ -52,12 +52,12 @@ if ($processes) {
 # Clean old artifacts
 Write-Host ""
 Write-Host "🧹 Cleaning old build artifacts..." -ForegroundColor Yellow
-$artifactsPath = "artifacts\bin\Debug\BackupEngine.dll"
+$artifactsPath = "artifacts\bin\Debug\SecureServerBackupEngine.dll"
 if (Test-Path $artifactsPath) {
     Remove-Item $artifactsPath -Force -ErrorAction SilentlyContinue
-    Write-Host "✓ Deleted old BackupEngine.dll" -ForegroundColor Green
+    Write-Host "✓ Deleted old SecureServerBackupEngine.dll" -ForegroundColor Green
 } else {
-    Write-Host "ℹ️ No old BackupEngine.dll found" -ForegroundColor Gray
+    Write-Host "ℹ️ No old SecureServerBackupEngine.dll found" -ForegroundColor Gray
 }
 
 # Find MSBuild
@@ -99,32 +99,32 @@ if ($buildSuccess) {
     exit 1
 }
 
-# Verify BackupEngine.dll exists
+# Verify SecureServerBackupEngine.dll exists
 Write-Host ""
-Write-Host "🔍 Verifying BackupEngine.dll..." -ForegroundColor Yellow
-$dllPath = "BackupEngine\x64\Release\BackupEngine.dll"
+Write-Host "🔍 Verifying SecureServerBackupEngine.dll..." -ForegroundColor Yellow
+$dllPath = "artifacts\bin\Release\SecureServerBackupEngine.dll"
 if (Test-Path $dllPath) {
     $dllInfo = Get-Item $dllPath
-    Write-Host "✓ BackupEngine.dll found" -ForegroundColor Green
+    Write-Host "✓ SecureServerBackupEngine.dll found" -ForegroundColor Green
     Write-Host "  Location: $dllPath" -ForegroundColor Gray
     Write-Host "  Size: $([math]::Round($dllInfo.Length / 1KB, 2)) KB" -ForegroundColor Gray
     Write-Host "  Modified: $($dllInfo.LastWriteTime)" -ForegroundColor Gray
 } else {
-    Write-Host "❌ BackupEngine.dll not found at $dllPath" -ForegroundColor Red
+    Write-Host "❌ SecureServerBackupEngine.dll not found at $dllPath" -ForegroundColor Red
     exit 1
 }
 
 # Copy to artifacts directory
 Write-Host ""
-Write-Host "📦 Copying BackupEngine.dll to artifacts..." -ForegroundColor Yellow
+Write-Host "📦 Copying SecureServerBackupEngine.dll to artifacts..." -ForegroundColor Yellow
 $destPath = "artifacts\bin\Release"
 if (-not (Test-Path $destPath)) {
     New-Item -ItemType Directory -Path $destPath -Force | Out-Null
 }
 
-Copy-Item $dllPath "$destPath\BackupEngine.dll" -Force
-if (Test-Path "$destPath\BackupEngine.dll") {
-    Write-Host "✓ Copied to $destPath\BackupEngine.dll" -ForegroundColor Green
+Copy-Item $dllPath "$destPath\SecureServerBackupEngine.dll" -Force
+if (Test-Path "$destPath\SecureServerBackupEngine.dll") {
+    Write-Host "✓ Copied to $destPath\SecureServerBackupEngine.dll" -ForegroundColor Green
 } else {
     Write-Host "❌ Failed to copy to artifacts directory" -ForegroundColor Red
     exit 1
@@ -167,3 +167,5 @@ Write-Host "• CreateWimFile() now uses flags=0 (no flags)" -ForegroundColor Wh
 Write-Host "• WIM_FLAG_REFERENCE removed from WIM creation" -ForegroundColor White
 Write-Host "• WIM_FLAG_REFERENCE kept for incremental/differential opening" -ForegroundColor White
 Write-Host ""
+
+

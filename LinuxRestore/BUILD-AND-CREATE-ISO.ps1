@@ -7,6 +7,11 @@ Write-Host "Building Bootable Linux ISO v4.7.1.0" -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host ""
 
+$restoreTuiBinary = "SecureServerBackupLinuxRestore"
+$restoreCliBinary = "SecureServerBackupLinuxRestoreCli"
+$restoreGuiBinary = "SecureServerBackupLinuxRestoreGui"
+$recoveryIsoName = "SecureServerBackupRestore_Recovery.iso"
+
 if (-not (Test-Path "CMakeLists.txt")) {
     Write-Host "ERROR: Run from LinuxRestore directory!" -ForegroundColor Red
     exit 1
@@ -39,11 +44,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 New-Item -ItemType Directory -Path "dist" -Force | Out-Null
-wsl bash -c "cd '$wslPath/build' && cp restore_* ../dist/ 2>/dev/null"
+wsl bash -c "cd '$wslPath/build' && cp SecureServerBackupLinuxRestore* ../dist/ 2>/dev/null"
 
-if (-not (Test-Path "dist\restore_tui")) {
+if (-not (Test-Path (Join-Path "dist" $restoreTuiBinary))) {
     Write-Host "" -ForegroundColor Red
-    Write-Host "? Build failed - restore_tui not found!" -ForegroundColor Red
+    Write-Host "? Build failed - $restoreTuiBinary not found!" -ForegroundColor Red
     Write-Host "Compilation succeeded but binaries not created." -ForegroundColor Yellow
     Write-Host "" -ForegroundColor Red
     exit 1
@@ -64,7 +69,7 @@ Write-Host ""
 Write-Host "Part 3: Creating ISO..." -ForegroundColor Cyan
 
 # Clean
-wsl bash -c "cd '$wslPath' && rm -rf iso_build && rm -f BackupRestore_Recovery.iso"
+wsl bash -c "cd '$wslPath' && rm -rf iso_build && rm -f '$recoveryIsoName'"
 
 # Extract Alpine
 Write-Host "Extracting Alpine ISO..." -ForegroundColor Gray
@@ -76,11 +81,11 @@ wsl bash -c "cd '$wslPath/iso_build' && chmod -R u+w ."
 
 # Add restore apps
 Write-Host "Adding restore apps..." -ForegroundColor Gray
-wsl bash -c "cd '$wslPath/iso_build' && mkdir restore && cp ../dist/restore_* restore/ && chmod +x restore/*"
+wsl bash -c "cd '$wslPath/iso_build' && mkdir restore && cp ../dist/SecureServerBackupLinuxRestore* restore/ && chmod +x restore/*"
 
 # Create startup script
 Write-Host "Creating scripts..." -ForegroundColor Gray
-wsl bash -c "cd '$wslPath/iso_build' && echo '#!/bin/sh' > restore/start.sh && echo 'apk add ntfs-3g --no-cache' >> restore/start.sh && echo 'cd /media/cdrom/restore' >> restore/start.sh && echo './restore_tui || ./restore_cli' >> restore/start.sh && echo 'poweroff' >> restore/start.sh && chmod +x restore/start.sh"
+wsl bash -c "cd '$wslPath/iso_build' && echo '#!/bin/sh' > restore/start.sh && echo 'apk add ntfs-3g --no-cache' >> restore/start.sh && echo 'cd /media/cdrom/restore' >> restore/start.sh && echo './$restoreTuiBinary || ./$restoreCliBinary' >> restore/start.sh && echo 'poweroff' >> restore/start.sh && chmod +x restore/start.sh"
 
 # Configure boot
 wsl bash -c "cd '$wslPath/iso_build' && echo 'DEFAULT restore' > boot/syslinux/syslinux.cfg && echo 'TIMEOUT 50' >> boot/syslinux/syslinux.cfg && echo 'LABEL restore' >> boot/syslinux/syslinux.cfg && echo '  KERNEL /boot/vmlinuz-lts' >> boot/syslinux/syslinux.cfg && echo '  INITRD /boot/initramfs-lts' >> boot/syslinux/syslinux.cfg && echo '  APPEND root=/dev/sr0 quiet' >> boot/syslinux/syslinux.cfg"
@@ -90,14 +95,14 @@ wsl bash -c "cd '$wslPath/iso_build' && mkdir -p etc/local.d && echo '#!/bin/sh'
 
 # Build ISO
 Write-Host "Building ISO (1-2 minutes)..." -ForegroundColor Yellow
-wsl bash -c "cd '$wslPath/iso_build' && genisoimage -o ../BackupRestore_Recovery.iso -b boot/syslinux/isolinux.bin -c boot/syslinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -J -R -V RESTORE . 2>&1 | tail -5"
+wsl bash -c "cd '$wslPath/iso_build' && genisoimage -o ../$recoveryIsoName -b boot/syslinux/isolinux.bin -c boot/syslinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -J -R -V RESTORE . 2>&1 | tail -5"
 
 # Cleanup
 wsl bash -c "cd '$wslPath' && rm -rf iso_build"
 
 # Verify
-if (Test-Path "BackupRestore_Recovery.iso") {
-    $size = [math]::Round((Get-Item "BackupRestore_Recovery.iso").Length / 1MB, 0)
+if (Test-Path $recoveryIsoName) {
+    $size = [math]::Round((Get-Item $recoveryIsoName).Length / 1MB, 0)
     
     if ($size -gt 100) {
         Write-Host ""
@@ -105,7 +110,7 @@ if (Test-Path "BackupRestore_Recovery.iso") {
         Write-Host "SUCCESS!" -ForegroundColor Green
         Write-Host "=========================================" -ForegroundColor Cyan
         Write-Host ""
-        Write-Host "ISO: BackupRestore_Recovery.iso" -ForegroundColor White
+        Write-Host "ISO: $recoveryIsoName" -ForegroundColor White
         Write-Host "Size: $size MB" -ForegroundColor White
         Write-Host ""
         
@@ -131,10 +136,10 @@ if (Test-Path "BackupRestore_Recovery.iso") {
         
         Write-Host ""
         Write-Host "Final files:" -ForegroundColor Cyan
-        Write-Host "  ? dist\restore_tui" -ForegroundColor Green
-        Write-Host "  ? dist\restore_cli" -ForegroundColor Green
-        Write-Host "  ? dist\restore_gui" -ForegroundColor Green
-        Write-Host "  ? BackupRestore_Recovery.iso ($size MB)" -ForegroundColor Green
+        Write-Host "  ? dist\$restoreTuiBinary" -ForegroundColor Green
+        Write-Host "  ? dist\$restoreCliBinary" -ForegroundColor Green
+        Write-Host "  ? dist\$restoreGuiBinary" -ForegroundColor Green
+        Write-Host "  ? $recoveryIsoName ($size MB)" -ForegroundColor Green
         Write-Host ""
         Write-Host "Use Rufus to write to USB: https://rufus.ie" -ForegroundColor Yellow
         Write-Host ""

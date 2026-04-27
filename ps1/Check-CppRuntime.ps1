@@ -1,5 +1,5 @@
 # Check-CppRuntime.ps1
-# Diagnoses missing C++ Runtime dependencies for BackupEngine.dll
+# Diagnoses missing C++ Runtime dependencies for SecureServerBackupEngine.dll
 
 Write-Host "=== C++ Runtime Dependency Checker ===" -ForegroundColor Cyan
 Write-Host ""
@@ -36,14 +36,14 @@ foreach ($redist in $vcRedists) {
 Write-Host ""
 
 # Check BackupEngine.dll location
-Write-Host "Checking BackupEngine.dll locations..." -ForegroundColor Yellow
+Write-Host "Checking SecureServerBackupEngine.dll locations..." -ForegroundColor Yellow
 Write-Host ""
 
 $dllPaths = @(
-    "artifacts\bin\Release\BackupEngine.dll",
-    "artifacts\bin\Debug\BackupEngine.dll",
-    "BackupEngine\x64\Release\BackupEngine.dll",
-    "BackupEngine\x64\Debug\BackupEngine.dll"
+    "artifacts\bin\Release\SecureServerBackupEngine.dll",
+    "artifacts\bin\Debug\SecureServerBackupEngine.dll",
+    "artifacts\bin\Release\SecureServerBackupEngine.dll",
+    "artifacts\bin\Debug\SecureServerBackupEngine.dll"
 )
 
 foreach ($path in $dllPaths) {
@@ -79,7 +79,7 @@ Write-Host ""
 if ($missingRedists.Count -gt 0) {
     Write-Host "=== PROBLEM FOUND ===" -ForegroundColor Red
     Write-Host ""
-    Write-Host "BackupEngine.dll requires Visual C++ Redistributables that are not installed!" -ForegroundColor Yellow
+    Write-Host "SecureServerBackupEngine.dll requires Visual C++ Redistributables that are not installed!" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Missing: $($missingRedists -join ', ')" -ForegroundColor Red
     Write-Host ""
@@ -93,7 +93,7 @@ if ($missingRedists.Count -gt 0) {
     Write-Host ""
     Write-Host "Then install: .\vc_redist.x64.exe" -ForegroundColor White
     Write-Host ""
-    Write-Host "After installation, the 'BackupEngine.dll not found' error will disappear!" -ForegroundColor Green
+    Write-Host "After installation, the 'SecureServerBackupEngine.dll not found' error will disappear!" -ForegroundColor Green
 } else {
     Write-Host "=== ALL CHECKS PASSED ===" -ForegroundColor Green
     Write-Host ""
@@ -102,7 +102,8 @@ if ($missingRedists.Count -gt 0) {
     Write-Host "If you're still seeing the error, try:" -ForegroundColor Yellow
     Write-Host "1. Restart your computer" -ForegroundColor White
     Write-Host "2. Check Windows Event Viewer for detailed error messages" -ForegroundColor White
-    Write-Host "3. Run: where.exe BackupEngine.dll" -ForegroundColor White
+    Write-Host "3. Run: where.exe SecureServerBackupEngine.dll" -ForegroundColor White
 }
 
 Write-Host ""
+

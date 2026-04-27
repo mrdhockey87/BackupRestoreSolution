@@ -15,6 +15,8 @@ namespace SecureServerBackup.Services
         /// </summary>
     public class NativeBackupMountManager
     {
+        private const string NativeDllName = "SecureServerBackupEngine.dll";
+
         public sealed class ImageRestoreMetadata
         {
             public int SourceDiskNumber { get; set; }
@@ -209,7 +211,7 @@ namespace SecureServerBackup.Services
         private delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
 
         // P/Invoke declarations for the native mount manager
-        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_MountArchive", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(NativeDllName, EntryPoint = "SsbMount_MountArchive", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern bool SsbMount_MountArchive(
             [MarshalAs(UnmanagedType.LPWStr)] string ssbPath,
             [MarshalAs(UnmanagedType.LPWStr)] string backupName,
@@ -223,7 +225,7 @@ namespace SecureServerBackup.Services
             [MarshalAs(UnmanagedType.LPWStr)] string? tempPath = null  // Optional temp path
         );
 
-        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_UnmountArchive", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(NativeDllName, EntryPoint = "SsbMount_UnmountArchive", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern bool SsbMount_UnmountArchive(
             [MarshalAs(UnmanagedType.LPWStr)] string mountPath,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
@@ -231,13 +233,13 @@ namespace SecureServerBackup.Services
             ProgressCallback? callback = null  // Optional progress callback
         );
 
-        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_UnmountAll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(NativeDllName, EntryPoint = "SsbMount_UnmountAll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern void SsbMount_UnmountAll();
 
-        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_GetMountedCount", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(NativeDllName, EntryPoint = "SsbMount_GetMountedCount", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern int SsbMount_GetMountedCount();
 
-        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_GetMountedInfo", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(NativeDllName, EntryPoint = "SsbMount_GetMountedInfo", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern bool SsbMount_GetMountedInfo(
             int index,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder ssbPath,
@@ -251,7 +253,7 @@ namespace SecureServerBackup.Services
             out SYSTEMTIME mountTime  // ? NEW: Get mount time from C++
         );
 
-        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_ValidateArchive", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(NativeDllName, EntryPoint = "SsbMount_ValidateArchive", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern bool SsbMount_ValidateArchive(
             [MarshalAs(UnmanagedType.LPWStr)] string ssbPath,
             out int imageCount,
@@ -259,14 +261,14 @@ namespace SecureServerBackup.Services
             int errorMsgSize
         );
 
-        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_GetImageCount", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(NativeDllName, EntryPoint = "SsbMount_GetImageCount", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern int SsbMount_GetImageCount(
             [MarshalAs(UnmanagedType.LPWStr)] string ssbPath,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
             int errorMsgSize
         );
 
-        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_GetImageInfo", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(NativeDllName, EntryPoint = "SsbMount_GetImageInfo", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern bool SsbMount_GetImageInfo(
             [MarshalAs(UnmanagedType.LPWStr)] string ssbPath,
             int imageIndex,

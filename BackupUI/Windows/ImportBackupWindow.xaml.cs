@@ -241,7 +241,9 @@ namespace SecureServerBackup.Windows
     // P/Invoke wrapper for BRS validation
     internal static class NativeBrsValidator
     {
-        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode)]
+        private const string NativeDllName = "SecureServerBackupEngine.dll";
+
+        [DllImport(NativeDllName, CharSet = CharSet.Unicode)]
         private static extern bool Brs_ValidateBackupFile(
             [MarshalAs(UnmanagedType.LPWStr)] string filePath,
             out bool isBrsFormat,
