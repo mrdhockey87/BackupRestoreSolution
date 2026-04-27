@@ -65,7 +65,7 @@ namespace BackupUI.Services
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int RestoreVolumeFromImage(
-            string wimPath,
+            string archivePath,
             int imageIndex,
             string targetVolume,
             bool restoreSystemState,
@@ -80,21 +80,21 @@ namespace BackupUI.Services
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int RestoreDiskFromImage(
-            string wimPath,
+            string archivePath,
             int imageIndex,
             int targetDiskNumber,
             bool restoreSystemState,
             ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        public static extern int VerifyWimArchive(
+        public static extern int VerifyBackupArchive(
             string archivePath,
             int expectedImageCount,
             StringBuilder errorMsg,
             int errorMsgSize,
             ProgressCallback? callback);
 
-        public enum DismImageHealthState
+        public enum BackupImageHealthState
         {
             Healthy = 0,
             Repairable = 1,
@@ -102,7 +102,7 @@ namespace BackupUI.Services
         }
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        public static extern int CheckBackupImageHealth(
+        public static extern int CheckBackupImageStatus(
             string backupPath,
             int imageIndex,
             [MarshalAs(UnmanagedType.I1)] bool scanImage,
@@ -111,7 +111,7 @@ namespace BackupUI.Services
             ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        public static extern int RestoreBackupImageHealth(
+        public static extern int RepairBackupImageStatus(
             string backupPath,
             int imageIndex,
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[]? sourcePaths,
@@ -222,8 +222,15 @@ namespace BackupUI.Services
             bool preservePermissions,
             ProgressCallback? callback);
 
-        // DISM-style wrappers for verify/repair flows used by the Verify tab
-        public static int DismCheckImageHealth(
+        // Neutral wrappers for verify/repair flows used by the Verify tab
+        public static int VerifyBackupArchive(
+            string backupPath,
+            ProgressCallback? callback)
+        {
+            return VerifyBackup(backupPath, callback);
+        }
+
+        public static int CheckBackupImageStatusWithProgress(
             string backupPath,
             int imageIndex,
             bool scanImage,
@@ -231,10 +238,10 @@ namespace BackupUI.Services
             int healthMessageSize,
             ProgressCallback? callback)
         {
-            return CheckBackupImageHealth(backupPath, imageIndex, scanImage, healthMessage, healthMessageSize, callback);
+            return CheckBackupImageStatus(backupPath, imageIndex, scanImage, healthMessage, healthMessageSize, callback);
         }
 
-        public static int DismRestoreImageHealth(
+        public static int RepairBackupImageStatusWithProgress(
             string backupPath,
             int imageIndex,
             string[]? sourcePaths,
@@ -244,7 +251,7 @@ namespace BackupUI.Services
             int healthMessageSize,
             ProgressCallback? callback)
         {
-            return RestoreBackupImageHealth(backupPath, imageIndex, sourcePaths, sourcePathCount, limitAccess, healthMessage, healthMessageSize, callback);
+            return RepairBackupImageStatus(backupPath, imageIndex, sourcePaths, sourcePathCount, limitAccess, healthMessage, healthMessageSize, callback);
         }
 
         // Job context functions - tells C++ engine which job is running for logging

@@ -18,105 +18,105 @@ namespace fs = std::filesystem;
 extern void SetLastErrorMessage(const std::wstring& error);
 
 namespace {
-    using DismSession = UINT;
+    using SSBSession = UINT;
 
-    enum DismLogLevel : UINT {
-        DismLogErrorsWarnings = 2
+    enum SSBLogLevel : UINT {
+        SSBLogErrorsWarnings = 2
     };
 
-    enum DismImageIdentifier : UINT {
-        DismImageIndex = 0
+    enum SSBImageIdentifier : UINT {
+        SSBImageIndex = 0
     };
 
-    enum DismImageHealthState : UINT {
-        DismImageHealthy = 0,
-        DismImageRepairable = 1,
-        DismImageNonRepairable = 2
+    enum SSBImageHealthState : UINT {
+        SSBImageHealthy = 0,
+        SSBImageRepairable = 1,
+        SSBImageNonRepairable = 2
     };
 
-    using DismInitializeFn = HRESULT(WINAPI*)(DismLogLevel, PCWSTR, PCWSTR);
-    using DismShutdownFn = HRESULT(WINAPI*)();
-    using DismMountImageFn = HRESULT(WINAPI*)(PCWSTR, PCWSTR, UINT, PCWSTR, DismImageIdentifier, DWORD, HANDLE, PVOID, PVOID);
-    using DismUnmountImageFn = HRESULT(WINAPI*)(PCWSTR, DWORD, HANDLE, PVOID, PVOID);
-    using DismOpenSessionFn = HRESULT(WINAPI*)(PCWSTR, PCWSTR, PCWSTR, DismSession*);
-    using DismCloseSessionFn = HRESULT(WINAPI*)(DismSession);
-    using DismCheckImageHealthFn = HRESULT(WINAPI*)(DismSession, BOOL, HANDLE, PVOID, PVOID, DismImageHealthState*);
-    using DismRestoreImageHealthFn = HRESULT(WINAPI*)(DismSession, const PCWSTR*, UINT, BOOL, HANDLE, PVOID, PVOID);
+    using SSBInitializeFn = HRESULT(WINAPI*)(SSBLogLevel, PCWSTR, PCWSTR);
+    using SSBShutdownFn = HRESULT(WINAPI*)();
+    using SSBMountImageFn = HRESULT(WINAPI*)(PCWSTR, PCWSTR, UINT, PCWSTR, SSBImageIdentifier, DWORD, HANDLE, PVOID, PVOID);
+    using SSBUnmountImageFn = HRESULT(WINAPI*)(PCWSTR, DWORD, HANDLE, PVOID, PVOID);
+    using SSBOpenSessionFn = HRESULT(WINAPI*)(PCWSTR, PCWSTR, PCWSTR, SSBSession*);
+    using SSBCloseSessionFn = HRESULT(WINAPI*)(SSBSession);
+    using SSBCheckImageHealthFn = HRESULT(WINAPI*)(SSBSession, BOOL, HANDLE, PVOID, PVOID, SSBImageHealthState*);
+    using SSBRestoreImageHealthFn = HRESULT(WINAPI*)(SSBSession, const PCWSTR*, UINT, BOOL, HANDLE, PVOID, PVOID);
 
-    struct DismApiFunctions {
+    struct SSBApiFunctions {
         HMODULE module = nullptr;
-        DismInitializeFn initialize = nullptr;
-        DismShutdownFn shutdown = nullptr;
-        DismMountImageFn mountImage = nullptr;
-        DismUnmountImageFn unmountImage = nullptr;
-        DismOpenSessionFn openSession = nullptr;
-        DismCloseSessionFn closeSession = nullptr;
-        DismCheckImageHealthFn checkImageHealth = nullptr;
-        DismRestoreImageHealthFn restoreImageHealth = nullptr;
+        SSBInitializeFn initialize = nullptr;
+        SSBShutdownFn shutdown = nullptr;
+        SSBMountImageFn mountImage = nullptr;
+        SSBUnmountImageFn unmountImage = nullptr;
+        SSBOpenSessionFn openSession = nullptr;
+        SSBCloseSessionFn closeSession = nullptr;
+        SSBCheckImageHealthFn checkImageHealth = nullptr;
+        SSBRestoreImageHealthFn restoreImageHealth = nullptr;
     };
 
-    DismApiFunctions& GetDismApi() {
-        static DismApiFunctions api;
+    SSBApiFunctions& GetSSBApi() {
+        static SSBApiFunctions api;
         static std::once_flag once;
 
         std::call_once(once, [] {
             api.module = LoadLibraryW(L"DismAPI.dll");
             if (api.module) {
-                api.initialize = reinterpret_cast<DismInitializeFn>(GetProcAddress(api.module, "DismInitialize"));
-                api.shutdown = reinterpret_cast<DismShutdownFn>(GetProcAddress(api.module, "DismShutdown"));
-                api.mountImage = reinterpret_cast<DismMountImageFn>(GetProcAddress(api.module, "DismMountImage"));
-                api.unmountImage = reinterpret_cast<DismUnmountImageFn>(GetProcAddress(api.module, "DismUnmountImage"));
-                api.openSession = reinterpret_cast<DismOpenSessionFn>(GetProcAddress(api.module, "DismOpenSession"));
-                api.closeSession = reinterpret_cast<DismCloseSessionFn>(GetProcAddress(api.module, "DismCloseSession"));
-                api.checkImageHealth = reinterpret_cast<DismCheckImageHealthFn>(GetProcAddress(api.module, "DismCheckImageHealth"));
-                api.restoreImageHealth = reinterpret_cast<DismRestoreImageHealthFn>(GetProcAddress(api.module, "DismRestoreImageHealth"));
+                api.initialize = reinterpret_cast<SSBInitializeFn>(GetProcAddress(api.module, "DismInitialize"));
+                api.shutdown = reinterpret_cast<SSBShutdownFn>(GetProcAddress(api.module, "DismShutdown"));
+                api.mountImage = reinterpret_cast<SSBMountImageFn>(GetProcAddress(api.module, "DismMountImage"));
+                api.unmountImage = reinterpret_cast<SSBUnmountImageFn>(GetProcAddress(api.module, "DismUnmountImage"));
+                api.openSession = reinterpret_cast<SSBOpenSessionFn>(GetProcAddress(api.module, "DismOpenSession"));
+                api.closeSession = reinterpret_cast<SSBCloseSessionFn>(GetProcAddress(api.module, "DismCloseSession"));
+                api.checkImageHealth = reinterpret_cast<SSBCheckImageHealthFn>(GetProcAddress(api.module, "DismCheckImageHealth"));
+                api.restoreImageHealth = reinterpret_cast<SSBRestoreImageHealthFn>(GetProcAddress(api.module, "DismRestoreImageHealth"));
             }
         });
 
         return api;
     }
 
-    constexpr DismSession DISM_SESSION_DEFAULT = 0;
-    constexpr DWORD DISM_MOUNT_READONLY = 1;
-    constexpr DWORD DISM_DISCARD_IMAGE = 0;
+    constexpr SSBSession SSB_SESSION_DEFAULT = 0;
+    constexpr DWORD SSB_MOUNT_READONLY = 1;
+    constexpr DWORD SSB_DISCARD_IMAGE = 0;
 
-    HRESULT DismInitialize(DismLogLevel logLevel, PCWSTR logFilePath, PCWSTR scratchDirectory) {
-        DismApiFunctions& api = GetDismApi();
+    HRESULT SSBInitialize(SSBLogLevel logLevel, PCWSTR logFilePath, PCWSTR scratchDirectory) {
+        SSBApiFunctions& api = GetSSBApi();
         return api.initialize ? api.initialize(logLevel, logFilePath, scratchDirectory) : HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
     }
 
-    HRESULT DismShutdown() {
-        DismApiFunctions& api = GetDismApi();
+    HRESULT SSBShutdown() {
+        SSBApiFunctions& api = GetSSBApi();
         return api.shutdown ? api.shutdown() : S_OK;
     }
 
-    HRESULT DismMountImage(PCWSTR imageFilePath, PCWSTR mountPath, UINT imageIndex, PCWSTR imageName, DismImageIdentifier imageIdentifier, DWORD flags, HANDLE cancelEvent, PVOID progress, PVOID userData) {
-        DismApiFunctions& api = GetDismApi();
+    HRESULT SSBMountImage(PCWSTR imageFilePath, PCWSTR mountPath, UINT imageIndex, PCWSTR imageName, SSBImageIdentifier imageIdentifier, DWORD flags, HANDLE cancelEvent, PVOID progress, PVOID userData) {
+        SSBApiFunctions& api = GetSSBApi();
         return api.mountImage ? api.mountImage(imageFilePath, mountPath, imageIndex, imageName, imageIdentifier, flags, cancelEvent, progress, userData) : HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
     }
 
-    HRESULT DismUnmountImage(PCWSTR mountPath, DWORD flags, HANDLE cancelEvent, PVOID progress, PVOID userData) {
-        DismApiFunctions& api = GetDismApi();
+    HRESULT SSBUnmountImage(PCWSTR mountPath, DWORD flags, HANDLE cancelEvent, PVOID progress, PVOID userData) {
+        SSBApiFunctions& api = GetSSBApi();
         return api.unmountImage ? api.unmountImage(mountPath, flags, cancelEvent, progress, userData) : HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
     }
 
-    HRESULT DismOpenSession(PCWSTR imagePath, PCWSTR windowsDirectory, PCWSTR systemDrive, DismSession* session) {
-        DismApiFunctions& api = GetDismApi();
+    HRESULT SSBOpenSession(PCWSTR imagePath, PCWSTR windowsDirectory, PCWSTR systemDrive, SSBSession* session) {
+        SSBApiFunctions& api = GetSSBApi();
         return api.openSession ? api.openSession(imagePath, windowsDirectory, systemDrive, session) : HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
     }
 
-    HRESULT DismCloseSession(DismSession session) {
-        DismApiFunctions& api = GetDismApi();
+    HRESULT SSBCloseSession(SSBSession session) {
+        SSBApiFunctions& api = GetSSBApi();
         return api.closeSession ? api.closeSession(session) : S_OK;
     }
 
-    HRESULT DismCheckImageHealth(DismSession session, BOOL scanImage, HANDLE cancelEvent, PVOID progress, PVOID userData, DismImageHealthState* imageHealth) {
-        DismApiFunctions& api = GetDismApi();
+    HRESULT SSBCheckImageHealth(SSBSession session, BOOL scanImage, HANDLE cancelEvent, PVOID progress, PVOID userData, SSBImageHealthState* imageHealth) {
+        SSBApiFunctions& api = GetSSBApi();
         return api.checkImageHealth ? api.checkImageHealth(session, scanImage, cancelEvent, progress, userData, imageHealth) : HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
     }
 
-    HRESULT DismRestoreImageHealth(DismSession session, const PCWSTR* sourcePaths, UINT sourcePathCount, BOOL limitAccess, HANDLE cancelEvent, PVOID progress, PVOID userData) {
-        DismApiFunctions& api = GetDismApi();
+    HRESULT SSBRestoreImageHealth(SSBSession session, const PCWSTR* sourcePaths, UINT sourcePathCount, BOOL limitAccess, HANDLE cancelEvent, PVOID progress, PVOID userData) {
+        SSBApiFunctions& api = GetSSBApi();
         return api.restoreImageHealth ? api.restoreImageHealth(session, sourcePaths, sourcePathCount, limitAccess, cancelEvent, progress, userData) : HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
     }
 
@@ -137,13 +137,13 @@ namespace {
         return L"C:\\Windows\\Temp\\";
     }
 
-    std::wstring CreateDismWorkRoot(int imageIndex) {
+    std::wstring CreateSSBWorkRoot(int imageIndex) {
         std::wstringstream ss;
-        ss << GetTempRoot() << L"BackupRestoreService\\Dism\\" << GetCurrentProcessId() << L"_" << GetTickCount64() << L"_" << imageIndex;
+        ss << GetTempRoot() << L"BackupRestoreService\\SSB\\" << GetCurrentProcessId() << L"_" << GetTickCount64() << L"_" << imageIndex;
         return ss.str();
     }
 
-    std::wstring StageBackupForDism(const std::wstring& backupPath, bool& cleanupRequired) {
+    std::wstring StageBackupForSSB(const std::wstring& backupPath, bool& cleanupRequired) {
         cleanupRequired = false;
 
         fs::path sourcePath(backupPath);
@@ -152,7 +152,7 @@ namespace {
             return backupPath;
         }
 
-        fs::path stagingDir = fs::path(GetTempRoot()) / L"BackupRestoreService" / L"DismStaging";
+        fs::path stagingDir = fs::path(GetTempRoot()) / L"BackupRestoreService" / L"SSBStaging";
         std::error_code ec;
         fs::create_directories(stagingDir, ec);
         if (ec) {
@@ -169,27 +169,27 @@ namespace {
         return stagedPath.wstring();
     }
 
-    std::wstring GetDismErrorMessage(HRESULT hr) {
+    std::wstring GetSSBErrorMessage(HRESULT hr) {
         std::wstringstream ss;
         ss << L"HRESULT=0x" << std::hex << std::uppercase << static_cast<unsigned long>(hr) << std::dec;
         return ss.str();
     }
 
-    std::wstring HealthStateToText(DismImageHealthState state) {
+    std::wstring HealthStateToText(SSBImageHealthState state) {
         switch (state) {
-            case DismImageHealthy:
+            case SSBImageHealthy:
                 return L"Healthy";
-            case DismImageRepairable:
+            case SSBImageRepairable:
                 return L"Repairable";
-            case DismImageNonRepairable:
+            case SSBImageNonRepairable:
                 return L"NonRepairable";
             default:
                 return L"Unknown";
         }
     }
 
-    HRESULT EnsureDismInitialized() {
-        DismApiFunctions& api = GetDismApi();
+    HRESULT EnsureSSBInitialized() {
+        SSBApiFunctions& api = GetSSBApi();
         if (!api.initialize) {
             return HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
         }
@@ -198,7 +198,7 @@ namespace {
         static HRESULT initResult = E_FAIL;
 
         std::call_once(initializedOnce, [&] {
-            initResult = api.initialize(DismLogErrorsWarnings, nullptr, nullptr);
+            initResult = api.initialize(SSBLogErrorsWarnings, nullptr, nullptr);
             if (FAILED(initResult)) {
                 initResult = E_FAIL;
             }
@@ -219,9 +219,9 @@ namespace {
         }
     }
 
-    void ReleaseDismSession(DismSession session) {
+    void ReleaseSSBSession(SSBSession session) {
         if (session != 0) {
-            DismApiFunctions& api = GetDismApi();
+            SSBApiFunctions& api = GetSSBApi();
             if (api.closeSession) {
                 api.closeSession(session);
             }
@@ -245,74 +245,74 @@ extern "C" {
         }
 
         bool stagedCleanup = false;
-        std::wstring dismSource = StageBackupForDism(backupPath, stagedCleanup);
-        if (dismSource.empty()) {
-            std::wstring message = L"Failed to stage backup for DISM health check.";
+        std::wstring SSBSource = StageBackupForSSB(backupPath, stagedCleanup);
+        if (SSBSource.empty()) {
+            std::wstring message = L"Failed to stage backup for SSB health check.";
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -2;
         }
 
-        std::wstring workRoot = CreateDismWorkRoot(imageIndex);
+        std::wstring workRoot = CreateSSBWorkRoot(imageIndex);
         std::error_code ec;
         fs::create_directories(workRoot, ec);
         if (ec) {
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
-            SetLastErrorMessage(L"Failed to create DISM work directory");
-            WriteMessageBuffer(healthMessage, healthMessageSize, L"Failed to create DISM work directory");
+            SetLastErrorMessage(L"Failed to create SSB work directory");
+            WriteMessageBuffer(healthMessage, healthMessageSize, L"Failed to create SSB work directory");
             return -3;
         }
 
-        HRESULT hr = EnsureDismInitialized();
+        HRESULT hr = EnsureSSBInitialized();
         if (FAILED(hr)) {
-            std::wstring message = L"DismInitialize failed. " + GetDismErrorMessage(hr);
+            std::wstring message = L"SSBInitialize failed. " + GetSSBErrorMessage(hr);
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             RemoveDirectoryTree(workRoot);
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
             return -4;
         }
 
         if (callback) {
-            callback(5, L"Mounting backup image for DISM health check...");
+            callback(5, L"Mounting backup image for SSB health check...");
         }
 
-        hr = DismMountImage(
-            dismSource.c_str(),
+        hr = SSBMountImage(
+            SSBSource.c_str(),
             workRoot.c_str(),
             static_cast<UINT>(imageIndex),
             nullptr,
-            DismImageIndex,
-            DISM_MOUNT_READONLY,
+            SSBImageIndex,
+            SSB_MOUNT_READONLY,
             nullptr,
             nullptr,
             nullptr);
 
         if (FAILED(hr)) {
-            std::wstring message = L"DismMountImage failed. " + GetDismErrorMessage(hr);
+            std::wstring message = L"SSBMountImage failed. " + GetSSBErrorMessage(hr);
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             RemoveDirectoryTree(workRoot);
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
             return -5;
         }
 
-        DismSession session = DISM_SESSION_DEFAULT;
-        hr = DismOpenSession(workRoot.c_str(), nullptr, nullptr, &session);
+        SSBSession session = SSB_SESSION_DEFAULT;
+        hr = SSBOpenSession(workRoot.c_str(), nullptr, nullptr, &session);
         if (FAILED(hr)) {
-            DismUnmountImage(workRoot.c_str(), DISM_DISCARD_IMAGE, nullptr, nullptr, nullptr);
+            SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
             RemoveDirectoryTree(workRoot);
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
 
-            std::wstring message = L"DismOpenSession failed. " + GetDismErrorMessage(hr);
+            std::wstring message = L"SSBOpenSession failed. " + GetSSBErrorMessage(hr);
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -6;
@@ -322,31 +322,31 @@ extern "C" {
             callback(50, L"Checking backup image health...");
         }
 
-        DismImageHealthState healthState = DismImageHealthy;
-        hr = DismCheckImageHealth(session, scanImage ? TRUE : FALSE, nullptr, nullptr, nullptr, &healthState);
+        SSBImageHealthState healthState = SSBImageHealthy;
+        hr = SSBCheckImageHealth(session, scanImage ? TRUE : FALSE, nullptr, nullptr, nullptr, &healthState);
 
-        DismCloseSession(session);
-        DismUnmountImage(workRoot.c_str(), DISM_DISCARD_IMAGE, nullptr, nullptr, nullptr);
+        SSBCloseSession(session);
+        SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
         RemoveDirectoryTree(workRoot);
         if (stagedCleanup) {
-            fs::remove(dismSource, ec);
+            fs::remove(SSBSource, ec);
         }
 
         if (FAILED(hr)) {
-            std::wstring message = L"DismCheckImageHealth failed. " + GetDismErrorMessage(hr);
+            std::wstring message = L"SSBCheckImageHealth failed. " + GetSSBErrorMessage(hr);
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -7;
         }
 
-        std::wstring message = L"DISM image health state: " + HealthStateToText(healthState);
+        std::wstring message = L"SSB image health state: " + HealthStateToText(healthState);
         WriteMessageBuffer(healthMessage, healthMessageSize, message);
 
-        if (healthState == DismImageHealthy) {
+        if (healthState == SSBImageHealthy) {
             return 0;
         }
 
-        if (healthState == DismImageRepairable) {
+        if (healthState == SSBImageRepairable) {
             return 1;
         }
 
@@ -370,101 +370,101 @@ extern "C" {
         }
 
         bool stagedCleanup = false;
-        std::wstring dismSource = StageBackupForDism(backupPath, stagedCleanup);
-        if (dismSource.empty()) {
-            std::wstring message = L"Failed to stage backup for DISM restore.";
+        std::wstring SSBSource = StageBackupForSSB(backupPath, stagedCleanup);
+        if (SSBSource.empty()) {
+            std::wstring message = L"Failed to stage backup for SSB restore.";
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -2;
         }
 
-        std::wstring workRoot = CreateDismWorkRoot(imageIndex);
+        std::wstring workRoot = CreateSSBWorkRoot(imageIndex);
         std::error_code ec;
         fs::create_directories(workRoot, ec);
         if (ec) {
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
-            SetLastErrorMessage(L"Failed to create DISM work directory");
-            WriteMessageBuffer(healthMessage, healthMessageSize, L"Failed to create DISM work directory");
+            SetLastErrorMessage(L"Failed to create SSB work directory");
+            WriteMessageBuffer(healthMessage, healthMessageSize, L"Failed to create SSB work directory");
             return -3;
         }
 
-        HRESULT hr = EnsureDismInitialized();
+        HRESULT hr = EnsureSSBInitialized();
         if (FAILED(hr)) {
-            std::wstring message = L"DismInitialize failed. " + GetDismErrorMessage(hr);
+            std::wstring message = L"SSBInitialize failed. " + GetSSBErrorMessage(hr);
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             RemoveDirectoryTree(workRoot);
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
             return -4;
         }
 
         if (callback) {
-            callback(5, L"Mounting backup image for DISM restore...");
+            callback(5, L"Mounting backup image for SSB restore...");
         }
 
-        hr = DismMountImage(
-            dismSource.c_str(),
+        hr = SSBMountImage(
+            SSBSource.c_str(),
             workRoot.c_str(),
             static_cast<UINT>(imageIndex),
             nullptr,
-            DismImageIndex,
-            DISM_MOUNT_READONLY,
+            SSBImageIndex,
+            SSB_MOUNT_READONLY,
             nullptr,
             nullptr,
             nullptr);
 
         if (FAILED(hr)) {
-            std::wstring message = L"DismMountImage failed. " + GetDismErrorMessage(hr);
+            std::wstring message = L"SSBMountImage failed. " + GetSSBErrorMessage(hr);
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             RemoveDirectoryTree(workRoot);
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
             return -5;
         }
 
-        DismSession session = DISM_SESSION_DEFAULT;
-        hr = DismOpenSession(workRoot.c_str(), nullptr, nullptr, &session);
+        SSBSession session = SSB_SESSION_DEFAULT;
+        hr = SSBOpenSession(workRoot.c_str(), nullptr, nullptr, &session);
         if (FAILED(hr)) {
-            DismUnmountImage(workRoot.c_str(), DISM_DISCARD_IMAGE, nullptr, nullptr, nullptr);
+            SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
             RemoveDirectoryTree(workRoot);
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
 
-            std::wstring message = L"DismOpenSession failed. " + GetDismErrorMessage(hr);
+            std::wstring message = L"SSBOpenSession failed. " + GetSSBErrorMessage(hr);
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -6;
         }
 
-        DismImageHealthState healthState = DismImageHealthy;
-        hr = DismCheckImageHealth(session, TRUE, nullptr, nullptr, nullptr, &healthState);
+        SSBImageHealthState healthState = SSBImageHealthy;
+        hr = SSBCheckImageHealth(session, TRUE, nullptr, nullptr, nullptr, &healthState);
         if (FAILED(hr)) {
-            DismCloseSession(session);
-            DismUnmountImage(workRoot.c_str(), DISM_DISCARD_IMAGE, nullptr, nullptr, nullptr);
+            SSBCloseSession(session);
+            SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
             RemoveDirectoryTree(workRoot);
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
 
-            std::wstring message = L"Initial DismCheckImageHealth failed. " + GetDismErrorMessage(hr);
+            std::wstring message = L"Initial SSBCheckImageHealth failed. " + GetSSBErrorMessage(hr);
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -7;
         }
 
-        if (healthState == DismImageNonRepairable) {
-            DismCloseSession(session);
-            DismUnmountImage(workRoot.c_str(), DISM_DISCARD_IMAGE, nullptr, nullptr, nullptr);
+        if (healthState == SSBImageNonRepairable) {
+            SSBCloseSession(session);
+            SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
             RemoveDirectoryTree(workRoot);
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
 
             std::wstring message = L"Image is non-repairable.";
@@ -473,12 +473,12 @@ extern "C" {
             return 2;
         }
 
-        if (healthState == DismImageHealthy) {
-            DismCloseSession(session);
-            DismUnmountImage(workRoot.c_str(), DISM_DISCARD_IMAGE, nullptr, nullptr, nullptr);
+        if (healthState == SSBImageHealthy) {
+            SSBCloseSession(session);
+            SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
             RemoveDirectoryTree(workRoot);
             if (stagedCleanup) {
-                fs::remove(dismSource, ec);
+                fs::remove(SSBSource, ec);
             }
 
             WriteMessageBuffer(healthMessage, healthMessageSize, L"Image is already healthy.");
@@ -486,10 +486,10 @@ extern "C" {
         }
 
         if (callback) {
-            callback(60, L"Attempting DISM RestoreHealth...");
+            callback(60, L"Attempting SSB RestoreHealth...");
         }
 
-        hr = DismRestoreImageHealth(
+        hr = SSBRestoreImageHealth(
             session,
             sourcePaths,
             static_cast<UINT>(sourcePathCount),
@@ -498,38 +498,38 @@ extern "C" {
             nullptr,
             nullptr);
 
-        DismImageHealthState postRepairState = DismImageHealthy;
-        HRESULT verifyHr = DismCheckImageHealth(session, TRUE, nullptr, nullptr, nullptr, &postRepairState);
+        SSBImageHealthState postRepairState = SSBImageHealthy;
+        HRESULT verifyHr = SSBCheckImageHealth(session, TRUE, nullptr, nullptr, nullptr, &postRepairState);
 
-        DismCloseSession(session);
-        DismUnmountImage(workRoot.c_str(), DISM_DISCARD_IMAGE, nullptr, nullptr, nullptr);
+        SSBCloseSession(session);
+        SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
         RemoveDirectoryTree(workRoot);
         if (stagedCleanup) {
-            fs::remove(dismSource, ec);
+            fs::remove(SSBSource, ec);
         }
 
         if (FAILED(hr)) {
-            std::wstring message = L"DismRestoreImageHealth failed. " + GetDismErrorMessage(hr);
+            std::wstring message = L"SSBRestoreImageHealth failed. " + GetSSBErrorMessage(hr);
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -8;
         }
 
         if (FAILED(verifyHr)) {
-            std::wstring message = L"RestoreHealth completed, but post-repair health check failed. " + GetDismErrorMessage(verifyHr);
+            std::wstring message = L"RestoreHealth completed, but post-repair health check failed. " + GetSSBErrorMessage(verifyHr);
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -9;
         }
 
-        std::wstring message = L"DISM RestoreHealth completed. Final state: " + HealthStateToText(postRepairState);
+        std::wstring message = L"SSB RestoreHealth completed. Final state: " + HealthStateToText(postRepairState);
         WriteMessageBuffer(healthMessage, healthMessageSize, message);
 
-        if (postRepairState == DismImageHealthy) {
+        if (postRepairState == SSBImageHealthy) {
             return 0;
         }
 
-        if (postRepairState == DismImageRepairable) {
+        if (postRepairState == SSBImageRepairable) {
             return 1;
         }
 
@@ -800,3 +800,4 @@ extern "C" {
         }
     }
 }
+

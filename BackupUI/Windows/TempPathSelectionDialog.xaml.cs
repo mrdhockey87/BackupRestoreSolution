@@ -149,7 +149,7 @@ namespace BackupUI.Windows
         {
             using (var dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "Select temporary directory for WIM mount operations";
+                dialog.Description = "Select temporary directory for backup archive mount operations";
                 dialog.SelectedPath = SelectedTempPath;
                 dialog.ShowNewFolderButton = true;
 
@@ -228,7 +228,7 @@ namespace BackupUI.Windows
                 }
 
                 // Test write access
-                string testFile = Path.Combine(SelectedTempPath, $"_wim_test_{Guid.NewGuid()}.tmp");
+                string testFile = Path.Combine(SelectedTempPath, $"_archive_test_{Guid.NewGuid()}.tmp");
                 File.WriteAllText(testFile, "test");
                 File.Delete(testFile);
 

@@ -2026,7 +2026,7 @@ namespace BackupUI
 
                             var healthMessage = new StringBuilder(1024);
 
-                            int checkResult = BackupEngineInterop.DismCheckImageHealth(
+                            int checkResult = BackupEngineInterop.CheckBackupImageStatusWithProgress(
                                 preparedBackup.WorkingPath,
                                 1,
                                 true,
@@ -2082,7 +2082,7 @@ namespace BackupUI
 
                                     var repairMessage = new StringBuilder(1024);
 
-                                    int repairResult = BackupEngineInterop.DismRestoreImageHealth(
+                                    int repairResult = BackupEngineInterop.RepairBackupImageStatusWithProgress(
                                         preparedBackup.WorkingPath,
                                         1,
                                         null,

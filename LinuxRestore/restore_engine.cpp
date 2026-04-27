@@ -1,6 +1,6 @@
 // LinuxRestore/restore_engine.cpp
 // Cross-platform restore engine for Linux-based bootable USB
-// Version 5.13.7.0 - Added WIM (.ssb) support for unified backup format
+// Version 5.13.7.0 - Added SSB archive support for unified backup format
 
 #include <iostream>
 #include <string>
@@ -103,8 +103,8 @@ private:
             return false;
         }
 
-    bool IsMetadataAwareWimBackup(const std::string& path) {
-        if (!IsWimBackup(path)) {
+    bool IsMetadataAwareSsbBackup(const std::string& path) {
+        if (!IsSsbBackup(path)) {
             return false;
         }
 
@@ -147,16 +147,16 @@ private:
                     return -1;
                 }
 
-                if (fs::is_regular_file(workingPath) && IsMetadataAwareWimBackup(workingPath)) {
+                if (fs::is_regular_file(workingPath) && IsMetadataAwareSsbBackup(workingPath)) {
                     return RestoreDiskFromMetadata(workingPath, targetDisk, callback);
                 }
 
-                if (fs::is_regular_file(workingPath) && IsWimBackup(workingPath)) {
-                    SetError("Legacy WIM backups without reconstruction metadata are not supported for disk restore.");
+                if (fs::is_regular_file(workingPath) && IsSsbBackup(workingPath)) {
+                    SetError("Legacy SSB backups without reconstruction metadata are not supported for disk restore.");
                     return -2;
                 }
 
-                SetError("Disk restore requires metadata-aware WIM backups.");
+                SetError("Disk restore requires metadata-aware SSB backups.");
                 return -3;
             });
         } catch (const std::exception& e) {
@@ -165,10 +165,10 @@ private:
         }
     }
 
-    std::vector<RestoreVolumePlan> GetWimRestorePlan(const std::string& wimPath) {
+    std::vector<RestoreVolumePlan> GetSsbRestorePlan(const std::string& ssbPath) {
         std::vector<RestoreVolumePlan> plans;
 
-        std::string info = CaptureCommandOutput("wimlib-imagex info '" + wimPath + "' --detailed 2>/dev/null");
+        std::string info = CaptureCommandOutput("wimlib-imagex info '" + ssbPath + "' --detailed 2>/dev/null");
         if (info.empty()) {
             return plans;
         }
@@ -228,12 +228,12 @@ private:
             return 0;
         }
 
-    int RestoreDiskFromMetadata(const std::string& wimPath,
+    int RestoreDiskFromMetadata(const std::string& ssbPath,
                                 const std::string& targetDisk,
                                 ProgressCallback callback) {
-        auto plans = GetWimRestorePlan(wimPath);
+        auto plans = GetSsbRestorePlan(ssbPath);
         if (plans.empty()) {
-            SetError("No reconstruction metadata found in WIM backup.");
+            SetError("No reconstruction metadata found in SSB backup.");
             return -1;
         }
 
@@ -265,7 +265,7 @@ private:
                 callback(10 + static_cast<int>((i * 80) / plans.size()), "Restoring partition " + std::to_string(plan.partitionNumber == 0 ? i + 1 : plan.partitionNumber));
             }
 
-            if (!MountAndRestorePartition(partitionDevice, mountPoint, plan, wimPath)) {
+            if (!MountAndRestorePartition(partitionDevice, mountPoint, plan, ssbPath)) {
                 return -5;
             }
 
@@ -358,7 +358,7 @@ private:
         return true;
     }
 
-    bool MountAndRestorePartition(const std::string& partitionDevice, const std::string& mountPoint, const RestoreVolumePlan& plan, const std::string& wimPath) {
+    bool MountAndRestorePartition(const std::string& partitionDevice, const std::string& mountPoint, const RestoreVolumePlan& plan, const std::string& ssbPath) {
         fs::create_directories(mountPoint);
 
         std::string fsType = plan.sourceFileSystem;
@@ -378,11 +378,11 @@ private:
             return false;
         }
 
-        std::string extractCmd = "wimlib-imagex extract '" + wimPath + "' " + std::to_string(plan.imageIndex) + " '" + mountPoint + "' --preserve-modes --preserve-timestamps";
+        std::string extractCmd = "wimlib-imagex extract '" + ssbPath + "' " + std::to_string(plan.imageIndex) + " '" + mountPoint + "' --preserve-modes --preserve-timestamps";
         if (system(extractCmd.c_str()) != 0) {
             std::string umountCmd = "umount '" + mountPoint + "'";
             system(umountCmd.c_str());
-            SetError("Failed to extract WIM image to partition: " + mountPoint);
+            SetError("Failed to extract SSB image to partition: " + mountPoint);
             return false;
         }
 
@@ -495,8 +495,8 @@ private:
         }
     }
 
-    // NEW: Check if file is WIM format (.ssb or .wim)
-    bool IsWimBackup(const std::string& path) {
+    // NEW: Check if file is SSB archive format (.ssb or legacy .wim)
+    bool IsSsbBackup(const std::string& path) {
         // Check file extension
         std::string ext = fs::path(path).extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
@@ -505,7 +505,7 @@ private:
             return true;
         }
 
-        // Check magic number for WIM files (MSWIM)
+        // Check magic number for SSB/WIM archives (MSWIM)
         std::ifstream file(path, std::ios::binary);
         if (file) {
             char magic[8] = {0};
@@ -518,10 +518,10 @@ private:
         return false;
     }
 
-    // NEW: Get number of images in WIM file
-    int GetWimImageCount(const std::string& wimPath) {
+    // NEW: Get number of images in an SSB archive
+    int GetSsbImageCount(const std::string& ssbPath) {
         // Use wimlib-imagex info to get image count
-        std::string cmd = "wimlib-imagex info '" + wimPath + "' 2>/dev/null | grep -c '^Image Count:'";
+        std::string cmd = "wimlib-imagex info '" + ssbPath + "' 2>/dev/null | grep -c '^Image Count:'";
 
         FILE* pipe = popen(cmd.c_str(), "r");
         if (!pipe) {
@@ -544,18 +544,18 @@ private:
         }
     }
 
-    // NEW: List all images in WIM file with their info
-    bool ListWimImages(const std::string& wimPath) {
+    // NEW: List all images in an SSB archive with their info
+    bool ListSsbImages(const std::string& ssbPath) {
         std::cout << "\n========================================" << std::endl;
         std::cout << "Available Backup Images" << std::endl;
         std::cout << "========================================" << std::endl;
 
         // Use wimlib-imagex info to list all images
-        std::string cmd = "wimlib-imagex info '" + wimPath + "' --detailed 2>&1";
+        std::string cmd = "wimlib-imagex info '" + ssbPath + "' --detailed 2>&1";
         int result = system(cmd.c_str());
 
         if (result != 0) {
-            SetError("Failed to read WIM information");
+            SetError("Failed to read SSB archive information");
             return false;
         }
 
@@ -564,10 +564,10 @@ private:
     }
 
     // NEW: Get image information
-    bool GetWimImageInfo(const std::string& wimPath, int imageIndex, 
+    bool GetSsbImageInfo(const std::string& ssbPath, int imageIndex, 
                         std::string& name, std::string& description) {
         // Use wimlib-imagex info to get specific image details
-        std::string cmd = "wimlib-imagex info '" + wimPath + "' " + std::to_string(imageIndex) + " 2>&1";
+        std::string cmd = "wimlib-imagex info '" + ssbPath + "' " + std::to_string(imageIndex) + " 2>&1";
 
         FILE* pipe = popen(cmd.c_str(), "r");
         if (!pipe) {
@@ -604,34 +604,34 @@ private:
         return true;
     }
 
-    // NEW: Extract WIM backup using wimlib
-    int ExtractWimBackup(const std::string& wimPath, 
+    // NEW: Extract SSB backup using wimlib
+    int ExtractSsbBackup(const std::string& ssbPath, 
                         const std::string& destPath,
                         int imageIndex = 1) {
-        ReportProgress(10, "Detected WIM format backup (.ssb file)");
+        ReportProgress(10, "Detected SSB archive backup (.ssb file)");
 
         // Check if wimlib-imagex is available
         int result = system("which wimlib-imagex > /dev/null 2>&1");
         if (result != 0) {
             SetError("wimlib-imagex not found. Install wimlib: sudo apt-get install wimtools");
-            std::cerr << "\nTo extract WIM backups, install wimlib:" << std::endl;
+            std::cerr << "\nTo extract SSB backups, install wimlib:" << std::endl;
             std::cerr << "  Debian/Ubuntu: sudo apt-get install wimtools" << std::endl;
             std::cerr << "  Fedora/RHEL:   sudo dnf install wimlib-utils" << std::endl;
             std::cerr << "  Arch Linux:    sudo pacman -S wimlib" << std::endl;
             return -1;
         }
 
-        ReportProgress(20, "Using wimlib to extract backup...");
+        ReportProgress(20, "Using wimlib to extract SSB backup...");
 
-        // First, get information about the WIM file
-        std::string infoCmd = "wimlib-imagex info '" + wimPath + "' 2>&1";
-        ReportProgress(25, "Reading WIM metadata...");
+        // First, get information about the SSB archive
+        std::string infoCmd = "wimlib-imagex info '" + ssbPath + "' 2>&1";
+        ReportProgress(25, "Reading SSB metadata...");
         system(infoCmd.c_str());
 
-        // Extract the WIM image
-        ReportProgress(30, "Extracting WIM image " + std::to_string(imageIndex) + "...");
+        // Extract the SSB image
+        ReportProgress(30, "Extracting SSB image " + std::to_string(imageIndex) + "...");
 
-        std::string extractCmd = "wimlib-imagex extract '" + wimPath + "' " + 
+        std::string extractCmd = "wimlib-imagex extract '" + ssbPath + "' " + 
                                 std::to_string(imageIndex) + " '" + destPath + 
                                 "' --preserve-modes --preserve-timestamps 2>&1";
 
@@ -639,11 +639,11 @@ private:
         result = system(extractCmd.c_str());
 
         if (result != 0) {
-            SetError("WIM extraction failed with code " + std::to_string(result));
+            SetError("SSB extraction failed with code " + std::to_string(result));
             return -2;
         }
 
-        ReportProgress(90, "WIM extraction complete");
+        ReportProgress(90, "SSB extraction complete");
         return 0;
     }
 
@@ -659,7 +659,7 @@ public:
     }
 
     // Restore files from backup to destination
-    // Now supports both folder-based backups AND WIM (.ssb) backups
+    // Now supports both folder-based backups and SSB (.ssb) backups
     int RestoreFiles(const std::string& backupPath, 
                      const std::string& destPath, 
                      bool overwriteExisting) {
@@ -672,18 +672,18 @@ public:
                     return -1;
                 }
 
-                if (fs::is_regular_file(workingPath) && IsMetadataAwareWimBackup(workingPath)) {
-                    ReportProgress(4, "Detected metadata-aware WIM backup");
-                    int result = ExtractWimBackup(workingPath, destPath);
+                if (fs::is_regular_file(workingPath) && IsMetadataAwareSsbBackup(workingPath)) {
+                    ReportProgress(4, "Detected metadata-aware SSB backup");
+                    int result = ExtractSsbBackup(workingPath, destPath);
                     if (result != 0) {
                         return result;
                     }
-                    ReportProgress(100, "WIM restore complete!");
+                    ReportProgress(100, "SSB restore complete!");
                     return 0;
                 }
 
-                if (fs::is_regular_file(workingPath) && IsWimBackup(workingPath)) {
-                    ReportProgress(5, "Detected WIM backup format");
+                if (fs::is_regular_file(workingPath) && IsSsbBackup(workingPath)) {
+                    ReportProgress(5, "Detected SSB backup format");
 
                     try {
                         fs::create_directories(destPath);
@@ -692,12 +692,12 @@ public:
                         return -1;
                     }
 
-                    int result = ExtractWimBackup(workingPath, destPath);
+                    int result = ExtractSsbBackup(workingPath, destPath);
                     if (result != 0) {
                         return result;
                     }
 
-                    ReportProgress(100, "WIM restore complete!");
+                    ReportProgress(100, "SSB restore complete!");
                     return 0;
                 }
 
@@ -1047,11 +1047,11 @@ public:
                     return 0;
                 }
 
-                if (fs::is_regular_file(workingPath) && IsWimBackup(workingPath)) {
+                if (fs::is_regular_file(workingPath) && IsSsbBackup(workingPath)) {
                     std::string command = "wimlib-imagex dir '" + workingPath + "' 1 2>/dev/null";
                     FILE* pipe = popen(command.c_str(), "r");
                     if (!pipe) {
-                        SetError("Failed to read WIM contents.");
+                        SetError("Failed to read SSB contents.");
                         return 0;
                     }
 
@@ -1195,7 +1195,7 @@ public:
                         callback(percentage, "Disk image detected: " + item);
                     }
 
-                    if (IsMetadataAwareWimBackup(sourcePath)) {
+                    if (IsMetadataAwareSsbBackup(sourcePath)) {
                         if (callback) {
                             callback(percentage, "Metadata-aware disk restore available");
                         }

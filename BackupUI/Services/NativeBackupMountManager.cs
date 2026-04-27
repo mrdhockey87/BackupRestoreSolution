@@ -10,9 +10,9 @@ using BackupCommon;
 
 namespace BackupUI.Services
 {
-    /// <summary>
-    /// Native WIM mounting manager (No PowerShell, No Admin required)
-    /// </summary>
+        /// <summary>
+        /// Native SSB mounting manager (No PowerShell, No Admin required)
+        /// </summary>
     public class NativeBackupMountManager
     {
         public sealed class ImageRestoreMetadata
@@ -33,7 +33,7 @@ namespace BackupUI.Services
             public int VolumeIndex { get; set; }
         }
 
-        public sealed class WimImageInfoResult
+        public sealed class SsbImageInfoResult
         {
             public int ImageIndex { get; set; }
             public string Name { get; set; } = string.Empty;
@@ -208,10 +208,10 @@ namespace BackupUI.Services
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
 
-        // P/Invoke declarations for C++ WimMountManager
-        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
-        private static extern bool WimMount_MountWim(
-            [MarshalAs(UnmanagedType.LPWStr)] string wimPath,
+        // P/Invoke declarations for the native mount manager
+        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_MountArchive", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern bool SsbMount_MountArchive(
+            [MarshalAs(UnmanagedType.LPWStr)] string ssbPath,
             [MarshalAs(UnmanagedType.LPWStr)] string backupName,
             [MarshalAs(UnmanagedType.LPWStr)] string backupType,
             int imageIndex,  // Image index to mount (1-based, use 1 for first image)
@@ -223,25 +223,25 @@ namespace BackupUI.Services
             [MarshalAs(UnmanagedType.LPWStr)] string? tempPath = null  // Optional temp path
         );
 
-        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
-        private static extern bool WimMount_UnmountWim(
+        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_UnmountArchive", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern bool SsbMount_UnmountArchive(
             [MarshalAs(UnmanagedType.LPWStr)] string mountPath,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
             int errorMsgSize,
             ProgressCallback? callback = null  // Optional progress callback
         );
 
-        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
-        private static extern void WimMount_UnmountAll();
+        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_UnmountAll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void SsbMount_UnmountAll();
 
-        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int WimMount_GetMountedCount();
+        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_GetMountedCount", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int SsbMount_GetMountedCount();
 
-        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
-        private static extern bool WimMount_GetMountedInfo(
+        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_GetMountedInfo", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern bool SsbMount_GetMountedInfo(
             int index,
-            [MarshalAs(UnmanagedType.LPWStr)] StringBuilder wimPath,
-            int wimPathSize,
+            [MarshalAs(UnmanagedType.LPWStr)] StringBuilder ssbPath,
+            int ssbPathSize,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder mountPath,
             int mountPathSize,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder backupName,
@@ -251,24 +251,24 @@ namespace BackupUI.Services
             out SYSTEMTIME mountTime  // ? NEW: Get mount time from C++
         );
 
-        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
-        private static extern bool WimMount_ValidateWim(
-            [MarshalAs(UnmanagedType.LPWStr)] string wimPath,
+        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_ValidateArchive", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern bool SsbMount_ValidateArchive(
+            [MarshalAs(UnmanagedType.LPWStr)] string ssbPath,
             out int imageCount,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
             int errorMsgSize
         );
 
-        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int WimMount_GetImageCount(
-            [MarshalAs(UnmanagedType.LPWStr)] string wimPath,
+        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_GetImageCount", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int SsbMount_GetImageCount(
+            [MarshalAs(UnmanagedType.LPWStr)] string ssbPath,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
             int errorMsgSize
         );
 
-        [DllImport("BackupEngine.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
-        private static extern bool WimMount_GetImageInfo(
-            [MarshalAs(UnmanagedType.LPWStr)] string wimPath,
+        [DllImport("BackupEngine.dll", EntryPoint = "SsbMount_GetImageInfo", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+        private static extern bool SsbMount_GetImageInfo(
+            [MarshalAs(UnmanagedType.LPWStr)] string ssbPath,
             int imageIndex,
             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder name,
             int nameSize,
@@ -297,7 +297,7 @@ namespace BackupUI.Services
         /// </summary>
         public class MountedBackup
         {
-            public string WimPath { get; set; } = "";
+            public string SsbPath { get; set; } = "";
             public string MountPath { get; set; } = "";
             public string BackupName { get; set; } = "";
             public string BackupType { get; set; } = "";
@@ -306,10 +306,10 @@ namespace BackupUI.Services
         }
 
         /// <summary>
-        /// Mount a WIM backup file (No admin required!)
+        /// Mount an SSB backup file (No admin required!)
         /// </summary>
         public static (bool Success, string MountPath, string Error) MountBackup(
-            string wimPath,
+            string ssbPath,
             string backupName,
             string backupType,
             int imageIndex = 1)  // Default to first image
@@ -319,8 +319,8 @@ namespace BackupUI.Services
                 var mountPath = new StringBuilder(260);
                 var errorMsg = new StringBuilder(512);
 
-                bool success = WimMount_MountWim(
-                    wimPath,
+                bool success = SsbMount_MountArchive(
+                    ssbPath,
                     backupName,
                     backupType,
                     imageIndex,  // Pass image index to C++
@@ -358,15 +358,15 @@ namespace BackupUI.Services
         }
 
         /// <summary>
-        /// Mount a WIM backup file asynchronously with progress reporting
+        /// Mount an SSB backup file asynchronously with progress reporting
         /// </summary>
         public static async Task<(bool Success, string MountPath, string Error)> MountBackupAsync(
-            string wimPath,
+            string ssbPath,
             string backupName,
             string backupType,
             int imageIndex = 1,
             Action<int, string>? progressCallback = null,  // Progress callback
-            string? tempPath = null)  // Optional temp path for WIM operations
+            string? tempPath = null)  // Optional temp path for archive operations
         {
             // Ensure mount operations run at Normal priority (not Efficiency mode)
             var originalPriority = System.Diagnostics.ProcessPriorityClass.Normal;
@@ -388,16 +388,16 @@ namespace BackupUI.Services
             {
                 progressCallback?.Invoke(0, "Validating backup file...");
 
-                // Validate WIM file BEFORE attempting to mount
+                // Validate backup archive BEFORE attempting to mount
                 var errorMsg = new StringBuilder(512);
                 int imageCount;
 
-                if (!WimMount_ValidateWim(wimPath, out imageCount, errorMsg, 512))
+                if (!SsbMount_ValidateArchive(ssbPath, out imageCount, errorMsg, 512))
                 {
                     string validationError = errorMsg.ToString();
 
                     BackupLogger.LogError("BackupMount",
-                        $"WIM validation failed for {backupName}",
+                        $"Archive validation failed for {backupName}",
                         validationError);
 
                     return (false, "", validationError);
@@ -424,7 +424,7 @@ namespace BackupUI.Services
                         errorMsg.Clear();
 
                         // DIAGNOSTIC: Log the temp path we're about to pass to C++
-                        System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] About to call WimMount_MountWim with tempPath: '{tempPath}'");
+                        System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] About to call SsbMount_MountArchive with tempPath: '{tempPath}'");
                         System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] tempPath is null: {tempPath == null}");
                         System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] tempPath is empty: {string.IsNullOrEmpty(tempPath)}");
                         if (!string.IsNullOrEmpty(tempPath))
@@ -449,8 +449,8 @@ namespace BackupUI.Services
                             : null;
                         mountWatcher?.Start();
 
-                        bool success = WimMount_MountWim(
-                            wimPath,
+                        bool success = SsbMount_MountArchive(
+                            ssbPath,
                             backupName,
                             backupType,
                             imageIndex,
@@ -462,7 +462,7 @@ namespace BackupUI.Services
                             tempPath  // Pass temp path to C++
                         );
 
-                        System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] WimMount_MountWim returned: {success}");
+                        System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] SsbMount_MountArchive returned: {success}");
                         if (!success)
                         {
                             System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager] Error message: {errorMsg}");
@@ -520,7 +520,7 @@ namespace BackupUI.Services
             {
                 var errorMsg = new StringBuilder(512);
 
-                bool success = WimMount_UnmountWim(mountPath, errorMsg, 512);
+                bool success = SsbMount_UnmountArchive(mountPath, errorMsg, 512);
 
                 if (success)
                 {
@@ -593,7 +593,7 @@ namespace BackupUI.Services
                             };
                         }
 
-                        bool success = WimMount_UnmountWim(mountPath, errorMsg, 512, nativeCallback);
+                bool success = SsbMount_UnmountArchive(mountPath, errorMsg, 512, nativeCallback);
 
                         if (success)
                         {
@@ -659,7 +659,7 @@ namespace BackupUI.Services
         {
             try
             {
-                WimMount_UnmountAll();
+                SsbMount_UnmountAll();
 
                 BackupLogger.LogSuccess("BackupMount",
                     "All backups unmounted",
@@ -682,17 +682,17 @@ namespace BackupUI.Services
 
             try
             {
-                int count = WimMount_GetMountedCount();
+                int count = SsbMount_GetMountedCount();
 
                 for (int i = 0; i < count; i++)
                 {
-                    var wimPath = new StringBuilder(260);
+                    var ssbPath = new StringBuilder(260);
                     var mountPath = new StringBuilder(260);
                     var backupName = new StringBuilder(256);
                     var backupType = new StringBuilder(64);
                     SYSTEMTIME mountTime;
 
-                    if (WimMount_GetMountedInfo(i, wimPath, 260, mountPath, 260,
+                    if (SsbMount_GetMountedInfo(i, ssbPath, 260, mountPath, 260,
                                                backupName, 256, backupType, 64, out mountTime))
                     {
                         // Convert SYSTEMTIME to DateTime
@@ -718,7 +718,7 @@ namespace BackupUI.Services
 
                         result.Add(new MountedBackup
                         {
-                            WimPath = wimPath.ToString(),
+                            SsbPath = ssbPath.ToString(),
                             MountPath = mountPath.ToString(),
                             BackupName = backupName.ToString(),
                             BackupType = backupType.ToString(),
@@ -738,14 +738,14 @@ namespace BackupUI.Services
         }
 
         /// <summary>
-        /// Get number of images in a WIM backup file
+        /// Get number of images in an SSB backup file
         /// </summary>
-        public static (bool Success, int ImageCount, string Error) GetImageCount(string wimPath)
+        public static (bool Success, int ImageCount, string Error) GetImageCount(string ssbPath)
         {
             try
             {
                 var errorMsg = new StringBuilder(512);
-                int imageCount = WimMount_GetImageCount(wimPath, errorMsg, 512);
+                int imageCount = SsbMount_GetImageCount(ssbPath, errorMsg, 512);
 
                 if (imageCount > 0)
                 {
@@ -767,14 +767,14 @@ namespace BackupUI.Services
         }
 
         /// <summary>
-        /// Get detailed information about all images in a WIM backup file
+        /// Get detailed information about all images in an SSB backup file
         /// </summary>
-        public static (bool Success, List<Windows.BackupImageInfo> Images, string Error) GetImageInfo(string wimPath)
+        public static (bool Success, List<Windows.BackupImageInfo> Images, string Error) GetImageInfo(string ssbPath)
         {
             try
             {
                 // First get image count
-                var (success, imageCount, error) = GetImageCount(wimPath);
+                var (success, imageCount, error) = GetImageCount(ssbPath);
                 if (!success)
                 {
                     return (false, new List<Windows.BackupImageInfo>(), error);
@@ -789,7 +789,7 @@ namespace BackupUI.Services
                     var description = new StringBuilder(1024);
                     var errorMsg = new StringBuilder(512);
 
-                    if (WimMount_GetImageInfo(wimPath, i, name, 256, description, 1024, errorMsg, 512))
+                    if (SsbMount_GetImageInfo(ssbPath, i, name, 256, description, 1024, errorMsg, 512))
                     {
                         string imageName = name.ToString();
                         string desc = description.ToString();
@@ -807,7 +807,7 @@ namespace BackupUI.Services
 
                         if (string.IsNullOrWhiteSpace(desc) || desc.Equals("No description", StringComparison.OrdinalIgnoreCase))
                         {
-                            desc = Path.GetFileNameWithoutExtension(wimPath);
+                            desc = Path.GetFileNameWithoutExtension(ssbPath);
                         }
 
                         string nameWithoutTimestamp = imageName;
@@ -855,18 +855,18 @@ namespace BackupUI.Services
             }
         }
 
-        public static (bool Success, List<WimImageInfoResult> Images, string Error) GetImageInfoWithRestoreMetadata(string wimPath)
+        public static (bool Success, List<SsbImageInfoResult> Images, string Error) GetImageInfoWithRestoreMetadata(string ssbPath)
         {
-            var (success, images, error) = GetImageInfo(wimPath);
+            var (success, images, error) = GetImageInfo(ssbPath);
             if (!success)
             {
-                return (false, new List<WimImageInfoResult>(), error);
+                return (false, new List<SsbImageInfoResult>(), error);
             }
 
-            var results = new List<WimImageInfoResult>();
+            var results = new List<SsbImageInfoResult>();
             foreach (var image in images)
             {
-                var result = new WimImageInfoResult
+                var result = new SsbImageInfoResult
                 {
                     ImageIndex = image.ImageIndex,
                     Name = image.Name,
@@ -936,11 +936,11 @@ namespace BackupUI.Services
             return metadata;
         }
 
-        public static (bool Success, RestoreDiskPlan Plan, string Error) BuildDiskRestorePlan(string wimPath)
+        public static (bool Success, RestoreDiskPlan Plan, string Error) BuildDiskRestorePlan(string ssbPath)
         {
             var plan = new RestoreDiskPlan();
 
-            var (success, images, error) = GetImageInfoWithRestoreMetadata(wimPath);
+            var (success, images, error) = GetImageInfoWithRestoreMetadata(ssbPath);
             if (!success)
             {
                 return (false, plan, error);

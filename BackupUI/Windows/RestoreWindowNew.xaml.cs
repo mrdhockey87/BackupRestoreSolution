@@ -103,7 +103,7 @@ namespace BackupUI.Windows
             using var dialog = new OpenFileDialog
             {
                 Title = "Select Backup File or Folder",
-                Filter = "Backup Files (*.ssb;*.wim;*.bak;*.backup)|*.ssb;*.wim;*.bak;*.backup|All Files (*.*)|*.*",
+                Filter = "Backup Files (*.ssb;*.bak;*.backup)|*.ssb;*.bak;*.backup|All Files (*.*)|*.*",
                 CheckFileExists = false,
                 CheckPathExists = true,
                 ValidateNames = false
@@ -172,8 +172,7 @@ namespace BackupUI.Windows
                     if (File.Exists(path))
                     {
                         var extension = Path.GetExtension(path);
-                        if (string.Equals(extension, ".ssb", StringComparison.OrdinalIgnoreCase) ||
-                            string.Equals(extension, ".wim", StringComparison.OrdinalIgnoreCase))
+                        if (string.Equals(extension, ".ssb", StringComparison.OrdinalIgnoreCase))
                         {
                             backupFiles.Add(path);
                         }
@@ -193,7 +192,6 @@ namespace BackupUI.Windows
                     {
                         // Directory - find all backup files
                         backupFiles.AddRange(Directory.GetFiles(path, "*.ssb", SearchOption.AllDirectories));
-                        backupFiles.AddRange(Directory.GetFiles(path, "*.wim", SearchOption.AllDirectories));
                         backupFiles.AddRange(Directory.GetFiles(path, "*.bak", SearchOption.AllDirectories));
                         backupFiles.AddRange(Directory.GetFiles(path, "*.backup", SearchOption.AllDirectories));
                     }

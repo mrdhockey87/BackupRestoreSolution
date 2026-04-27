@@ -10,7 +10,7 @@ namespace BackupUI
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.50";
+        private static readonly string version_fallback_number = "6.2.3.55";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,6 +68,16 @@ namespace BackupUI
 
 
 /*
+ * Version 6.2.3.55 Refactored LinuxRestore helper names and restore text to use SSB terminology while preserving
+ *                  legacy .wim compatibility and the underlying wimlib-based extraction behavior. mdail 4/27/2026
+ * Version 6.2.3.54 Cleaned the remaining managed comments and helper text to remove WIM wording, and disabled XML
+ *                  documentation and source-note artifacts from build outputs. mdail 4/26/2026
+ * Version 6.2.3.53 Renamed the native mount export surface to SSB-prefixed exports and updated the managed EntryPoint
+ *                  mappings to match while keeping behavior unchanged. mdail 4/26/2026
+ * Version 6.2.3.52 Refactored the native verification helper layer to use SSB terminology in the C++ wrapper
+ *                  functions while keeping the underlying Windows API behavior unchanged. mdail 4/26/2026
+ * Version 6.2.3.51 Refactored the C# managed interop surface to use neutral backup and status names while preserving
+ *                  the native C++ exports and reducing direct WIM and DISM naming in the UI layer. mdail 4/26/2026
  * Version 6.2.3.50 Wired the Verify tab to run DISM health checks and optional repair attempts with progress reporting
  *                  so users can verify backups and attempt recovery from corrupted files directly in the UI. mdail 4/26/2026
  * Version 6.2.3.49 Renamed the Schedules tab/menu entry to Service Status in the UI while preserving the schedule

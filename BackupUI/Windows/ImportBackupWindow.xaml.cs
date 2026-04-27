@@ -32,7 +32,7 @@ namespace BackupUI.Windows
             var dialog = new OpenFileDialog
             {
                 Title = "Select Backup File",
-                Filter = "Backup Files (*.brs;*.wim)|*.brs;*.wim|BRS Backups (*.brs)|*.brs|WIM Files (*.wim)|*.wim|All Files (*.*)|*.*",
+                Filter = "Backup Files (*.brs;*.ssb)|*.brs;*.ssb|BRS Backups (*.brs)|*.brs|SSB Files (*.ssb)|*.ssb|All Files (*.*)|*.*",
                 CheckFileExists = true
             };
 
@@ -63,7 +63,7 @@ namespace BackupUI.Windows
                     temporaryPath = preparedBackup.WorkingPath;
                 }
 
-                // P/Invoke to C++ validation
+                // P/Invoke to native backup validation
                 bool isBrs = false;
                 bool compressed = false;
                 var errorMsg = new StringBuilder(512);
@@ -89,10 +89,10 @@ namespace BackupUI.Windows
                     txtValidationStatus.Foreground = Brushes.Green;
                     txtValidationDetails.Text = isBrs 
                         ? "This is a Backup Restore System (.brs) backup file."
-                        : "This is a standard Windows Imaging (.wim) file.";
+                        : "This is a standard backup archive file.";
 
                     // Fill backup info
-                    txtFormat.Text = isBrs ? ".brs (Proprietary)" : ".wim (Windows Standard)";
+                    txtFormat.Text = isBrs ? ".brs (Proprietary)" : ".ssb (Standard)";
                     txtBackupName.Text = backupName;
                     txtBackupType.Text = backupType;
                     txtTimestamp.Text = backupDate.ToString("yyyy-MM-dd HH:mm:ss");
@@ -116,7 +116,7 @@ namespace BackupUI.Windows
                     pnlValidation.Background = new SolidColorBrush(Color.FromRgb(255, 235, 238)); // Light red
                     txtValidationStatus.Text = "? Invalid Backup File";
                     txtValidationStatus.Foreground = Brushes.Red;
-                    txtValidationDetails.Text = $"Error: {errorMsg}\n\nOnly .brs and .wim backup files are supported.";
+                    txtValidationDetails.Text = $"Error: {errorMsg}\n\nOnly .brs and .ssb backup files are supported.";
 
                     BackupLogger.LogWarning("ImportBackup", 
                         $"Invalid backup file: {Path.GetFileName(filePath)}", 
@@ -184,7 +184,7 @@ namespace BackupUI.Windows
 
                 MessageBox.Show(
                     $"Backup '{jobName}' imported successfully!\n\n" +
-                    $"Format: {(isBrsFormat ? ".brs" : ".wim")}\n" +
+                    $"Format: {(isBrsFormat ? ".brs" : ".ssb")}\n" +
                     $"Size: {FormatBytes(backupSize)}\n" +
                     $"Compressed: {(isCompressed ? "Yes" : "No")}\n\n" +
                     "The backup is now available in the main window.",

@@ -66,7 +66,7 @@ namespace BackupUI.Windows
     }
 
     /// <summary>
-    /// Information about a single WIM image/restore point
+    /// Information about a single backup image/restore point
     /// </summary>
     public class BackupImageInfo
     {

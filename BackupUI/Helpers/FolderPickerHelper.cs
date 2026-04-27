@@ -35,7 +35,7 @@ namespace BackupUI.Helpers
         /// Opens a file picker dialog to select a file
         /// </summary>
         /// <param name="title">Dialog title</param>
-        /// <param name="filter">File filter (e.g., "Backup Files|*.brs;*.wim|All Files|*.*")</param>
+        /// <param name="filter">File filter (e.g., "Backup Files|*.brs;*.ssb|All Files|*.*")</param>
         /// <param name="initialDirectory">Starting directory (optional)</param>
         /// <returns>Selected file path or null if cancelled</returns>
         public static string? PickFile(string title, string filter, string? initialDirectory = null)

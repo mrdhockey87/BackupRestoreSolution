@@ -662,7 +662,7 @@ namespace BackupEngine {
 extern "C" {
     using namespace BackupEngine;
 
-    BACKUPENGINE_API bool WimMount_MountWim(
+    BACKUPENGINE_API bool SsbMount_MountArchive(
         const wchar_t* wimPath,
         const wchar_t* backupName,
         const wchar_t* backupType,
@@ -688,7 +688,7 @@ extern "C" {
         );
     }
 
-    BACKUPENGINE_API bool WimMount_UnmountWim(
+    BACKUPENGINE_API bool SsbMount_UnmountArchive(
         const wchar_t* mountPath,
         wchar_t* errorMsg,
         int errorMsgSize,
@@ -697,16 +697,16 @@ extern "C" {
         return WimMountManager::UnmountWim(mountPath, errorMsg, errorMsgSize, callback);
     }
 
-    BACKUPENGINE_API void WimMount_UnmountAll() {
+    BACKUPENGINE_API void SsbMount_UnmountAll() {
         WimMountManager::UnmountAll();
     }
 
-    BACKUPENGINE_API int WimMount_GetMountedCount() {
+    BACKUPENGINE_API int SsbMount_GetMountedCount() {
         auto mounts = WimMountManager::GetMountedWims();
         return static_cast<int>(mounts.size());
     }
 
-    BACKUPENGINE_API bool WimMount_GetMountedInfo(
+    BACKUPENGINE_API bool SsbMount_GetMountedInfo(
         int index,
         wchar_t* wimPath,
         int wimPathSize,
@@ -740,7 +740,7 @@ extern "C" {
     }
 
     // NEW: Get WIM image count (exported for mount image selection)
-    BACKUPENGINE_API int WimMount_GetImageCount(
+    BACKUPENGINE_API int SsbMount_GetImageCount(
         const wchar_t* wimPath,
         wchar_t* errorMsg,
         int errorMsgSize
@@ -772,7 +772,7 @@ extern "C" {
     }
 
     // NEW: Get WIM image info by index (exported for mount image selection)
-    BACKUPENGINE_API bool WimMount_GetImageInfo(
+    BACKUPENGINE_API bool SsbMount_GetImageInfo(
         const wchar_t* wimPath,
         int imageIndex,
         wchar_t* imageName,

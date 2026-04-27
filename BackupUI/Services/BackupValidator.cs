@@ -38,7 +38,7 @@ namespace BackupUI.Services
                     try
                     {
                         var buffer = new StringBuilder(1024);
-                        int validationResult = BackupEngineInterop.VerifyBackup(backupPath, (percent, message) =>
+                        int validationResult = BackupEngineInterop.VerifyBackupArchive(backupPath, (percent, message) =>
                         {
                             try
                             {
