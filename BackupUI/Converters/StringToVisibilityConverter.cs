@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
-namespace BackupUI.Converters
+namespace SecureServerBackup.Converters
 {
     public class StringToVisibilityConverter : IValueConverter
     {

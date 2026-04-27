@@ -4,7 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class ImageSelectionDialog : Window
     {

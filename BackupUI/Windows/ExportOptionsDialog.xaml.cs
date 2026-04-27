@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class ExportOptionsDialog : Window
     {

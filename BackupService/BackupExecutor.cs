@@ -7,9 +7,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using BackupCommon;
+using SecureServerBackupCommon;
 
-namespace BackupService
+namespace SecureServerBackupService
 {
     public class BackupExecutor
     {

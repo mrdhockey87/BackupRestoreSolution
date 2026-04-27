@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace BackupUI.Models
+namespace SecureServerBackup.Models
 {
     /// <summary>
     /// Manages volume resizing logic, constraints, and validation

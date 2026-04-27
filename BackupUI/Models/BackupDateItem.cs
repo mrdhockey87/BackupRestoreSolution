@@ -1,6 +1,6 @@
 using System;
 
-namespace BackupUI.Models
+namespace SecureServerBackup.Models
 {
     public class BackupDateItem
     {

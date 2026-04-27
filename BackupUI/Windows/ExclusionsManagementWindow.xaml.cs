@@ -7,7 +7,7 @@ using System.Windows.Input;
 using Microsoft.Win32;
 using FolderBrowserDialog = System.Windows.Forms.FolderBrowserDialog;
 
-namespace BackupUI
+namespace SecureServerBackup
 {
     public partial class ExclusionsManagementWindow : Window
     {

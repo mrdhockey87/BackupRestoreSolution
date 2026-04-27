@@ -1,13 +1,15 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using BackupCommon;
-using BackupUI.Models;
-using BackupUI.Services;
+using SecureServerBackupCommon;
+using SecureServerBackup.Models;
+using SecureServerBackup.Services;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class ScheduleManagementWindow : Window
     {
@@ -23,6 +25,91 @@ namespace BackupUI.Windows
         {
             var jobs = jobManager.GetScheduledJobs();
             dgJobs.ItemsSource = jobs;
+        }
+
+        private void EditNextRun_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.Tag is not BackupJob job)
+            {
+                CustomDialogService.ShowWarning(this, "Please select a valid scheduled job.", "No Selection");
+                return;
+            }
+
+            if (job.Schedule == null || !job.Schedule.Enabled || !job.NextScheduledRun.HasValue)
+            {
+                CustomDialogService.ShowWarning(this, "This job does not have an editable next run time.", "Edit Next Run");
+                return;
+            }
+
+            var currentNextRun = job.NextScheduledRun.Value;
+            var latestAllowedRun = GetLatestAllowedNextRun(job.Schedule, currentNextRun);
+
+            if (!latestAllowedRun.HasValue || latestAllowedRun.Value < currentNextRun)
+            {
+                CustomDialogService.ShowWarning(this, "Unable to determine the valid edit range for this schedule.", "Edit Next Run");
+                return;
+            }
+
+            CustomDialogService.ShowInfo(
+                this,
+                $"You can edit the next run for '{job.Name}'.\n\nThis is a one time change only. After this edited next run is used, the job will return to its normal schedule.\n\nCurrent next run: {currentNextRun:yyyy-MM-dd hh:mm tt}\nLatest allowed value: {latestAllowedRun.Value:yyyy-MM-dd hh:mm tt}",
+                "Edit Next Run");
+
+            var editWindow = new NextRunTimeEditWindow(job, currentNextRun, latestAllowedRun.Value)
+            {
+                Owner = this
+            };
+
+            if (editWindow.ShowDialog() != true)
+            {
+                return;
+            }
+
+            job.NextScheduledRun = editWindow.SelectedNextRun;
+            jobManager.UpdateJob(job);
+
+            BackupLogger.LogInfo(job.Name, $"Next scheduled run manually edited to {editWindow.SelectedNextRun:yyyy-MM-dd HH:mm:ss}");
+            LoadJobs();
+
+            CustomDialogService.ShowSuccess(
+                this,
+                $"Next run updated to {editWindow.SelectedNextRun:yyyy-MM-dd hh:mm tt}.",
+                "Next Run Updated");
+        }
+
+        private static DateTime? GetLatestAllowedNextRun(BackupSchedule schedule, DateTime currentNextRun)
+        {
+            return schedule.Frequency switch
+            {
+                ScheduleFrequency.Daily => currentNextRun.Date.Add(schedule.Time).AddDays(1),
+                ScheduleFrequency.Weekly => GetNextWeeklyOccurrence(schedule, currentNextRun),
+                ScheduleFrequency.Monthly => GetNextMonthlyOccurrence(schedule, currentNextRun),
+                ScheduleFrequency.Once => currentNextRun,
+                _ => null
+            };
+        }
+
+        private static DateTime? GetNextWeeklyOccurrence(BackupSchedule schedule, DateTime currentNextRun)
+        {
+            if (schedule.DaysOfWeek.Count == 0)
+            {
+                return null;
+            }
+
+            DateTime candidate = currentNextRun.Date.AddDays(1).Add(schedule.Time);
+            while (!schedule.DaysOfWeek.Contains(candidate.DayOfWeek))
+            {
+                candidate = candidate.AddDays(1);
+            }
+
+            return candidate;
+        }
+
+        private static DateTime GetNextMonthlyOccurrence(BackupSchedule schedule, DateTime currentNextRun)
+        {
+            DateTime nextMonth = new DateTime(currentNextRun.Year, currentNextRun.Month, 1).AddMonths(1);
+            int day = Math.Max(1, Math.Min(schedule.DayOfMonth, DateTime.DaysInMonth(nextMonth.Year, nextMonth.Month)));
+            return new DateTime(nextMonth.Year, nextMonth.Month, day, schedule.Time.Hours, schedule.Time.Minutes, 0);
         }
 
         private void EditJob_Click(object sender, RoutedEventArgs e)

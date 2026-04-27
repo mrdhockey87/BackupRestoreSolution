@@ -5,11 +5,11 @@ using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using Microsoft.Win32;
-using BackupCommon;
-using BackupUI.Models;
-using BackupUI.Services;
+using SecureServerBackupCommon;
+using SecureServerBackup.Models;
+using SecureServerBackup.Services;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class ImportBackupWindow : Window
     {

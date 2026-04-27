@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using BackupCommon;
+using SecureServerBackupCommon;
 
-namespace BackupService
+namespace SecureServerBackupService
 {
     public class JobManager
     {

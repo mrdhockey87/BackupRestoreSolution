@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace BackupUI.Services
+namespace SecureServerBackup.Services
 {
     public class BackupEngineInterop
     {
@@ -101,7 +101,7 @@ namespace BackupUI.Services
             NonRepairable = 2
         }
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+[DllImport(DllName, EntryPoint = "CheckBackupImageHealth", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int CheckBackupImageStatus(
             string backupPath,
             int imageIndex,
@@ -110,7 +110,7 @@ namespace BackupUI.Services
             int healthMessageSize,
             ProgressCallback? callback);
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+[DllImport(DllName, EntryPoint = "RestoreBackupImageHealth", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int RepairBackupImageStatus(
             string backupPath,
             int imageIndex,

@@ -1,359 +1,482 @@
-<Window x:Class="BackupUI.Windows.RecoveryEnvironmentWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Recovery Environment Creator - Instructions"
-        Height="650"
-        Width="850"
-        WindowStartupLocation="CenterOwner"
-        ResizeMode="CanResize">
-    <Window.Resources>
-        <!-- Number circle style for steps -->
-        <Style x:Key="StepNumberStyle" TargetType="Border">
-            <Setter Property="Width" Value="30"/>
-            <Setter Property="Height" Value="30"/>
-            <Setter Property="Background" Value="#008B8B"/>
-            <Setter Property="CornerRadius" Value="15"/>
-            <Setter Property="Margin" Value="0,0,10,0"/>
-            <Setter Property="VerticalAlignment" Value="Top"/>
-        </Style>
+<Window
+	x:Class="SecureServerBackup.Windows.RecoveryEnvironmentWindow"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	Title="Recovery Environment Creator - Instructions"
+	Width="850"
+	Height="650"
+	ResizeMode="CanResize"
+	WindowStartupLocation="CenterOwner">
+	<Window.Resources>
+		<!--  Number circle style for steps  -->
+		<Style x:Key="StepNumberStyle" TargetType="Border">
+			<Setter Property="Width" Value="30" />
+			<Setter Property="Height" Value="30" />
+			<Setter Property="Background" Value="#008B8B" />
+			<Setter Property="CornerRadius" Value="15" />
+			<Setter Property="Margin" Value="0,0,10,0" />
+			<Setter Property="VerticalAlignment" Value="Top" />
+		</Style>
 
-        <Style x:Key="StepNumberTextStyle" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-    </Window.Resources>
+		<Style x:Key="StepNumberTextStyle" TargetType="TextBlock">
+			<Setter Property="Foreground" Value="White" />
+			<Setter Property="FontSize" Value="16" />
+			<Setter Property="FontWeight" Value="Bold" />
+			<Setter Property="HorizontalAlignment" Value="Center" />
+			<Setter Property="VerticalAlignment" Value="Center" />
+		</Style>
+	</Window.Resources>
 
-    <Grid Margin="15">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+	<Grid Margin="15">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
+		</Grid.RowDefinitions>
 
-        <!-- Header -->
-        <Border Grid.Row="0" Background="#E0F7F7" Padding="15" Margin="0,0,0,15" CornerRadius="5">
-            <StackPanel>
-                <TextBlock Text="Create Bootable Recovery USB" 
-                           FontSize="22" 
-                           FontWeight="Bold" 
-                           Foreground="#008B8B"
-                           Margin="0,0,0,10"/>
-                <TextBlock TextWrapping="Wrap" FontSize="13">
-                    Follow these instructions to create a bootable USB drive with LinuxRestore tools. 
-                    This USB can restore your system even if Windows won't boot.
-                </TextBlock>
-            </StackPanel>
-        </Border>
+		<!--  Header  -->
+		<Border
+			Grid.Row="0"
+			Margin="0,0,0,15"
+			Padding="15"
+			Background="#E0F7F7"
+			CornerRadius="5">
+			<StackPanel>
+				<TextBlock
+					Margin="0,0,0,10"
+					FontSize="22"
+					FontWeight="Bold"
+					Foreground="#008B8B"
+					Text="Create Bootable Recovery USB" />
+				<TextBlock FontSize="13" TextWrapping="Wrap">
+					Follow these instructions to create a bootable USB drive with LinuxRestore tools.
+					This USB can restore your system even if Windows won't boot.
+				</TextBlock>
+			</StackPanel>
+		</Border>
 
-        <!-- Scrollable Instructions -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="5">
+		<!--  Scrollable Instructions  -->
+		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+			<StackPanel Margin="5">
 
-                <!-- Step 1: Download Rufus -->
-                <Border BorderBrush="#AFEEEE" BorderThickness="1" Padding="15" Margin="0,0,0,15" CornerRadius="5">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+				<!--  Step 1: Download Rufus  -->
+				<Border
+					Margin="0,0,0,15"
+					Padding="15"
+					BorderBrush="#AFEEEE"
+					BorderThickness="1"
+					CornerRadius="5">
+					<Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="Auto" />
+							<ColumnDefinition Width="*" />
+						</Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Style="{StaticResource StepNumberStyle}">
-                            <TextBlock Text="1" Style="{StaticResource StepNumberTextStyle}"/>
-                        </Border>
+						<Border Grid.Column="0" Style="{StaticResource StepNumberStyle}">
+							<TextBlock Style="{StaticResource StepNumberTextStyle}" Text="1" />
+						</Border>
 
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="Download Rufus" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                                Rufus is a free, open-source tool for creating bootable USB drives.
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,5">
-                                • Visit: <Hyperlink Name="lnkRufusDownload" Click="RufusDownload_Click" Foreground="#008B8B">https://rufus.ie</Hyperlink>
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,5">
-                                • Click "Download" button (latest version)
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                                • Save rufus.exe to your Downloads folder (no installation needed)
-                            </TextBlock>
-                            <Button Name="btnOpenRufusWebsite" 
-                                    Content="Open Rufus Website" 
-                                    Width="150" 
-                                    HorizontalAlignment="Left"
-                                    Click="OpenRufusWebsite_Click"
-                                    Background="#008B8B"
-                                    Foreground="White"
-                                    Padding="10,5"
-                                    BorderThickness="0"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+						<StackPanel Grid.Column="1">
+							<TextBlock
+								Margin="0,0,0,10"
+								FontSize="16"
+								FontWeight="Bold"
+								Text="Download Rufus" />
+							<TextBlock Margin="0,0,0,10" TextWrapping="Wrap">
+								Rufus is a free, open-source tool for creating bootable USB drives.
+							</TextBlock>
+							<TextBlock Margin="0,0,0,5" TextWrapping="Wrap">
+								• Visit:<Hyperlink
+									Name="lnkRufusDownload"
+									Click="RufusDownload_Click"
+									Foreground="#008B8B">
+									https://rufus.ie
+								</Hyperlink>
+							</TextBlock>
+							<TextBlock Margin="0,0,0,5" TextWrapping="Wrap">
+								• Click "Download" button (latest version)
+							</TextBlock>
+							<TextBlock Margin="0,0,0,10" TextWrapping="Wrap">
+								• Save rufus.exe to your Downloads folder (no installation needed)
+							</TextBlock>
+							<Button
+								Name="btnOpenRufusWebsite"
+								Width="150"
+								Padding="10,5"
+								HorizontalAlignment="Left"
+								Background="#008B8B"
+								BorderThickness="0"
+								Click="OpenRufusWebsite_Click"
+								Content="Open Rufus Website"
+								Foreground="White" />
+						</StackPanel>
+					</Grid>
+				</Border>
 
-                <!-- Step 2: Locate ISO File -->
-                <Border BorderBrush="#AFEEEE" BorderThickness="1" Padding="15" Margin="0,0,0,15" CornerRadius="5">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+				<!--  Step 2: Locate ISO File  -->
+				<Border
+					Margin="0,0,0,15"
+					Padding="15"
+					BorderBrush="#AFEEEE"
+					BorderThickness="1"
+					CornerRadius="5">
+					<Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="Auto" />
+							<ColumnDefinition Width="*" />
+						</Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Style="{StaticResource StepNumberStyle}">
-                            <TextBlock Text="2" Style="{StaticResource StepNumberTextStyle}"/>
-                        </Border>
+						<Border Grid.Column="0" Style="{StaticResource StepNumberStyle}">
+							<TextBlock Style="{StaticResource StepNumberTextStyle}" Text="2" />
+						</Border>
 
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="Locate Recovery ISO File" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                                The recovery ISO file is located in your application directory:
-                            </TextBlock>
-                            <Border Background="#F5FFFF" Padding="10" Margin="0,0,0,10" CornerRadius="3" BorderBrush="#AFEEEE" BorderThickness="1">
-                                <StackPanel>
-                                    <TextBlock Name="txtIsoPath" 
-                                               FontFamily="Consolas" 
-                                               TextWrapping="Wrap"
-                                               FontSize="12"/>
-                                    <TextBlock Name="txtIsoStatus" 
-                                               Margin="0,5,0,0" 
-                                               FontWeight="Bold"/>
-                                </StackPanel>
-                            </Border>
-                            <Button Name="btnOpenIsoLocation" 
-                                    Content="Open ISO Folder" 
-                                    Width="150" 
-                                    HorizontalAlignment="Left"
-                                    Click="OpenIsoLocation_Click"
-                                    Background="#008B8B"
-                                    Foreground="White"
-                                    Padding="10,5"
-                                    BorderThickness="0"
-                                    Margin="0,0,0,10"/>
-                            <TextBlock Name="txtIsoNote" 
-                                       TextWrapping="Wrap" 
-                                       Foreground="#FF8C00"
-                                       FontStyle="Italic"
-                                       Margin="0,5,0,0"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+						<StackPanel Grid.Column="1">
+							<TextBlock
+								Margin="0,0,0,10"
+								FontSize="16"
+								FontWeight="Bold"
+								Text="Locate Recovery ISO File" />
+							<TextBlock Margin="0,0,0,10" TextWrapping="Wrap">
+								The recovery ISO file is located in your application directory:
+							</TextBlock>
+							<Border
+								Margin="0,0,0,10"
+								Padding="10"
+								Background="#F5FFFF"
+								BorderBrush="#AFEEEE"
+								BorderThickness="1"
+								CornerRadius="3">
+								<StackPanel>
+									<TextBlock
+										Name="txtIsoPath"
+										FontFamily="Consolas"
+										FontSize="12"
+										TextWrapping="Wrap" />
+									<TextBlock
+										Name="txtIsoStatus"
+										Margin="0,5,0,0"
+										FontWeight="Bold" />
+								</StackPanel>
+							</Border>
+							<Button
+								Name="btnOpenIsoLocation"
+								Width="150"
+								Margin="0,0,0,10"
+								Padding="10,5"
+								HorizontalAlignment="Left"
+								Background="#008B8B"
+								BorderThickness="0"
+								Click="OpenIsoLocation_Click"
+								Content="Open ISO Folder"
+								Foreground="White" />
+							<TextBlock
+								Name="txtIsoNote"
+								Margin="0,5,0,0"
+								FontStyle="Italic"
+								Foreground="#FF8C00"
+								TextWrapping="Wrap" />
+						</StackPanel>
+					</Grid>
+				</Border>
 
-                <!-- Step 3: Create Bootable USB -->
-                <Border BorderBrush="#AFEEEE" BorderThickness="1" Padding="15" Margin="0,0,0,15" CornerRadius="5">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+				<!--  Step 3: Create Bootable USB  -->
+				<Border
+					Margin="0,0,0,15"
+					Padding="15"
+					BorderBrush="#AFEEEE"
+					BorderThickness="1"
+					CornerRadius="5">
+					<Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="Auto" />
+							<ColumnDefinition Width="*" />
+						</Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Style="{StaticResource StepNumberStyle}">
-                            <TextBlock Text="3" Style="{StaticResource StepNumberTextStyle}"/>
-                        </Border>
+						<Border Grid.Column="0" Style="{StaticResource StepNumberStyle}">
+							<TextBlock Style="{StaticResource StepNumberTextStyle}" Text="3" />
+						</Border>
 
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="Create Bootable USB with Rufus" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10" FontWeight="Bold" Foreground="#8B0000">
-                                ⚠️ WARNING: This will erase ALL data on the USB drive!
-                            </TextBlock>
+						<StackPanel Grid.Column="1">
+							<TextBlock
+								Margin="0,0,0,10"
+								FontSize="16"
+								FontWeight="Bold"
+								Text="Create Bootable USB with Rufus" />
+							<TextBlock
+								Margin="0,0,0,10"
+								FontWeight="Bold"
+								Foreground="#8B0000"
+								TextWrapping="Wrap">
+								⚠️ WARNING: This will erase ALL data on the USB drive!
+							</TextBlock>
 
-                            <TextBlock Text="1. Insert USB Drive" FontWeight="Bold" Margin="0,0,0,5"/>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                                • Minimum 2 GB USB drive (4 GB+ recommended)
-                            </TextBlock>
+							<TextBlock
+								Margin="0,0,0,5"
+								FontWeight="Bold"
+								Text="1. Insert USB Drive" />
+							<TextBlock Margin="0,0,0,10" TextWrapping="Wrap">
+								• Minimum 2 GB USB drive (4 GB+ recommended)
+							</TextBlock>
 
-                            <TextBlock Text="2. Run Rufus" FontWeight="Bold" Margin="0,0,0,5"/>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                                • Double-click rufus.exe from Downloads
-                                • Allow administrator permissions if prompted
-                            </TextBlock>
+							<TextBlock
+								Margin="0,0,0,5"
+								FontWeight="Bold"
+								Text="2. Run Rufus" />
+							<TextBlock Margin="0,0,0,10" TextWrapping="Wrap">
+								• Double-click rufus.exe from Downloads
+								• Allow administrator permissions if prompted
+							</TextBlock>
 
-                            <TextBlock Text="3. Configure Rufus Settings" FontWeight="Bold" Margin="0,0,0,5"/>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
-                                • <Bold>Device:</Bold> Select your USB drive
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
-                                • <Bold>Boot selection:</Bold> Click "SELECT" and choose BackupRestore_Recovery.iso
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
-                                • <Bold>Partition scheme:</Bold> MBR (for BIOS/UEFI compatibility)
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                                • <Bold>File system:</Bold> FAT32 (default)
-                            </TextBlock>
+							<TextBlock
+								Margin="0,0,0,5"
+								FontWeight="Bold"
+								Text="3. Configure Rufus Settings" />
+							<TextBlock Margin="0,0,0,3" TextWrapping="Wrap">
+								•<Bold>Device:</Bold>
+								Select your USB drive</TextBlock>
+							<TextBlock Margin="0,0,0,3" TextWrapping="Wrap">
+								•<Bold>Boot selection:</Bold>
+								Click "SELECT" and choose BackupRestore_Recovery.iso</TextBlock>
+							<TextBlock Margin="0,0,0,3" TextWrapping="Wrap">
+								•<Bold>Partition scheme:</Bold>
+								MBR (for BIOS/UEFI compatibility)</TextBlock>
+							<TextBlock Margin="0,0,0,10" TextWrapping="Wrap">
+								•<Bold>File system:</Bold>
+								FAT32 (default)</TextBlock>
 
-                            <TextBlock Text="4. Start Creation" FontWeight="Bold" Margin="0,0,0,5"/>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
-                                • Click "START" button
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
-                                • If prompted about ISO mode, select <Bold>"Write in DD Image mode"</Bold>
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                                • Wait for completion (usually 2-5 minutes)
-                            </TextBlock>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+							<TextBlock
+								Margin="0,0,0,5"
+								FontWeight="Bold"
+								Text="4. Start Creation" />
+							<TextBlock Margin="0,0,0,3" TextWrapping="Wrap">
+								• Click "START" button
+							</TextBlock>
+							<TextBlock Margin="0,0,0,3" TextWrapping="Wrap">
+								• If prompted about ISO mode, select<Bold>"Write in DD Image mode"</Bold>
+							</TextBlock>
+							<TextBlock Margin="0,0,0,10" TextWrapping="Wrap">
+								• Wait for completion (usually 2-5 minutes)
+							</TextBlock>
+						</StackPanel>
+					</Grid>
+				</Border>
 
-                <!-- Step 4: Boot from USB -->
-                <Border BorderBrush="#AFEEEE" BorderThickness="1" Padding="15" Margin="0,0,0,15" CornerRadius="5">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+				<!--  Step 4: Boot from USB  -->
+				<Border
+					Margin="0,0,0,15"
+					Padding="15"
+					BorderBrush="#AFEEEE"
+					BorderThickness="1"
+					CornerRadius="5">
+					<Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="Auto" />
+							<ColumnDefinition Width="*" />
+						</Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Style="{StaticResource StepNumberStyle}">
-                            <TextBlock Text="4" Style="{StaticResource StepNumberTextStyle}"/>
-                        </Border>
+						<Border Grid.Column="0" Style="{StaticResource StepNumberStyle}">
+							<TextBlock Style="{StaticResource StepNumberTextStyle}" Text="4" />
+						</Border>
 
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="Boot from Recovery USB" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                                When you need to restore a system:
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
-                                1. Insert the USB drive into the computer
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
-                                2. Restart the computer
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
-                                3. Press boot menu key (F12, F2, DEL, or ESC - varies by manufacturer)
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
-                                4. Select the USB drive from boot menu
-                            </TextBlock>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,5" FontStyle="Italic">
-                                The system will boot into Linux with restore tools ready to use.
-                            </TextBlock>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+						<StackPanel Grid.Column="1">
+							<TextBlock
+								Margin="0,0,0,10"
+								FontSize="16"
+								FontWeight="Bold"
+								Text="Boot from Recovery USB" />
+							<TextBlock Margin="0,0,0,10" TextWrapping="Wrap">
+								When you need to restore a system:
+							</TextBlock>
+							<TextBlock Margin="0,0,0,3" TextWrapping="Wrap">
+								1. Insert the USB drive into the computer
+							</TextBlock>
+							<TextBlock Margin="0,0,0,3" TextWrapping="Wrap">
+								2. Restart the computer
+							</TextBlock>
+							<TextBlock Margin="0,0,0,3" TextWrapping="Wrap">
+								3. Press boot menu key (F12, F2, DEL, or ESC - varies by manufacturer)
+							</TextBlock>
+							<TextBlock Margin="0,0,0,10" TextWrapping="Wrap">
+								4. Select the USB drive from boot menu
+							</TextBlock>
+							<TextBlock
+								Margin="0,0,0,5"
+								FontStyle="Italic"
+								TextWrapping="Wrap">
+								The system will boot into Linux with restore tools ready to use.
+							</TextBlock>
+						</StackPanel>
+					</Grid>
+				</Border>
 
-                <!-- Step 5: Using Restore Tools -->
-                <Border BorderBrush="#AFEEEE" BorderThickness="1" Padding="15" Margin="0,0,0,0" CornerRadius="5">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+				<!--  Step 5: Using Restore Tools  -->
+				<Border
+					Margin="0,0,0,0"
+					Padding="15"
+					BorderBrush="#AFEEEE"
+					BorderThickness="1"
+					CornerRadius="5">
+					<Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="Auto" />
+							<ColumnDefinition Width="*" />
+						</Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Style="{StaticResource StepNumberStyle}">
-                            <TextBlock Text="5" Style="{StaticResource StepNumberTextStyle}"/>
-                        </Border>
+						<Border Grid.Column="0" Style="{StaticResource StepNumberStyle}">
+							<TextBlock Style="{StaticResource StepNumberTextStyle}" Text="5" />
+						</Border>
 
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="Using the 3 Restore Options" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,15">
-                                After booting from USB, you have 3 ways to restore your backup:
-                            </TextBlock>
+						<StackPanel Grid.Column="1">
+							<TextBlock
+								Margin="0,0,0,10"
+								FontSize="16"
+								FontWeight="Bold"
+								Text="Using the 3 Restore Options" />
+							<TextBlock Margin="0,0,0,15" TextWrapping="Wrap">
+								After booting from USB, you have 3 ways to restore your backup:
+							</TextBlock>
 
-                            <!-- Option 1: GUI -->
-                            <Border Background="#E6F4EA" Padding="10" Margin="0,0,0,10" CornerRadius="3">
-                                <StackPanel>
-                                    <TextBlock FontWeight="Bold" Margin="0,0,0,5">
-                                        Option 1: Graphical Interface (restore_gui) - EASIEST
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,5">
-                                        Best for users who prefer point-and-click interface.
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Background="White" Padding="5" Margin="0,5,0,0">
-                                        $ ./restore_gui
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="0,5,0,0">
-                                        • Browse for backup (.ssb file or folder)
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap">
-                                        • Select destination (partition or directory)
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap">
-                                        • Click "Restore" button
-                                    </TextBlock>
-                                </StackPanel>
-                            </Border>
+							<!--  Option 1: GUI  -->
+							<Border
+								Margin="0,0,0,10"
+								Padding="10"
+								Background="#E6F4EA"
+								CornerRadius="3">
+								<StackPanel>
+									<TextBlock Margin="0,0,0,5" FontWeight="Bold">
+										Option 1: Graphical Interface (restore_gui) - EASIEST
+									</TextBlock>
+									<TextBlock Margin="0,0,0,5" TextWrapping="Wrap">
+										Best for users who prefer point-and-click interface.
+									</TextBlock>
+									<TextBlock
+										Margin="0,5,0,0"
+										Padding="5"
+										Background="White"
+										FontFamily="Consolas"
+										FontSize="11"
+										TextWrapping="Wrap">
+										$ ./restore_gui
+									</TextBlock>
+									<TextBlock Margin="0,5,0,0" TextWrapping="Wrap">
+										• Browse for backup (.ssb file or folder)
+									</TextBlock>
+									<TextBlock TextWrapping="Wrap">
+										• Select destination (partition or directory)
+									</TextBlock>
+									<TextBlock TextWrapping="Wrap">
+										• Click "Restore" button
+									</TextBlock>
+								</StackPanel>
+							</Border>
 
-                            <!-- Option 2: TUI -->
-                            <Border Background="#FFF8DC" Padding="10" Margin="0,0,0,10" CornerRadius="3">
-                                <StackPanel>
-                                    <TextBlock FontWeight="Bold" Margin="0,0,0,5">
-                                        Option 2: Terminal UI (restore_tui) - RECOMMENDED
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,5">
-                                        Interactive text-based menu system. Works on any terminal.
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Background="White" Padding="5" Margin="0,5,0,0">
-                                        $ ./restore_tui
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="0,5,0,0">
-                                        • Use arrow keys to navigate menus
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap">
-                                        • Enter to select options
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap">
-                                        • Follow 3-step wizard:
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="15,2,0,0">
-                                        1. Select backup source
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="15,2,0,0">
-                                        2. Choose destination
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="15,2,0,0">
-                                        3. Confirm and restore
-                                    </TextBlock>
-                                </StackPanel>
-                            </Border>
+							<!--  Option 2: TUI  -->
+							<Border
+								Margin="0,0,0,10"
+								Padding="10"
+								Background="#FFF8DC"
+								CornerRadius="3">
+								<StackPanel>
+									<TextBlock Margin="0,0,0,5" FontWeight="Bold">
+										Option 2: Terminal UI (restore_tui) - RECOMMENDED
+									</TextBlock>
+									<TextBlock Margin="0,0,0,5" TextWrapping="Wrap">
+										Interactive text-based menu system. Works on any terminal.
+									</TextBlock>
+									<TextBlock
+										Margin="0,5,0,0"
+										Padding="5"
+										Background="White"
+										FontFamily="Consolas"
+										FontSize="11"
+										TextWrapping="Wrap">
+										$ ./restore_tui
+									</TextBlock>
+									<TextBlock Margin="0,5,0,0" TextWrapping="Wrap">
+										• Use arrow keys to navigate menus
+									</TextBlock>
+									<TextBlock TextWrapping="Wrap">
+										• Enter to select options
+									</TextBlock>
+									<TextBlock TextWrapping="Wrap">
+										• Follow 3-step wizard:
+									</TextBlock>
+									<TextBlock Margin="15,2,0,0" TextWrapping="Wrap">
+										1. Select backup source
+									</TextBlock>
+									<TextBlock Margin="15,2,0,0" TextWrapping="Wrap">
+										2. Choose destination
+									</TextBlock>
+									<TextBlock Margin="15,2,0,0" TextWrapping="Wrap">
+										3. Confirm and restore
+									</TextBlock>
+								</StackPanel>
+							</Border>
 
-                            <!-- Option 3: CLI -->
-                            <Border Background="#E0F7F7" Padding="10" Margin="0,0,0,0" CornerRadius="3">
-                                <StackPanel>
-                                    <TextBlock FontWeight="Bold" Margin="0,0,0,5">
-                                        Option 3: Command Line (restore_cli) - ADVANCED
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,5">
-                                        For advanced users and scripting. Fastest option.
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Background="White" Padding="5" Margin="0,5,0,0">
-                                        $ ./restore_cli /media/backups/ServerBackup_Full.ssb /mnt/sda1
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="0,5,0,0">
-                                        • First argument: backup source (.ssb file or folder)
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap">
-                                        • Second argument: destination path
-                                    </TextBlock>
-                                    <TextBlock TextWrapping="Wrap">
-                                        • No prompts - runs immediately
-                                    </TextBlock>
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+							<!--  Option 3: CLI  -->
+							<Border
+								Margin="0,0,0,0"
+								Padding="10"
+								Background="#E0F7F7"
+								CornerRadius="3">
+								<StackPanel>
+									<TextBlock Margin="0,0,0,5" FontWeight="Bold">
+										Option 3: Command Line (restore_cli) - ADVANCED
+									</TextBlock>
+									<TextBlock Margin="0,0,0,5" TextWrapping="Wrap">
+										For advanced users and scripting. Fastest option.
+									</TextBlock>
+									<TextBlock
+										Margin="0,5,0,0"
+										Padding="5"
+										Background="White"
+										FontFamily="Consolas"
+										FontSize="11"
+										TextWrapping="Wrap">
+										$ ./restore_cli /media/backups/ServerBackup_Full.ssb /mnt/sda1
+									</TextBlock>
+									<TextBlock Margin="0,5,0,0" TextWrapping="Wrap">
+										• First argument: backup source (.ssb file or folder)
+									</TextBlock>
+									<TextBlock TextWrapping="Wrap">
+										• Second argument: destination path
+									</TextBlock>
+									<TextBlock TextWrapping="Wrap">
+										• No prompts - runs immediately
+									</TextBlock>
+								</StackPanel>
+							</Border>
+						</StackPanel>
+					</Grid>
+				</Border>
 
-            </StackPanel>
-        </ScrollViewer>
+			</StackPanel>
+		</ScrollViewer>
 
-        <!-- Footer Buttons -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-            <Button Name="btnPrintInstructions" 
-                    Content="Print Instructions" 
-                    Width="150" 
-                    Margin="0,0,10,0"
-                    Click="PrintInstructions_Click"
-                    Background="#48D1CC"
-                    Foreground="White"
-                    Padding="10,5"
-                    BorderThickness="0"/>
-            <Button Content="Close" 
-                    Width="100" 
-                    Click="Close_Click"
-                    Background="#008B8B"
-                    Foreground="White"
-                    Padding="10,5"
-                    BorderThickness="0"/>
-        </StackPanel>
-    </Grid>
+		<!--  Footer Buttons  -->
+		<StackPanel
+			Grid.Row="2"
+			Margin="0,15,0,0"
+			HorizontalAlignment="Right"
+			Orientation="Horizontal">
+			<Button
+				Name="btnPrintInstructions"
+				Width="150"
+				Margin="0,0,10,0"
+				Padding="10,5"
+				Background="#48D1CC"
+				BorderThickness="0"
+				Click="PrintInstructions_Click"
+				Content="Print Instructions"
+				Foreground="White" />
+			<Button
+				Width="100"
+				Padding="10,5"
+				Background="#008B8B"
+				BorderThickness="0"
+				Click="Close_Click"
+				Content="Close"
+				Foreground="White" />
+		</StackPanel>
+	</Grid>
 </Window>

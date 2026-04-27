@@ -1,6 +1,6 @@
 using System;
 
-namespace BackupCommon
+namespace SecureServerBackupCommon
 {
     /// <summary>
     /// Shared DTO for backup progress information between BackupService and BackupUI

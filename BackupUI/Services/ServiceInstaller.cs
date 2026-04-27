@@ -1,11 +1,12 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.ServiceProcess;
 using System.Threading.Tasks;
-using BackupCommon;
+using SecureServerBackupCommon;
 
-namespace BackupUI.Services
+namespace SecureServerBackup.Services
 {
     /// <summary>
     /// Helper class to install, start, and manage the BackupRestoreService
@@ -15,6 +16,30 @@ namespace BackupUI.Services
         private const string ServiceName = "BackupRestoreService";
         private const string ServiceDisplayName = "Backup & Restore Service";
         private const string ServiceDescription = "Enterprise backup and restore service for Windows servers and Hyper-V VMs";
+
+        /// <summary>
+        /// Resolve the service executable path from the shared output directory without relying on a fixed file name.
+        /// </summary>
+        public static string? GetServiceExecutablePath()
+        {
+            var appDir = AppDomain.CurrentDomain.BaseDirectory;
+            var currentProcessPath = Environment.ProcessPath;
+
+            var candidates = Directory.EnumerateFiles(appDir, "*.exe", SearchOption.TopDirectoryOnly)
+                .Where(path => !string.Equals(path, currentProcessPath, StringComparison.OrdinalIgnoreCase))
+                .Where(path => string.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase))
+                .Select(path => new
+                {
+                    Path = path,
+                    FileName = Path.GetFileName(path)
+                })
+                .OrderByDescending(candidate => candidate.FileName.EndsWith("Service.exe", StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(candidate => candidate.FileName.Contains("SecureServerBackupService", StringComparison.OrdinalIgnoreCase))
+                .ThenBy(candidate => candidate.FileName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return candidates.FirstOrDefault()?.Path;
+        }
 
         /// <summary>
         /// Check if service is installed
@@ -72,13 +97,11 @@ namespace BackupUI.Services
         {
             try
             {
-                // Find BackupService.exe in the application directory
-                var appDir = AppDomain.CurrentDomain.BaseDirectory;
-                var serviceExePath = Path.Combine(appDir, "BackupService.exe");
+                var serviceExePath = GetServiceExecutablePath();
 
-                if (!File.Exists(serviceExePath))
+                if (string.IsNullOrWhiteSpace(serviceExePath) || !File.Exists(serviceExePath))
                 {
-                    return (false, $"Service executable not found at: {serviceExePath}");
+                    return (false, $"Service executable not found in: {AppDomain.CurrentDomain.BaseDirectory}");
                 }
 
                 // Use sc.exe to install the service

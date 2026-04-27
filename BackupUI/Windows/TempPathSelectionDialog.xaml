@@ -1,50 +1,96 @@
-<Window x:Class="BackupUI.Windows.TempPathSelectionDialog"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Select Temporary Path for Mount"
-        Width="550"
-        Height="340"
-        WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
-        Background="{StaticResource WindowBackground}"
-        BorderBrush="{StaticResource LightBorderBrush}"
-        BorderThickness="1">
-    <Grid Margin="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+<Window
+	x:Class="SecureServerBackup.Windows.TempPathSelectionDialog"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	Title="Select Temporary Path for Mount"
+	Width="550"
+	Height="340"
+	Background="{StaticResource WindowBackground}"
+	BorderBrush="{StaticResource LightBorderBrush}"
+	BorderThickness="1"
+	ResizeMode="NoResize"
+	WindowStartupLocation="CenterOwner">
+	<Grid Margin="20">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
+		</Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" FontSize="16" FontWeight="Bold" Text="Temporary Path for Mount Operation" Margin="0,0,0,15" />
-        
-        <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="{StaticResource SecondaryText}" Margin="0,0,0,10">
-            <Run Text="The WIM API requires a temporary directory to decompress and process backup image data during mount operations."/>
-            <LineBreak/><LineBreak/>
-            <Run Text="Choose a location with adequate free space (several GB may be needed for large backups)."/>
-        </TextBlock>
+		<TextBlock
+			Grid.Row="0"
+			Margin="0,0,0,15"
+			FontSize="16"
+			FontWeight="Bold"
+			Text="Temporary Path for Mount Operation" />
 
-        <Label Grid.Row="2" Content="Temporary Path:" Margin="0,5,0,5" />
+		<TextBlock
+			Grid.Row="1"
+			Margin="0,0,0,10"
+			Foreground="{StaticResource SecondaryText}"
+			TextWrapping="Wrap">
+			<Run Text="The WIM API requires a temporary directory to decompress and process backup image data during mount operations." />
+			<LineBreak /><LineBreak />
+			<Run Text="Choose a location with adequate free space (several GB may be needed for large backups)." />
+		</TextBlock>
 
-        <Grid Grid.Row="3" Margin="0,0,0,15">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0" Name="txtTempPath" Padding="5" VerticalContentAlignment="Center" IsReadOnly="True" Background="{StaticResource PanelBackground}" />
-            <Button Grid.Column="1" Content="Browse..." Width="80" Height="28" Margin="10,0,0,0" Click="Browse_Click" />
-        </Grid>
+		<Label
+			Grid.Row="2"
+			Margin="0,5,0,5"
+			Content="Temporary Path:" />
 
-        <StackPanel Grid.Row="4" Orientation="Vertical" Margin="0,0,0,15">
-            <TextBlock Name="txtSpaceInfo" Foreground="{StaticResource SecondaryText}" FontSize="12" Text="Checking available space..." />
-        </StackPanel>
+		<Grid Grid.Row="3" Margin="0,0,0,15">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="Auto" />
+			</Grid.ColumnDefinitions>
+			<TextBox
+				Name="txtTempPath"
+				Grid.Column="0"
+				Padding="5"
+				VerticalContentAlignment="Center"
+				Background="{StaticResource PanelBackground}"
+				IsReadOnly="True" />
+			<Button
+				Grid.Column="1"
+				Width="80"
+				Height="28"
+				Margin="10,0,0,0"
+				Click="Browse_Click"
+				Content="Browse..." />
+		</Grid>
 
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="OK" Width="80" Height="28" Margin="0,0,10,0" IsDefault="True" Click="OK_Click" />
-            <Button Content="Cancel" Width="80" Height="28" IsCancel="True" Click="Cancel_Click" />
-        </StackPanel>
-    </Grid>
+		<StackPanel
+			Grid.Row="4"
+			Margin="0,0,0,15"
+			Orientation="Vertical">
+			<TextBlock
+				Name="txtSpaceInfo"
+				FontSize="12"
+				Foreground="{StaticResource SecondaryText}"
+				Text="Checking available space..." />
+		</StackPanel>
+
+		<StackPanel
+			Grid.Row="5"
+			HorizontalAlignment="Right"
+			Orientation="Horizontal">
+			<Button
+				Width="80"
+				Height="28"
+				Margin="0,0,10,0"
+				Click="OK_Click"
+				Content="OK"
+				IsDefault="True" />
+			<Button
+				Width="80"
+				Height="28"
+				Click="Cancel_Click"
+				Content="Cancel"
+				IsCancel="True" />
+		</StackPanel>
+	</Grid>
 </Window>

@@ -5,9 +5,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using BackupCommon;  // v6.0.1.19: Use shared BackupProgress DTO from BackupCommon
+using SecureServerBackupCommon;  // v6.0.1.19: Use shared BackupProgress DTO from BackupCommon
 
-namespace BackupUI.Services
+namespace SecureServerBackup.Services
 {
     /// <summary>
     /// Client-side communication with BackupService via Named Pipes

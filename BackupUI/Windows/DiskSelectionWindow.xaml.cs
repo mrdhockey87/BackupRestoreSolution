@@ -4,7 +4,7 @@ using System.Linq;
 using System.Management;
 using System.Windows;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class DiskSelectionWindow : Window
     {

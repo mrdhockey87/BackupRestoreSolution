@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Windows;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class NetworkPathDialog : Window
     {

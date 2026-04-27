@@ -1,9 +1,9 @@
 <Window
-	x:Class="BackupUI.Windows.BackupWindowNew"
+	x:Class="SecureServerBackup.Windows.BackupWindowNew"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-	xmlns:controls="clr-namespace:BackupUI.Controls"
-	xmlns:local="clr-namespace:BackupUI.Models"
+	xmlns:controls="clr-namespace:SecureServerBackup.Controls"
+	xmlns:local="clr-namespace:SecureServerBackup.Models"
 	Title="Create Backup"
 	Width="1000"
 	Height="850"
@@ -306,8 +306,8 @@
 							<CheckBox
 								Name="chkEncryptBackup"
 								Margin="0,0,0,10"
-								Content="Encrypt Backup"
 								Checked="EncryptBackup_CheckedChanged"
+								Content="Encrypt Backup"
 								Unchecked="EncryptBackup_CheckedChanged" />
 
 							<StackPanel Name="pnlEncryptionSettings" Visibility="Collapsed">
@@ -327,15 +327,15 @@
 										Name="txtEncryptionPasswordVisible"
 										Grid.Column="0"
 										Height="25"
-										Visibility="Collapsed"
-										TextChanged="EncryptionPasswordVisible_TextChanged" />
+										TextChanged="EncryptionPasswordVisible_TextChanged"
+										Visibility="Collapsed" />
 									<CheckBox
 										Name="chkShowEncryptionPassword"
 										Grid.Column="1"
 										Margin="10,0,0,0"
 										VerticalAlignment="Center"
-										Content="Show Password"
 										Checked="ShowEncryptionPassword_CheckedChanged"
+										Content="Show Password"
 										Unchecked="ShowEncryptionPassword_CheckedChanged" />
 								</Grid>
 
@@ -351,8 +351,8 @@
 									Name="txtEncryptionInfo"
 									FontSize="10"
 									Foreground="Gray"
-									TextWrapping="Wrap"
-									Text="Encrypted backups use AES-128. Stored scheduled-backup passwords are protected with Windows DPAPI LocalMachine." />
+									Text="Encrypted backups use AES-128. Stored scheduled-backup passwords are protected with Windows DPAPI LocalMachine."
+									TextWrapping="Wrap" />
 							</StackPanel>
 						</StackPanel>
 					</StackPanel>

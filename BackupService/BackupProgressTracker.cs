@@ -2,9 +2,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using BackupCommon;  // v6.0.1.19: Reference shared BackupProgress DTO
+using SecureServerBackupCommon;  // v6.0.1.19: Reference shared BackupProgress DTO
 
-namespace BackupService
+namespace SecureServerBackupService
 {
     /// <summary>
     /// Tracks progress and state of running backup jobs

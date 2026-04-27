@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace BackupUI.Models
+namespace SecureServerBackup.Models
 {
     /// <summary>
     /// Represents a volume in the resize interface with its original and target sizes

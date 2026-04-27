@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 using System.Windows;
-using BackupCommon;
-using BackupUI.Windows;
+using SecureServerBackupCommon;
+using SecureServerBackup.Windows;
 
-namespace BackupUI.Services
+namespace SecureServerBackup.Services
 {
     public sealed class PreparedBackupFile : IDisposable
     {

@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Forms;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class TempPathSelectionDialog : Window
     {

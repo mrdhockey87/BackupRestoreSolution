@@ -5,7 +5,7 @@ using System.Security.Principal;
 using System.Threading.Tasks;
 using System.Windows;
 
-namespace BackupUI
+namespace SecureServerBackup
 {
     public partial class App : Application
     {
@@ -63,12 +63,12 @@ namespace BackupUI
         /// </summary>
         private async Task ShowSplashScreenAndInitialize(StartupEventArgs e)
         {
-            BackupUI.Windows.SplashScreen? splash = null;
+            SecureServerBackup.Windows.SplashScreen? splash = null;
 
             try
             {
                 // Show splash screen
-                splash = await BackupUI.Windows.SplashScreen.ShowAsync();
+                splash = await SecureServerBackup.Windows.SplashScreen.ShowAsync();
 
                 // Perform initialization tasks
                 splash.UpdateStatus("Checking components...");

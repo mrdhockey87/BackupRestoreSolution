@@ -4,7 +4,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Documents;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class RecoveryEnvironmentWindow : Window
     {

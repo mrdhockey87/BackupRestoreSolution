@@ -1,6 +1,6 @@
 using System;
 
-namespace BackupUI.Models
+namespace SecureServerBackup.Models
 {
     /// <summary>
     /// Represents volume information for configuration and resizing

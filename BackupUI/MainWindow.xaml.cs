@@ -9,12 +9,12 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
-using BackupCommon;
-using BackupUI.Models;
-using BackupUI.Services;
-using BackupUI.Windows;
+using SecureServerBackupCommon;
+using SecureServerBackup.Models;
+using SecureServerBackup.Services;
+using SecureServerBackup.Windows;
 
-namespace BackupUI
+namespace SecureServerBackup
 {
     public partial class MainWindow : Window
     {
@@ -236,11 +236,11 @@ namespace BackupUI
                             DateTime? nextRun = null;
                             switch (job.Schedule.Frequency)
                             {
-                                case BackupCommon.ScheduleFrequency.Daily:
+                                case SecureServerBackupCommon.ScheduleFrequency.Daily:
                                     nextRun = scheduledTime > now ? scheduledTime : scheduledTime.AddDays(1);
                                     break;
                                     
-                                case BackupCommon.ScheduleFrequency.Weekly:
+                                case SecureServerBackupCommon.ScheduleFrequency.Weekly:
                                     var nextWeeklyRun = scheduledTime > now ? scheduledTime : scheduledTime.AddDays(1);
                                     while (!job.Schedule.DaysOfWeek.Contains(nextWeeklyRun.DayOfWeek))
                                     {
@@ -249,7 +249,7 @@ namespace BackupUI
                                     nextRun = nextWeeklyRun;
                                     break;
                                     
-                                case BackupCommon.ScheduleFrequency.Monthly:
+                                case SecureServerBackupCommon.ScheduleFrequency.Monthly:
                                     var nextMonthlyRun = new DateTime(now.Year, now.Month, job.Schedule.DayOfMonth,
                                         job.Schedule.Time.Hours, job.Schedule.Time.Minutes, 0);
                                     if (nextMonthlyRun <= now)
@@ -1511,7 +1511,7 @@ namespace BackupUI
                         }
 
                         // Show image selection dialog
-                        var imageDialog = new BackupUI.Windows.ImageSelectionDialog(images)
+                        var imageDialog = new SecureServerBackup.Windows.ImageSelectionDialog(images)
                         {
                             Owner = this
                         };
@@ -1531,7 +1531,7 @@ namespace BackupUI
                     }
 
                     // Show temp path selection dialog
-                    var tempPathDialog = new BackupUI.Windows.TempPathSelectionDialog
+                    var tempPathDialog = new SecureServerBackup.Windows.TempPathSelectionDialog
                     {
                         Owner = this
                     };
@@ -1554,7 +1554,7 @@ namespace BackupUI
                     System.Diagnostics.Debug.WriteLine($"[Mount] About to create progress window...");
 
                     // Create and show progress window
-                    var progressWindow = new BackupUI.Windows.MountProgressWindow
+                    var progressWindow = new SecureServerBackup.Windows.MountProgressWindow
                     {
                         Owner = this
                     };
@@ -1636,7 +1636,7 @@ namespace BackupUI
                 if (result == CustomDialogResult.Yes)
                 {
                     // Create and show progress window
-                    var progressWindow = new BackupUI.Windows.MountProgressWindow
+                    var progressWindow = new SecureServerBackup.Windows.MountProgressWindow
                     {
                         Owner = this,
                         Title = "Unmounting Backup"

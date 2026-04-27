@@ -3,7 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace BackupUI.Models
+namespace SecureServerBackup.Models
 {
     public class DriveTreeItem : INotifyPropertyChanged
     {

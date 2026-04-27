@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace BackupUI.Models
+namespace SecureServerBackup.Models
 {
     /// <summary>
     /// Represents an available backup that can be mounted

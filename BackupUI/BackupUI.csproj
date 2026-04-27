@@ -6,9 +6,10 @@
   <UseWPF>true</UseWPF>
   <UseWindowsForms>true</UseWindowsForms>
   <Platforms>x64</Platforms>
-  <!-- ApplicationManifest removed - .res files are icon resources, not XML manifests -->
-  <!-- Default manifest will be used for assembly identity and UAC settings -->
+  <RootNamespace>SecureServerBackup</RootNamespace>
+  <AssemblyName>SecureServerBackup</AssemblyName>
   <ApplicationIcon>Assets\SSB_LogoWinIcos.ico</ApplicationIcon>
+  <AssemblyTitle>SecureServerBackup</AssemblyTitle>
   <!-- Version, OutputPath, and Runtime config generation come from Directory.Build.props -->
 </PropertyGroup>
 <ItemGroup>

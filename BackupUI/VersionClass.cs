@@ -5,12 +5,12 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BackupUI
+namespace SecureServerBackup
 {
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.55";
+        private static readonly string version_fallback_number = "6.2.3.62";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,28 +68,58 @@ namespace BackupUI
 
 
 /*
- * Version 6.2.3.55 Refactored LinuxRestore helper names and restore text to use SSB terminology while preserving
+ * 
+ * Version 6.2.3.62 Allow the next run time to be change for a one time run time without having to change the scheduled
+ *                  run, however try to limit it so it does not go past another scheduled run. Clarified the schedule 
+ *                  next-run edit prompt to state that the override is one time only and the job returns to its normal 
+ *                  schedule afterward. mdail 4/27/2026
+ * Version 6.2.3.61 Fixed service install lookup to resolve the service executable from the output folder instead of
+ *                  hardcoding BackupService.exe, so renamed service assemblies still install from Service Management. mdail 4/27/2026
+ * Version 6.2.3.60 Refactored the BackupService to SecureServerBackupService, change the namespace and the AssemblyName to 
+ *                  SecureServerBackupService to reflect the product branding and create a clear distinction between the 
+ *                  service and UI components. This change is purely organizational and does not affect any functionality 
+ *                  or public API surfaces. All internal references, using directives, and project properties have been 
+ *                  updated to use the new namespace while maintaining the same folder structure and class 
+ *                  names for consistency. Also deleted an empty ServiceLog.cs file  mdail 4/27/2026
+ * Version 6.2.3.59 Change SecureServerBackupCommon to use the icon file as the resource file wasn't working however 
+ *                  the icon file isn't working working either. mdail 4/27/2026
+ * Version 6.2.3.58 Fixed SecureServerBackupCommon Win32Resource path so the renamed shared DLL keeps the product icon.
+ *                  mdail 4/27/2026
+ * Version 6.2.3.57 Refactored BackupCommon to SecureServerBackupCommon and the AssemblyName to SecureServerBackupCommon 
+ *                  to create a shared library for common types and logic between the BackupUI and BackupService projects.
+ *                  This allows both projects to reference the same core backup functionality, data models, and utilities 
+ *                  without duplication, while keeping the UI-specific code separate in the BackupUI project. All namespaces, 
+ *                  using directives, and project references have been updated accordingly to reflect the new shared library 
+ *                  structure. mdail 4/27/2026
+ * Version 6.2.3.56 Fixed verify image-health interop so the UI calls the renamed BackupEngine health-check and
+ *                  repair exports correctly. mdail 4/27/2026
+ * Version 6.2.3.55 Refactor the BackupUI project namespace to SecureServerBackup to better reflect the product 
+ *                  branding and avoid confusion with generic backup terminology. This change is purely organizational
+ *                  and does not affect any functionality or public API surfaces. All internal references, using directives, 
+ *                  and project properties have been updated to use the new namespace while maintaining the same folder structure 
+ *                  and class names for consistency. Also change the AssemblyName so the output file reflects the new branding. mdail 4/27/2026
+ * Version 6.2.3.54 Refactored LinuxRestore helper names and restore text to use SSB terminology while preserving
  *                  legacy .wim compatibility and the underlying wimlib-based extraction behavior. mdail 4/27/2026
- * Version 6.2.3.54 Cleaned the remaining managed comments and helper text to remove WIM wording, and disabled XML
+ * Version 6.2.3.53 Cleaned the remaining managed comments and helper text to remove WIM wording, and disabled XML
  *                  documentation and source-note artifacts from build outputs. mdail 4/26/2026
- * Version 6.2.3.53 Renamed the native mount export surface to SSB-prefixed exports and updated the managed EntryPoint
+ * Version 6.2.3.52 Renamed the native mount export surface to SSB-prefixed exports and updated the managed EntryPoint
  *                  mappings to match while keeping behavior unchanged. mdail 4/26/2026
- * Version 6.2.3.52 Refactored the native verification helper layer to use SSB terminology in the C++ wrapper
+ * Version 6.2.3.51 Refactored the native verification helper layer to use SSB terminology in the C++ wrapper
  *                  functions while keeping the underlying Windows API behavior unchanged. mdail 4/26/2026
- * Version 6.2.3.51 Refactored the C# managed interop surface to use neutral backup and status names while preserving
+ * Version 6.2.3.50 Refactored the C# managed interop surface to use neutral backup and status names while preserving
  *                  the native C++ exports and reducing direct WIM and DISM naming in the UI layer. mdail 4/26/2026
- * Version 6.2.3.50 Wired the Verify tab to run DISM health checks and optional repair attempts with progress reporting
+ * Version 6.2.3.49 Wired the Verify tab to run DISM health checks and optional repair attempts with progress reporting
  *                  so users can verify backups and attempt recovery from corrupted files directly in the UI. mdail 4/26/2026
- * Version 6.2.3.49 Renamed the Schedules tab/menu entry to Service Status in the UI while preserving the schedule
+ * Version 6.2.3.48 Renamed the Schedules tab/menu entry to Service Status in the UI while preserving the schedule
  *                  management action and keeping the backup/service navigation clearer. mdail 4/25/2026
- * Version 6.2.3.48 Wired backup-completion verification path so when VerifyAfterBackup is enabled, the backup progress
+ * Version 6.2.3.47 Wired backup-completion verification path so when VerifyAfterBackup is enabled, the backup progress
  *                  window transitions from backup to verification phase, updates its title, and shows verification progress
  *                  separately after backup completion. mdail 4/25/2026
- * Version 6.2.3.47 Added the restore metadata-driven reconstruction follow-up by wiring metadata-aware restore planning into
+ * Version 6.2.3.46 Added the restore metadata-driven reconstruction follow-up by wiring metadata-aware restore planning into
  *                  the Windows restore flow and starting LinuxRestore support for the same layout-aware restore model. mdail 4/25/2026
- * Version 6.2.3.46 Added FileSystemWatcher-based mount progress reporting so the Mount progress window can surface current
+ * Version 6.2.3.45 Added FileSystemWatcher-based mount progress reporting so the Mount progress window can surface current
  *                  file/folder names during extraction with throttling, duplicate suppression, and safe watcher cleanup. mdail 4/25/2026
- * Version 6.2.3.45 Updated the restore workflow so Restore tab selections preload into RestoreWindowNew, boot-drive restores
+ * Version 6.2.3.44 Updated the restore workflow so Restore tab selections preload into RestoreWindowNew, boot-drive restores
  *                  are routed to safe alternate-target or recovery-disk handling, and disk/volume restores now support target
  *                  selection, destructive warnings, and current-item restore progress updates. mdail 4/25/2026
  * Version 6.1.3.44 Restored the Export button to the main Activity tab so it shows beside View Details in the Actions column

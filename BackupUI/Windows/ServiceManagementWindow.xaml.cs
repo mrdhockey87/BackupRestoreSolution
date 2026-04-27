@@ -4,11 +4,11 @@ using System.IO;
 using System.ServiceProcess;
 using System.Threading.Tasks;
 using System.Windows;
-using BackupCommon;
-using BackupUI.Models;
-using BackupUI.Services;
+using SecureServerBackupCommon;
+using SecureServerBackup.Models;
+using SecureServerBackup.Services;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class ServiceManagementWindow : Window
     {
@@ -172,11 +172,11 @@ namespace BackupUI.Windows
         {
             try
             {
-                var servicePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BackupService.exe");
+                var servicePath = ServiceInstaller.GetServiceExecutablePath();
 
-                if (!File.Exists(servicePath))
+                if (string.IsNullOrWhiteSpace(servicePath) || !File.Exists(servicePath))
                 {
-                    CustomDialogService.ShowError($"Service executable not found at: {servicePath}", "Error");
+                    CustomDialogService.ShowError($"Service executable not found in: {AppDomain.CurrentDomain.BaseDirectory}", "Error");
                     return;
                 }
 

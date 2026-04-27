@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 
-namespace BackupUI.Models
+namespace SecureServerBackup.Models
 {
     public class RestoreTreeItem : INotifyPropertyChanged
     {

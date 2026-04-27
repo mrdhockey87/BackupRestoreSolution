@@ -1,7 +1,7 @@
 using System;
 using System.Windows;
 
-namespace BackupUI.Services
+namespace SecureServerBackup.Services
 {
     public static class NotificationService
     {

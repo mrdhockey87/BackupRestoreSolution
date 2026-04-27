@@ -3,9 +3,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using BackupCommon;
+using SecureServerBackupCommon;
 
-namespace BackupUI.Services
+namespace SecureServerBackup.Services
 {
     public class BackupValidator
     {

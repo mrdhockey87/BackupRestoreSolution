@@ -2,7 +2,7 @@ using System;
 using System.ServiceProcess;
 using System.Threading.Tasks;
 
-namespace BackupUI.Services
+namespace SecureServerBackup.Services
 {
     public class BackupServiceManager
     {

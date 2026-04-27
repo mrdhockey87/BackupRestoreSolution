@@ -1,7 +1,7 @@
 using System;
 using System.Windows;
 
-namespace BackupUI
+namespace SecureServerBackup
 {
     /// <summary>
     /// Service for showing custom themed dialogs throughout the application

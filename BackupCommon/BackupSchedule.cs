@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace BackupCommon
+namespace SecureServerBackupCommon
 {
     public class BackupSchedule
     {

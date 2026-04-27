@@ -2,9 +2,9 @@ using System;
 using System.ServiceProcess;
 using System.Threading.Tasks;
 using System.Windows;
-using BackupUI.Services;
+using SecureServerBackup.Services;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class AboutWindow : Window
     {

@@ -7,9 +7,9 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Threading.Tasks;
-using BackupUI.Models;
+using SecureServerBackup.Models;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     /// <summary>
     /// Interactive Volume Configuration Window - Version 5.13.5.0

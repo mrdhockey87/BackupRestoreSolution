@@ -3,7 +3,7 @@ using Microsoft.Win32;
 using System;
 using System.IO;
 
-namespace BackupUI.Helpers
+namespace SecureServerBackup.Helpers
 {
     public static class FolderPickerHelper
     {

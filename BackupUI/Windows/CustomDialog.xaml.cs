@@ -2,7 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Media;
 
-namespace BackupUI
+namespace SecureServerBackup
 {
     /// <summary>
     /// Custom themed dialog window to replace MessageBox

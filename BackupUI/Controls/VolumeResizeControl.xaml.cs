@@ -6,9 +6,9 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shapes;
-using BackupUI.Models;
+using SecureServerBackup.Models;
 
-namespace BackupUI.Controls
+namespace SecureServerBackup.Controls
 {
     public partial class VolumeResizeControl : UserControl
     {

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace BackupUI.Models
+namespace SecureServerBackup.Models
 {
     public class RestoreJob
     {

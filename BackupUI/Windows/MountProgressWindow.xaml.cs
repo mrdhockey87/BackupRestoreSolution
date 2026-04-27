@@ -2,7 +2,7 @@ using System;
 using System.Threading.Tasks;
 using System.Windows;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class MountProgressWindow : Window
     {

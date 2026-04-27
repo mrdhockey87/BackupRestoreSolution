@@ -1,72 +1,133 @@
-<Window x:Class="BackupUI.Windows.ServiceManagementWindow"
-xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-Title="Service Management"
-Height="550"
-Width="600"
-MinHeight="500"
-MinWidth="600"
-WindowStartupLocation="CenterOwner">
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+<Window
+	x:Class="SecureServerBackup.Windows.ServiceManagementWindow"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	Title="Service Management"
+	Width="600"
+	Height="550"
+	MinWidth="600"
+	MinHeight="500"
+	WindowStartupLocation="CenterOwner">
+	<Grid Margin="10">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
+		</Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Backup Service Management" FontSize="20" FontWeight="Bold" Margin="0,0,0,20"/>
+		<TextBlock
+			Grid.Row="0"
+			Margin="0,0,0,20"
+			FontSize="20"
+			FontWeight="Bold"
+			Text="Backup Service Management" />
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="10">
-                <GroupBox Header="Service Status" Margin="0,0,0,20">
-                <StackPanel Margin="10">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <TextBlock Text="Status:" Width="100" FontWeight="Bold"/>
-                        <TextBlock Name="txtStatus" Text="Unknown"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <TextBlock Text="Installed:" Width="100" FontWeight="Bold"/>
-                        <TextBlock Name="txtInstalled" Text="Unknown"/>
-                    </StackPanel>
-                    <Separator Margin="0,5"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,10,0,5">
-                        <TextBlock Text="UI Version:" Width="100" FontWeight="Bold"/>
-                        <TextBlock Name="txtUIVersion" Text="Unknown"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <TextBlock Text="Service Version:" Width="100" FontWeight="Bold"/>
-                        <TextBlock Name="txtServiceVersion" Text="Unknown"/>
-                        <TextBlock Name="txtVersionWarning" Text="? VERSION MISMATCH!" 
-                                   Foreground="{StaticResource ErrorText}" FontWeight="Bold" Margin="10,0,0,0" 
-                                   Visibility="Collapsed"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <Button Content="Refresh Status" Width="120" HorizontalAlignment="Left" Margin="0,0,5,0" Click="RefreshStatus_Click"/>
-                        <Button Name="btnAbortRetries" Content="Abort Failed Retries" Width="140" HorizontalAlignment="Left" 
-                                Click="AbortFailedRetries_Click" ToolTip="Cancels all pending retry attempts for failed backups"/>
-                    </StackPanel>
-                </StackPanel>
-            </GroupBox>
+		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+			<StackPanel Margin="10">
+				<GroupBox Margin="0,0,0,20" Header="Service Status">
+					<StackPanel Margin="10">
+						<StackPanel Margin="0,0,0,10" Orientation="Horizontal">
+							<TextBlock
+								Width="100"
+								FontWeight="Bold"
+								Text="Status:" />
+							<TextBlock Name="txtStatus" Text="Unknown" />
+						</StackPanel>
+						<StackPanel Margin="0,0,0,10" Orientation="Horizontal">
+							<TextBlock
+								Width="100"
+								FontWeight="Bold"
+								Text="Installed:" />
+							<TextBlock Name="txtInstalled" Text="Unknown" />
+						</StackPanel>
+						<Separator Margin="0,5" />
+						<StackPanel Margin="0,10,0,5" Orientation="Horizontal">
+							<TextBlock
+								Width="100"
+								FontWeight="Bold"
+								Text="UI Version:" />
+							<TextBlock Name="txtUIVersion" Text="Unknown" />
+						</StackPanel>
+						<StackPanel Margin="0,0,0,10" Orientation="Horizontal">
+							<TextBlock
+								Width="100"
+								FontWeight="Bold"
+								Text="Service Version:" />
+							<TextBlock Name="txtServiceVersion" Text="Unknown" />
+							<TextBlock
+								Name="txtVersionWarning"
+								Margin="10,0,0,0"
+								FontWeight="Bold"
+								Foreground="{StaticResource ErrorText}"
+								Text="? VERSION MISMATCH!"
+								Visibility="Collapsed" />
+						</StackPanel>
+						<StackPanel Margin="0,0,0,10" Orientation="Horizontal">
+							<Button
+								Width="120"
+								Margin="0,0,5,0"
+								HorizontalAlignment="Left"
+								Click="RefreshStatus_Click"
+								Content="Refresh Status" />
+							<Button
+								Name="btnAbortRetries"
+								Width="140"
+								HorizontalAlignment="Left"
+								Click="AbortFailedRetries_Click"
+								Content="Abort Failed Retries"
+								ToolTip="Cancels all pending retry attempts for failed backups" />
+						</StackPanel>
+					</StackPanel>
+				</GroupBox>
 
-            <GroupBox Header="Service Control">
-                <StackPanel Margin="10">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <Button Name="btnStart" Content="Start Service" Width="120" Margin="0,0,5,0" Click="StartService_Click"/>
-                        <Button Name="btnStop" Content="Stop Service" Width="120" Margin="0,0,5,0" Click="StopService_Click"/>
-                        <Button Name="btnRestart" Content="Restart Service" Width="120" Click="RestartService_Click"/>
-                    </StackPanel>
-                    <Separator Margin="0,10"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                        <Button Name="btnInstall" Content="Install and Start Service" Width="150" Margin="0,0,5,0" Click="InstallService_Click"/>
-                        <Button Name="btnUninstall" Content="Uninstall Service" Width="120" Click="UninstallService_Click"/>
-                    </StackPanel>
-                </StackPanel>
-            </GroupBox>
-            </StackPanel>
-        </ScrollViewer>
+				<GroupBox Header="Service Control">
+					<StackPanel Margin="10">
+						<StackPanel Margin="0,0,0,10" Orientation="Horizontal">
+							<Button
+								Name="btnStart"
+								Width="120"
+								Margin="0,0,5,0"
+								Click="StartService_Click"
+								Content="Start Service" />
+							<Button
+								Name="btnStop"
+								Width="120"
+								Margin="0,0,5,0"
+								Click="StopService_Click"
+								Content="Stop Service" />
+							<Button
+								Name="btnRestart"
+								Width="120"
+								Click="RestartService_Click"
+								Content="Restart Service" />
+						</StackPanel>
+						<Separator Margin="0,10" />
+						<StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+							<Button
+								Name="btnInstall"
+								Width="150"
+								Margin="0,0,5,0"
+								Click="InstallService_Click"
+								Content="Install and Start Service" />
+							<Button
+								Name="btnUninstall"
+								Width="120"
+								Click="UninstallService_Click"
+								Content="Uninstall Service" />
+						</StackPanel>
+					</StackPanel>
+				</GroupBox>
+			</StackPanel>
+		</ScrollViewer>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Close" Width="100" Click="Close_Click"/>
-        </StackPanel>
-    </Grid>
+		<StackPanel
+			Grid.Row="2"
+			HorizontalAlignment="Right"
+			Orientation="Horizontal">
+			<Button
+				Width="100"
+				Click="Close_Click"
+				Content="Close" />
+		</StackPanel>
+	</Grid>
 </Window>

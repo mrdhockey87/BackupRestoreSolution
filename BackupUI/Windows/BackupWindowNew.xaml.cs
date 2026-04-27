@@ -9,12 +9,12 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
-using BackupCommon;
-using BackupUI.Models;
-using BackupUI.Services;
+using SecureServerBackupCommon;
+using SecureServerBackup.Models;
+using SecureServerBackup.Services;
 using MessageBox = System.Windows.MessageBox;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class BackupWindowNew : Window
     {

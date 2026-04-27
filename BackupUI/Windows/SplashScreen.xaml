@@ -1,5 +1,5 @@
 <Window
-	x:Class="BackupUI.Windows.SplashScreen"
+	x:Class="SecureServerBackup.Windows.SplashScreen"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	Title="Secure Server Backup"

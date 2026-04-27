@@ -6,15 +6,15 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using BackupCommon;
-using BackupUI.Models;
-using BackupUI.Services;
+using SecureServerBackupCommon;
+using SecureServerBackup.Models;
+using SecureServerBackup.Services;
 using Microsoft.Win32;
 using System.Windows.Forms;
 using MessageBox = System.Windows.MessageBox;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class BackupWindow : Window
     {

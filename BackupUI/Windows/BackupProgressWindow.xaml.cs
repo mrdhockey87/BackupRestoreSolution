@@ -3,10 +3,10 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
-using BackupUI.Models;
-using BackupUI.Services;
+using SecureServerBackup.Models;
+using SecureServerBackup.Services;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     /// <summary>
     /// Non-modal progress window that shows backup progress from the service

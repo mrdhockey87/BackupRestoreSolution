@@ -3,7 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 
-namespace BackupUI.Services
+namespace SecureServerBackup.Services
 {
     /// <summary>
     /// Manages window position persistence for the main window

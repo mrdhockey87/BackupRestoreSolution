@@ -4,13 +4,13 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using BackupCommon;
-using BackupUI.Services;
+using SecureServerBackupCommon;
+using SecureServerBackup.Services;
 using Microsoft.Win32;
 using System.IO;
 using System.Text;
 
-namespace BackupUI.Windows
+namespace SecureServerBackup.Windows
 {
     public partial class ActivityManagementWindow : Window
     {

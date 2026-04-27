@@ -6,9 +6,9 @@ using System.Linq;
 using System.Management;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
-using BackupCommon;
+using SecureServerBackupCommon;
 
-namespace BackupUI.Services
+namespace SecureServerBackup.Services
 {
     /// <summary>
     /// Manages mounting and unmounting backup virtual disks as drive letters
