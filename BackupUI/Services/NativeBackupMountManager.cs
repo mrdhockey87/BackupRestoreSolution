@@ -511,6 +511,21 @@ namespace SecureServerBackup.Services
 
                 return (false, "", ex.Message);
             }
+            finally
+            {
+                try
+                {
+                    if (System.Diagnostics.Process.GetCurrentProcess().PriorityClass != originalPriority)
+                    {
+                        System.Diagnostics.Process.GetCurrentProcess().PriorityClass = originalPriority;
+                        System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager.MountBackupAsync] Priority restored to {originalPriority} after mount");
+                    }
+                }
+                catch (Exception prioEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[NativeBackupMountManager.MountBackupAsync] Warning: Could not restore priority: {prioEx.Message}");
+                }
+            }
         }
 
         /// <summary>

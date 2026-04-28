@@ -118,33 +118,16 @@ namespace SecureServerBackup
 
         private void CheckBackupEngineDll()
         {
-            try
+            var dllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SecureServerBackupEngine.dll");
+
+            if (!File.Exists(dllPath))
             {
-                var dllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SecureServerBackupEngine.dll");
-                
-                if (!File.Exists(dllPath))
-                {
-                    CustomDialogService.ShowError(
-                        $"Critical Error: SecureServerBackupEngine.dll not found!\n\n" +
-                        $"Expected location: {dllPath}\n\n" +
-                        $"Please ensure:\n" +
-                        $"1. BackupEngine project is built first\n" +
-                        $"2. SecureServerBackupEngine.dll is in the same directory as BackupUI.exe\n" +
-                        $"3. Build the entire solution (Build ? Rebuild Solution)",
-                        "Missing DLL");
-                }
-                else
-                {
-                    // DLL exists, log its location for debugging
-                    Debug.WriteLine($"SecureServerBackupEngine.dll found at: {dllPath}");
-                }
+                throw new FileNotFoundException(
+                    $"SecureServerBackupEngine.dll was not found. Expected location: {dllPath}",
+                    dllPath);
             }
-            catch (Exception ex)
-            {
-                CustomDialogService.ShowError(
-                    $"Error checking for SecureServerBackupEngine.dll: {ex.Message}",
-                    "Initialization Error");
-            }
+
+            Debug.WriteLine($"SecureServerBackupEngine.dll found at: {dllPath}");
         }
 
         private static bool IsRunningAsAdministrator()

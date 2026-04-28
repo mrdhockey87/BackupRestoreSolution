@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -108,16 +109,7 @@ namespace SecureServerBackupCommon
                 cryptoStream.FlushFinalBlock();
             }
 
-            if (string.Equals(inputPath, outputPath, StringComparison.OrdinalIgnoreCase))
-            {
-                File.Delete(inputPath);
-            }
-            else if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
-
-            File.Move(tempOutputPath, outputPath);
+            ReplaceFileAtomically(tempOutputPath, outputPath);
         }
 
         public static void DecryptFile(string encryptedPath, string outputPath, string password)
@@ -127,35 +119,48 @@ namespace SecureServerBackupCommon
                 throw new FileNotFoundException("Encrypted backup file was not found.", encryptedPath);
             }
 
-            using var inputStream = File.OpenRead(encryptedPath);
-            using var outputStream = File.Create(outputPath);
-
-            byte[] magic = ReadExact(inputStream, MagicHeader.Length);
-            if (!magic.AsSpan().SequenceEqual(MagicHeader))
-            {
-                throw new InvalidOperationException("The selected file is not an encrypted backup created by this application.");
-            }
-
-            byte[] salt = ReadExact(inputStream, 16);
-            byte[] iv = ReadExact(inputStream, 16);
-
-            using var aes = Aes.Create();
-            aes.KeySize = 128;
-            aes.BlockSize = 128;
-            aes.Mode = CipherMode.CBC;
-            aes.Padding = PaddingMode.PKCS7;
-            aes.Key = DeriveKey(password, salt);
-            aes.IV = iv;
+            string tempOutputPath = Path.Combine(Path.GetDirectoryName(outputPath) ?? Path.GetTempPath(), $"{Guid.NewGuid():N}.tmp");
+            Directory.CreateDirectory(Path.GetDirectoryName(tempOutputPath)!);
 
             try
             {
-                using var cryptoStream = new CryptoStream(inputStream, aes.CreateDecryptor(), CryptoStreamMode.Read);
-                cryptoStream.CopyTo(outputStream);
+                using var inputStream = File.OpenRead(encryptedPath);
+                using var outputStream = File.Create(tempOutputPath);
+
+                byte[] magic = ReadExact(inputStream, MagicHeader.Length);
+                if (!magic.AsSpan().SequenceEqual(MagicHeader))
+                {
+                    throw new InvalidOperationException("The selected file is not an encrypted backup created by this application.");
+                }
+
+                byte[] salt = ReadExact(inputStream, 16);
+                byte[] iv = ReadExact(inputStream, 16);
+
+                using var aes = Aes.Create();
+                aes.KeySize = 128;
+                aes.BlockSize = 128;
+                aes.Mode = CipherMode.CBC;
+                aes.Padding = PaddingMode.PKCS7;
+                aes.Key = DeriveKey(password, salt);
+                aes.IV = iv;
+
+                try
+                {
+                    using var cryptoStream = new CryptoStream(inputStream, aes.CreateDecryptor(), CryptoStreamMode.Read);
+                    cryptoStream.CopyTo(outputStream);
+                }
+                catch (CryptographicException ex)
+                {
+                    throw new InvalidOperationException("Invalid encryption password or corrupted encrypted backup.", ex);
+                }
             }
-            catch (CryptographicException ex)
+            catch
             {
-                throw new InvalidOperationException("Invalid encryption password or corrupted encrypted backup.", ex);
+                DeleteTemporaryFile(tempOutputPath);
+                throw;
             }
+
+            ReplaceFileAtomically(tempOutputPath, outputPath);
         }
 
         public static string DecryptFileToTemporaryLocation(string encryptedPath, string password)
@@ -176,12 +181,19 @@ namespace SecureServerBackupCommon
             {
                 if (File.Exists(filePath))
                 {
+                    File.SetAttributes(filePath, FileAttributes.Normal);
                     File.Delete(filePath);
                 }
+
+                DeleteEmptyTemporaryDirectory(filePath);
             }
-            catch
+            catch (IOException ex)
             {
-                // Best effort cleanup only.
+                Debug.WriteLine($"Temporary backup cleanup failed for '{filePath}': {ex.Message}");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Debug.WriteLine($"Temporary backup cleanup failed for '{filePath}': {ex.Message}");
             }
         }
 
@@ -189,6 +201,51 @@ namespace SecureServerBackupCommon
         {
             using var deriveBytes = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
             return deriveBytes.GetBytes(16);
+        }
+
+        private static void ReplaceFileAtomically(string tempOutputPath, string outputPath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(tempOutputPath);
+            ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+
+            string? outputDirectory = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrWhiteSpace(outputDirectory) && !Directory.Exists(outputDirectory))
+            {
+                Directory.CreateDirectory(outputDirectory);
+            }
+
+            if (File.Exists(outputPath))
+            {
+                File.Replace(tempOutputPath, outputPath, null, true);
+            }
+            else
+            {
+                File.Move(tempOutputPath, outputPath);
+            }
+        }
+
+        private static void DeleteEmptyTemporaryDirectory(string filePath)
+        {
+            string tempRoot = Path.Combine(Path.GetTempPath(), "BackupRestoreApp", "DecryptedBackups");
+            string? directoryPath = Path.GetDirectoryName(filePath);
+            if (string.IsNullOrWhiteSpace(directoryPath) || !directoryPath.StartsWith(tempRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (Directory.Exists(directoryPath)
+                && Directory.GetFiles(directoryPath).Length == 0
+                && Directory.GetDirectories(directoryPath).Length == 0)
+            {
+                Directory.Delete(directoryPath);
+            }
+
+            if (Directory.Exists(tempRoot)
+                && Directory.GetFiles(tempRoot).Length == 0
+                && Directory.GetDirectories(tempRoot).Length == 0)
+            {
+                Directory.Delete(tempRoot);
+            }
         }
 
         private static byte[] ReadExact(Stream stream, int count)

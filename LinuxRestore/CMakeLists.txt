@@ -9,10 +9,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(SSB_RESTORE_TUI_NAME SecureServerBackupLinuxRestore)
 set(SSB_RESTORE_CLI_NAME SecureServerBackupLinuxRestoreCli)
 set(SSB_RESTORE_GUI_NAME SecureServerBackupLinuxRestoreGui)
+option(SSB_RESTORE_BUILD_TUI "Build the ncurses-based Linux restore TUI" ON)
 
 # Find required packages
-find_package(Curses REQUIRED)
 find_package(PkgConfig)
+
+if(SSB_RESTORE_BUILD_TUI)
+    find_package(Curses REQUIRED)
+endif()
 
 # NOTE: WIM support requires wimlib-imagex to be installed on the target system
 # This is a runtime dependency, not a compile-time dependency
@@ -30,16 +34,20 @@ target_link_libraries(restore_engine
 )
 
 # Terminal UI Application (ncurses TUI)
-add_executable(${SSB_RESTORE_TUI_NAME}
-    restore_tui.cpp
-)
+if(SSB_RESTORE_BUILD_TUI)
+    add_executable(${SSB_RESTORE_TUI_NAME}
+        restore_tui.cpp
+    )
 
-target_link_libraries(${SSB_RESTORE_TUI_NAME}
-    restore_engine
-    ${CURSES_LIBRARIES}
-    ncurses
-    menu
-)
+    target_link_libraries(${SSB_RESTORE_TUI_NAME}
+        restore_engine
+        ${CURSES_LIBRARIES}
+        ncurses
+        menu
+    )
+else()
+    message(STATUS "Skipping ncurses TUI build (SSB_RESTORE_BUILD_TUI=OFF)")
+endif()
 
 # CLI Application (simpler, no ncurses)
 add_executable(${SSB_RESTORE_CLI_NAME}
@@ -48,6 +56,14 @@ add_executable(${SSB_RESTORE_CLI_NAME}
 
 target_link_libraries(${SSB_RESTORE_CLI_NAME}
     restore_engine
+)
+
+add_executable(restore_engine_tests
+    restore_engine_tests.cpp
+)
+
+target_link_libraries(restore_engine_tests
+    stdc++fs
 )
 
 # Graphical UI Application (GTK+, optional)
@@ -77,7 +93,13 @@ if(PKG_CONFIG_FOUND)
 endif()
 
 # Installation
-install(TARGETS ${SSB_RESTORE_TUI_NAME} ${SSB_RESTORE_CLI_NAME}
+set(SSB_RESTORE_INSTALL_TARGETS ${SSB_RESTORE_CLI_NAME})
+
+if(SSB_RESTORE_BUILD_TUI)
+    list(APPEND SSB_RESTORE_INSTALL_TARGETS ${SSB_RESTORE_TUI_NAME})
+endif()
+
+install(TARGETS ${SSB_RESTORE_INSTALL_TARGETS}
     RUNTIME DESTINATION bin
 )
 

@@ -9,14 +9,7 @@
 	<!-- Version, OutputPath, and Runtime config generation come from Directory.Build.props -->
 	<UseWPF>true</UseWPF>
 	<AssemblyTitle>SecureServerBackupCommon</AssemblyTitle>
-	<Win32Resource>SSB_LogoWinIcosM.res</Win32Resource>
+	<Win32Resource>E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\BackupCommon\Resources\SSB_LogoWinIcosM.res</Win32Resource>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Content Include="SSB_LogoWinIcos.ico" />
-    <Content Include="SSB_LogoWinIcosM.res">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
 
 </Project>

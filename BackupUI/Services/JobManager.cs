@@ -3,12 +3,15 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using SecureServerBackupCommon;
 
 namespace SecureServerBackup.Services
 {
     public class JobManager
     {
+        private const string JobsFileMutexName = @"Local\SecureServerBackup_JobsFileMutex";
+        private static readonly Mutex JobsFileMutex = new(false, JobsFileMutexName);
         private static readonly string JobsFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "BackupRestoreService",
@@ -112,53 +115,113 @@ namespace SecureServerBackup.Services
 
         private void LoadJobs()
         {
-            try
+            ExecuteWithJobsFileLock(() =>
             {
-                if (File.Exists(JobsFilePath))
+                try
                 {
-                    var json = File.ReadAllText(JobsFilePath);
-                    jobs = JsonSerializer.Deserialize<List<BackupJob>>(json) ?? new List<BackupJob>();
-                    System.Diagnostics.Debug.WriteLine($"Loaded {jobs.Count} jobs from {JobsFilePath}");
+                    if (File.Exists(JobsFilePath))
+                    {
+                        var json = File.ReadAllText(JobsFilePath);
+                        jobs = JsonSerializer.Deserialize<List<BackupJob>>(json) ?? new List<BackupJob>();
+                        System.Diagnostics.Debug.WriteLine($"Loaded {jobs.Count} jobs from {JobsFilePath}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Jobs file not found: {JobsFilePath}");
+                        jobs = new List<BackupJob>();
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Jobs file not found: {JobsFilePath}");
+                    System.Diagnostics.Debug.WriteLine($"ERROR loading jobs: {ex.Message}");
                     jobs = new List<BackupJob>();
                 }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"ERROR loading jobs: {ex.Message}");
-                jobs = new List<BackupJob>();
-            }
+
+                return 0;
+            });
         }
 
         private void SaveJobs()
         {
-            try
+            ExecuteWithJobsFileLock(() =>
             {
-                var directory = Path.GetDirectoryName(JobsFilePath);
-                if (!string.IsNullOrEmpty(directory))
+                string? tempFilePath = null;
+
+                try
                 {
-                    if (!Directory.Exists(directory))
+                    var directory = Path.GetDirectoryName(JobsFilePath);
+                    if (!string.IsNullOrEmpty(directory))
                     {
-                        System.Diagnostics.Debug.WriteLine($"Creating directory: {directory}");
-                        Directory.CreateDirectory(directory);
+                        if (!Directory.Exists(directory))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Creating directory: {directory}");
+                            Directory.CreateDirectory(directory);
+                        }
+                    }
+
+                    var options = new JsonSerializerOptions { WriteIndented = true };
+                    var json = JsonSerializer.Serialize(jobs, options);
+                    tempFilePath = $"{JobsFilePath}.{Guid.NewGuid():N}.tmp";
+
+                    System.Diagnostics.Debug.WriteLine($"Saving {jobs.Count} jobs to {JobsFilePath}");
+                    File.WriteAllText(tempFilePath, json);
+
+                    if (File.Exists(JobsFilePath))
+                    {
+                        File.Replace(tempFilePath, JobsFilePath, null, true);
+                    }
+                    else
+                    {
+                        File.Move(tempFilePath, JobsFilePath);
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"Jobs saved successfully. File size: {new FileInfo(JobsFilePath).Length} bytes");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CRITICAL ERROR in SaveJobs: {ex.Message}\nStack: {ex.StackTrace}");
+                    throw new Exception($"Failed to save jobs file: {ex.Message}\nPath: {JobsFilePath}", ex);
+                }
+                finally
+                {
+                    if (!string.IsNullOrWhiteSpace(tempFilePath) && File.Exists(tempFilePath))
+                    {
+                        File.Delete(tempFilePath);
                     }
                 }
 
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                var json = JsonSerializer.Serialize(jobs, options);
-                
-                System.Diagnostics.Debug.WriteLine($"Saving {jobs.Count} jobs to {JobsFilePath}");
-                File.WriteAllText(JobsFilePath, json);
-                
-                System.Diagnostics.Debug.WriteLine($"Jobs saved successfully. File size: {new FileInfo(JobsFilePath).Length} bytes");
-            }
-            catch (Exception ex)
+                return 0;
+            });
+        }
+
+        private static T ExecuteWithJobsFileLock<T>(Func<T> action)
+        {
+            bool lockTaken = false;
+
+            try
             {
-                System.Diagnostics.Debug.WriteLine($"CRITICAL ERROR in SaveJobs: {ex.Message}\nStack: {ex.StackTrace}");
-                throw new Exception($"Failed to save jobs file: {ex.Message}\nPath: {JobsFilePath}", ex);
+                try
+                {
+                    lockTaken = JobsFileMutex.WaitOne(TimeSpan.FromSeconds(15));
+                }
+                catch (AbandonedMutexException)
+                {
+                    lockTaken = true;
+                }
+
+                if (!lockTaken)
+                {
+                    throw new TimeoutException("Timed out waiting for jobs file access.");
+                }
+
+                return action();
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    JobsFileMutex.ReleaseMutex();
+                }
             }
         }
 

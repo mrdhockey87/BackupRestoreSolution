@@ -1,0 +1,2 @@
+/usr/bin/ar qc librestore_engine.a CMakeFiles/restore_engine.dir/restore_engine.cpp.o
+/usr/bin/ranlib librestore_engine.a

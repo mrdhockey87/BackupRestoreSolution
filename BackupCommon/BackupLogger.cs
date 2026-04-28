@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
+using System.Threading;
 
 namespace SecureServerBackupCommon
 {
@@ -45,6 +47,7 @@ namespace SecureServerBackupCommon
         private static readonly string LegacyLogFile = Path.Combine(LogDirectory, "backup_activity.json");
 
         private static readonly object lockObject = new object();
+        private static readonly Mutex FileMutex = new(false, @"Local\SecureServerBackup_LogsMutex");
         private static readonly int MaxLogEntriesPerFile = 2000; // Keep last 2000 entries per job (increased from 500 to prevent log loss)
 
         static BackupLogger()
@@ -311,7 +314,7 @@ namespace SecureServerBackupCommon
                         else
                         {
                             // No entries recovered - reset to empty
-                            File.WriteAllText(filePath, "[]");
+                            SaveLogsToFile(filePath, new List<BackupLogEntry>());
                         }
                     }
                     catch (Exception ex)
@@ -517,32 +520,100 @@ namespace SecureServerBackupCommon
 
         private static void SaveLogsToFile(string filePath, List<BackupLogEntry> logs)
         {
-            try
+            ExecuteWithFileMutex(() =>
             {
-                var json = JsonSerializer.Serialize(logs, new JsonSerializerOptions
+                string? tempFilePath = null;
+
+                try
                 {
-                    WriteIndented = true
-                });
-                File.WriteAllText(filePath, json);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error saving logs to {filePath}: {ex.Message}");
-                throw; // Let caller handle via fallback
-            }
+                    string? directory = Path.GetDirectoryName(filePath);
+                    if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+
+                    var json = JsonSerializer.Serialize(logs, new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    });
+
+                    tempFilePath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+                    File.WriteAllText(tempFilePath, json, Encoding.UTF8);
+
+                    if (File.Exists(filePath))
+                    {
+                        File.Replace(tempFilePath, filePath, null, true);
+                    }
+                    else
+                    {
+                        File.Move(tempFilePath, filePath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error saving logs to {filePath}: {ex.Message}");
+                    throw;
+                }
+                finally
+                {
+                    if (!string.IsNullOrWhiteSpace(tempFilePath) && File.Exists(tempFilePath))
+                    {
+                        File.Delete(tempFilePath);
+                    }
+                }
+
+                return 0;
+            });
         }
 
         private static void WriteFallbackLog(string message)
         {
+            ExecuteWithFileMutex(() =>
+            {
+                try
+                {
+                    var fallbackFile = Path.Combine(LogDirectory, "backup_errors.txt");
+                    File.AppendAllText(fallbackFile, message + Environment.NewLine, Encoding.UTF8);
+                }
+                catch
+                {
+                    System.Diagnostics.Debug.WriteLine($"CRITICAL: Cannot write to any log file: {message}");
+                }
+
+                return 0;
+            });
+        }
+
+        private static T ExecuteWithFileMutex<T>(Func<T> action)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            bool mutexAcquired = false;
+
             try
             {
-                var fallbackFile = Path.Combine(LogDirectory, "backup_errors.txt");
-                File.AppendAllText(fallbackFile, message + "\n");
+                try
+                {
+                    mutexAcquired = FileMutex.WaitOne(TimeSpan.FromSeconds(30));
+                }
+                catch (AbandonedMutexException)
+                {
+                    mutexAcquired = true;
+                }
+
+                if (!mutexAcquired)
+                {
+                    throw new TimeoutException("Timed out waiting for the shared backup log file lock.");
+                }
+
+                return action();
             }
-            catch
+            finally
             {
-                // Last resort - just debug output
-                System.Diagnostics.Debug.WriteLine($"CRITICAL: Cannot write to any log file: {message}");
+                if (mutexAcquired)
+                {
+                    FileMutex.ReleaseMutex();
+                }
             }
         }
 

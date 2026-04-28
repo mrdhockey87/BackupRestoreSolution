@@ -14,8 +14,14 @@ namespace SecureServerBackup.Services
     /// </summary>
     public class BackupServiceClient
     {
-        private const string PipeName = "BackupRestoreServicePipe";
+        private const string DefaultPipeName = "BackupRestoreServicePipe";
         private const int Timeout = 5000;
+        private readonly string _pipeName;
+
+        public BackupServiceClient(string? pipeName = null)
+        {
+            _pipeName = string.IsNullOrWhiteSpace(pipeName) ? DefaultPipeName : pipeName;
+        }
 
         public async Task<bool> RunBackupNowAsync(Guid jobId)
         {
@@ -51,7 +57,7 @@ namespace SecureServerBackup.Services
 
             try
             {
-                using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
+                using var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut);
                 await pipe.ConnectAsync(Timeout);
 
                 using var writer = new StreamWriter(pipe, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
@@ -101,7 +107,7 @@ namespace SecureServerBackup.Services
         {
             try
             {
-                using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
+                using var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut);
                 await pipe.ConnectAsync(Timeout);
 
                 using var writer = new StreamWriter(pipe, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };

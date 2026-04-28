@@ -8,16 +8,36 @@ namespace SecureServerBackup.Services
 {
     public sealed class PreparedBackupFile : IDisposable
     {
+        private bool _disposed;
+
         public string OriginalPath { get; init; } = string.Empty;
         public string WorkingPath { get; init; } = string.Empty;
         public bool IsTemporary { get; init; }
 
+        ~PreparedBackupFile()
+        {
+            Dispose(false);
+        }
+
         public void Dispose()
         {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
             if (IsTemporary)
             {
                 BackupEncryptionService.DeleteTemporaryFile(WorkingPath);
             }
+
+            _disposed = true;
         }
     }
 

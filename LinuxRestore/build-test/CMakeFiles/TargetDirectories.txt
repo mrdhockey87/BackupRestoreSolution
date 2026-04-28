@@ -1,0 +1,10 @@
+/mnt/e/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build-test/CMakeFiles/restore_engine.dir
+/mnt/e/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build-test/CMakeFiles/SecureServerBackupLinuxRestoreCli.dir
+/mnt/e/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build-test/CMakeFiles/restore_engine_tests.dir
+/mnt/e/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build-test/CMakeFiles/SecureServerBackupLinuxRestoreGui.dir
+/mnt/e/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build-test/CMakeFiles/edit_cache.dir
+/mnt/e/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build-test/CMakeFiles/rebuild_cache.dir
+/mnt/e/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build-test/CMakeFiles/list_install_components.dir
+/mnt/e/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build-test/CMakeFiles/install.dir
+/mnt/e/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build-test/CMakeFiles/install/local.dir
+/mnt/e/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build-test/CMakeFiles/install/strip.dir

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
 using System.Reflection;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -18,12 +20,21 @@ namespace SecureServerBackupService
 	/// </summary>
 	public class BackupServiceCommunication : IHostedService, IDisposable
 	{
-		private const string PipeName = "BackupRestoreServicePipe";
+        private const string DefaultPipeName = "BackupRestoreServicePipe";
+		private static readonly PipeSecurity PipeServerSecurity = new PipeSecurity
+		{
+		};
+      private readonly string _pipeName;
 		private readonly CancellationTokenSource _cancellationTokenSource = new();
 		private Task? _listenTask;
 
 		public event EventHandler<BackupCommandEventArgs>? CommandReceived;
 		public event EventHandler<ProgressQueryEventArgs>? ProgressQueried;
+
+		public BackupServiceCommunication(string? pipeName = null)
+		{
+			_pipeName = string.IsNullOrWhiteSpace(pipeName) ? DefaultPipeName : pipeName;
+		}
 
 		// IHostedService implementation - called automatically when Windows Service starts
 		public Task StartAsync(CancellationToken cancellationToken)
@@ -47,12 +58,15 @@ namespace SecureServerBackupService
 			{
 				try
 				{
-					var pipeServer = new NamedPipeServerStream(
-						PipeName,
+                  var pipeServer = NamedPipeServerStreamAcl.Create(
+                       _pipeName,
 						PipeDirection.InOut,
 						NamedPipeServerStream.MaxAllowedServerInstances,
 						PipeTransmissionMode.Message,
-						PipeOptions.Asynchronous);
+                     PipeOptions.Asynchronous,
+						0,
+						0,
+                      PipeServerSecurity);
 
 					await pipeServer.WaitForConnectionAsync(_cancellationTokenSource.Token);
 
@@ -63,11 +77,27 @@ namespace SecureServerBackupService
 				{
 					break;
 				}
-				catch (Exception)
+               catch (Exception ex)
 				{
+                 BackupLogger.LogServiceError("Named pipe listener error", ex.Message);
 					await Task.Delay(1000, _cancellationTokenSource.Token);
 				}
 			}
+		}
+
+        static BackupServiceCommunication()
+		{
+			PipeServerSecurity.SetAccessRule(
+				new PipeAccessRule(
+					new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
+					PipeAccessRights.FullControl,
+					AccessControlType.Allow));
+
+			PipeServerSecurity.SetAccessRule(
+				new PipeAccessRule(
+					new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
+					PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance,
+					AccessControlType.Allow));
 		}
 
 		private async Task HandleClientAsync(NamedPipeServerStream pipeServer)
@@ -91,9 +121,9 @@ namespace SecureServerBackupService
 					await writer.FlushAsync();
 				}
 			}
-			catch (Exception)
+           catch (Exception ex)
 			{
-				// Silently handle pipe communication errors
+                BackupLogger.LogServiceWarning("Named pipe client communication failed", ex.Message);
 			}
 			finally
 			{

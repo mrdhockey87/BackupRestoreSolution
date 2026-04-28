@@ -14,6 +14,7 @@ namespace SecureServerBackupService
     public class BackupExecutor
     {
         private const string DllName = "SecureServerBackupEngine.dll";
+        private static readonly SemaphoreSlim NativeExecutionLock = new(1, 1);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
@@ -23,11 +24,6 @@ namespace SecureServerBackupService
             int level,
             [MarshalAs(UnmanagedType.LPWStr)] string message,
             [MarshalAs(UnmanagedType.LPWStr)] string details);
-
-        // Instance variables to keep delegates alive during P/Invoke calls
-        // This prevents AccessViolationException due to premature garbage collection
-        private ProgressCallback? _currentProgressCallback;
-        private LogCallback? _currentLogCallback;
 
         private static void EncryptBackupFileIfNeeded(BackupJob job, string backupPath, Action<int, string>? progressCallback, Action<string>? logger)
         {
@@ -140,162 +136,99 @@ namespace SecureServerBackupService
         private static extern void ClearCurrentJobName();
 
         public async Task<bool> ExecuteBackupJobWithProgress(
-            BackupJob job, 
+            BackupJob job,
             Action<int, string>? progressCallback,
             CancellationToken cancellationToken,
             Action<string>? logger = null)
         {
-            // Store original priority to restore after backup completes
             var originalPriority = ProcessPriorityClass.Normal;
-            
-            return await Task.Run(() =>
+
+            await NativeExecutionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            try
             {
-                try
+                return await Task.Run(() =>
                 {
-                    // Set process to BelowNormal priority for backup operations only
-                    // This implements "Efficiency mode" for backups to reduce CPU impact
-                    // Mount/Unmount and UI operations remain at Normal priority
                     try
                     {
-                        originalPriority = Process.GetCurrentProcess().PriorityClass;
-                        Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
-                        logger?.Invoke($"Process priority set to BelowNormal for backup operation (was {originalPriority})");
-                    }
-                    catch (Exception prioEx)
-                    {
-                        logger?.Invoke($"Warning: Could not set process priority: {prioEx.Message}");
-                    }
-
-                    // Set job name for C++ engine logging context
-                    // This ensures C++ logs go to {JobName}.json instead of engine.json
-                    try
-                    {
-                        _currentJobName = job.Name;
-                        SetCurrentJobName(job.Name);
-                        logger?.Invoke($"C++ engine logging context set to: {job.Name}");
-                    }
-                    catch (Exception jobNameEx)
-                    {
-                        logger?.Invoke($"Warning: Could not set C++ job name context: {jobNameEx.Message}");
-                    }
-
-                    logger?.Invoke($"Starting backup job: {job.Name}");
-                    progressCallback?.Invoke(0, "Initializing backup...");
-
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        logger?.Invoke("Backup cancelled by user");
-                        return false;
-                    }
-
-                    // AUTO-RECOVERY: Check if we need to force a full backup due to previous verification failure
-                    BackupType originalType = job.Type;
-                    if (job.ForceFullBackupOnNextRun && (job.Type == BackupType.Incremental || job.Type == BackupType.Differential))
-                    {
-                        logger?.Invoke($"AUTO-RECOVERY MODE: Previous {originalType} backup failed verification");
-                        logger?.Invoke($"Forcing FULL backup to rebuild backup chain");
-                        job.Type = BackupType.Full;
-
-                        // Clear the flag and save
-                        job.ForceFullBackupOnNextRun = false;
                         try
                         {
-                            var jobManager = new JobManager();
-                            jobManager.UpdateJob(job);
-                            logger?.Invoke("ForceFullBackupOnNextRun flag cleared");
+                            originalPriority = Process.GetCurrentProcess().PriorityClass;
+                            Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
+                            logger?.Invoke($"Process priority set to BelowNormal for backup operation (was {originalPriority})");
                         }
-                        catch (Exception saveEx)
+                        catch (Exception prioEx)
                         {
-                            logger?.Invoke($"Warning: Failed to clear ForceFullBackupOnNextRun flag: {saveEx.Message}");
+                            logger?.Invoke($"Warning: Could not set process priority: {prioEx.Message}");
                         }
-                    }
 
-                    // REMOVED: Backup safety renaming - with single-file approach, we simply overwrite
-                    // Old file is replaced atomically by new file
-
-                    // Create native progress callback
-                    ProgressCallback nativeCallback = (percentage, message) =>
-                    {
-                        progressCallback?.Invoke(percentage, message ?? $"Progress: {percentage}%");
-                    };
-
-                    string? newBackupPath = null;
-
-                    // SIMPLIFIED ARCHITECTURE: Create direct .ssb file with NO type suffix
-                    // Each backup overwrites the previous one - single file per job
-                    // Format: JobName.ssb (no Full/Incremental/Differential suffix)
-
-                    // Create destination FILE path (no folders, no timestamp, no type suffix)
-                    newBackupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
-
-                    // For incremental/differential, check if base backup exists
-                    // If no base exists, automatically switch to Full backup
-                    if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
-                    {
-                        if (!File.Exists(newBackupPath))
+                        try
                         {
-                            logger?.Invoke($"No base backup exists. Automatically switching from {job.Type} to Full backup: {job.Name}.ssb");
-                            job.Type = BackupType.Full;
+                            SetCurrentJobName(job.Name);
+                            logger?.Invoke($"C++ engine logging context set to: {job.Name}");
                         }
-                    }
+                        catch (Exception jobNameEx)
+                        {
+                            logger?.Invoke($"Warning: Could not set C++ job name context: {jobNameEx.Message}");
+                        }
 
-                    // Ensure destination directory exists
-                    Directory.CreateDirectory(job.DestinationPath);
+                        logger?.Invoke($"Starting backup job: {job.Name}");
+                        progressCallback?.Invoke(0, "Initializing backup...");
 
-                    logger?.Invoke($"Creating backup file: {Path.GetFileName(newBackupPath)}");
-
-                    // Execute backup for all source paths
-                    // For multiple sources, they'll be added as multiple images in the same WIM file
-                    foreach (var sourcePath in job.SourcePaths)
-                    {
                         if (cancellationToken.IsCancellationRequested)
                         {
                             logger?.Invoke("Backup cancelled by user");
                             return false;
                         }
 
-                        int result = ExecuteBackup(job, sourcePath, newBackupPath, nativeCallback, logger);
-
-                        if (result != 0)
+                        BackupType originalType = job.Type;
+                        if (job.ForceFullBackupOnNextRun && (job.Type == BackupType.Incremental || job.Type == BackupType.Differential))
                         {
-                            var error = new StringBuilder(1024);
-                            GetLastErrorMessage(error, error.Capacity);
+                            logger?.Invoke($"AUTO-RECOVERY MODE: Previous {originalType} backup failed verification");
+                            logger?.Invoke("Forcing FULL backup to rebuild backup chain");
+                            job.Type = BackupType.Full;
+                            job.ForceFullBackupOnNextRun = false;
 
-                            // DIAGNOSTIC: Show both result code AND error message
-                            string errorMessage = error.ToString();
-                            logger?.Invoke($"[ERROR] Backup failed with code {result}");
-                            logger?.Invoke($"[ERROR] Error message: {(string.IsNullOrEmpty(errorMessage) ? "(empty - C++ didn't set error message)" : errorMessage)}");
-                            logger?.Invoke($"[ERROR] Source path: {sourcePath}");
-                            logger?.Invoke($"[ERROR] Destination path: {newBackupPath}");
-
-                            // COMMENTED OUT FOR DEBUGGING: Delete failed backup file for incremental/differential
-                            // This ensures next attempt will start fresh instead of trying to open corrupt file
-                            // DISABLED to allow testing if backup files are actually mountable despite errors
-                            /*
-                            if ((job.Type == BackupType.Incremental || job.Type == BackupType.Differential) && 
-                                newBackupPath != null && File.Exists(newBackupPath))
+                            try
                             {
-                                try
-                                {
-                                    logger?.Invoke($"[CLEANUP] Deleting failed backup file: {Path.GetFileName(newBackupPath)}");
-                                    File.Delete(newBackupPath);
-                                    logger?.Invoke($"[CLEANUP] Failed backup file deleted successfully");
-                                }
-                                catch (Exception ex)
-                                {
-                                    logger?.Invoke($"[WARNING] Could not delete failed backup file: {ex.Message}");
-                                }
+                                var jobManager = new JobManager();
+                                jobManager.UpdateJob(job);
+                                logger?.Invoke("ForceFullBackupOnNextRun flag cleared");
                             }
-                            */
-                            logger?.Invoke($"[DEBUG] Failed backup file preserved for analysis: {Path.GetFileName(newBackupPath)}");
-
-                            return false;
+                            catch (Exception saveEx)
+                            {
+                                logger?.Invoke($"Warning: Failed to clear ForceFullBackupOnNextRun flag: {saveEx.Message}");
+                            }
                         }
-                    }
 
-                    if (job.IsHyperVBackup)
-                    {
-                        foreach (var vm in job.HyperVMachines)
+                        ProgressCallback? nativeCallback = null;
+                        if (progressCallback != null)
+                        {
+                            nativeCallback = (percentage, message) =>
+                            {
+                                progressCallback(percentage, message ?? $"Progress: {percentage}%");
+                            };
+                        }
+
+                        LogCallback nativeLogCallback = (level, message, details) =>
+                        {
+                            LogFromEngine(job.Name, level, message, details);
+                        };
+
+                        string? newBackupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+                        if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
+                        {
+                            if (!File.Exists(newBackupPath))
+                            {
+                                logger?.Invoke($"No base backup exists. Automatically switching from {job.Type} to Full backup: {job.Name}.ssb");
+                                job.Type = BackupType.Full;
+                            }
+                        }
+
+                        Directory.CreateDirectory(job.DestinationPath);
+                        logger?.Invoke($"Creating backup file: {Path.GetFileName(newBackupPath)}");
+
+                        foreach (var sourcePath in job.SourcePaths)
                         {
                             if (cancellationToken.IsCancellationRequested)
                             {
@@ -303,92 +236,107 @@ namespace SecureServerBackupService
                                 return false;
                             }
 
-                            // SIMPLIFIED: No type suffix for Hyper-V backups either
-                            newBackupPath = Path.Combine(job.DestinationPath, $"{vm}.ssb");
-
-                            // Check if base backup exists for incremental/differential
-                            if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
-                            {
-                                if (!File.Exists(newBackupPath))
-                                {
-                                    logger?.Invoke($"No base backup exists. Creating initial full backup: {vm}.ssb");
-                                }
-                            }
-
-                            logger?.Invoke($"Creating Hyper-V backup file: {Path.GetFileName(newBackupPath)}");
-
-                            progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {vm}...");
-                            int result = BackupHyperVVM(vm, newBackupPath, _currentProgressCallback);
-
+                            int result = ExecuteBackup(job, sourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
                             if (result != 0)
                             {
                                 var error = new StringBuilder(1024);
                                 GetLastErrorMessage(error, error.Capacity);
-                                logger?.Invoke($"Hyper-V backup failed: {error}");
+
+                                string errorMessage = error.ToString();
+                                logger?.Invoke($"[ERROR] Backup failed with code {result}");
+                                logger?.Invoke($"[ERROR] Error message: {(string.IsNullOrEmpty(errorMessage) ? "(empty - C++ didn't set error message)" : errorMessage)}");
+                                logger?.Invoke($"[ERROR] Source path: {sourcePath}");
+                                logger?.Invoke($"[ERROR] Destination path: {newBackupPath}");
+                                logger?.Invoke($"[DEBUG] Failed backup file preserved for analysis: {Path.GetFileName(newBackupPath)}");
                                 return false;
                             }
                         }
+
+                        if (job.IsHyperVBackup)
+                        {
+                            foreach (var vm in job.HyperVMachines)
+                            {
+                                if (cancellationToken.IsCancellationRequested)
+                                {
+                                    logger?.Invoke("Backup cancelled by user");
+                                    return false;
+                                }
+
+                                newBackupPath = Path.Combine(job.DestinationPath, $"{vm}.ssb");
+                                if ((job.Type == BackupType.Incremental || job.Type == BackupType.Differential) && !File.Exists(newBackupPath))
+                                {
+                                    logger?.Invoke($"No base backup exists. Creating initial full backup: {vm}.ssb");
+                                }
+
+                                logger?.Invoke($"Creating Hyper-V backup file: {Path.GetFileName(newBackupPath)}");
+                                progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {vm}...");
+
+                                int result = BackupHyperVVM(vm, newBackupPath, nativeCallback);
+                                if (result != 0)
+                                {
+                                    var error = new StringBuilder(1024);
+                                    GetLastErrorMessage(error, error.Capacity);
+                                    logger?.Invoke($"Hyper-V backup failed: {error}");
+                                    return false;
+                                }
+                            }
+                        }
+
+                        if (newBackupPath != null)
+                        {
+                            EncryptBackupFileIfNeeded(job, newBackupPath, progressCallback, logger);
+                        }
+
+                        if (originalType != job.Type)
+                        {
+                            job.Type = originalType;
+                            try
+                            {
+                                var jobManager = new JobManager();
+                                jobManager.UpdateJob(job);
+                                logger?.Invoke($"AUTO-RECOVERY COMPLETE: Job type restored to {originalType} for next run");
+                            }
+                            catch (Exception saveEx)
+                            {
+                                logger?.Invoke($"Warning: Failed to restore job type: {saveEx.Message}");
+                            }
+                        }
+
+                        progressCallback?.Invoke(100, "Backup completed successfully!");
+                        logger?.Invoke($"Backup job completed successfully: {job.Name}");
+                        return true;
                     }
-
-                    // Note: Verification moved to separate phase after backup completion
-                    // This allows the UI to show backup progress completion before transitioning to verification
-                    // The BackupSchedulerService will call VerifyBackupWithProgress if job.VerifyAfterBackup is true
-
-                    if (newBackupPath != null)
+                    catch (Exception ex)
                     {
-                        EncryptBackupFileIfNeeded(job, newBackupPath, progressCallback, logger);
+                        logger?.Invoke($"Backup job failed with exception: {ex.Message}");
+                        return false;
                     }
-
-                    // If we forced a full backup for auto-recovery, restore original type for future backups
-                    if (originalType != job.Type)
+                    finally
                     {
-                        job.Type = originalType;
                         try
                         {
-                            var jobManager = new JobManager();
-                            jobManager.UpdateJob(job);
-                            logger?.Invoke($"AUTO-RECOVERY COMPLETE: Job type restored to {originalType} for next run");
+                            ClearCurrentJobName();
                         }
-                        catch (Exception saveEx)
+                        catch
                         {
-                            logger?.Invoke($"Warning: Failed to restore job type: {saveEx.Message}");
+                        }
+
+                        try
+                        {
+                            Process.GetCurrentProcess().PriorityClass = originalPriority;
+                            logger?.Invoke($"Process priority restored to {originalPriority}");
+                        }
+                        catch (Exception prioEx)
+                        {
+                            logger?.Invoke($"Warning: Could not restore process priority: {prioEx.Message}");
                         }
                     }
-
-                    // REMOVED: Retention cleanup - with single-file approach, each backup type 
-                    // (Full/Incremental/Differential) has ONE file that gets overwritten
-                    // No need for retention policy or cleanup
-
-                    progressCallback?.Invoke(100, "Backup completed successfully!");
-                    logger?.Invoke($"Backup job completed successfully: {job.Name}");
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    logger?.Invoke($"Backup job failed with exception: {ex.Message}");
-                    return false;
-                }
-                finally
-                {
-                    // Clear C++ engine logging context
-                    try
-                    {
-                        ClearCurrentJobName();
-                    }
-                    catch { }
-
-                    // Restore original process priority after backup completion
-                    try
-                    {
-                        Process.GetCurrentProcess().PriorityClass = originalPriority;
-                        logger?.Invoke($"Process priority restored to {originalPriority}");
-                    }
-                    catch (Exception prioEx)
-                    {
-                        logger?.Invoke($"Warning: Could not restore process priority: {prioEx.Message}");
-                    }
-                }
-            }, cancellationToken);
+                }, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                NativeExecutionLock.Release();
+            }
         }
 
         public async Task<bool> ExecuteBackupJob(BackupJob job, Action<string>? logger = null)
@@ -405,145 +353,141 @@ namespace SecureServerBackupService
             CancellationToken cancellationToken,
             Action<string>? logger = null)
         {
-            return await Task.Run(() =>
+            await NativeExecutionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            try
             {
-                try
+                return await Task.Run(() =>
                 {
-                    logger?.Invoke($"Starting backup verification for: {job.Name}");
-                    progressCallback?.Invoke(0, "Initializing verification...");
-
-                    if (cancellationToken.IsCancellationRequested)
+                    try
                     {
-                        logger?.Invoke("Verification cancelled by user");
-                        return false;
-                    }
+                        logger?.Invoke($"Starting backup verification for: {job.Name}");
+                        progressCallback?.Invoke(0, "Initializing verification...");
 
-                    // Build backup file path
-                    string backupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
-                    
-                    if (!File.Exists(backupPath))
-                    {
-                        logger?.Invoke($"[ERROR] Backup file not found: {backupPath}");
-                        return false;
-                    }
-
-                    logger?.Invoke($"Verifying backup file: {Path.GetFileName(backupPath)}");
-                    progressCallback?.Invoke(10, "Verifying SSB archive integrity...");
-
-                    // Create native progress callback
-                    ProgressCallback nativeCallback = (percentage, message) =>
-                    {
-                        // Map verification progress to 10-90% range (reservation for health check)
-                        int mappedPercentage = 10 + (int)(percentage * 0.8);
-                        progressCallback?.Invoke(mappedPercentage, message ?? $"Verifying: {percentage}%");
-                    };
-
-                    // Store delegate to prevent GC
-                    _currentProgressCallback = nativeCallback;
-
-                    // Determine expected image count
-                    int expectedImageCount = -1;
-                    if (job.Target == BackupTarget.Disk && job.SourcePaths?.Count > 0)
-                    {
-                        int diskNumber = ExtractDiskNumber(job.SourcePaths[0]);
-                        if (diskNumber >= 0)
+                        if (cancellationToken.IsCancellationRequested)
                         {
-                            expectedImageCount = -1; // Future: query actual volume count
-                        }
-                    }
-
-                    // Verify WIM archive
-                    var errorMsg = new StringBuilder(1024);
-                    int verifyResult = VerifyWimArchive(
-                        backupPath,
-                        expectedImageCount,
-                        errorMsg,
-                        errorMsg.Capacity,
-                        _currentProgressCallback
-                    );
-
-                    if (verifyResult != 0)
-                    {
-                        logger?.Invoke($"[VERIFICATION FAILED] Result code: {verifyResult}");
-                        logger?.Invoke($"[VERIFICATION FAILED] Error: {errorMsg}");
-                        return false;
-                    }
-
-                    logger?.Invoke($"Archive verification PASSED: {errorMsg}");
-                    progressCallback?.Invoke(90, "Checking image health...");
-
-                    // Check image health
-                    var healthMsg = new StringBuilder(1024);
-                    int healthState = CheckBackupImageHealth(
-                        backupPath,
-                        1,
-                        true,
-                        healthMsg,
-                        healthMsg.Capacity,
-                        _currentProgressCallback);
-
-                    if (healthState < 0)
-                    {
-                        logger?.Invoke($"[DISM VERIFY FAILED] Result code: {healthState}");
-                        logger?.Invoke($"[DISM VERIFY FAILED] {healthMsg}");
-                        return false;
-                    }
-
-                    if (healthState == (int)DismImageHealthState.Repairable)
-                    {
-                        logger?.Invoke($"[DISM] Image is repairable. Attempting RestoreHealth: {healthMsg}");
-                        progressCallback?.Invoke(95, "Repairing image...");
-
-                        var repairMsg = new StringBuilder(1024);
-                        int repairResult = RestoreBackupImageHealth(
-                            backupPath,
-                            1,
-                            null,
-                            0,
-                            false,
-                            repairMsg,
-                            repairMsg.Capacity,
-                            _currentProgressCallback);
-
-                        if (repairResult != 0)
-                        {
-                            logger?.Invoke($"[DISM REPAIR FAILED] Result code: {repairResult}");
-                            logger?.Invoke($"[DISM REPAIR FAILED] {repairMsg}");
+                            logger?.Invoke("Verification cancelled by user");
                             return false;
                         }
 
-                        logger?.Invoke($"[DISM] Repair completed: {repairMsg}");
+                        string backupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+                        if (!File.Exists(backupPath))
+                        {
+                            logger?.Invoke($"[ERROR] Backup file not found: {backupPath}");
+                            return false;
+                        }
+
+                        logger?.Invoke($"Verifying backup file: {Path.GetFileName(backupPath)}");
+                        progressCallback?.Invoke(10, "Verifying SSB archive integrity...");
+
+                        ProgressCallback? nativeCallback = null;
+                        if (progressCallback != null)
+                        {
+                            nativeCallback = (percentage, message) =>
+                            {
+                                int mappedPercentage = 10 + (int)(percentage * 0.8);
+                                progressCallback(mappedPercentage, message ?? $"Verifying: {percentage}%");
+                            };
+                        }
+
+                        int expectedImageCount = -1;
+                        if (job.Target == BackupTarget.Disk && job.SourcePaths?.Count > 0)
+                        {
+                            int diskNumber = ExtractDiskNumber(job.SourcePaths[0]);
+                            if (diskNumber >= 0)
+                            {
+                                expectedImageCount = -1;
+                            }
+                        }
+
+                        var errorMsg = new StringBuilder(1024);
+                        int verifyResult = VerifyWimArchive(
+                            backupPath,
+                            expectedImageCount,
+                            errorMsg,
+                            errorMsg.Capacity,
+                            nativeCallback);
+
+                        if (verifyResult != 0)
+                        {
+                            logger?.Invoke($"[VERIFICATION FAILED] Result code: {verifyResult}");
+                            logger?.Invoke($"[VERIFICATION FAILED] Error: {errorMsg}");
+                            return false;
+                        }
+
+                        logger?.Invoke($"Archive verification PASSED: {errorMsg}");
+                        progressCallback?.Invoke(90, "Checking image health...");
+
+                        var healthMsg = new StringBuilder(1024);
+                        int healthState = CheckBackupImageHealth(
+                            backupPath,
+                            1,
+                            true,
+                            healthMsg,
+                            healthMsg.Capacity,
+                            nativeCallback);
+
+                        if (healthState < 0)
+                        {
+                            logger?.Invoke($"[DISM VERIFY FAILED] Result code: {healthState}");
+                            logger?.Invoke($"[DISM VERIFY FAILED] {healthMsg}");
+                            return false;
+                        }
+
+                        if (healthState == (int)DismImageHealthState.Repairable)
+                        {
+                            logger?.Invoke($"[DISM] Image is repairable. Attempting RestoreHealth: {healthMsg}");
+                            progressCallback?.Invoke(95, "Repairing image...");
+
+                            var repairMsg = new StringBuilder(1024);
+                            int repairResult = RestoreBackupImageHealth(
+                                backupPath,
+                                1,
+                                null,
+                                0,
+                                false,
+                                repairMsg,
+                                repairMsg.Capacity,
+                                nativeCallback);
+
+                            if (repairResult != 0)
+                            {
+                                logger?.Invoke($"[DISM REPAIR FAILED] Result code: {repairResult}");
+                                logger?.Invoke($"[DISM REPAIR FAILED] {repairMsg}");
+                                return false;
+                            }
+
+                            logger?.Invoke($"[DISM] Repair completed: {repairMsg}");
+                        }
+                        else if (healthState == (int)DismImageHealthState.NonRepairable)
+                        {
+                            logger?.Invoke($"[DISM VERIFY FAILED] Image is non-repairable: {healthMsg}");
+                            return false;
+                        }
+                        else
+                        {
+                            logger?.Invoke($"[DISM VERIFY PASSED] {healthMsg}");
+                        }
+
+                        progressCallback?.Invoke(100, "Verification completed successfully!");
+                        logger?.Invoke($"Backup verification completed successfully: {job.Name}");
+                        return true;
                     }
-                    else if (healthState == (int)DismImageHealthState.NonRepairable)
+                    catch (Exception ex)
                     {
-                        logger?.Invoke($"[DISM VERIFY FAILED] Image is non-repairable: {healthMsg}");
+                        logger?.Invoke($"Verification failed with exception: {ex.Message}");
                         return false;
                     }
-                    else
-                    {
-                        logger?.Invoke($"[DISM VERIFY PASSED] {healthMsg}");
-                    }
-
-                    progressCallback?.Invoke(100, "Verification completed successfully!");
-                    logger?.Invoke($"Backup verification completed successfully: {job.Name}");
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    logger?.Invoke($"Verification failed with exception: {ex.Message}");
-                    return false;
-                }
-            }, cancellationToken);
+                }, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                NativeExecutionLock.Release();
+            }
         }
 
-        private string? _currentJobName;
-
-        private void LogFromEngine(int level, string message, string details)
+        private static void LogFromEngine(string jobName, int level, string message, string details)
         {
-            var jobName = _currentJobName ?? "Unknown";
-
-            // Map integer level to BackupLogLevel enum
-            // 0=Info, 1=Success, 2=Warning, 3=Error
             switch (level)
             {
                 case 0: // Info
@@ -564,15 +508,10 @@ namespace SecureServerBackupService
             }
         }
 
-        private int ExecuteBackup(BackupJob job, string sourcePath, string destPath, 
-            ProgressCallback? callback, Action<string>? logger)
+        private int ExecuteBackup(BackupJob job, string sourcePath, string destPath,
+            ProgressCallback? progressCallback, LogCallback logCallback, Action<string>? logger)
         {
             int result;
-
-            // Store delegates as instance variables to prevent garbage collection during P/Invoke
-            // This prevents AccessViolationException caused by delegate cleanup mid-operation
-            _currentLogCallback = LogFromEngine;
-            _currentProgressCallback = callback;
 
             // Convert user exclusions to array for P/Invoke (empty array if null)
             string[] exclusionsArray = job.UserExclusions?.ToArray() ?? Array.Empty<string>();
@@ -623,7 +562,7 @@ namespace SecureServerBackupService
                         logger?.Invoke($"[DIAGNOSTIC] About to call BackupDisk({diskNumber}, {destPath}, {job.IncludeSystemState}, {job.CompressData}, exclusions: {exclusionCount})");
 
                         result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
-                                          exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                                          exclusionsArray, exclusionCount, progressCallback, logCallback);
 
                         // DIAGNOSTIC: Log result code immediately
                         logger?.Invoke($"[DIAGNOSTIC] BackupDisk returned: {result}");
@@ -638,12 +577,12 @@ namespace SecureServerBackupService
                     {
                         logger?.Invoke($"Backing up volume: {sourcePath}");
                         result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
-                                            exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                                            exclusionsArray, exclusionCount, progressCallback, logCallback);
                     }
                     else
                     {
                         logger?.Invoke($"Backing up files: {sourcePath}");
-                        result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                        result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, progressCallback, logCallback);
                     }
                     break;
 
@@ -663,7 +602,7 @@ namespace SecureServerBackupService
                     {
                         logger?.Invoke($"Creating incremental disk backup (WIM referential): {diskNumber}");
                         result = BackupDiskIncremental(diskNumber, destPath, job.IncludeSystemState, job.CompressData,
-                            exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                            exclusionsArray, exclusionCount, progressCallback, logCallback);
 
                         if (result != 0)
                         {
@@ -674,7 +613,7 @@ namespace SecureServerBackupService
                     {
                         logger?.Invoke($"No base backup found. Creating initial full backup: {diskNumber}");
                         result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
-                                          exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                                          exclusionsArray, exclusionCount, progressCallback, logCallback);
 
                         if (result != 0)
                         {
@@ -697,11 +636,11 @@ namespace SecureServerBackupService
                         if (job.Target == BackupTarget.Volume)
                         {
                             result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
-                                                exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                                                exclusionsArray, exclusionCount, progressCallback, logCallback);
                         }
                         else
                         {
-                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, progressCallback, logCallback);
                         }
                     }
                     else
@@ -709,7 +648,7 @@ namespace SecureServerBackupService
                         // Find the most recent backup (could be full, incremental, or differential) to base the incremental on
                         var lastBackup = FindLastBackup(job.DestinationPath, job.Name) ?? fullBackupBase;
                         logger?.Invoke($"Creating incremental backup from: {lastBackup}");
-                        result = CreateIncrementalBackup(sourcePath, destPath, lastBackup, _currentProgressCallback);
+                        result = CreateIncrementalBackup(sourcePath, destPath, lastBackup, progressCallback);
                     }
                 }
                 break;
@@ -730,7 +669,7 @@ namespace SecureServerBackupService
                     {
                         logger?.Invoke($"Creating differential disk backup (WIM referential): {diskNumber}");
                         result = BackupDiskDifferential(diskNumber, destPath, job.IncludeSystemState, job.CompressData,
-                            exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                            exclusionsArray, exclusionCount, progressCallback, logCallback);
 
                         if (result != 0)
                         {
@@ -741,7 +680,7 @@ namespace SecureServerBackupService
                     {
                         logger?.Invoke($"No base backup found. Creating initial full backup: {diskNumber}");
                         result = BackupDisk(diskNumber, destPath, job.IncludeSystemState, job.CompressData, 
-                                          exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                                          exclusionsArray, exclusionCount, progressCallback, logCallback);
 
                         if (result != 0)
                         {
@@ -764,17 +703,17 @@ namespace SecureServerBackupService
                         if (job.Target == BackupTarget.Volume)
                         {
                             result = BackupVolume(sourcePath, destPath, job.IncludeSystemState, job.CompressData,
-                                                exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                                                exclusionsArray, exclusionCount, progressCallback, logCallback);
                         }
                         else
                         {
-                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, _currentProgressCallback, _currentLogCallback);
+                            result = BackupFiles(sourcePath, destPath, exclusionsArray, exclusionCount, progressCallback, logCallback);
                         }
                     }
                     else
                     {
                         logger?.Invoke($"Creating differential backup from: {fullBackup}");
-                        result = CreateDifferentialBackup(sourcePath, destPath, fullBackup, _currentProgressCallback);
+                        result = CreateDifferentialBackup(sourcePath, destPath, fullBackup, progressCallback);
                     }
                 }
                 break;
@@ -783,11 +722,6 @@ namespace SecureServerBackupService
                     result = -1;
                     break;
             }
-
-            // Clear delegate references to allow garbage collection
-            // This prevents memory leaks after backup operations complete
-            _currentProgressCallback = null;
-            _currentLogCallback = null;
 
             return result;
         }

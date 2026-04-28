@@ -103,15 +103,6 @@ private:
             return false;
         }
 
-    bool IsMetadataAwareSsbBackup(const std::string& path) {
-        if (!IsSsbBackup(path)) {
-            return false;
-        }
-
-        std::string info = CaptureCommandOutput("wimlib-imagex info '" + path + "' --detailed 2>/dev/null");
-        return info.find("BACKUPRESTOREMETADATA") != std::string::npos;
-    }
-
         try {
             plan.sourceDiskNumber = std::stoi(diskNumber);
             plan.sourceDiskSizeBytes = std::stoull(readTag("SOURCE_DISK_SIZE_BYTES"));
@@ -137,11 +128,20 @@ private:
         }
     }
 
+    bool IsMetadataAwareSsbBackup(const std::string& path) {
+        if (!IsSsbBackup(path)) {
+            return false;
+        }
+
+        std::string info = CaptureCommandOutput("wimlib-imagex info '" + path + "' --detailed 2>/dev/null");
+        return info.find("BACKUPRESTOREMETADATA") != std::string::npos;
+    }
+
     int RestoreDisk(const std::string& backupPath,
                     const std::string& targetDisk,
                     ProgressCallback callback) {
         try {
-            return WithPreparedBackup<int>(backupPath, [&](const std::string& workingPath) {
+            return WithPreparedBackup(backupPath, [&](const std::string& workingPath) {
                 if (!fs::exists(workingPath)) {
                     SetError("Backup path does not exist: " + workingPath);
                     return -1;
@@ -228,6 +228,14 @@ private:
             return 0;
         }
 
+        try {
+            return std::stoull(output);
+        }
+        catch (...) {
+            return 0;
+        }
+    }
+
     int RestoreDiskFromMetadata(const std::string& ssbPath,
                                 const std::string& targetDisk,
                                 ProgressCallback callback) {
@@ -262,7 +270,8 @@ private:
             std::string mountPoint = "/mnt/backup_restore_partition_" + std::to_string(i + 1);
 
             if (callback) {
-                callback(10 + static_cast<int>((i * 80) / plans.size()), "Restoring partition " + std::to_string(plan.partitionNumber == 0 ? i + 1 : plan.partitionNumber));
+                std::string restoreMessage = "Restoring partition " + std::to_string(plan.partitionNumber == 0 ? i + 1 : plan.partitionNumber);
+                callback(10 + static_cast<int>((i * 80) / plans.size()), restoreMessage.c_str());
             }
 
             if (!MountAndRestorePartition(partitionDevice, mountPoint, plan, ssbPath)) {
@@ -270,7 +279,8 @@ private:
             }
 
             if (callback) {
-                callback(10 + static_cast<int>(((i + 1) * 80) / plans.size()), "Restored partition " + std::to_string(plan.partitionNumber == 0 ? i + 1 : plan.partitionNumber));
+                std::string restoredMessage = "Restored partition " + std::to_string(plan.partitionNumber == 0 ? i + 1 : plan.partitionNumber);
+                callback(10 + static_cast<int>(((i + 1) * 80) / plans.size()), restoredMessage.c_str());
             }
         }
 
@@ -279,13 +289,6 @@ private:
         }
 
         return 0;
-    }
-        try {
-            return std::stoull(output);
-        }
-        catch (...) {
-            return 0;
-        }
     }
 
     bool RunCommand(const std::string& cmd, std::string* output = nullptr) {
@@ -664,7 +667,7 @@ public:
                      const std::string& destPath, 
                      bool overwriteExisting) {
         try {
-            return WithPreparedBackup<int>(backupPath, [&](const std::string& workingPath) {
+            return WithPreparedBackup(backupPath, [&](const std::string& workingPath) {
                 ReportProgress(0, "Starting file restore...");
 
                 if (!fs::exists(workingPath)) {
@@ -1041,7 +1044,7 @@ public:
         std::vector<RestoreItem> tree;
 
         try {
-            WithPreparedBackup<int>(backupPath, [&](const std::string& workingPath) {
+            WithPreparedBackup(backupPath, [&](const std::string& workingPath) {
                 if (!fs::exists(workingPath)) {
                     SetError("Backup path does not exist");
                     return 0;
@@ -1190,23 +1193,31 @@ public:
                             hasSystemState = fs::exists(sourcePath + "/SystemState");
                         } catch (...) {}
 
-                if (hasDiskImage) {
-                    if (callback) {
-                        callback(percentage, "Disk image detected: " + item);
-                    }
+                        if (hasDiskImage) {
+                            if (callback) {
+                                callback(percentage, "Disk image detected: " + item);
+                            }
 
-                    if (IsMetadataAwareSsbBackup(sourcePath)) {
-                        if (callback) {
-                            callback(percentage, "Metadata-aware disk restore available");
+                            if (IsMetadataAwareSsbBackup(sourcePath)) {
+                                if (callback) {
+                                    callback(percentage, "Metadata-aware disk restore available");
+                                }
+
+                                ProgressCallback diskCallback = nullptr;
+                                if (callback) {
+                                    diskCallback = [](int progress, const char* message) {
+                                        std::cout << "[" << progress << "%] " << (message == nullptr ? "" : message) << std::endl;
+                                    };
+                                }
+
+                                RestoreDisk(sourcePath, targetPath, diskCallback);
+                            } else {
+                                if (callback) {
+                                    callback(percentage, "WARNING: Legacy disk backups without reconstruction metadata cannot be restored automatically");
+                                    callback(percentage, "Skipping automatic disk restore - create a new backup with reconstruction metadata");
+                                }
+                            }
                         }
-                        RestoreDisk(sourcePath, targetPath, callback);
-                    } else {
-                        if (callback) {
-                            callback(percentage, "WARNING: Legacy disk backups without reconstruction metadata cannot be restored automatically");
-                            callback(percentage, "Skipping automatic disk restore - create a new backup with reconstruction metadata");
-                        }
-                    }
-                }
                         else if (hasSystemState) {
                             // This is a Windows system state backup
                             // Linux can't restore Windows registry/BCD, but can restore files

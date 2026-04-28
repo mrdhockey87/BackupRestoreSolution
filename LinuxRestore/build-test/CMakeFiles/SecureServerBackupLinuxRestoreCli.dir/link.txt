@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/SecureServerBackupLinuxRestoreCli.dir/restore_cli.cpp.o -o SecureServerBackupLinuxRestoreCli  librestore_engine.a -lstdc++fs 

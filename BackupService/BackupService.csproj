@@ -6,7 +6,7 @@
   <Platforms>x64</Platforms>
   <RootNamespace>SecureServerBackupService</RootNamespace>
   <AssemblyName>SecureServerBackupService</AssemblyName>
-  <Win32Resource>E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\BackupUI\Assets\SSB_LogoWinIcosM.res</Win32Resource>
+  <Win32Resource>E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\BackupService\Resources\SSB_LogoWinIcosM.res</Win32Resource>
   <AssemblyTitle>SecureServerBackupService</AssemblyTitle>
   <!-- Version, OutputPath, and Runtime config generation come from Directory.Build.props -->
 </PropertyGroup>
