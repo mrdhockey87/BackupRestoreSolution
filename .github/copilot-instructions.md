@@ -2,7 +2,7 @@
 
 ## General Guidelines
 - When making phased code changes, continue through and fix build errors before pausing so the current implementation compiles cleanly.
-- Always update `Directory.Build.props` and `BackupUI/VersionClass.cs` version numbers/notes for restore workflow changes, and keep the newest release note at the top of the notes block.
+- Always apply the Version Tracker skill for version updates and follow its exact output/update requirements, including updating `Directory.Build.props` and `BackupUI/VersionClass.cs` version numbers/notes for restore workflow changes. Keep the newest release note at the top of the notes block.
 - When a plan is created, continue executing the planned investigation or fix instead of stopping after announcing the first step.
 
 ## Backup Password Management
