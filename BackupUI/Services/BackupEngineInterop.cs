@@ -39,6 +39,18 @@ namespace SecureServerBackup.Services
             ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int BackupHyperVVMIncremental(
+            string vmName,
+            string destPath,
+            ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int BackupHyperVVMDifferential(
+            string vmName,
+            string destPath,
+            ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int DeleteSnapshot(string snapshotId);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]

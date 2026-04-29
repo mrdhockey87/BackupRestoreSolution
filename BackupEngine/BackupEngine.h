@@ -101,6 +101,18 @@ extern "C" {
         const wchar_t* destPath,
         ProgressCallback callback);
 
+    // Backup a Hyper-V Virtual Machine incrementally by creating a new point linked to the last backup
+    BACKUPENGINE_API int BackupHyperVVMIncremental(
+        const wchar_t* vmName,
+        const wchar_t* destPath,
+        ProgressCallback callback);
+
+    // Backup a Hyper-V Virtual Machine differentially by creating a new point linked to the last full backup
+    BACKUPENGINE_API int BackupHyperVVMDifferential(
+        const wchar_t* vmName,
+        const wchar_t* destPath,
+        ProgressCallback callback);
+
     // Delete a VSS snapshot
     BACKUPENGINE_API int DeleteSnapshot(
         const wchar_t* snapshotId);

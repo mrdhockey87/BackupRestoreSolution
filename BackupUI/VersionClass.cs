@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.67";
+        private static readonly string version_fallback_number = "6.2.3.70";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,14 @@ namespace SecureServerBackup
 
 /*
  * 
+ * Version 6.2.3.70 Added tests for Hyper-V backup mode selection and Hyper-V restore-point helper path resolution.
+ *                  mdail 4/29/2026
+ * Version 6.2.3.69 Added Hyper-V restore target selection so Hyper-V backup points can restore as Hyper-V VMs,
+ *                  guest files, guest volumes, or prepared physical disks, and updated LinuxRestore to detect and
+ *                  restore Hyper-V backup-point export folders. mdail 4/29/2026
+ * Version 6.2.3.68 Added true Hyper-V full, incremental, and differential backup routing with directory-based
+ *                  backup points, restore/verify discovery for Hyper-V .ssb folders, and restore path resolution
+ *                  for the new Hyper-V export layout. mdail 4/29/2026
  * Version 6.2.3.67 Added managed and native automated test coverage, a repeatable Run-Tests.ps1 workflow,
  *                  optional WSL LinuxRestore test execution, and fixed the LinuxRestore restore_engine compile issues found by the new tests. mdail 4/28/2026
  * Version 6.2.3.66 Hardened decrypted temp backup cleanup and changed activity log writes to atomic shared-file

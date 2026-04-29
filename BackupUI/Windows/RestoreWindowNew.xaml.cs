@@ -8,6 +8,8 @@ using System.Management;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.Xml.Linq;
 using System.Windows.Forms;
 using SecureServerBackupCommon;
 using SecureServerBackup.Models;
@@ -20,7 +22,8 @@ namespace SecureServerBackup.Windows
     {
         FileOrFolder,
         Volume,
-        Disk
+        Disk,
+        HyperVVm
     }
 
     public partial class RestoreWindowNew : Window
@@ -34,6 +37,129 @@ namespace SecureServerBackup.Windows
         private string? _selectedTargetPath;
         private int? _selectedTargetDiskNumber;
         private NativeBackupMountManager.RestoreDiskPlan? _diskRestorePlan;
+        private bool _isHyperVBackupPoint;
+
+        public static class HyperVRestorePointHelper
+        {
+            public static bool IsHyperVBackupPoint(string path)
+            {
+                return Directory.Exists(path) && File.Exists(Path.Combine(path, "hyperv_backup_info.txt"));
+            }
+
+            public static string? ResolveExportPath(string backupPointPath)
+            {
+                if (!Directory.Exists(backupPointPath))
+                {
+                    return null;
+                }
+
+                string exportFolder = Path.Combine(backupPointPath, "Export");
+                if (Directory.Exists(exportFolder))
+                {
+                    return exportFolder;
+                }
+
+                string metadataPath = Path.Combine(backupPointPath, "hyperv_backup_info.txt");
+                if (!File.Exists(metadataPath))
+                {
+                    return null;
+                }
+
+                foreach (string line in File.ReadLines(metadataPath))
+                {
+                    string[] parts = line.Split('=', 2);
+                    if (parts.Length == 2 && string.Equals(parts[0].Trim(), "ExportPath", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string exportPath = parts[1].Trim();
+                        return Directory.Exists(exportPath) ? exportPath : null;
+                    }
+                }
+
+                return null;
+            }
+
+            public static string? FindPrimaryVirtualDisk(string backupPointPath)
+            {
+                string? exportPath = ResolveExportPath(backupPointPath);
+                if (string.IsNullOrWhiteSpace(exportPath) || !Directory.Exists(exportPath))
+                {
+                    return null;
+                }
+
+                string[] virtualDisks = Directory.GetFiles(exportPath, "*.vhd*", SearchOption.AllDirectories);
+                if (virtualDisks.Length == 0)
+                {
+                    return null;
+                }
+
+                return virtualDisks
+                    .Select(path => new FileInfo(path))
+                    .OrderByDescending(file => file.Length)
+                    .ThenBy(file => file.FullName)
+                    .Select(file => file.FullName)
+                    .FirstOrDefault();
+            }
+
+            public static string ResolveVmName(string backupPointPath)
+            {
+                try
+                {
+                    string? exportPath = ResolveExportPath(backupPointPath);
+                    if (string.IsNullOrWhiteSpace(exportPath) || !Directory.Exists(exportPath))
+                    {
+                        return Path.GetFileNameWithoutExtension(backupPointPath);
+                    }
+
+                    string configFile = Directory.GetFiles(exportPath, "*.xml", SearchOption.AllDirectories)
+                        .FirstOrDefault(file =>
+                            string.Equals(Path.GetFileName(Path.GetDirectoryName(file)), "Virtual Machines", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(file) ?? string.Empty)), "Virtual Machines", StringComparison.OrdinalIgnoreCase));
+
+                    if (string.IsNullOrWhiteSpace(configFile) || !File.Exists(configFile))
+                    {
+                        return Path.GetFileNameWithoutExtension(backupPointPath);
+                    }
+
+                    XDocument document = XDocument.Load(configFile);
+                    string? vmName = document.Descendants()
+                        .FirstOrDefault(element => string.Equals(element.Name.LocalName, "Name", StringComparison.OrdinalIgnoreCase))
+                        ?.Value;
+
+                    return string.IsNullOrWhiteSpace(vmName)
+                        ? Path.GetFileNameWithoutExtension(backupPointPath)
+                        : vmName.Trim();
+                }
+                catch
+                {
+                    return Path.GetFileNameWithoutExtension(backupPointPath);
+                }
+            }
+        }
+
+        private sealed class MountedVirtualDiskScope : IDisposable
+        {
+            private readonly string _virtualDiskPath;
+            private bool _disposed;
+
+            public MountedVirtualDiskScope(string virtualDiskPath, string driveRoot)
+            {
+                _virtualDiskPath = virtualDiskPath;
+                DriveRoot = driveRoot;
+            }
+
+            public string DriveRoot { get; }
+
+            public void Dispose()
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                BackupMountManager.UnmountVirtualDisk(_virtualDiskPath);
+                _disposed = true;
+            }
+        }
 
         public RestoreWindowNew()
         {
@@ -41,6 +167,34 @@ namespace SecureServerBackup.Windows
             rbRestoreSelected.Checked += (s, e) => pnlItemSelection.Visibility = Visibility.Visible;
             rbRestoreAll.Checked += (s, e) => pnlItemSelection.Visibility = Visibility.Collapsed;
             Loaded += RestoreWindowNew_Loaded;
+        }
+
+        private static DateTime GetEntryTimestamp(string path)
+        {
+            return File.Exists(path)
+                ? File.GetCreationTime(path)
+                : Directory.GetCreationTime(path);
+        }
+
+        private MountedVirtualDiskScope MountPrimaryHyperVVirtualDisk(string backupPointPath)
+        {
+            string? virtualDiskPath = HyperVRestorePointHelper.FindPrimaryVirtualDisk(backupPointPath);
+            if (string.IsNullOrWhiteSpace(virtualDiskPath))
+            {
+                throw new InvalidOperationException("No VHD or VHDX guest disk was found in the selected Hyper-V backup point.");
+            }
+
+            var mountResult = BackupMountManager.MountVirtualDiskReadOnly(virtualDiskPath);
+            if (!mountResult.Success || string.IsNullOrWhiteSpace(mountResult.DriveLetter))
+            {
+                throw new InvalidOperationException($"Failed to mount the Hyper-V guest disk: {mountResult.Error}");
+            }
+
+            string driveRoot = mountResult.DriveLetter.EndsWith(":", StringComparison.Ordinal)
+                ? mountResult.DriveLetter + "\\"
+                : mountResult.DriveLetter;
+
+            return new MountedVirtualDiskScope(virtualDiskPath, driveRoot);
         }
 
         public RestoreWindowNew(AvailableBackupInfo backup, bool requireAlternateDestination)
@@ -190,8 +344,10 @@ namespace SecureServerBackup.Windows
                     }
                     else if (Directory.Exists(path))
                     {
-                        // Directory - find all backup files
+                        // Directory - find all backup files and Hyper-V backup point folders
                         backupFiles.AddRange(Directory.GetFiles(path, "*.ssb", SearchOption.AllDirectories));
+                        backupFiles.AddRange(Directory.GetDirectories(path, "*.ssb", SearchOption.AllDirectories)
+                            .Where(HyperVRestorePointHelper.IsHyperVBackupPoint));
                         backupFiles.AddRange(Directory.GetFiles(path, "*.bak", SearchOption.AllDirectories));
                         backupFiles.AddRange(Directory.GetFiles(path, "*.backup", SearchOption.AllDirectories));
                     }
@@ -229,43 +385,46 @@ namespace SecureServerBackup.Windows
             int pointNumber = 1;
 
             // Full backups
-            foreach (var fullBackup in fullBackups.OrderBy(f => File.GetCreationTime(f)))
+            foreach (var fullBackup in fullBackups.OrderBy(GetEntryTimestamp))
             {
+                DateTime timestamp = GetEntryTimestamp(fullBackup);
                 restorePoints.Add(new RestorePoint
                 {
                     DisplayName = $"Point {pointNumber}: Full Backup",
-                    Description = $"Created: {File.GetCreationTime(fullBackup):yyyy-MM-dd HH:mm:ss}",
+                    Description = $"Created: {timestamp:yyyy-MM-dd HH:mm:ss}",
                     BackupType = "Full",
                     FilePath = fullBackup,
-                    Timestamp = File.GetCreationTime(fullBackup)
+                    Timestamp = timestamp
                 });
                 pointNumber++;
             }
 
             // Incremental backups
-            foreach (var incBackup in incrementalBackups.OrderBy(f => File.GetCreationTime(f)))
+            foreach (var incBackup in incrementalBackups.OrderBy(GetEntryTimestamp))
             {
+                DateTime timestamp = GetEntryTimestamp(incBackup);
                 restorePoints.Add(new RestorePoint
                 {
                     DisplayName = $"Point {pointNumber}: Incremental Backup",
-                    Description = $"Created: {File.GetCreationTime(incBackup):yyyy-MM-dd HH:mm:ss}",
+                    Description = $"Created: {timestamp:yyyy-MM-dd HH:mm:ss}",
                     BackupType = "Incremental",
                     FilePath = incBackup,
-                    Timestamp = File.GetCreationTime(incBackup)
+                    Timestamp = timestamp
                 });
                 pointNumber++;
             }
 
             // Differential backups
-            foreach (var diffBackup in differentialBackups.OrderBy(f => File.GetCreationTime(f)))
+            foreach (var diffBackup in differentialBackups.OrderBy(GetEntryTimestamp))
             {
+                DateTime timestamp = GetEntryTimestamp(diffBackup);
                 restorePoints.Add(new RestorePoint
                 {
                     DisplayName = $"Point {pointNumber}: Differential Backup",
-                    Description = $"Created: {File.GetCreationTime(diffBackup):yyyy-MM-dd HH:mm:ss}",
+                    Description = $"Created: {timestamp:yyyy-MM-dd HH:mm:ss}",
                     BackupType = "Differential",
                     FilePath = diffBackup,
-                    Timestamp = File.GetCreationTime(diffBackup)
+                    Timestamp = timestamp
                 });
                 pointNumber++;
             }
@@ -273,15 +432,16 @@ namespace SecureServerBackup.Windows
             // If no specific types found, add all files as restore points
             if (restorePoints.Count == 0 && backupFiles.Count > 0)
             {
-                foreach (var file in backupFiles.OrderBy(f => File.GetCreationTime(f)))
+                foreach (var file in backupFiles.OrderBy(GetEntryTimestamp))
                 {
+                    DateTime timestamp = GetEntryTimestamp(file);
                     restorePoints.Add(new RestorePoint
                     {
                         DisplayName = $"Point {pointNumber}: Backup",
-                        Description = $"File: {Path.GetFileName(file)} - {File.GetCreationTime(file):yyyy-MM-dd HH:mm:ss}",
+                        Description = $"File: {Path.GetFileName(file)} - {timestamp:yyyy-MM-dd HH:mm:ss}",
                         BackupType = "Unknown",
                         FilePath = file,
-                        Timestamp = File.GetCreationTime(file)
+                        Timestamp = timestamp
                     });
                     pointNumber++;
                 }
@@ -290,12 +450,58 @@ namespace SecureServerBackup.Windows
 
         private void UpdateBackupInfo()
         {
-            var totalSize = backupFiles.Sum(f => new FileInfo(f).Length);
+            long totalSize = 0;
+            foreach (var backupFile in backupFiles)
+            {
+                if (File.Exists(backupFile))
+                {
+                    totalSize += new FileInfo(backupFile).Length;
+                }
+                else if (Directory.Exists(backupFile))
+                {
+                    totalSize += Directory.EnumerateFiles(backupFile, "*", SearchOption.AllDirectories)
+                        .Select(file => new FileInfo(file).Length)
+                        .Sum();
+                }
+            }
+
             var sizeGB = totalSize / (1024.0 * 1024.0 * 1024.0);
 
             txtBackupInfo.Text = $"Found {backupFiles.Count} backup file(s)\n" +
                                 $"Total size: {sizeGB:F2} GB\n" +
                                 $"Restore points available: {restorePoints.Count}";
+        }
+
+        private string CreateVolumeOnDiskForHyperVRestore(int diskNumber)
+        {
+            var script = $"$diskNumber={diskNumber}; Clear-Disk -Number $diskNumber -RemoveData -RemoveOEM -Confirm:$false -ErrorAction Stop; Initialize-Disk -Number $diskNumber -PartitionStyle GPT -ErrorAction Stop; $partition = New-Partition -DiskNumber $diskNumber -UseMaximumSize -AssignDriveLetter -ErrorAction Stop; Format-Volume -Partition $partition -FileSystem NTFS -NewFileSystemLabel 'SSBRestore' -Confirm:$false -Force -ErrorAction Stop | Out-Null; ($partition | Get-Volume).DriveLetter";
+
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string output = process?.StandardOutput.ReadToEnd() ?? string.Empty;
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Failed to prepare the target disk for Hyper-V guest restore. {errors}".Trim());
+            }
+
+            string driveLetter = output.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(driveLetter))
+            {
+                throw new InvalidOperationException("The target disk was prepared, but no drive letter was assigned to the new restore volume.");
+            }
+
+            return driveLetter.EndsWith(":", StringComparison.Ordinal) ? driveLetter + "\\" : driveLetter + ":\\";
         }
 
         private async void RestorePoints_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -314,6 +520,7 @@ namespace SecureServerBackup.Windows
             {
                 try
                 {
+                    _isHyperVBackupPoint = HyperVRestorePointHelper.IsHyperVBackupPoint(backupFile);
                     var buffer = new StringBuilder(32768);
                     using var preparedBackup = EncryptedBackupFileService.PrepareForRead(this, backupFile, Path.GetFileNameWithoutExtension(backupFile));
                     int result = BackupEngineInterop.ListBackupContents(preparedBackup.WorkingPath, buffer, buffer.Capacity);
@@ -337,6 +544,12 @@ namespace SecureServerBackup.Windows
                                 lstBackupItems.SelectedIndex = 0;
                             }
 
+                            if (_isHyperVBackupPoint && string.IsNullOrWhiteSpace(txtHyperVVmName.Text))
+                            {
+                                txtHyperVVmName.Text = HyperVRestorePointHelper.ResolveVmName(backupFile);
+                            }
+
+                            UpdateHyperVRestoreMode();
                             LoadDiskRestorePlan(preparedBackup.WorkingPath);
                             UpdateSelectedRestoreTargetKind();
                         });
@@ -378,6 +591,33 @@ namespace SecureServerBackup.Windows
             UpdateDestinationHelpText();
         }
 
+        private void HyperVRestoreTarget_Changed(object sender, RoutedEventArgs e)
+        {
+            UpdateSelectedRestoreTargetKind();
+        }
+
+        private void UpdateHyperVRestoreMode()
+        {
+            if (pnlHyperVRestoreMode == null || pnlHyperVVmOptions == null)
+            {
+                return;
+            }
+
+            pnlHyperVRestoreMode.Visibility = _isHyperVBackupPoint ? Visibility.Visible : Visibility.Collapsed;
+
+            if (!_isHyperVBackupPoint)
+            {
+                pnlHyperVVmOptions.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            if (cmbHyperVRestoreTarget.SelectedItem is ComboBoxItem selectedItem)
+            {
+                bool isHyperVVm = string.Equals(selectedItem.Tag?.ToString(), "HyperVVm", StringComparison.OrdinalIgnoreCase);
+                pnlHyperVVmOptions.Visibility = isHyperVVm ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
         private void RestoreItems_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             UpdateSelectedRestoreTargetKind();
@@ -396,6 +636,23 @@ namespace SecureServerBackup.Windows
                     txtRestoreDestination.Text = diskWindow.SelectedDisk.DisplayName;
                     _restoreTargetKind = RestoreTargetKind.Disk;
                 }
+                return;
+            }
+
+            if (_restoreTargetKind == RestoreTargetKind.HyperVVm)
+            {
+                using var hyperVFolderDialog = new FolderBrowserDialog
+                {
+                    Description = "Select Hyper-V virtual machine storage folder",
+                    ShowNewFolderButton = true
+                };
+
+                if (hyperVFolderDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    _selectedTargetPath = hyperVFolderDialog.SelectedPath;
+                    txtRestoreDestination.Text = hyperVFolderDialog.SelectedPath;
+                }
+
                 return;
             }
 
@@ -611,9 +868,33 @@ namespace SecureServerBackup.Windows
                 return false;
             }
 
+            if (_restoreTargetKind == RestoreTargetKind.HyperVVm)
+            {
+                if (string.IsNullOrWhiteSpace(txtRestoreDestination.Text))
+                {
+                    MessageBox.Show("Please select the Hyper-V virtual machine storage folder.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(txtHyperVVmName.Text))
+                {
+                    MessageBox.Show("Please enter a virtual machine name.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+            }
+
             if (_restoreTargetKind == RestoreTargetKind.Volume && string.IsNullOrWhiteSpace(_selectedTargetPath) && string.IsNullOrWhiteSpace(txtRestoreDestination.Text))
             {
                 MessageBox.Show("Please select the target volume to restore to.", "Validation Error",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            if (_isHyperVBackupPoint && (_restoreTargetKind == RestoreTargetKind.Disk || _restoreTargetKind == RestoreTargetKind.Volume) && HyperVRestorePointHelper.FindPrimaryVirtualDisk(((RestorePoint)lstRestorePoints.SelectedItem!).FilePath) == null)
+            {
+                MessageBox.Show("The selected Hyper-V backup point does not contain a guest VHD or VHDX file that can be restored to a disk or volume target.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
@@ -632,6 +913,22 @@ namespace SecureServerBackup.Windows
             if (selectedPoint == null)
             {
                 _restoreTargetKind = RestoreTargetKind.FileOrFolder;
+                UpdateDestinationHelpText();
+                return;
+            }
+
+            if (_isHyperVBackupPoint && cmbHyperVRestoreTarget?.SelectedItem is ComboBoxItem selectedRestoreMode)
+            {
+                string restoreMode = selectedRestoreMode.Tag?.ToString() ?? "Files";
+                _restoreTargetKind = restoreMode switch
+                {
+                    "Disk" => RestoreTargetKind.Disk,
+                    "Volume" => RestoreTargetKind.Volume,
+                    "HyperVVm" => RestoreTargetKind.HyperVVm,
+                    _ => RestoreTargetKind.FileOrFolder
+                };
+
+                UpdateHyperVRestoreMode();
                 UpdateDestinationHelpText();
                 return;
             }
@@ -666,6 +963,7 @@ namespace SecureServerBackup.Windows
             {
                 RestoreTargetKind.Disk => "Disk restore: choose a target disk. It will be formatted and repartitioned before restore.",
                 RestoreTargetKind.Volume => "Volume restore: choose a target volume. It will be formatted before restore.",
+                RestoreTargetKind.HyperVVm => "Hyper-V restore: import the selected Hyper-V backup point as a virtual machine on this host.",
                 _ => "File/folder restore: choose a destination folder, or restore to the original location if allowed."
             };
         }

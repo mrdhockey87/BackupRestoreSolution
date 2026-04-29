@@ -203,6 +203,9 @@ PKG_CONFIG_ARGN:STRING=
 //pkg-config executable
 PKG_CONFIG_EXECUTABLE:FILEPATH=PKG_CONFIG_EXECUTABLE-NOTFOUND
 
+//Build the ncurses-based Linux restore TUI
+SSB_RESTORE_BUILD_TUI:BOOL=ON
+
 //Value Computed by CMake
 SecureServerBackupLinuxRestore_BINARY_DIR:STATIC=E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build
 

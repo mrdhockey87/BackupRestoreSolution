@@ -1,6 +1,6 @@
 # Backup & Restore - Linux Recovery USB
 
-**Version 5.13.7.0** (Updated with WIM/.ssb backup support and encrypted backup restore support)
+**Version 5.13.7.0** (Updated with WIM/.ssb backup support, encrypted backup restore support, and Hyper-V backup-point browsing)
 
 A lightweight, bootable Linux-based restore solution that works with backups created by the Backup & Restore Windows application.
 
@@ -12,6 +12,7 @@ A lightweight, bootable Linux-based restore solution that works with backups cre
 ✓ **NTFS Support** - Can restore to Windows partitions  
 ✓ **WIM Support** - Extracts .ssb/.wim backup files (NEW in 5.13.7.0)
 ✓ **Encrypted Backup Support** - Prompts for password and restores AES-128 encrypted .ssb backups
+✓ **Hyper-V Backup Point Support** - Detects Hyper-V `.ssb` folders and restores exported VM files
 ✓ **Intelligent Restore** - Auto-detects disk/volume/file backups
 ✓ **Two Interfaces** - Terminal UI (TUI) or command-line (CLI)  
 ✓ **Self-Contained** - Everything needed on one USB drive  
@@ -32,6 +33,7 @@ The restore engine now supports the unified WIM backup format:
 
 The restore engine automatically detects backup types:
 - **WIM Archives** (.ssb, .wim) - Extracts using wimlib-imagex
+- **Hyper-V Backup Point Directories** - Restores exported VM files and guest disks as files
 - **Disk Images** (.img files) - Warns about manual restore requirement
 - **Volume Backups** (with SystemState) - Restores files, notes system state is Windows-only
 - **Directories** - Standard file restore

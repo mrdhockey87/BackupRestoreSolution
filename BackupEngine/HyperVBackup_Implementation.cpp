@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <shlwapi.h>
+#include <cwchar>
 
 #pragma comment(lib, "wbemuuid.lib")
 #pragma comment(lib, "shlwapi.lib")
@@ -18,6 +19,192 @@
 namespace fs = std::filesystem;
 
 extern void SetLastErrorMessage(const std::wstring& error);
+
+namespace {
+    struct HyperVBackupPointInfo {
+        std::wstring Type;
+        std::wstring PointId;
+        std::wstring ParentPath;
+        std::wstring VmName;
+        std::wstring ExportPath;
+        bool IsValid = false;
+    };
+
+    constexpr wchar_t HyperVMetadataFileName[] = L"hyperv_backup_info.txt";
+
+    std::wstring TrimWhitespace(const std::wstring& value) {
+        size_t start = value.find_first_not_of(L" \t\r\n");
+        if (start == std::wstring::npos) {
+            return L"";
+        }
+
+        size_t end = value.find_last_not_of(L" \t\r\n");
+        return value.substr(start, end - start + 1);
+    }
+
+    std::wstring GetTimestampId() {
+        SYSTEMTIME localTime = {};
+        GetLocalTime(&localTime);
+
+        wchar_t buffer[32] = {};
+        swprintf_s(
+            buffer,
+            L"%04u%02u%02u_%02u%02u%02u",
+            localTime.wYear,
+            localTime.wMonth,
+            localTime.wDay,
+            localTime.wHour,
+            localTime.wMinute,
+            localTime.wSecond);
+
+        return buffer;
+    }
+
+    std::wstring CombinePath(const std::wstring& root, const std::wstring& child) {
+        return (fs::path(root) / child).wstring();
+    }
+
+    std::wstring GetMetadataPath(const std::wstring& backupPointPath) {
+        return CombinePath(backupPointPath, HyperVMetadataFileName);
+    }
+
+    std::wstring GetExportRootPath(const std::wstring& backupPointPath) {
+        return CombinePath(backupPointPath, L"Export");
+    }
+
+    bool IsHyperVBackupPointDirectory(const fs::path& path) {
+        if (!fs::is_directory(path)) {
+            return false;
+        }
+
+        std::error_code ec;
+        return fs::exists(path / HyperVMetadataFileName, ec);
+    }
+
+    bool TryReadHyperVBackupPointInfo(const std::wstring& backupPointPath, HyperVBackupPointInfo& info) {
+        std::wifstream stream(GetMetadataPath(backupPointPath));
+        if (!stream.is_open()) {
+            return false;
+        }
+
+        info = {};
+        info.ExportPath = GetExportRootPath(backupPointPath);
+
+        std::wstring line;
+        while (std::getline(stream, line)) {
+            size_t separatorIndex = line.find(L'=');
+            if (separatorIndex == std::wstring::npos) {
+                continue;
+            }
+
+            std::wstring key = TrimWhitespace(line.substr(0, separatorIndex));
+            std::wstring value = TrimWhitespace(line.substr(separatorIndex + 1));
+
+            if (_wcsicmp(key.c_str(), L"Type") == 0) {
+                info.Type = value;
+            }
+            else if (_wcsicmp(key.c_str(), L"PointId") == 0) {
+                info.PointId = value;
+            }
+            else if (_wcsicmp(key.c_str(), L"ParentPath") == 0) {
+                info.ParentPath = value;
+            }
+            else if (_wcsicmp(key.c_str(), L"VmName") == 0) {
+                info.VmName = value;
+            }
+        }
+
+        info.IsValid = !info.Type.empty() && !info.PointId.empty();
+        return info.IsValid;
+    }
+
+    bool WriteHyperVBackupPointInfo(
+        const std::wstring& backupPointPath,
+        const std::wstring& backupType,
+        const std::wstring& pointId,
+        const std::wstring& vmName,
+        const std::wstring& parentPath) {
+
+        std::wofstream stream(GetMetadataPath(backupPointPath), std::ios::trunc);
+        if (!stream.is_open()) {
+            return false;
+        }
+
+        stream << L"Type=" << backupType << L'\n';
+        stream << L"PointId=" << pointId << L'\n';
+        stream << L"VmName=" << vmName << L'\n';
+        stream << L"ExportPath=" << GetExportRootPath(backupPointPath) << L'\n';
+        if (!parentPath.empty()) {
+            stream << L"ParentPath=" << parentPath << L'\n';
+        }
+
+        return stream.good();
+    }
+
+    std::wstring FindNewestHyperVBackupPoint(const std::wstring& backupRootPath) {
+        if (!fs::exists(backupRootPath) || !fs::is_directory(backupRootPath)) {
+            return L"";
+        }
+
+        std::vector<fs::directory_entry> entries;
+        for (const auto& entry : fs::directory_iterator(backupRootPath)) {
+            if (IsHyperVBackupPointDirectory(entry.path())) {
+                entries.push_back(entry);
+            }
+        }
+
+        if (entries.empty()) {
+            return L"";
+        }
+
+        std::sort(
+            entries.begin(),
+            entries.end(),
+            [](const fs::directory_entry& left, const fs::directory_entry& right) {
+                return fs::last_write_time(left) > fs::last_write_time(right);
+            });
+
+        return entries.front().path().wstring();
+    }
+
+    std::wstring FindLatestHyperVBackupPointByType(const std::wstring& backupRootPath, const std::wstring& desiredType) {
+        if (!fs::exists(backupRootPath) || !fs::is_directory(backupRootPath)) {
+            return L"";
+        }
+
+        std::vector<fs::directory_entry> entries;
+        for (const auto& entry : fs::directory_iterator(backupRootPath)) {
+            if (!IsHyperVBackupPointDirectory(entry.path())) {
+                continue;
+            }
+
+            HyperVBackupPointInfo info;
+            if (TryReadHyperVBackupPointInfo(entry.path().wstring(), info) && _wcsicmp(info.Type.c_str(), desiredType.c_str()) == 0) {
+                entries.push_back(entry);
+            }
+        }
+
+        if (entries.empty()) {
+            return L"";
+        }
+
+        std::sort(
+            entries.begin(),
+            entries.end(),
+            [](const fs::directory_entry& left, const fs::directory_entry& right) {
+                return fs::last_write_time(left) > fs::last_write_time(right);
+            });
+
+        return entries.front().path().wstring();
+    }
+
+    int ExecuteHyperVBackupPoint(
+        const wchar_t* vmName,
+        const wchar_t* backupRootPath,
+        const std::wstring& backupType,
+        const std::wstring& parentPath,
+        ProgressCallback callback);
+}
 
 // Helper to execute WMI method
 HRESULT ExecuteWMIMethod(IWbemServices* pSvc, const std::wstring& objectPath,
@@ -105,16 +292,61 @@ extern "C" BACKUPENGINE_API int BackupHyperVVM(
     const wchar_t* destPath,
     ProgressCallback callback) {
 
+    return ExecuteHyperVBackupPoint(vmName, destPath, L"Full", L"", callback);
+}
+
+extern "C" BACKUPENGINE_API int BackupHyperVVMIncremental(
+    const wchar_t* vmName,
+    const wchar_t* destPath,
+    ProgressCallback callback) {
+
     if (!vmName || !destPath) {
         SetLastErrorMessage(L"Invalid parameters");
         return -1;
     }
 
-    HRESULT hr = CoInitializeEx(0, COINIT_MULTITHREADED);
-    bool coinitCalled = SUCCEEDED(hr);
+    std::wstring latestPoint = FindNewestHyperVBackupPoint(destPath);
+    return ExecuteHyperVBackupPoint(vmName, destPath, latestPoint.empty() ? L"Full" : L"Incremental", latestPoint, callback);
+}
 
-    CComPtr<IWbemLocator> pLoc;
-    CComPtr<IWbemServices> pSvc;
+extern "C" BACKUPENGINE_API int BackupHyperVVMDifferential(
+    const wchar_t* vmName,
+    const wchar_t* destPath,
+    ProgressCallback callback) {
+
+    if (!vmName || !destPath) {
+        SetLastErrorMessage(L"Invalid parameters");
+        return -1;
+    }
+
+    std::wstring latestFullPoint = FindLatestHyperVBackupPointByType(destPath, L"Full");
+    return ExecuteHyperVBackupPoint(vmName, destPath, latestFullPoint.empty() ? L"Full" : L"Differential", latestFullPoint, callback);
+}
+
+namespace {
+    int ExecuteHyperVBackupPoint(
+        const wchar_t* vmName,
+        const wchar_t* backupRootPath,
+        const std::wstring& backupType,
+        const std::wstring& parentPath,
+        ProgressCallback callback) {
+
+        if (!vmName || !backupRootPath) {
+            SetLastErrorMessage(L"Invalid parameters");
+            return -1;
+        }
+
+        std::wstring backupRoot = backupRootPath;
+        std::wstring pointId = GetTimestampId();
+        std::wstring backupPointName = backupType + L"_" + pointId + L".ssb";
+        std::wstring backupPointPath = CombinePath(backupRoot, backupPointName);
+        std::wstring exportPath = GetExportRootPath(backupPointPath);
+
+        HRESULT hr = CoInitializeEx(0, COINIT_MULTITHREADED);
+        bool coinitCalled = SUCCEEDED(hr);
+
+        CComPtr<IWbemLocator> pLoc;
+        CComPtr<IWbemServices> pSvc;
 
     try {
         // Create WMI locator
@@ -190,11 +422,14 @@ extern "C" BACKUPENGINE_API int BackupHyperVVM(
             return -1;
         }
 
-        if (callback) callback(30, L"Preparing export...");
+        if (callback) {
+            std::wstring status = L"Preparing " + backupType + L" Hyper-V backup point...";
+            callback(30, status.c_str());
+        }
 
         // Create destination directory
         try {
-            fs::create_directories(destPath);
+            fs::create_directories(exportPath);
         }
         catch (const std::exception& e) {
             std::wstring error = L"Failed to create destination directory: ";
@@ -246,7 +481,7 @@ extern "C" BACKUPENGINE_API int BackupHyperVVM(
         }
 
         // Set ExportDirectory parameter
-        CComVariant varPath(destPath);
+        CComVariant varPath(exportPath.c_str());
         hr = pInParams->Put(L"ExportDirectory", 0, &varPath, 0);
         if (FAILED(hr)) {
             SetLastErrorMessage(L"Failed to set ExportDirectory parameter");
@@ -266,7 +501,10 @@ extern "C" BACKUPENGINE_API int BackupHyperVVM(
         CComVariant varSubdir(true);
         pInParams->Put(L"CreateVmExportSubdirectory", 0, &varSubdir, 0);
 
-        if (callback) callback(40, L"Starting export...");
+        if (callback) {
+            std::wstring status = L"Starting " + backupType + L" export...";
+            callback(40, status.c_str());
+        }
 
         // Execute export
         CComPtr<IWbemClassObject> pOutParams;
@@ -294,7 +532,7 @@ extern "C" BACKUPENGINE_API int BackupHyperVVM(
             
             if (returnValue == 0) {
                 // Success
-                if (callback) callback(100, L"Export completed successfully");
+                if (callback) callback(95, L"Finalizing Hyper-V backup metadata...");
             }
             else if (returnValue == 4096) {
                 // Job started - need to wait for completion
@@ -322,7 +560,7 @@ extern "C" BACKUPENGINE_API int BackupHyperVVM(
                                 // 7 = Completed, 10 = Failed, 32768 = CompletedWithWarnings
                                 if (jobState == 7 || jobState == 32768) {
                                     jobComplete = true;
-                                    if (callback) callback(100, L"Export completed");
+                                    if (callback) callback(95, L"Export completed. Finalizing metadata...");
                                 }
                                 else if (jobState == 10) {
                                     SetLastErrorMessage(L"Export job failed");
@@ -359,7 +597,17 @@ extern "C" BACKUPENGINE_API int BackupHyperVVM(
             }
         }
 
+        if (!WriteHyperVBackupPointInfo(backupPointPath, backupType, pointId, vmName, parentPath)) {
+            SetLastErrorMessage(L"Failed to write Hyper-V backup metadata");
+            if (coinitCalled) CoUninitialize();
+            return -1;
+        }
+
         if (coinitCalled) CoUninitialize();
+        if (callback) {
+            std::wstring status = backupType + L" Hyper-V backup completed successfully";
+            callback(100, status.c_str());
+        }
         return 0;
     }
     catch (const std::exception& e) {
@@ -373,5 +621,6 @@ extern "C" BACKUPENGINE_API int BackupHyperVVM(
         SetLastErrorMessage(L"Unknown exception during Hyper-V export");
         if (coinitCalled) CoUninitialize();
         return -1;
+    }
     }
 }

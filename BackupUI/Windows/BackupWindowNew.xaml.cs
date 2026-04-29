@@ -2039,8 +2039,7 @@ namespace SecureServerBackup.Windows
                     // Execute based on job type
                     if (job.IsHyperVBackup && job.HyperVMachines.Count > 0)
                     {
-                        // Hyper-V VM backup - use job name for .ssb file (matches service behavior)
-                        var vmDestPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+                        var vmDestPath = job.DestinationPath;
 
                         foreach (var vmName in job.HyperVMachines)
                         {
@@ -2049,10 +2048,21 @@ namespace SecureServerBackup.Windows
                                 txtProgress.Text = $"Backing up Hyper-V VM: {vmName}...";
                             });
 
-                            result = BackupEngineInterop.BackupHyperVVM(
-                                vmName,
-                                vmDestPath,
-                                progressCallback);
+                            result = job.Type switch
+                            {
+                                BackupType.Incremental => BackupEngineInterop.BackupHyperVVMIncremental(
+                                    vmName,
+                                    vmDestPath,
+                                    progressCallback),
+                                BackupType.Differential => BackupEngineInterop.BackupHyperVVMDifferential(
+                                    vmName,
+                                    vmDestPath,
+                                    progressCallback),
+                                _ => BackupEngineInterop.BackupHyperVVM(
+                                    vmName,
+                                    vmDestPath,
+                                    progressCallback)
+                            };
 
                             if (result != 0)
                             {
@@ -2201,7 +2211,7 @@ namespace SecureServerBackup.Windows
                         txtProgress.Text = "Backup completed!";
                     });
 
-                    if (job.EncryptBackup)
+                    if (job.EncryptBackup && job.Target != BackupTarget.HyperV)
                     {
                         string backupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
                         string password = BackupEncryptionService.UnprotectPassword(job.ProtectedEncryptionPassword);
@@ -2443,6 +2453,9 @@ namespace SecureServerBackup.Windows
 
         private void CollectSelectedHyperVMachines(BackupJob job)
         {
+            job.IsHyperVBackup = true;
+            job.Target = BackupTarget.HyperV;
+
             foreach (var drive in driveItems)
             {
                 if (drive.ItemType == DriveTreeItemType.HyperVSystem && drive.IsChecked == true)
@@ -2478,7 +2491,7 @@ namespace SecureServerBackup.Windows
                     }
                     else if (drive.ItemType == DriveTreeItemType.HyperVSystem)
                     {
-                        job.IsHyperVBackup = true;
+                        job.Target = BackupTarget.HyperV;
                         job.HyperVMachines.Add(drive.FullPath);
                     }
                 }
@@ -2517,6 +2530,12 @@ namespace SecureServerBackup.Windows
                 {
                     job.Target = BackupTarget.FilesAndFolders;
                 }
+            }
+
+            if (job.HyperVMachines.Count > 0)
+            {
+                job.IsHyperVBackup = true;
+                job.Target = BackupTarget.HyperV;
             }
         }
 
@@ -2572,19 +2591,20 @@ namespace SecureServerBackup.Windows
             }
 
             // Validate selections based on backup type
+            var selectedItems = GetCheckedDriveItems();
+            var selectedHyperV = selectedItems.Where(item => item.ItemType == DriveTreeItemType.HyperVSystem).ToList();
+            var selectedNonHyperV = selectedItems.Where(item => item.ItemType != DriveTreeItemType.HyperVSystem).ToList();
+
             if (rbCloneHyperV?.IsChecked == true)
             {
                 // Clone Hyper-V System: Must have at least one Hyper-V system selected, and ONLY Hyper-V systems
-                var selectedHyperV = driveItems.Where(d => d.ItemType == DriveTreeItemType.HyperVSystem && d.IsChecked == true).ToList();
-                var selectedOther = driveItems.Where(d => d.ItemType != DriveTreeItemType.HyperVSystem && d.IsChecked == true).ToList();
-                
                 if (selectedHyperV.Count == 0)
                 {
                     CustomDialogService.ShowWarning("Please select at least one Hyper-V system to clone.", "Validation Error");
                     return false;
                 }
                 
-                if (selectedOther.Count > 0)
+                if (selectedNonHyperV.Count > 0)
                 {
                     CustomDialogService.ShowWarning("Clone Hyper-V System can only clone Hyper-V systems.\n\nPlease unselect disks, volumes, and folders.", "Validation Error");
                     return false;
@@ -2592,21 +2612,16 @@ namespace SecureServerBackup.Windows
             }
             else
             {
-                // All other backup types: Must NOT have Hyper-V systems selected
-                var selectedHyperV = driveItems.Where(d => d.ItemType == DriveTreeItemType.HyperVSystem && d.IsChecked == true).ToList();
-                
-                if (selectedHyperV.Count > 0)
+                if (selectedHyperV.Count > 0 && selectedNonHyperV.Count > 0)
                 {
                     var backupTypeName = GetBackupTypeName();
-                    CustomDialogService.ShowWarning($"{backupTypeName} cannot include Hyper-V systems.\n\nPlease use 'Clone Hyper-V System' for Hyper-V backups, or unselect Hyper-V systems.", "Validation Error");
+                    CustomDialogService.ShowWarning($"{backupTypeName} cannot combine Hyper-V systems with disks, volumes, or folders.\n\nPlease select only Hyper-V systems or only disks, volumes, and folders.", "Validation Error");
                     return false;
                 }
-                
-                // Must have at least one disk/volume/folder selected
-                var anySelected = driveItems.Any(d => d.IsChecked == true || d.Children.Any(c => c.IsChecked == true));
-                if (!anySelected)
+
+                if (selectedHyperV.Count == 0 && selectedNonHyperV.Count == 0)
                 {
-                    CustomDialogService.ShowWarning("Please select at least one drive, volume, or folder to backup.", "Validation Error");
+                    CustomDialogService.ShowWarning("Please select at least one drive, volume, folder, or Hyper-V system to backup.", "Validation Error");
                     return false;
                 }
             }

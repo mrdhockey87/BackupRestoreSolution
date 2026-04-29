@@ -110,6 +110,27 @@ int main()
     engine.BackupCleanup(cleanupPath.string());
     allPassed &= Expect(!fs::exists(cleanupPath), "BackupCleanup should remove an existing temporary file.");
 
+    fs::path hyperVBackupPoint = fs::path(tempDirectory) / "Full_20260429_120000.ssb";
+    fs::path exportRoot = hyperVBackupPoint / "Export";
+    fs::create_directories(exportRoot);
+    fs::path metadataPath = hyperVBackupPoint / "hyperv_backup_info.txt";
+    {
+        std::ofstream metadataStream(metadataPath);
+        metadataStream << "Type=Full\n";
+        metadataStream << "PointId=20260429_120000\n";
+        metadataStream << "ExportPath=" << exportRoot.string() << "\n";
+    }
+
+    allPassed &= Expect(engine.IsHyperVBackupPointDirectory(hyperVBackupPoint.string()), "IsHyperVBackupPointDirectory should detect Hyper-V backup-point metadata.");
+    allPassed &= Expect(engine.ResolveHyperVExportPath(hyperVBackupPoint.string()) == exportRoot.string(), "ResolveHyperVExportPath should return the Hyper-V export folder from metadata.");
+
+    auto backupDates = engine.EnumerateBackupDates(tempDirectory);
+    auto hyperVDate = std::find_if(backupDates.begin(), backupDates.end(), [&](const RestoreEngine::BackupDate& date) {
+        return date.path == hyperVBackupPoint.string();
+    });
+    allPassed &= Expect(hyperVDate != backupDates.end(), "EnumerateBackupDates should include Hyper-V backup-point directories.");
+    allPassed &= Expect(hyperVDate != backupDates.end() && hyperVDate->type == "Hyper-V", "EnumerateBackupDates should label Hyper-V backup points distinctly.");
+
     fs::remove_all(tempDirectory);
     return allPassed ? 0 : 1;
 }

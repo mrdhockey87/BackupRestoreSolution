@@ -850,17 +850,22 @@ namespace SecureServerBackup
                         continue;
                     }
 
-                    var ssbFiles = Directory.GetFiles(destPath, "*.ssb", SearchOption.AllDirectories);
-                    foreach (var ssb in ssbFiles)
+                    var backupEntries = Directory.EnumerateFileSystemEntries(destPath, "*.ssb", SearchOption.AllDirectories);
+                    foreach (var ssb in backupEntries)
                     {
-                        var fileInfo = new FileInfo(ssb);
+                        DateTime backupDate = File.Exists(ssb)
+                            ? new FileInfo(ssb).LastWriteTime
+                            : Directory.GetLastWriteTime(ssb);
+
+                        bool isEncrypted = File.Exists(ssb) && BackupEncryptionService.IsEncryptedBackupFile(ssb);
+
                         backups.Add(new AvailableBackupInfo
                         {
                             BackupName = job.Name,
                             BackupType = GetBackupTypeFromFilename(Path.GetFileNameWithoutExtension(ssb)),
-                            BackupDate = fileInfo.LastWriteTime,
+                            BackupDate = backupDate,
                             BackupPath = ssb,
-                            IsEncrypted = BackupEncryptionService.IsEncryptedBackupFile(ssb),
+                            IsEncrypted = isEncrypted,
                             ProtectedEncryptionPassword = job.ProtectedEncryptionPassword
                         });
                     }
@@ -1867,17 +1872,19 @@ namespace SecureServerBackup
                     if (System.IO.Directory.Exists(destPath))
                     {
                         // Find .ssb (WIM backup) files
-                        var ssbFiles = System.IO.Directory.GetFiles(destPath, "*.ssb", System.IO.SearchOption.AllDirectories);
+                        var backupEntries = System.IO.Directory.EnumerateFileSystemEntries(destPath, "*.ssb", System.IO.SearchOption.AllDirectories);
 
-                        foreach (var ssb in ssbFiles)
+                        foreach (var ssb in backupEntries)
                         {
-                            var fileInfo = new System.IO.FileInfo(ssb);
+                            DateTime backupDate = System.IO.File.Exists(ssb)
+                                ? new System.IO.FileInfo(ssb).LastWriteTime
+                                : System.IO.Directory.GetLastWriteTime(ssb);
 
                             backups.Add(new AvailableBackupInfo
                             {
                                 BackupName = job.Name,
                                 BackupType = GetBackupTypeFromFilename(System.IO.Path.GetFileNameWithoutExtension(ssb)),
-                                BackupDate = fileInfo.LastWriteTime,
+                                BackupDate = backupDate,
                                 BackupPath = ssb
                             });
                         }

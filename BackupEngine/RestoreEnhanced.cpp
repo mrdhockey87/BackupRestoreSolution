@@ -43,6 +43,11 @@ std::wstring GetBackupType(const std::wstring& folderName) {
     return L"Full"; // Default
 }
 
+bool IsHyperVBackupPointDirectory(const fs::path& folderPath) {
+    std::error_code ec;
+    return fs::is_directory(folderPath, ec) && fs::exists(folderPath / L"hyperv_backup_info.txt", ec);
+}
+
 // Helper function to parse date from folder name
 // Format: Full_20260130_143000 or Incremental_20260130_143000
 bool ParseDateFromFolderName(const std::wstring& folderName, SYSTEMTIME& st) {
@@ -99,7 +104,8 @@ BACKUPENGINE_API int EnumerateBackupDates(
                 // Check if it looks like a backup folder
                 if (folderName.find(L"Full") != std::wstring::npos ||
                     folderName.find(L"Incremental") != std::wstring::npos ||
-                    folderName.find(L"Differential") != std::wstring::npos) {
+                    folderName.find(L"Differential") != std::wstring::npos ||
+                    IsHyperVBackupPointDirectory(entry.path())) {
                     backupFolders.push_back(entry);
                 }
             }

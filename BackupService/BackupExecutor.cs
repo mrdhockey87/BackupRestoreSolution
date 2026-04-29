@@ -16,6 +16,16 @@ namespace SecureServerBackupService
         private const string DllName = "SecureServerBackupEngine.dll";
         private static readonly SemaphoreSlim NativeExecutionLock = new(1, 1);
 
+        public static string GetHyperVBackupMode(BackupType backupType, bool hasExistingFullBackup, bool hasAnyExistingBackup)
+        {
+            return backupType switch
+            {
+                BackupType.Incremental when hasAnyExistingBackup => "Incremental",
+                BackupType.Differential when hasExistingFullBackup => "Differential",
+                _ => "Full"
+            };
+        }
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
 
@@ -78,6 +88,12 @@ namespace SecureServerBackupService
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupHyperVVM(string vmName, string destPath, ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private static extern int BackupHyperVVMIncremental(string vmName, string destPath, ProgressCallback? callback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private static extern int BackupHyperVVMDifferential(string vmName, string destPath, ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int CreateIncrementalBackup(string sourcePath, string destPath, 
@@ -252,7 +268,7 @@ namespace SecureServerBackupService
                             }
                         }
 
-                        if (job.IsHyperVBackup)
+                        if (job.IsHyperVBackup || job.Target == BackupTarget.HyperV)
                         {
                             foreach (var vm in job.HyperVMachines)
                             {
@@ -262,16 +278,21 @@ namespace SecureServerBackupService
                                     return false;
                                 }
 
-                                newBackupPath = Path.Combine(job.DestinationPath, $"{vm}.ssb");
-                                if ((job.Type == BackupType.Incremental || job.Type == BackupType.Differential) && !File.Exists(newBackupPath))
-                                {
-                                    logger?.Invoke($"No base backup exists. Creating initial full backup: {vm}.ssb");
-                                }
+                                newBackupPath = job.DestinationPath;
 
-                                logger?.Invoke($"Creating Hyper-V backup file: {Path.GetFileName(newBackupPath)}");
+                                logger?.Invoke($"Creating Hyper-V backup point in: {newBackupPath}");
                                 progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {vm}...");
 
-                                int result = BackupHyperVVM(vm, newBackupPath, nativeCallback);
+                                bool hasAnyExistingHyperVPoint = Directory.Exists(newBackupPath) && Directory.EnumerateDirectories(newBackupPath, "*.ssb", SearchOption.TopDirectoryOnly).Any();
+                                bool hasExistingFullHyperVPoint = Directory.Exists(newBackupPath) && Directory.EnumerateDirectories(newBackupPath, "Full_*.ssb", SearchOption.TopDirectoryOnly).Any();
+                                string hyperVBackupMode = GetHyperVBackupMode(job.Type, hasExistingFullHyperVPoint, hasAnyExistingHyperVPoint);
+
+                                int result = hyperVBackupMode switch
+                                {
+                                    "Incremental" => BackupHyperVVMIncremental(vm, newBackupPath, nativeCallback),
+                                    "Differential" => BackupHyperVVMDifferential(vm, newBackupPath, nativeCallback),
+                                    _ => BackupHyperVVM(vm, newBackupPath, nativeCallback)
+                                };
                                 if (result != 0)
                                 {
                                     var error = new StringBuilder(1024);
@@ -282,7 +303,7 @@ namespace SecureServerBackupService
                             }
                         }
 
-                        if (newBackupPath != null)
+                        if (newBackupPath != null && job.Target != BackupTarget.HyperV)
                         {
                             EncryptBackupFileIfNeeded(job, newBackupPath, progressCallback, logger);
                         }
@@ -398,6 +419,10 @@ namespace SecureServerBackupService
                             {
                                 expectedImageCount = -1;
                             }
+                        }
+                        else if (job.Target == BackupTarget.HyperV)
+                        {
+                            expectedImageCount = -1;
                         }
 
                         var errorMsg = new StringBuilder(1024);
@@ -542,6 +567,12 @@ namespace SecureServerBackupService
                     logger?.Invoke($"AUTO-CORRECT: Detected device path (Volume GUID) - changing from {job.Target} to Volume backup");
                     job.Target = BackupTarget.Volume;
                 }
+            }
+
+            if (job.Target == BackupTarget.HyperV)
+            {
+                logger?.Invoke($"Backing up Hyper-V virtual machine: {sourcePath}");
+                return BackupHyperVVM(sourcePath, destPath, progressCallback);
             }
 
             switch (job.Type)

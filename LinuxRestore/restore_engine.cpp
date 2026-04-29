@@ -68,6 +68,13 @@ private:
         return value.substr(start, end - start + 1);
     }
 
+    static bool EqualsIgnoreCase(const std::string& left, const std::string& right) {
+        return left.size() == right.size() &&
+            std::equal(left.begin(), left.end(), right.begin(), [](char a, char b) {
+                return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+            });
+    }
+
     static bool LooksLikeBlockDevice(const std::string& path) {
         return path.rfind("/dev/", 0) == 0;
     }
@@ -135,6 +142,49 @@ private:
 
         std::string info = CaptureCommandOutput("wimlib-imagex info '" + path + "' --detailed 2>/dev/null");
         return info.find("BACKUPRESTOREMETADATA") != std::string::npos;
+    }
+
+    bool IsHyperVBackupPointDirectory(const std::string& path) {
+        std::error_code ec;
+        fs::path directory(path);
+        return fs::is_directory(directory, ec) && fs::exists(directory / "hyperv_backup_info.txt", ec);
+    }
+
+    std::string ResolveHyperVExportPath(const std::string& backupPath) {
+        std::error_code ec;
+        fs::path candidate(backupPath);
+        if (!fs::exists(candidate, ec) || !fs::is_directory(candidate, ec)) {
+            return {};
+        }
+
+        fs::path exportPath = candidate / "Export";
+        if (fs::exists(exportPath, ec) && fs::is_directory(exportPath, ec)) {
+            return exportPath.string();
+        }
+
+        fs::path metadataPath = candidate / "hyperv_backup_info.txt";
+        if (!fs::exists(metadataPath, ec)) {
+            return {};
+        }
+
+        std::ifstream metadata(metadataPath);
+        std::string line;
+        while (std::getline(metadata, line)) {
+            size_t separator = line.find('=');
+            if (separator == std::string::npos) {
+                continue;
+            }
+
+            std::string key = Trim(line.substr(0, separator));
+            if (!EqualsIgnoreCase(key, "ExportPath")) {
+                continue;
+            }
+
+            std::string value = Trim(line.substr(separator + 1));
+            return fs::exists(value, ec) ? value : std::string();
+        }
+
+        return {};
     }
 
     int RestoreDisk(const std::string& backupPath,
@@ -704,6 +754,36 @@ public:
                     return 0;
                 }
 
+                if (IsHyperVBackupPointDirectory(workingPath)) {
+                    std::string exportPath = ResolveHyperVExportPath(workingPath);
+                    if (exportPath.empty()) {
+                        SetError("Hyper-V backup metadata was found, but the exported VM files could not be located.");
+                        return -3;
+                    }
+
+                    ReportProgress(5, "Detected Hyper-V backup point directory");
+                    try {
+                        fs::create_directories(destPath);
+                    } catch (const std::exception& e) {
+                        SetError(std::string("Failed to create destination: ") + e.what());
+                        return -1;
+                    }
+
+                    for (const auto& entry : fs::recursive_directory_iterator(exportPath)) {
+                        if (!entry.is_regular_file()) {
+                            continue;
+                        }
+
+                        fs::path relativePath = fs::relative(entry.path(), exportPath);
+                        fs::path targetPath = fs::path(destPath) / relativePath;
+                        fs::create_directories(targetPath.parent_path());
+                        fs::copy_file(entry.path(), targetPath, overwriteExisting ? fs::copy_options::overwrite_existing : fs::copy_options::skip_existing);
+                    }
+
+                    ReportProgress(100, "Hyper-V export restore complete!");
+                    return 0;
+                }
+
                 ReportProgress(5, "Detected folder-based backup (legacy format)");
 
                 try {
@@ -965,6 +1045,8 @@ public:
                     type = "Incremental";
                 } else if (folderName.find("Differential") != std::string::npos || folderName.find("differential") != std::string::npos) {
                     type = "Differential";
+                } else if (entry.is_directory() && IsHyperVBackupPointDirectory(entry.path().string())) {
+                    type = "Hyper-V";
                 } else if (entry.is_regular_file() && (entry.path().extension() == ".ssb" || entry.path().extension() == ".wim")) {
                     type = "Full";
                 } else {
@@ -1080,6 +1162,30 @@ public:
                     }
 
                     pclose(pipe);
+                    return 0;
+                }
+
+                if (IsHyperVBackupPointDirectory(workingPath)) {
+                    std::string exportPath = ResolveHyperVExportPath(workingPath);
+                    if (exportPath.empty()) {
+                        SetError("Hyper-V backup metadata was found, but the exported VM files could not be located.");
+                        return 0;
+                    }
+
+                    for (const auto& entry : fs::directory_iterator(exportPath)) {
+                        RestoreItem item;
+                        item.name = entry.path().filename().string();
+                        item.path = entry.path().string();
+                        item.type = entry.is_directory() ? "HyperVFolder" : "HyperVFile";
+                        item.checked = false;
+
+                        if (entry.is_directory()) {
+                            item.children = BuildTreeRecursive(entry.path().string(), 1);
+                        }
+
+                        tree.push_back(item);
+                    }
+
                     return 0;
                 }
 

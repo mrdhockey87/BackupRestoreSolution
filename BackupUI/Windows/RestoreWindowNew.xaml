@@ -134,6 +134,39 @@
 						Foreground="{StaticResource SecondaryText}"
 						Text="Select where the restore should be written."
 						TextWrapping="Wrap" />
+					<StackPanel
+						Name="pnlHyperVRestoreMode"
+						Margin="0,0,0,10"
+						Visibility="Collapsed">
+						<TextBlock
+							Margin="0,0,0,5"
+							FontWeight="Bold"
+							Text="Hyper-V Restore Target:" />
+						<ComboBox
+							Name="cmbHyperVRestoreTarget"
+							MinWidth="260"
+							SelectionChanged="HyperVRestoreTarget_Changed"
+							SelectedIndex="0">
+							<ComboBoxItem Content="Restore exported files/folders" Tag="Files" />
+							<ComboBoxItem Content="Restore guest disk to volume" Tag="Volume" />
+							<ComboBoxItem Content="Restore guest disk to disk" Tag="Disk" />
+							<ComboBoxItem Content="Restore as Hyper-V virtual machine" Tag="HyperVVm" />
+						</ComboBox>
+					</StackPanel>
+					<StackPanel
+						Name="pnlHyperVVmOptions"
+						Margin="0,0,0,10"
+						Visibility="Collapsed">
+						<TextBlock Margin="0,0,0,5" Text="Virtual machine name:" />
+						<TextBox
+							Name="txtHyperVVmName"
+							Height="25"
+							Margin="0,0,0,8" />
+						<CheckBox
+							Name="chkStartHyperVVm"
+							Content="Start the virtual machine after restore"
+							IsChecked="True" />
+					</StackPanel>
 					<RadioButton
 						Name="rbOriginalLocation"
 						Margin="0,0,0,5"

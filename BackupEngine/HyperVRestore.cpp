@@ -3,8 +3,12 @@
 #include <comdef.h>
 #include <Wbemidl.h>
 #include <string>
+#include <filesystem>
+#include <fstream>
 
 #pragma comment(lib, "wbemuuid.lib")
+
+namespace fs = std::filesystem;
 
 class HyperVRestorer {
 private:
@@ -328,6 +332,78 @@ public:
     const std::wstring& GetLastError() const { return lastError; }
 };
 
+namespace {
+    std::wstring TrimWhitespace(const std::wstring& value)
+    {
+        size_t start = value.find_first_not_of(L" \t\r\n");
+        if (start == std::wstring::npos)
+        {
+            return L"";
+        }
+
+        size_t end = value.find_last_not_of(L" \t\r\n");
+        return value.substr(start, end - start + 1);
+    }
+
+    std::wstring ReadMetadataValue(const fs::path& metadataPath, const wchar_t* key)
+    {
+        std::wifstream stream(metadataPath);
+        if (!stream.is_open())
+        {
+            return L"";
+        }
+
+        std::wstring line;
+        while (std::getline(stream, line))
+        {
+            size_t separatorIndex = line.find(L'=');
+            if (separatorIndex == std::wstring::npos)
+            {
+                continue;
+            }
+
+            std::wstring currentKey = TrimWhitespace(line.substr(0, separatorIndex));
+            if (_wcsicmp(currentKey.c_str(), key) == 0)
+            {
+                return TrimWhitespace(line.substr(separatorIndex + 1));
+            }
+        }
+
+        return L"";
+    }
+
+    std::wstring ResolveHyperVImportPath(const wchar_t* backupPath)
+    {
+        fs::path candidate(backupPath);
+        std::error_code ec;
+        if (!fs::exists(candidate, ec))
+        {
+            return L"";
+        }
+
+        if (fs::is_directory(candidate, ec))
+        {
+            fs::path exportPath = candidate / L"Export";
+            if (fs::exists(exportPath, ec) && fs::is_directory(exportPath, ec))
+            {
+                return exportPath.wstring();
+            }
+
+            fs::path metadataPath = candidate / L"hyperv_backup_info.txt";
+            if (fs::exists(metadataPath, ec))
+            {
+                std::wstring metadataExportPath = ReadMetadataValue(metadataPath, L"ExportPath");
+                if (!metadataExportPath.empty())
+                {
+                    return metadataExportPath;
+                }
+            }
+        }
+
+        return candidate.wstring();
+    }
+}
+
 extern "C" {
     BACKUPENGINE_API int RestoreHyperVVM(
         const wchar_t* backupPath,
@@ -339,7 +415,12 @@ extern "C" {
         try {
             HyperVRestorer restorer(callback);
 
-            int result = restorer.ImportVM(backupPath, vmName, vmStoragePath);
+            std::wstring importPath = ResolveHyperVImportPath(backupPath);
+            if (importPath.empty()) {
+                return -98;
+            }
+
+            int result = restorer.ImportVM(importPath.c_str(), vmName, vmStoragePath);
             if (result != 0) {
                 return result;
             }

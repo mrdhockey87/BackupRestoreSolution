@@ -4,6 +4,7 @@ namespace SecureServerBackupCommon
     {
         Disk,
         Volume,
-        FilesAndFolders
+        FilesAndFolders,
+        HyperV
     }
 }
