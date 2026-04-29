@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.70";
+        private static readonly string version_fallback_number = "6.2.3.71";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,8 @@ namespace SecureServerBackup
 
 /*
  * 
+ * Version 6.2.3.71 Added restore support to write regular full, incremental, differential, and file backups into
+ *                  Hyper-V VHDX targets and optionally attach the restored disk to an existing Hyper-V VM. mdail 4/29/2026
  * Version 6.2.3.70 Added tests for Hyper-V backup mode selection and Hyper-V restore-point helper path resolution.
  *                  mdail 4/29/2026
  * Version 6.2.3.69 Added Hyper-V restore target selection so Hyper-V backup points can restore as Hyper-V VMs,

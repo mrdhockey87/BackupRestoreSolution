@@ -23,7 +23,8 @@ namespace SecureServerBackup.Windows
         FileOrFolder,
         Volume,
         Disk,
-        HyperVVm
+        HyperVVm,
+        HyperVVirtualDisk
     }
 
     public partial class RestoreWindowNew : Window
@@ -38,6 +39,35 @@ namespace SecureServerBackup.Windows
         private int? _selectedTargetDiskNumber;
         private NativeBackupMountManager.RestoreDiskPlan? _diskRestorePlan;
         private bool _isHyperVBackupPoint;
+
+        public static class RegularHyperVRestoreHelper
+        {
+            public static bool SupportsHyperVVirtualDiskRestore(string selectedItemText)
+            {
+                if (string.IsNullOrWhiteSpace(selectedItemText))
+                {
+                    return false;
+                }
+
+                return selectedItemText.Contains("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase) ||
+                       selectedItemText.StartsWith("\\?\\", StringComparison.OrdinalIgnoreCase) ||
+                       selectedItemText.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase) ||
+                       selectedItemText.EndsWith(":\\", StringComparison.OrdinalIgnoreCase) ||
+                       selectedItemText.EndsWith(":", StringComparison.OrdinalIgnoreCase) ||
+                       selectedItemText.Contains("SystemState", StringComparison.OrdinalIgnoreCase);
+            }
+
+            public static string NormalizeHyperVVmName(string displayText)
+            {
+                if (string.IsNullOrWhiteSpace(displayText))
+                {
+                    return string.Empty;
+                }
+
+                int stateIndex = displayText.LastIndexOf(" (", StringComparison.Ordinal);
+                return stateIndex > 0 ? displayText[..stateIndex].Trim() : displayText.Trim();
+            }
+        }
 
         public static class HyperVRestorePointHelper
         {
@@ -549,6 +579,11 @@ namespace SecureServerBackup.Windows
                                 txtHyperVVmName.Text = HyperVRestorePointHelper.ResolveVmName(backupFile);
                             }
 
+                            if (!_isHyperVBackupPoint)
+                            {
+                                LoadAvailableHyperVVirtualMachines();
+                            }
+
                             UpdateHyperVRestoreMode();
                             LoadDiskRestorePlan(preparedBackup.WorkingPath);
                             UpdateSelectedRestoreTargetKind();
@@ -591,6 +626,17 @@ namespace SecureServerBackup.Windows
             UpdateDestinationHelpText();
         }
 
+        private void RegularHyperVRestoreOption_Changed(object sender, RoutedEventArgs e)
+        {
+            UpdateRegularHyperVRestoreMode();
+            UpdateSelectedRestoreTargetKind();
+        }
+
+        private void ExistingHyperVVmAttach_Changed(object sender, RoutedEventArgs e)
+        {
+            UpdateExistingHyperVVmOptions();
+        }
+
         private void HyperVRestoreTarget_Changed(object sender, RoutedEventArgs e)
         {
             UpdateSelectedRestoreTargetKind();
@@ -615,6 +661,77 @@ namespace SecureServerBackup.Windows
             {
                 bool isHyperVVm = string.Equals(selectedItem.Tag?.ToString(), "HyperVVm", StringComparison.OrdinalIgnoreCase);
                 pnlHyperVVmOptions.Visibility = isHyperVVm ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            UpdateRegularHyperVRestoreMode();
+        }
+
+        private void UpdateRegularHyperVRestoreMode()
+        {
+            if (chkRestoreToHyperVDisk == null || pnlRegularHyperVRestore == null)
+            {
+                return;
+            }
+
+            string selectedItemText = lstBackupItems.SelectedItem?.ToString() ?? string.Empty;
+            bool supportsRegularHyperV = !_isHyperVBackupPoint && RegularHyperVRestoreHelper.SupportsHyperVVirtualDiskRestore(selectedItemText);
+
+            chkRestoreToHyperVDisk.Visibility = supportsRegularHyperV ? Visibility.Visible : Visibility.Collapsed;
+
+            if (!supportsRegularHyperV)
+            {
+                chkRestoreToHyperVDisk.IsChecked = false;
+            }
+
+            pnlRegularHyperVRestore.Visibility = supportsRegularHyperV && chkRestoreToHyperVDisk.IsChecked == true
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+            UpdateExistingHyperVVmOptions();
+        }
+
+        private void UpdateExistingHyperVVmOptions()
+        {
+            if (pnlExistingHyperVVmOptions == null || chkAttachToExistingHyperVVm == null)
+            {
+                return;
+            }
+
+            bool visible = pnlRegularHyperVRestore.Visibility == Visibility.Visible && chkAttachToExistingHyperVVm.IsChecked == true;
+            pnlExistingHyperVVmOptions.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void LoadAvailableHyperVVirtualMachines()
+        {
+            if (cmbExistingHyperVVm == null)
+            {
+                return;
+            }
+
+            cmbExistingHyperVVm.Items.Clear();
+
+            try
+            {
+                var buffer = new StringBuilder(32768);
+                int result = BackupEngineInterop.EnumerateHyperVMachines(buffer, buffer.Capacity);
+                if (result != 0)
+                {
+                    return;
+                }
+
+                foreach (string vm in buffer.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    cmbExistingHyperVVm.Items.Add(vm.Trim());
+                }
+
+                if (cmbExistingHyperVVm.Items.Count > 0)
+                {
+                    cmbExistingHyperVVm.SelectedIndex = 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"LoadAvailableHyperVVirtualMachines warning: {ex.Message}");
             }
         }
 
@@ -656,6 +773,28 @@ namespace SecureServerBackup.Windows
                 return;
             }
 
+            if (_restoreTargetKind == RestoreTargetKind.HyperVVirtualDisk)
+            {
+                using var saveDialog = new SaveFileDialog
+                {
+                    Title = "Select Hyper-V virtual disk destination",
+                    Filter = "Hyper-V Virtual Disk (*.vhdx)|*.vhdx",
+                    DefaultExt = "vhdx",
+                    AddExtension = true,
+                    OverwritePrompt = false,
+                    CheckPathExists = true
+                };
+
+                if (saveDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    _selectedTargetPath = saveDialog.FileName;
+                    txtHyperVVirtualDiskPath.Text = saveDialog.FileName;
+                    txtRestoreDestination.Text = saveDialog.FileName;
+                }
+
+                return;
+            }
+
             if (_restoreTargetKind == RestoreTargetKind.Volume)
             {
                 var volumeWindow = new VolumeSelectionWindow(_bootProtectedTargets) { Owner = this };
@@ -678,6 +817,26 @@ namespace SecureServerBackup.Windows
             {
                 _selectedTargetPath = dialog.SelectedPath;
                 txtRestoreDestination.Text = dialog.SelectedPath;
+            }
+        }
+
+        private void BrowseHyperVVirtualDisk_Click(object sender, RoutedEventArgs e)
+        {
+            using var saveDialog = new SaveFileDialog
+            {
+                Title = "Select Hyper-V virtual disk destination",
+                Filter = "Hyper-V Virtual Disk (*.vhdx)|*.vhdx",
+                DefaultExt = "vhdx",
+                AddExtension = true,
+                OverwritePrompt = false,
+                CheckPathExists = true
+            };
+
+            if (saveDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                _selectedTargetPath = saveDialog.FileName;
+                txtHyperVVirtualDiskPath.Text = saveDialog.FileName;
+                txtRestoreDestination.Text = saveDialog.FileName;
             }
         }
 
@@ -800,6 +959,20 @@ namespace SecureServerBackup.Windows
                         }
                         break;
 
+                    case RestoreTargetKind.HyperVVm:
+                        result = BackupEngineInterop.RestoreHyperVVM(
+                            preparedBackup.WorkingPath,
+                            txtHyperVVmName.Text.Trim(),
+                            txtRestoreDestination.Text.Trim(),
+                            chkStartHyperVVm.IsChecked == true,
+                            callback);
+                        break;
+
+                    case RestoreTargetKind.HyperVVirtualDisk:
+                        RestoreToHyperVVirtualDisk(preparedBackup.WorkingPath, callback);
+                        result = 0;
+                        break;
+
                     default:
                         result = BackupEngineInterop.RestoreFiles(
                             preparedBackup.WorkingPath,
@@ -885,6 +1058,27 @@ namespace SecureServerBackup.Windows
                 }
             }
 
+            if (_restoreTargetKind == RestoreTargetKind.HyperVVirtualDisk)
+            {
+                if (string.IsNullOrWhiteSpace(txtHyperVVirtualDiskPath.Text))
+                {
+                    MessageBox.Show("Please select the Hyper-V virtual disk file to create or update.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                if (chkAttachToExistingHyperVVm.IsChecked == true)
+                {
+                    string selectedVm = cmbExistingHyperVVm.SelectedItem?.ToString() ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(selectedVm))
+                    {
+                        MessageBox.Show("Please select the existing Hyper-V virtual machine that should receive the restored virtual disk.", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return false;
+                    }
+                }
+            }
+
             if (_restoreTargetKind == RestoreTargetKind.Volume && string.IsNullOrWhiteSpace(_selectedTargetPath) && string.IsNullOrWhiteSpace(txtRestoreDestination.Text))
             {
                 MessageBox.Show("Please select the target volume to restore to.", "Validation Error",
@@ -933,6 +1127,13 @@ namespace SecureServerBackup.Windows
                 return;
             }
 
+            if (!_isHyperVBackupPoint && chkRestoreToHyperVDisk?.IsChecked == true)
+            {
+                _restoreTargetKind = RestoreTargetKind.HyperVVirtualDisk;
+                UpdateDestinationHelpText();
+                return;
+            }
+
             var selectedItemText = lstBackupItems.SelectedItem?.ToString() ?? string.Empty;
             if (selectedItemText.Contains("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase))
             {
@@ -964,8 +1165,164 @@ namespace SecureServerBackup.Windows
                 RestoreTargetKind.Disk => "Disk restore: choose a target disk. It will be formatted and repartitioned before restore.",
                 RestoreTargetKind.Volume => "Volume restore: choose a target volume. It will be formatted before restore.",
                 RestoreTargetKind.HyperVVm => "Hyper-V restore: import the selected Hyper-V backup point as a virtual machine on this host.",
+                RestoreTargetKind.HyperVVirtualDisk => "Hyper-V virtual disk restore: write the restored backup into a .vhdx file, then optionally attach that disk to an existing Hyper-V VM.",
                 _ => "File/folder restore: choose a destination folder, or restore to the original location if allowed."
             };
+        }
+
+        private void RestoreToHyperVVirtualDisk(string preparedBackupPath, BackupEngineInterop.ProgressCallback callback)
+        {
+            string virtualDiskPath = txtHyperVVirtualDiskPath.Text.Trim();
+            if (string.IsNullOrWhiteSpace(virtualDiskPath))
+            {
+                throw new InvalidOperationException("No Hyper-V virtual disk path was selected.");
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(virtualDiskPath) ?? throw new InvalidOperationException("Invalid Hyper-V virtual disk path."));
+
+            string selectedItemText = lstBackupItems.SelectedItem?.ToString() ?? string.Empty;
+            bool restoreAsDisk = selectedItemText.Contains("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase);
+            bool restoreAsVolume = !restoreAsDisk && (selectedItemText.StartsWith("\\?\\", StringComparison.OrdinalIgnoreCase) ||
+                selectedItemText.EndsWith(":\\", StringComparison.OrdinalIgnoreCase) ||
+                selectedItemText.EndsWith(":", StringComparison.OrdinalIgnoreCase));
+
+            callback(5, "Creating or preparing Hyper-V virtual disk...");
+            PrepareHyperVVirtualDiskFile(virtualDiskPath, restoreAsDisk);
+
+            callback(10, "Mounting Hyper-V virtual disk...");
+            var mountResult = BackupMountManager.MountVirtualDisk(virtualDiskPath, readOnly: false);
+            if (!mountResult.Success || string.IsNullOrWhiteSpace(mountResult.DriveLetter))
+            {
+                throw new InvalidOperationException($"Failed to mount the Hyper-V virtual disk: {mountResult.Error}");
+            }
+
+            string mountedDriveRoot = mountResult.DriveLetter.EndsWith(":", StringComparison.Ordinal)
+                ? mountResult.DriveLetter + "\\"
+                : mountResult.DriveLetter;
+
+            try
+            {
+                string targetVolumePath;
+                if (restoreAsDisk)
+                {
+                    callback(12, "Preparing virtual disk volume layout...");
+                    targetVolumePath = CreateVolumeOnDiskForHyperVRestore(GetDiskNumberForDriveLetter(mountedDriveRoot));
+                }
+                else
+                {
+                    targetVolumePath = mountedDriveRoot;
+                }
+
+                int result = restoreAsDisk
+                    ? (_diskRestorePlan?.HasMetadata == true
+                        ? BackupEngineInterop.RestoreDiskFromImage(preparedBackupPath, _diskRestorePlan.ImageIndex, GetDiskNumberForDriveLetter(mountedDriveRoot), false, callback)
+                        : BackupEngineInterop.RestoreDisk(preparedBackupPath, GetDiskNumberForDriveLetter(mountedDriveRoot), false, callback))
+                    : (restoreAsVolume
+                        ? (_diskRestorePlan?.HasMetadata == true
+                            ? BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, _diskRestorePlan.ImageIndex, targetVolumePath, false, callback)
+                            : BackupEngineInterop.RestoreVolume(preparedBackupPath, targetVolumePath, false, callback))
+                        : BackupEngineInterop.RestoreFiles(preparedBackupPath, targetVolumePath, chkOverwrite.IsChecked == true, callback));
+
+                if (result != 0)
+                {
+                    var error = new StringBuilder(1024);
+                    BackupEngineInterop.GetLastErrorMessage(error, error.Capacity);
+                    throw new InvalidOperationException($"Restore to Hyper-V virtual disk failed: {error}");
+                }
+            }
+            finally
+            {
+                BackupMountManager.UnmountVirtualDisk(virtualDiskPath);
+            }
+
+            if (chkAttachToExistingHyperVVm.IsChecked == true)
+            {
+                string vmName = RegularHyperVRestoreHelper.NormalizeHyperVVmName(cmbExistingHyperVVm.SelectedItem?.ToString() ?? string.Empty);
+                if (string.IsNullOrWhiteSpace(vmName))
+                {
+                    throw new InvalidOperationException("No Hyper-V virtual machine was selected for disk attachment.");
+                }
+
+                callback(95, $"Attaching restored virtual disk to Hyper-V VM '{vmName}'...");
+                AttachVirtualDiskToExistingHyperVVm(vmName, virtualDiskPath);
+            }
+        }
+
+        private static void PrepareHyperVVirtualDiskFile(string virtualDiskPath, bool createFixedDisk)
+        {
+            string diskType = createFixedDisk ? "Fixed" : "Dynamic";
+            long sizeBytes = createFixedDisk ? 137438953472L : 68719476736L;
+            string script = $"$path='{virtualDiskPath.Replace("'", "''")}'; if (Test-Path $path) {{ Dismount-DiskImage -ImagePath $path -ErrorAction SilentlyContinue; }} else {{ New-VHD -Path $path -SizeBytes {sizeBytes} -{diskType} | Out-Null; }}";
+
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            });
+
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Failed to prepare the Hyper-V virtual disk file. {errors}".Trim());
+            }
+        }
+
+        private static int GetDiskNumberForDriveLetter(string driveRoot)
+        {
+            string normalizedDrive = driveRoot.TrimEnd('\\');
+            string script = $"$partition = Get-Partition -DriveLetter '{normalizedDrive[0]}' -ErrorAction Stop; $partition.DiskNumber";
+
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string output = process?.StandardOutput.ReadToEnd() ?? string.Empty;
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0 || !int.TryParse(output.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault(), out int diskNumber))
+            {
+                throw new InvalidOperationException($"Failed to resolve the mounted Hyper-V virtual disk number. {errors}".Trim());
+            }
+
+            return diskNumber;
+        }
+
+        private static void AttachVirtualDiskToExistingHyperVVm(string vmName, string virtualDiskPath)
+        {
+            string escapedVmName = vmName.Replace("'", "''");
+            string escapedDiskPath = virtualDiskPath.Replace("'", "''");
+            string script = $"Add-VMHardDiskDrive -VMName '{escapedVmName}' -Path '{escapedDiskPath}' -ErrorAction Stop";
+
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Failed to attach the restored virtual disk to the selected Hyper-V virtual machine. {errors}".Trim());
+            }
         }
 
         private List<int> GetProtectedDiskIndexes()

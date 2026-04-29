@@ -37,6 +37,11 @@ namespace SecureServerBackup.Services
             return MountVHDX(vhdxPath, readOnly: true);
         }
 
+        public static (bool Success, string DriveLetter, string Error) MountVirtualDisk(string vhdxPath, bool readOnly)
+        {
+            return MountVHDX(vhdxPath, readOnly);
+        }
+
         public static (bool Success, string Error) UnmountVirtualDisk(string vhdxPath)
         {
             return UnmountVHDX(vhdxPath);
@@ -204,9 +209,11 @@ namespace SecureServerBackup.Services
         {
             try
             {
+                string accessMode = readOnly ? "ReadOnly" : "ReadWrite";
+
                 // Use PowerShell to mount the VHDX
                 string script = $@"
-                    $disk = Mount-DiskImage -ImagePath '{vhdxPath}' -Access ReadOnly -PassThru -ErrorAction Stop
+                    $disk = Mount-DiskImage -ImagePath '{vhdxPath}' -Access {accessMode} -PassThru -ErrorAction Stop
                     $partition = Get-Partition -DiskNumber $disk.Number | Where-Object {{ $_.DriveLetter }} | Sort-Object Size -Descending | Select-Object -First 1
                     if ($partition) {{
                         $partition.DriveLetter + ':'

@@ -167,6 +167,49 @@
 							Content="Start the virtual machine after restore"
 							IsChecked="True" />
 					</StackPanel>
+                    <CheckBox
+						Name="chkRestoreToHyperVDisk"
+						Margin="0,0,0,8"
+						Checked="RegularHyperVRestoreOption_Changed"
+						Content="Restore into a Hyper-V virtual disk (.vhdx)"
+						Unchecked="RegularHyperVRestoreOption_Changed"
+						Visibility="Collapsed" />
+					<StackPanel
+						Name="pnlRegularHyperVRestore"
+						Margin="0,0,0,10"
+						Visibility="Collapsed">
+						<TextBlock Margin="0,0,0,5" Text="Hyper-V virtual disk file:" />
+						<Grid Margin="0,0,0,8">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
+							<TextBox
+								Name="txtHyperVVirtualDiskPath"
+								Grid.Column="0"
+								Height="25"
+								Margin="0,0,5,0" />
+							<Button
+								Grid.Column="1"
+								Width="80"
+								Click="BrowseHyperVVirtualDisk_Click"
+								Content="Browse..." />
+						</Grid>
+						<CheckBox
+							Name="chkAttachToExistingHyperVVm"
+							Margin="0,0,0,8"
+							Checked="ExistingHyperVVmAttach_Changed"
+							Content="Attach the restored virtual disk to an existing Hyper-V virtual machine after restore"
+							Unchecked="ExistingHyperVVmAttach_Changed" />
+						<StackPanel
+							Name="pnlExistingHyperVVmOptions"
+							Visibility="Collapsed">
+							<TextBlock Margin="0,0,0,5" Text="Existing Hyper-V virtual machine:" />
+							<ComboBox
+								Name="cmbExistingHyperVVm"
+								MinWidth="260" />
+						</StackPanel>
+					</StackPanel>
 					<RadioButton
 						Name="rbOriginalLocation"
 						Margin="0,0,0,5"
