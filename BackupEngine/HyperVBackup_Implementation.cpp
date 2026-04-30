@@ -265,10 +265,24 @@ bool BuildHyperVExportSettingData(
         return false;
     }
 
-    CComVariant varCopyRuntime(VARIANT_TRUE);
+    CComVariant varCopyRuntime(VARIANT_FALSE);
     hr = pSettingInstance->Put(L"CopyVmRuntimeInformation", 0, &varCopyRuntime, 0);
     if (FAILED(hr)) {
         errorMessage = L"Failed to set CopyVmRuntimeInformation export setting: " + GetWmiErrorMessage(hr);
+        return false;
+    }
+
+    CComVariant varCaptureLiveState(static_cast<unsigned char>(0));
+    hr = pSettingInstance->Put(L"CaptureLiveState", 0, &varCaptureLiveState, 0);
+    if (FAILED(hr)) {
+        errorMessage = L"Failed to set CaptureLiveState export setting: " + GetWmiErrorMessage(hr);
+        return false;
+    }
+
+    CComVariant varCopySnapshotConfiguration(static_cast<unsigned char>(1));
+    hr = pSettingInstance->Put(L"CopySnapshotConfiguration", 0, &varCopySnapshotConfiguration, 0);
+    if (FAILED(hr)) {
+        errorMessage = L"Failed to set CopySnapshotConfiguration export setting: " + GetWmiErrorMessage(hr);
         return false;
     }
 

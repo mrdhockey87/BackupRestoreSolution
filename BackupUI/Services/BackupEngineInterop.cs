@@ -207,6 +207,11 @@ namespace SecureServerBackup.Services
             int bufferSize);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int EnumerateHyperVVirtualMachineDisks(
+            StringBuilder buffer,
+            int bufferSize);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int IsBootVolume(
             string volumePath,
             out bool isBootVolume);

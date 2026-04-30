@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Management;
+using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -31,6 +33,63 @@ namespace SecureServerBackup.Windows
         private bool _isUpdatingEncryptionPasswordDisplay;
         private string? _decryptedEncryptionPassword;
         private bool _windowHeightWasAutoAdjusted;
+        private readonly Dictionary<string, List<string>> _hyperVDiskMountDirectories = new(StringComparer.OrdinalIgnoreCase);
+        private string? _hyperVGuestMountRoot;
+
+        private sealed record MountedHyperVGuestExecutionPartition(int PartitionNumber, string MountPath, bool CreatedMountDirectory);
+
+        private sealed class MountedHyperVGuestExecutionDisk : IDisposable
+        {
+            private readonly List<MountedHyperVGuestExecutionPartition> _partitions;
+            private readonly string _mountRoot;
+
+            public MountedHyperVGuestExecutionDisk(string virtualDiskPath, string mountRoot, List<MountedHyperVGuestExecutionPartition> partitions)
+            {
+                VirtualDiskPath = virtualDiskPath;
+                _mountRoot = mountRoot;
+                _partitions = partitions;
+            }
+
+            public string VirtualDiskPath { get; }
+
+            public IReadOnlyList<MountedHyperVGuestExecutionPartition> Partitions => _partitions;
+
+            public void Dispose()
+            {
+                try
+                {
+                    RunPowerShell($"Dismount-DiskImage -ImagePath '{EscapePowerShellSingleQuotedString(VirtualDiskPath)}' -ErrorAction SilentlyContinue | Out-Null");
+                }
+                catch
+                {
+                }
+
+                foreach (MountedHyperVGuestExecutionPartition partition in _partitions.Where(partition => partition.CreatedMountDirectory))
+                {
+                    try
+                    {
+                        if (Directory.Exists(partition.MountPath))
+                        {
+                            Directory.Delete(partition.MountPath, recursive: true);
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                try
+                {
+                    if (Directory.Exists(_mountRoot))
+                    {
+                        Directory.Delete(_mountRoot, recursive: true);
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
 
         // Volume configuration tracking
         private bool hasSourceSelected = false;
@@ -59,12 +118,18 @@ namespace SecureServerBackup.Windows
                 
                 // Load drives after window is fully loaded
                 Loaded += BackupWindowNew_Loaded;
+                Closed += BackupWindowNew_Closed;
             }
             catch (Exception ex)
             {
                 CustomDialogService.ShowError($"Error initializing backup window: {ex.Message}\n\nStack Trace: {ex.StackTrace}", 
                     "Initialization Error");
             }
+        }
+
+        private void BackupWindowNew_Closed(object? sender, EventArgs e)
+        {
+            CleanupHyperVGuestMounts();
         }
 
         private void LoadJobData(BackupJob job)
@@ -229,8 +294,82 @@ namespace SecureServerBackup.Windows
         {
             foreach (var path in pathsToSelect)
             {
-                PreSelectItemRecursive(driveItems, path);
+                if (HyperVGuestSelectionPath.TryParse(path, out HyperVGuestSelectionInfo? guestSelection) && guestSelection != null)
+                {
+                    PreSelectHyperVGuestItem(guestSelection);
+                }
+                else
+                {
+                    PreSelectItemRecursive(driveItems, path);
+                }
             }
+        }
+
+        private void PreSelectHyperVGuestItem(HyperVGuestSelectionInfo selection)
+        {
+            DriveTreeItem? hyperVSystem = driveItems.FirstOrDefault(item =>
+                item.ItemType == DriveTreeItemType.HyperVSystem &&
+                string.Equals(item.VirtualMachineName, selection.VirtualMachineName, StringComparison.OrdinalIgnoreCase));
+            if (hyperVSystem == null)
+            {
+                return;
+            }
+
+            DriveTreeItem? virtualDiskItem = hyperVSystem.Children.FirstOrDefault(item =>
+                item.ItemType == DriveTreeItemType.HyperVVirtualDisk &&
+                string.Equals(item.VirtualDiskPath, selection.VirtualDiskPath, StringComparison.OrdinalIgnoreCase));
+            if (virtualDiskItem == null)
+            {
+                return;
+            }
+
+            if (selection.Kind == HyperVGuestSelectionKind.VirtualDisk)
+            {
+                virtualDiskItem.IsChecked = true;
+                return;
+            }
+
+            if (!virtualDiskItem.ChildrenLoaded)
+            {
+                LoadHyperVVirtualDiskChildren(virtualDiskItem);
+                virtualDiskItem.ChildrenLoaded = true;
+            }
+
+            DriveTreeItem? volumeItem = virtualDiskItem.Children.FirstOrDefault(item =>
+                item.ItemType == DriveTreeItemType.HyperVVolume &&
+                item.PartitionNumber == selection.PartitionNumber);
+            if (volumeItem == null)
+            {
+                return;
+            }
+
+            if (selection.Kind == HyperVGuestSelectionKind.Volume || string.IsNullOrWhiteSpace(selection.RelativePath))
+            {
+                volumeItem.IsChecked = true;
+                return;
+            }
+
+            DriveTreeItem current = volumeItem;
+            foreach (string segment in selection.RelativePath.Split(new[] { '\\' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!current.ChildrenLoaded)
+                {
+                    LoadFoldersForVolume(current);
+                    current.ChildrenLoaded = true;
+                }
+
+                DriveTreeItem? next = current.Children.FirstOrDefault(item =>
+                    item.ItemType == DriveTreeItemType.Folder &&
+                    item.ResolvedPath.EndsWith(segment, StringComparison.OrdinalIgnoreCase));
+                if (next == null)
+                {
+                    return;
+                }
+
+                current = next;
+            }
+
+            current.IsChecked = true;
         }
 
         /// <summary>
@@ -265,6 +404,273 @@ namespace SecureServerBackup.Windows
             return false;
         }
 
+        private string EnsureHyperVGuestMountRoot()
+        {
+            if (!string.IsNullOrWhiteSpace(_hyperVGuestMountRoot))
+            {
+                Directory.CreateDirectory(_hyperVGuestMountRoot);
+                return _hyperVGuestMountRoot;
+            }
+
+            _hyperVGuestMountRoot = Path.Combine(Path.GetTempPath(), "SecureServerBackup", "HyperVGuestMounts", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_hyperVGuestMountRoot);
+            return _hyperVGuestMountRoot;
+        }
+
+        private void CleanupHyperVGuestMounts()
+        {
+            foreach (var virtualDiskPath in _hyperVDiskMountDirectories.Keys.ToList())
+            {
+                try
+                {
+                    RunPowerShell($"Dismount-DiskImage -ImagePath '{EscapePowerShellSingleQuotedString(virtualDiskPath)}' -ErrorAction SilentlyContinue | Out-Null");
+                }
+                catch
+                {
+                }
+            }
+
+            foreach (var mountDirectories in _hyperVDiskMountDirectories.Values)
+            {
+                foreach (string directory in mountDirectories)
+                {
+                    try
+                    {
+                        if (Directory.Exists(directory))
+                        {
+                            Directory.Delete(directory, recursive: true);
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            _hyperVDiskMountDirectories.Clear();
+
+            if (!string.IsNullOrWhiteSpace(_hyperVGuestMountRoot))
+            {
+                try
+                {
+                    if (Directory.Exists(_hyperVGuestMountRoot))
+                    {
+                        Directory.Delete(_hyperVGuestMountRoot, recursive: true);
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static string EscapePowerShellSingleQuotedString(string value)
+            => (value ?? string.Empty).Replace("'", "''", StringComparison.Ordinal);
+
+        private static string RunPowerShell(string script)
+        {
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            process.Start();
+            string output = process.StandardOutput.ReadToEnd();
+            string errors = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(errors) ? "The PowerShell command failed." : errors.Trim());
+            }
+
+            return output;
+        }
+
+        private static string BuildHyperVGuestRelativePath(DriveTreeItem parentItem, string childResolvedPath)
+        {
+            if (!HyperVGuestSelectionPath.TryParse(parentItem.FullPath, out HyperVGuestSelectionInfo? parentSelection) || parentSelection == null)
+            {
+                return string.Empty;
+            }
+
+            string childName = Path.GetFileName(childResolvedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrWhiteSpace(childName))
+            {
+                return parentSelection.RelativePath;
+            }
+
+            return HyperVGuestSelectionPath.NormalizeRelativePath(Path.Combine(parentSelection.RelativePath, childName));
+        }
+
+        private static MountedHyperVGuestExecutionDisk MountHyperVGuestExecutionDiskReadOnly(string vmName, string virtualDiskPath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(vmName);
+            ArgumentException.ThrowIfNullOrWhiteSpace(virtualDiskPath);
+
+            string mountRoot = Path.Combine(Path.GetTempPath(), "SecureServerBackup", "HyperVGuestMounts", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(mountRoot);
+
+            string escapedPath = EscapePowerShellSingleQuotedString(virtualDiskPath);
+            string escapedRoot = EscapePowerShellSingleQuotedString(mountRoot);
+            string script = $"$image = Mount-DiskImage -ImagePath '{escapedPath}' -Access ReadOnly -PassThru -ErrorAction Stop; $disk = $image | Get-Disk -ErrorAction Stop; Get-Partition -DiskNumber $disk.Number -ErrorAction Stop | Sort-Object PartitionNumber | ForEach-Object {{ $partition = $_; $mountPath = $null; $created = $false; if ($partition.AccessPaths) {{ $mountPath = @($partition.AccessPaths | Where-Object {{ $_ }}) | Select-Object -First 1; }} if ([string]::IsNullOrWhiteSpace($mountPath)) {{ $folder = Join-Path '{escapedRoot}' ('Partition' + $partition.PartitionNumber); New-Item -ItemType Directory -Path $folder -Force | Out-Null; Add-PartitionAccessPath -DiskNumber $disk.Number -PartitionNumber $partition.PartitionNumber -AccessPath $folder -ErrorAction Stop | Out-Null; $mountPath = $folder; $created = $true; }} [Console]::WriteLine(($partition.PartitionNumber.ToString() + \"`t\" + $mountPath + \"`t\" + $created.ToString())); }}";
+
+            try
+            {
+                string output = RunPowerShell(script);
+                List<MountedHyperVGuestExecutionPartition> partitions = new();
+                foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string[] parts = line.Split('\t');
+                    if (parts.Length < 3 ||
+                        !int.TryParse(parts[0], out int partitionNumber) ||
+                        string.IsNullOrWhiteSpace(parts[1]))
+                    {
+                        continue;
+                    }
+
+                    partitions.Add(new MountedHyperVGuestExecutionPartition(
+                        partitionNumber,
+                        parts[1].Trim(),
+                        bool.TryParse(parts[2], out bool createdMountDirectory) && createdMountDirectory));
+                }
+
+                return new MountedHyperVGuestExecutionDisk(virtualDiskPath, mountRoot, partitions);
+            }
+            catch
+            {
+                try
+                {
+                    if (Directory.Exists(mountRoot))
+                    {
+                        Directory.Delete(mountRoot, recursive: true);
+                    }
+                }
+                catch
+                {
+                }
+
+                throw;
+            }
+        }
+
+        private static IReadOnlyList<string> ResolveHyperVGuestExecutionSourcePaths(HyperVGuestSelectionInfo selection, MountedHyperVGuestExecutionDisk mountedDisk)
+        {
+            return HyperVGuestSelectionPath.GetCandidateSourcePaths(
+                    selection,
+                    mountedDisk.Partitions.Select(partition => new HyperVGuestMountedPartition(partition.PartitionNumber, partition.MountPath)))
+                .Where(Directory.Exists)
+                .ToArray();
+        }
+
+        private void LoadHyperVVirtualDiskChildren(DriveTreeItem virtualDiskItem)
+        {
+            virtualDiskItem.Children.Clear();
+
+            if (string.IsNullOrWhiteSpace(virtualDiskItem.VirtualDiskPath) || string.IsNullOrWhiteSpace(virtualDiskItem.VirtualMachineName))
+            {
+                virtualDiskItem.Children.Add(new DriveTreeItem
+                {
+                    Name = "(Hyper-V virtual disk information is missing)",
+                    ItemType = DriveTreeItemType.Folder,
+                    Parent = virtualDiskItem
+                });
+                return;
+            }
+
+            try
+            {
+                string root = EnsureHyperVGuestMountRoot();
+                string diskFolderName = Regex.Replace(Path.GetFileNameWithoutExtension(virtualDiskItem.VirtualDiskPath) ?? "HyperVDisk", "[^A-Za-z0-9._-]", "_");
+                string diskMountRoot = Path.Combine(root, diskFolderName + "_" + Math.Abs(StringComparer.OrdinalIgnoreCase.GetHashCode(virtualDiskItem.VirtualDiskPath)).ToString("X8"));
+                Directory.CreateDirectory(diskMountRoot);
+
+                string script = $"$image = Mount-DiskImage -ImagePath '{EscapePowerShellSingleQuotedString(virtualDiskItem.VirtualDiskPath)}' -Access ReadOnly -PassThru -ErrorAction Stop; $disk = $image | Get-Disk -ErrorAction Stop; Get-Partition -DiskNumber $disk.Number -ErrorAction Stop | Sort-Object PartitionNumber | ForEach-Object {{ $partition = $_; $mountPath = $null; if ($partition.AccessPaths) {{ $mountPath = @($partition.AccessPaths | Where-Object {{ $_ }}) | Select-Object -First 1; }} if ([string]::IsNullOrWhiteSpace($mountPath)) {{ $folder = Join-Path '{EscapePowerShellSingleQuotedString(diskMountRoot)}' ('Partition' + $partition.PartitionNumber); New-Item -ItemType Directory -Path $folder -Force | Out-Null; Add-PartitionAccessPath -DiskNumber $disk.Number -PartitionNumber $partition.PartitionNumber -AccessPath $folder -ErrorAction Stop | Out-Null; $mountPath = $folder; }} [Console]::WriteLine(($partition.PartitionNumber.ToString() + \"`t\" + $mountPath)); }}";
+                string output = RunPowerShell(script);
+
+                List<string> mountDirectories = new();
+                foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string[] parts = line.Split('\t');
+                    if (parts.Length < 2 || !int.TryParse(parts[0], out int partitionNumber))
+                    {
+                        continue;
+                    }
+
+                    string mountPath = parts[1].Trim();
+                    if (string.IsNullOrWhiteSpace(mountPath) || !Directory.Exists(mountPath))
+                    {
+                        continue;
+                    }
+
+                    if (mountPath.StartsWith(diskMountRoot, StringComparison.OrdinalIgnoreCase))
+                    {
+                        mountDirectories.Add(mountPath);
+                    }
+
+                    string encodedPath = HyperVGuestSelectionPath.Encode(
+                        HyperVGuestSelectionKind.Volume,
+                        virtualDiskItem.VirtualMachineName,
+                        virtualDiskItem.VirtualDiskPath,
+                        partitionNumber,
+                        string.Empty);
+
+                    var volumeItem = new DriveTreeItem
+                    {
+                        Name = $"Partition {partitionNumber}",
+                        FullPath = encodedPath,
+                        ResolvedPath = mountPath,
+                        VirtualMachineName = virtualDiskItem.VirtualMachineName,
+                        VirtualDiskPath = virtualDiskItem.VirtualDiskPath,
+                        PartitionNumber = partitionNumber,
+                        ItemType = DriveTreeItemType.HyperVVolume,
+                        Parent = virtualDiskItem
+                    };
+
+                    if (Directory.GetDirectories(mountPath).Length > 0)
+                    {
+                        volumeItem.Children.Add(new DriveTreeItem
+                        {
+                            Name = "Loading...",
+                            ItemType = DriveTreeItemType.Folder,
+                            Parent = volumeItem
+                        });
+                    }
+
+                    virtualDiskItem.Children.Add(volumeItem);
+                }
+
+                _hyperVDiskMountDirectories[virtualDiskItem.VirtualDiskPath] = mountDirectories;
+
+                if (virtualDiskItem.Children.Count == 0)
+                {
+                    virtualDiskItem.Children.Add(new DriveTreeItem
+                    {
+                        Name = "(No accessible guest partitions)",
+                        ItemType = DriveTreeItemType.Folder,
+                        Parent = virtualDiskItem
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                virtualDiskItem.Children.Add(new DriveTreeItem
+                {
+                    Name = $"(Error mounting virtual disk: {ex.Message})",
+                    ItemType = DriveTreeItemType.Folder,
+                    Parent = virtualDiskItem
+                });
+            }
+        }
+
         private void LoadFoldersForVolume(DriveTreeItem volumeItem)
         {
             try
@@ -272,7 +678,7 @@ namespace SecureServerBackup.Windows
                 // Remove the placeholder "Loading..." item
                 volumeItem.Children.Clear();
                 
-                var rootPath = volumeItem.FullPath;
+                var rootPath = string.IsNullOrWhiteSpace(volumeItem.ResolvedPath) ? volumeItem.FullPath : volumeItem.ResolvedPath;
                 
                 System.Diagnostics.Debug.WriteLine($"=== LoadFoldersForVolume ===");
                 System.Diagnostics.Debug.WriteLine($"Volume: {volumeItem.Name}");
@@ -331,7 +737,18 @@ namespace SecureServerBackup.Windows
                             var folderItem = new DriveTreeItem
                             {
                                 Name = folderName,
-                                FullPath = dirInfo.FullName,
+                                FullPath = HyperVGuestSelectionPath.IsEncodedPath(volumeItem.FullPath)
+                                    ? HyperVGuestSelectionPath.Encode(
+                                        HyperVGuestSelectionKind.Folder,
+                                        volumeItem.VirtualMachineName,
+                                        volumeItem.VirtualDiskPath,
+                                        volumeItem.PartitionNumber,
+                                        BuildHyperVGuestRelativePath(volumeItem, dirInfo.FullName))
+                                    : dirInfo.FullName,
+                                ResolvedPath = dirInfo.FullName,
+                                VirtualMachineName = volumeItem.VirtualMachineName,
+                                VirtualDiskPath = volumeItem.VirtualDiskPath,
+                                PartitionNumber = volumeItem.PartitionNumber,
                                 ItemType = DriveTreeItemType.Folder,
                                 Parent = volumeItem
                             };
@@ -364,10 +781,23 @@ namespace SecureServerBackup.Windows
                         {
                             // Add a marker for inaccessible folders
                             var folderName = $"{Path.GetFileName(directory)} [Access Denied]";
+                            string folderFullPath = HyperVGuestSelectionPath.IsEncodedPath(volumeItem.FullPath)
+                                ? HyperVGuestSelectionPath.Encode(
+                                    HyperVGuestSelectionKind.Folder,
+                                    volumeItem.VirtualMachineName,
+                                    volumeItem.VirtualDiskPath,
+                                    volumeItem.PartitionNumber,
+                                    BuildHyperVGuestRelativePath(volumeItem, directory))
+                                : directory;
+
                             volumeItem.Children.Add(new DriveTreeItem
                             {
                                 Name = folderName,
-                                FullPath = directory,
+                                FullPath = folderFullPath,
+                                ResolvedPath = directory,
+                                VirtualMachineName = volumeItem.VirtualMachineName,
+                                VirtualDiskPath = volumeItem.VirtualDiskPath,
+                                PartitionNumber = volumeItem.PartitionNumber,
                                 ItemType = DriveTreeItemType.Folder,
                                 Parent = volumeItem
                             });
@@ -585,11 +1015,24 @@ namespace SecureServerBackup.Windows
                         return;
                     }
                     
+                    if (item.ItemType == DriveTreeItemType.HyperVVirtualDisk && !item.ChildrenLoaded)
+                    {
+                        LoadHyperVVirtualDiskChildren(item);
+                        item.ChildrenLoaded = true;
+
+                        treeViewItem.Items.Clear();
+                        foreach (var child in item.Children)
+                        {
+                            treeViewItem.Items.Add(CreateTreeViewItem(child));
+                        }
+                    }
                     // Load folders for volumes when expanded
-                    if ((item.ItemType == DriveTreeItemType.Volume || 
-                         item.ItemType == DriveTreeItemType.NetworkDrive || 
-                         item.ItemType == DriveTreeItemType.NetworkShare) && 
-                        !item.ChildrenLoaded)
+                    else if ((item.ItemType == DriveTreeItemType.Volume || 
+                              item.ItemType == DriveTreeItemType.HyperVVolume ||
+                              item.ItemType == DriveTreeItemType.NetworkDrive || 
+                              item.ItemType == DriveTreeItemType.NetworkShare ||
+                              (item.ItemType == DriveTreeItemType.Folder && !string.IsNullOrWhiteSpace(item.ResolvedPath))) && 
+                             !item.ChildrenLoaded)
                     {
                         LoadFoldersForVolume(item);
                         item.ChildrenLoaded = true;
@@ -1078,23 +1521,84 @@ namespace SecureServerBackup.Windows
             {
                 try
                 {
-                    var vmBuffer = new StringBuilder(4096);
-                    var result = BackupEngineInterop.EnumerateHyperVMachines(vmBuffer, vmBuffer.Capacity);
+                    Dictionary<string, DriveTreeItem> hyperVSystems = new(StringComparer.OrdinalIgnoreCase);
 
-                    if (result == 0)
+                    var vmBuffer = new StringBuilder(4096);
+                    var vmResult = BackupEngineInterop.EnumerateHyperVMachines(vmBuffer, vmBuffer.Capacity);
+                    if (vmResult == 0)
                     {
-                        var vms = vmBuffer.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
-                        foreach (var vm in vms)
+                        foreach (string vm in vmBuffer.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries))
                         {
-                            var hvItem = new DriveTreeItem
+                            string normalizedVmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(vm);
+                            if (string.IsNullOrWhiteSpace(normalizedVmName))
+                            {
+                                continue;
+                            }
+
+                            hyperVSystems[normalizedVmName] = new DriveTreeItem
                             {
                                 Name = $"Hyper-V: {vm}",
                                 FullPath = vm,
+                                VirtualMachineName = normalizedVmName,
                                 ItemType = DriveTreeItemType.HyperVSystem
                             };
-
-                            Dispatcher.Invoke(() => driveItems.Add(hvItem));
                         }
+                    }
+
+                    var diskBuffer = new StringBuilder(32768);
+                    var diskResult = BackupEngineInterop.EnumerateHyperVVirtualMachineDisks(diskBuffer, diskBuffer.Capacity);
+                    if (diskResult == 0)
+                    {
+                        foreach (string line in diskBuffer.ToString().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            string[] parts = line.Split('\t');
+                            if (parts.Length < 3)
+                            {
+                                continue;
+                            }
+
+                            string vmName = parts[0].Trim();
+                            string vmDisplayName = parts[1].Trim();
+                            string virtualDiskPath = parts[2].Trim();
+                            if (string.IsNullOrWhiteSpace(vmName) || string.IsNullOrWhiteSpace(virtualDiskPath))
+                            {
+                                continue;
+                            }
+
+                            if (!hyperVSystems.TryGetValue(vmName, out DriveTreeItem? hyperVItem))
+                            {
+                                hyperVItem = new DriveTreeItem
+                                {
+                                    Name = $"Hyper-V: {vmDisplayName}",
+                                    FullPath = vmDisplayName,
+                                    VirtualMachineName = vmName,
+                                    ItemType = DriveTreeItemType.HyperVSystem
+                                };
+                                hyperVSystems[vmName] = hyperVItem;
+                            }
+
+                            var virtualDiskItem = new DriveTreeItem
+                            {
+                                Name = Path.GetFileName(virtualDiskPath),
+                                FullPath = HyperVGuestSelectionPath.Encode(HyperVGuestSelectionKind.VirtualDisk, vmName, virtualDiskPath, 0, string.Empty),
+                                VirtualMachineName = vmName,
+                                VirtualDiskPath = virtualDiskPath,
+                                ItemType = DriveTreeItemType.HyperVVirtualDisk,
+                                Parent = hyperVItem
+                            };
+                            virtualDiskItem.Children.Add(new DriveTreeItem
+                            {
+                                Name = "Loading...",
+                                ItemType = DriveTreeItemType.Folder,
+                                Parent = virtualDiskItem
+                            });
+                            hyperVItem.Children.Add(virtualDiskItem);
+                        }
+                    }
+
+                    foreach (DriveTreeItem hyperVSystem in hyperVSystems.Values.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
+                    {
+                        Dispatcher.Invoke(() => driveItems.Add(hyperVSystem));
                     }
                 }
                 catch { }
@@ -2139,14 +2643,18 @@ namespace SecureServerBackup.Windows
                     }
                     else if (job.Target == BackupTarget.FilesAndFolders)
                     {
-                        // Files/Folders backup
-                        switch (job.Type)
+                        void ExecuteFileBackupOperation(string resolvedSourcePath)
                         {
-                            case BackupType.Full:
-                                foreach (var sourcePath in job.SourcePaths)
-                                {
+                            Dispatcher.Invoke(() =>
+                            {
+                                txtProgress.Text = $"Backing up files from {resolvedSourcePath}...";
+                            });
+
+                            switch (job.Type)
+                            {
+                                case BackupType.Full:
                                     result = BackupEngineInterop.BackupFiles(
-                                        sourcePath,
+                                        resolvedSourcePath,
                                         job.DestinationPath,
                                         null,
                                         0,
@@ -2159,17 +2667,13 @@ namespace SecureServerBackup.Windows
                                         BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
                                         throw new Exception($"File backup failed: {errorBuffer}");
                                     }
-                                }
-                                break;
+                                    break;
 
-                            case BackupType.Incremental:
-                                // Find last backup in destination
-                                var lastBackup = FindLastBackup(job.DestinationPath);
-                                
-                                foreach (var sourcePath in job.SourcePaths)
-                                {
+                                case BackupType.Incremental:
+                                    var lastBackup = FindLastBackup(job.DestinationPath);
+
                                     result = BackupEngineInterop.CreateIncrementalBackup(
-                                        sourcePath,
+                                        resolvedSourcePath,
                                         job.DestinationPath,
                                         lastBackup ?? job.DestinationPath,
                                         progressCallback);
@@ -2180,16 +2684,13 @@ namespace SecureServerBackup.Windows
                                         BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
                                         throw new Exception($"Incremental backup failed: {errorBuffer}");
                                     }
-                                }
-                                break;
+                                    break;
 
-                            case BackupType.Differential:
-                                var fullBackup = FindFullBackup(job.DestinationPath);
-                                
-                                foreach (var sourcePath in job.SourcePaths)
-                                {
+                                case BackupType.Differential:
+                                    var fullBackup = FindFullBackup(job.DestinationPath);
+
                                     result = BackupEngineInterop.CreateDifferentialBackup(
-                                        sourcePath,
+                                        resolvedSourcePath,
                                         job.DestinationPath,
                                         fullBackup ?? job.DestinationPath,
                                         progressCallback);
@@ -2200,8 +2701,35 @@ namespace SecureServerBackup.Windows
                                         BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
                                         throw new Exception($"Differential backup failed: {errorBuffer}");
                                     }
+                                    break;
+                            }
+                        }
+
+                        foreach (var sourcePath in job.SourcePaths)
+                        {
+                            if (HyperVGuestSelectionPath.TryParse(sourcePath, out HyperVGuestSelectionInfo? guestSelection) && guestSelection != null)
+                            {
+                                Dispatcher.Invoke(() =>
+                                {
+                                    txtProgress.Text = $"Mounting Hyper-V guest selection from {guestSelection.VirtualMachineName}...";
+                                });
+
+                                using var mountedDisk = MountHyperVGuestExecutionDiskReadOnly(guestSelection.VirtualMachineName, guestSelection.VirtualDiskPath);
+                                IReadOnlyList<string> resolvedSourcePaths = ResolveHyperVGuestExecutionSourcePaths(guestSelection, mountedDisk);
+                                if (resolvedSourcePaths.Count == 0)
+                                {
+                                    throw new Exception($"Hyper-V guest selection could not be resolved: {sourcePath}");
                                 }
-                                break;
+
+                                foreach (string resolvedSourcePath in resolvedSourcePaths)
+                                {
+                                    ExecuteFileBackupOperation(resolvedSourcePath);
+                                }
+                            }
+                            else
+                            {
+                                ExecuteFileBackupOperation(sourcePath);
+                            }
                         }
                     }
 
@@ -2502,6 +3030,11 @@ namespace SecureServerBackup.Windows
                             job.HyperVMachines.Add(vmName);
                         }
                     }
+                    else if (drive.ItemType == DriveTreeItemType.HyperVVirtualDisk || drive.ItemType == DriveTreeItemType.HyperVVolume)
+                    {
+                        job.Target = BackupTarget.FilesAndFolders;
+                        job.SourcePaths.Add(drive.FullPath);
+                    }
                 }
                 else if (drive.IsChecked == null && drive.Children.Count > 0)
                 {
@@ -2556,6 +3089,11 @@ namespace SecureServerBackup.Windows
                     if (child.ItemType == DriveTreeItemType.Volume)
                     {
                         if (job.Target == 0) job.Target = BackupTarget.Volume;
+                        job.SourcePaths.Add(child.FullPath);
+                    }
+                    else if (child.ItemType == DriveTreeItemType.HyperVVirtualDisk || child.ItemType == DriveTreeItemType.HyperVVolume)
+                    {
+                        job.Target = BackupTarget.FilesAndFolders;
                         job.SourcePaths.Add(child.FullPath);
                     }
                     else if (child.ItemType == DriveTreeItemType.Folder)

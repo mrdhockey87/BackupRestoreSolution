@@ -203,6 +203,118 @@ namespace SecureServerBackupService
             }
         }
 
+        private sealed record MountedHyperVGuestPartition(int PartitionNumber, string MountPath, bool CreatedMountDirectory);
+
+        private sealed class MountedHyperVGuestDisk : IDisposable
+        {
+            private readonly List<MountedHyperVGuestPartition> _partitions;
+
+            public MountedHyperVGuestDisk(string virtualDiskPath, List<MountedHyperVGuestPartition> partitions)
+            {
+                VirtualDiskPath = virtualDiskPath;
+                _partitions = partitions;
+            }
+
+            public string VirtualDiskPath { get; }
+
+            public IReadOnlyList<MountedHyperVGuestPartition> Partitions => _partitions;
+
+            public void Dispose()
+            {
+                try
+                {
+                    UnmountVirtualDisk(VirtualDiskPath);
+                }
+                catch
+                {
+                }
+
+                foreach (MountedHyperVGuestPartition partition in _partitions.Where(partition => partition.CreatedMountDirectory))
+                {
+                    try
+                    {
+                        if (Directory.Exists(partition.MountPath))
+                        {
+                            Directory.Delete(partition.MountPath, recursive: true);
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+        }
+
+        private static MountedHyperVGuestDisk MountHyperVGuestDiskReadOnly(string vmName, string virtualDiskPath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(vmName);
+            ArgumentException.ThrowIfNullOrWhiteSpace(virtualDiskPath);
+
+            string mountRoot = Path.Combine(Path.GetTempPath(), "SecureServerBackup", "HyperVGuestMounts", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(mountRoot);
+
+            string escapedPath = EscapePowerShellSingleQuotedString(virtualDiskPath);
+            string escapedRoot = EscapePowerShellSingleQuotedString(mountRoot);
+            string script = $"$image = Mount-DiskImage -ImagePath '{escapedPath}' -Access ReadOnly -PassThru -ErrorAction Stop; $disk = $image | Get-Disk -ErrorAction Stop; Get-Partition -DiskNumber $disk.Number -ErrorAction Stop | Sort-Object PartitionNumber | ForEach-Object {{ $partition = $_; $mountPath = $null; $created = $false; if ($partition.AccessPaths) {{ $mountPath = @($partition.AccessPaths | Where-Object {{ $_ }}) | Select-Object -First 1; }} if ([string]::IsNullOrWhiteSpace($mountPath)) {{ $folder = Join-Path '{escapedRoot}' ('Partition' + $partition.PartitionNumber); New-Item -ItemType Directory -Path $folder -Force | Out-Null; Add-PartitionAccessPath -DiskNumber $disk.Number -PartitionNumber $partition.PartitionNumber -AccessPath $folder -ErrorAction Stop | Out-Null; $mountPath = $folder; $created = $true; }} [Console]::WriteLine(($partition.PartitionNumber.ToString() + \"`t\" + $mountPath + \"`t\" + $created.ToString())); }}";
+
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string output = process?.StandardOutput.ReadToEnd() ?? string.Empty;
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0)
+            {
+                try
+                {
+                    Directory.Delete(mountRoot, recursive: true);
+                }
+                catch
+                {
+                }
+
+                throw new InvalidOperationException($"Failed to mount Hyper-V guest disk '{vmName}'. {errors}".Trim());
+            }
+
+            var partitions = new List<MountedHyperVGuestPartition>();
+            foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string[] parts = line.Split('\t');
+                if (parts.Length < 3 ||
+                    !int.TryParse(parts[0], out int partitionNumber) ||
+                    string.IsNullOrWhiteSpace(parts[1]))
+                {
+                    continue;
+                }
+
+                partitions.Add(new MountedHyperVGuestPartition(
+                    partitionNumber,
+                    parts[1].Trim(),
+                    bool.TryParse(parts[2], out bool createdMountDirectory) && createdMountDirectory));
+            }
+
+            return new MountedHyperVGuestDisk(virtualDiskPath, partitions);
+        }
+
+        private static IReadOnlyList<string> ResolveHyperVGuestSourcePaths(HyperVGuestSelectionInfo selection, MountedHyperVGuestDisk mountedDisk)
+        {
+            ArgumentNullException.ThrowIfNull(mountedDisk);
+
+            return HyperVGuestSelectionPath.GetCandidateSourcePaths(
+                    selection,
+                    mountedDisk.Partitions.Select(partition => new HyperVGuestMountedPartition(partition.PartitionNumber, partition.MountPath)))
+                .Where(Directory.Exists)
+                .ToArray();
+        }
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void ProgressCallback(int percentage, [MarshalAs(UnmanagedType.LPWStr)] string message);
 
@@ -430,7 +542,35 @@ namespace SecureServerBackupService
                                 return false;
                             }
 
-                            int result = ExecuteBackup(job, sourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
+                            int result;
+                            if (HyperVGuestSelectionPath.TryParse(sourcePath, out HyperVGuestSelectionInfo? guestSelection) && guestSelection != null)
+                            {
+                                logger?.Invoke($"Mounting Hyper-V guest disk selection from VM '{guestSelection.VirtualMachineName}': {guestSelection.VirtualDiskPath}");
+
+                                using var mountedDisk = MountHyperVGuestDiskReadOnly(guestSelection.VirtualMachineName, guestSelection.VirtualDiskPath);
+                                IReadOnlyList<string> resolvedSourcePaths = ResolveHyperVGuestSourcePaths(guestSelection, mountedDisk);
+                                if (resolvedSourcePaths.Count == 0)
+                                {
+                                    logger?.Invoke($"[ERROR] Hyper-V guest selection could not be resolved: {sourcePath}");
+                                    return false;
+                                }
+
+                                result = 0;
+                                foreach (string resolvedSourcePath in resolvedSourcePaths)
+                                {
+                                    logger?.Invoke($"Backing up mounted Hyper-V guest path: {resolvedSourcePath}");
+                                    result = ExecuteBackup(job, resolvedSourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
+                                    if (result != 0)
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                result = ExecuteBackup(job, sourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
+                            }
+
                             if (result != 0)
                             {
                                 var error = new StringBuilder(1024);

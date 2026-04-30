@@ -226,6 +226,12 @@ extern "C" {
         wchar_t* buffer,
         int bufferSize);
 
+    // Enumerate Hyper-V virtual machine disk paths as tab-delimited lines:
+    // <vmName>\t<vmDisplayName>\t<virtualDiskPath>
+    BACKUPENGINE_API int EnumerateHyperVVirtualMachineDisks(
+        wchar_t* buffer,
+        int bufferSize);
+
     // Check if a volume is a boot volume
     BACKUPENGINE_API int IsBootVolume(
         const wchar_t* volumePath,

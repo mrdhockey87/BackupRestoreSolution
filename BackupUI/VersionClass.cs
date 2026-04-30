@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.77";
+        private static readonly string version_fallback_number = "6.2.3.81";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,14 @@ namespace SecureServerBackup
 
 /*
  * 
+ * Version 6.2.3.81 Fixed Hyper-V guest disk and volume restores to use the mounted guest VHDX target and
+ *                  corrected Linux Hyper-V selected-item path resolution during restore. mdail 4/30/2026
+ * Version 6.2.3.80 Fixed Hyper-V guest access-denied folder selections so saved jobs keep stable encoded
+ *                  guest paths instead of temporary hidden mount-point folders. mdail 4/30/2026
+ * Version 6.2.3.79 Added Hyper-V guest VHDX discovery on the backup page so VM disks and mounted guest
+ *                  partitions or folders can be selected and backed up through hidden mount points. mdail 4/30/2026
+ * Version 6.2.3.78 Fixed Hyper-V VM export settings so first-run incremental and differential jobs that
+ *                  fall back to full backups can export running VMs without failing with code 32773. mdail 4/30/2026
  * Version 6.2.3.77 Matched Linux recovery Hyper-V backup-point detection to the Windows compatibility
  *                  flow so legacy export-folder backups are still recognized during recovery restores. mdail 4/30/2026
  * Version 6.2.3.76 Changed Hyper-V backups to restore through the normal .ssb archive flow while keeping

@@ -123,4 +123,25 @@ public sealed class BackupExecutorHyperVTests
             Directory.Delete(tempRoot, recursive: true);
         }
     }
+
+    [Fact]
+    public void HasFullHyperVBackupPoint_WhenLegacyFullBackupPointDirectoryPassed_ReturnsTrue()
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            string fullBackupPointPath = Path.Combine(tempRoot, "Full_20260430_142402.ssb");
+            Directory.CreateDirectory(fullBackupPointPath);
+
+            bool result = BackupExecutor.HasFullHyperVBackupPoint(fullBackupPointPath);
+
+            Assert.True(result);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
 }

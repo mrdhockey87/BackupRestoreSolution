@@ -1018,45 +1018,11 @@ namespace SecureServerBackup.Windows
                 switch (_restoreTargetKind)
                 {
                     case RestoreTargetKind.Disk:
-                        PrepareDiskTarget();
-                        if (_diskRestorePlan?.HasMetadata == true)
-                        {
-                            result = BackupEngineInterop.RestoreDiskFromImage(
-                                preparedBackup.WorkingPath,
-                                _diskRestorePlan.ImageIndex,
-                                _selectedTargetDiskNumber ?? -1,
-                                false,
-                                callback);
-                        }
-                        else
-                        {
-                            result = BackupEngineInterop.RestoreDisk(
-                                preparedBackup.WorkingPath,
-                                _selectedTargetDiskNumber ?? -1,
-                                false,
-                                callback);
-                        }
+                        result = RestoreDiskTarget(preparedBackup.WorkingPath, selectedPoint.FilePath, callback);
                         break;
 
                     case RestoreTargetKind.Volume:
-                        PrepareVolumeTarget();
-                        if (_diskRestorePlan?.HasMetadata == true)
-                        {
-                            result = BackupEngineInterop.RestoreVolumeFromImage(
-                                preparedBackup.WorkingPath,
-                                _diskRestorePlan.ImageIndex,
-                                _selectedTargetPath ?? string.Empty,
-                                false,
-                                callback);
-                        }
-                        else
-                        {
-                            result = BackupEngineInterop.RestoreVolume(
-                                preparedBackup.WorkingPath,
-                                _selectedTargetPath ?? string.Empty,
-                                false,
-                                callback);
-                        }
+                        result = RestoreVolumeTarget(preparedBackup.WorkingPath, selectedPoint.FilePath, callback);
                         break;
 
                     case RestoreTargetKind.HyperVVm:
@@ -1089,6 +1055,44 @@ namespace SecureServerBackup.Windows
                     throw new Exception($"Restore failed: {error}");
                 }
             });
+        }
+
+        private int RestoreDiskTarget(string preparedBackupPath, string selectedBackupPath, BackupEngineInterop.ProgressCallback callback)
+        {
+            PrepareDiskTarget();
+
+            if (_isHyperVBackupPoint)
+            {
+                using var mountedDisk = MountPrimaryHyperVVirtualDisk(selectedBackupPath);
+                int mountedDiskNumber = GetDiskNumberForDriveLetter(mountedDisk.DriveRoot);
+
+                return _diskRestorePlan?.HasMetadata == true
+                    ? BackupEngineInterop.RestoreDiskFromImage(preparedBackupPath, _diskRestorePlan.ImageIndex, mountedDiskNumber, false, callback)
+                    : BackupEngineInterop.RestoreDisk(preparedBackupPath, mountedDiskNumber, false, callback);
+            }
+
+            return _diskRestorePlan?.HasMetadata == true
+                ? BackupEngineInterop.RestoreDiskFromImage(preparedBackupPath, _diskRestorePlan.ImageIndex, _selectedTargetDiskNumber ?? -1, false, callback)
+                : BackupEngineInterop.RestoreDisk(preparedBackupPath, _selectedTargetDiskNumber ?? -1, false, callback);
+        }
+
+        private int RestoreVolumeTarget(string preparedBackupPath, string selectedBackupPath, BackupEngineInterop.ProgressCallback callback)
+        {
+            PrepareVolumeTarget();
+
+            if (_isHyperVBackupPoint)
+            {
+                using var mountedDisk = MountPrimaryHyperVVirtualDisk(selectedBackupPath);
+                string targetVolumePath = mountedDisk.DriveRoot;
+
+                return _diskRestorePlan?.HasMetadata == true
+                    ? BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, _diskRestorePlan.ImageIndex, targetVolumePath, false, callback)
+                    : BackupEngineInterop.RestoreVolume(preparedBackupPath, targetVolumePath, false, callback);
+            }
+
+            return _diskRestorePlan?.HasMetadata == true
+                ? BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, _diskRestorePlan.ImageIndex, _selectedTargetPath ?? string.Empty, false, callback)
+                : BackupEngineInterop.RestoreVolume(preparedBackupPath, _selectedTargetPath ?? string.Empty, false, callback);
         }
 
         private bool ValidateRestore()

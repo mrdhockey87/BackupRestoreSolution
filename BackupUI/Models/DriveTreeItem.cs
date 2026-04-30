@@ -13,6 +13,10 @@ namespace SecureServerBackup.Models
 
         public string Name { get; set; } = string.Empty;
         public string FullPath { get; set; } = string.Empty;
+        public string ResolvedPath { get; set; } = string.Empty;
+        public string VirtualMachineName { get; set; } = string.Empty;
+        public string VirtualDiskPath { get; set; } = string.Empty;
+        public int PartitionNumber { get; set; }
         public DriveTreeItemType ItemType { get; set; }
         public long Size { get; set; }
         public bool IsBootVolume { get; set; }
@@ -138,6 +142,7 @@ namespace SecureServerBackup.Models
         Folder,
         File,
         HyperVSystem,
+        HyperVVirtualDisk,
         HyperVVolume,
         NetworkRoot,        // Root "Network Locations" node
         NetworkDrive,       // Mapped network drive (Z:\)

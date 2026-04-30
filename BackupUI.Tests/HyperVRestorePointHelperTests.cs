@@ -54,6 +54,24 @@ public sealed class HyperVRestorePointHelperTests : IDisposable
     }
 
     [Fact]
+    public void FindPrimaryVirtualDisk_WhenMetadataExportPathExists_ReturnsLargestDiskFromResolvedExport()
+    {
+        string backupPoint = CreateBackupPointDirectory(createExportFolder: false);
+        string exportPath = Path.Combine(_tempDirectory, "ResolvedExportPath");
+        Directory.CreateDirectory(exportPath);
+        File.WriteAllText(Path.Combine(backupPoint, "hyperv_backup_info.txt"), $"ExportPath={exportPath}{Environment.NewLine}");
+
+        string smallerDisk = Path.Combine(exportPath, "guest-small.vhdx");
+        string largerDisk = Path.Combine(exportPath, "guest-large.vhdx");
+        File.WriteAllBytes(smallerDisk, new byte[8]);
+        File.WriteAllBytes(largerDisk, new byte[64]);
+
+        string? result = RestoreWindowNew.HyperVRestorePointHelper.FindPrimaryVirtualDisk(backupPoint);
+
+        Assert.Equal(largerDisk, result);
+    }
+
+    [Fact]
     public void ResolveVmName_WhenNoConfigExists_ReturnsBackupPointName()
     {
         string backupPoint = CreateBackupPointDirectory();

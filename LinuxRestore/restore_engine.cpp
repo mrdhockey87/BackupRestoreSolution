@@ -152,6 +152,10 @@ private:
                 fs::is_directory(directory / "Export", ec));
     }
 
+    static bool IsPathRooted(const std::string& path) {
+        return !path.empty() && (path[0] == '/' || path[0] == '\\');
+    }
+
     std::string ResolveHyperVExportPath(const std::string& backupPath) {
         std::error_code ec;
         fs::path candidate(backupPath);
@@ -187,6 +191,46 @@ private:
         }
 
         return {};
+    }
+
+    std::string ResolveSelectedItemSourcePath(const std::string& backupPath, const std::string& item) {
+        if (item.empty()) {
+            return backupPath;
+        }
+
+        if (IsHyperVBackupPointDirectory(backupPath)) {
+            std::string exportPath = ResolveHyperVExportPath(backupPath);
+            if (!exportPath.empty()) {
+                fs::path exportRoot(exportPath);
+                fs::path itemPath(item);
+
+                if (itemPath.is_absolute()) {
+                    std::error_code ec;
+                    fs::path normalizedItem = fs::weakly_canonical(itemPath, ec);
+                    fs::path normalizedExport = fs::weakly_canonical(exportRoot, ec);
+
+                    if (!ec) {
+                        std::string normalizedItemText = normalizedItem.generic_string();
+                        std::string normalizedExportText = normalizedExport.generic_string();
+                        if (normalizedItemText == normalizedExportText ||
+                            normalizedItemText.rfind(normalizedExportText + "/", 0) == 0)
+                        {
+                            return normalizedItem.string();
+                        }
+                    }
+
+                    return itemPath.string();
+                }
+
+                return (exportRoot / itemPath).string();
+            }
+        }
+
+        if (IsPathRooted(item)) {
+            return item;
+        }
+
+        return (fs::path(backupPath) / fs::path(item)).string();
     }
 
     int RestoreDisk(const std::string& backupPath,
@@ -1267,12 +1311,7 @@ public:
                 }
 
                 // Determine paths
-                std::string sourcePath;
-                if (item[0] == '/') {
-                    sourcePath = backupPath + item;
-                } else {
-                    sourcePath = backupPath + "/" + item;
-                }
+                std::string sourcePath = ResolveSelectedItemSourcePath(backupPath, item);
 
                 std::string targetPath;
                 if (destPath.empty()) {
