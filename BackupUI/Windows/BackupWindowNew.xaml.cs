@@ -20,6 +20,42 @@ namespace SecureServerBackup.Windows
 {
     public partial class BackupWindowNew : Window
     {
+        public sealed record HyperVVirtualDiskInfo(string VirtualMachineName, string VirtualMachineDisplayName, string VirtualDiskPath);
+
+        public static class HyperVBackupTreeHelper
+        {
+            public static IReadOnlyList<HyperVVirtualDiskInfo> ParseVirtualDiskEnumeration(string? output)
+            {
+                if (string.IsNullOrWhiteSpace(output))
+                {
+                    return Array.Empty<HyperVVirtualDiskInfo>();
+                }
+
+                List<HyperVVirtualDiskInfo> disks = new();
+                foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string[] parts = line.Split('\t');
+                    if (parts.Length < 3)
+                    {
+                        continue;
+                    }
+
+                    string vmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(parts[0].Trim());
+                    string vmDisplayName = string.IsNullOrWhiteSpace(parts[1]) ? vmName : parts[1].Trim();
+                    string virtualDiskPath = parts[2].Trim().Trim('"');
+
+                    if (string.IsNullOrWhiteSpace(vmName) || string.IsNullOrWhiteSpace(virtualDiskPath))
+                    {
+                        continue;
+                    }
+
+                    disks.Add(new HyperVVirtualDiskInfo(vmName, vmDisplayName, virtualDiskPath));
+                }
+
+                return disks;
+            }
+        }
+
         private const double DefaultWindowHeight = 850;
         private const double EncryptionExpandedWindowHeight = 980;
 
@@ -1545,54 +1581,33 @@ namespace SecureServerBackup.Windows
                         }
                     }
 
-                    var diskBuffer = new StringBuilder(32768);
-                    var diskResult = BackupEngineInterop.EnumerateHyperVVirtualMachineDisks(diskBuffer, diskBuffer.Capacity);
-                    if (diskResult == 0)
+                    foreach (HyperVVirtualDiskInfo diskInfo in EnumerateHyperVVirtualDiskInfos())
                     {
-                        foreach (string line in diskBuffer.ToString().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                        if (!hyperVSystems.TryGetValue(diskInfo.VirtualMachineName, out DriveTreeItem? hyperVItem))
                         {
-                            string[] parts = line.Split('\t');
-                            if (parts.Length < 3)
+                            hyperVItem = new DriveTreeItem
                             {
-                                continue;
-                            }
-
-                            string vmName = parts[0].Trim();
-                            string vmDisplayName = parts[1].Trim();
-                            string virtualDiskPath = parts[2].Trim();
-                            if (string.IsNullOrWhiteSpace(vmName) || string.IsNullOrWhiteSpace(virtualDiskPath))
-                            {
-                                continue;
-                            }
-
-                            if (!hyperVSystems.TryGetValue(vmName, out DriveTreeItem? hyperVItem))
-                            {
-                                hyperVItem = new DriveTreeItem
-                                {
-                                    Name = $"Hyper-V: {vmDisplayName}",
-                                    FullPath = vmDisplayName,
-                                    VirtualMachineName = vmName,
-                                    ItemType = DriveTreeItemType.HyperVSystem
-                                };
-                                hyperVSystems[vmName] = hyperVItem;
-                            }
-
-                            var virtualDiskItem = new DriveTreeItem
-                            {
-                                Name = Path.GetFileName(virtualDiskPath),
-                                FullPath = HyperVGuestSelectionPath.Encode(HyperVGuestSelectionKind.VirtualDisk, vmName, virtualDiskPath, 0, string.Empty),
-                                VirtualMachineName = vmName,
-                                VirtualDiskPath = virtualDiskPath,
-                                ItemType = DriveTreeItemType.HyperVVirtualDisk,
-                                Parent = hyperVItem
+                                Name = $"Hyper-V: {diskInfo.VirtualMachineDisplayName}",
+                                FullPath = diskInfo.VirtualMachineDisplayName,
+                                VirtualMachineName = diskInfo.VirtualMachineName,
+                                ItemType = DriveTreeItemType.HyperVSystem
                             };
-                            virtualDiskItem.Children.Add(new DriveTreeItem
+                            hyperVSystems[diskInfo.VirtualMachineName] = hyperVItem;
+                        }
+
+                        AddHyperVVirtualDiskItem(hyperVItem, diskInfo);
+                    }
+
+                    foreach (DriveTreeItem hyperVSystem in hyperVSystems.Values)
+                    {
+                        if (hyperVSystem.Children.Count == 0)
+                        {
+                            hyperVSystem.Children.Add(new DriveTreeItem
                             {
-                                Name = "Loading...",
+                                Name = "(No guest disks found)",
                                 ItemType = DriveTreeItemType.Folder,
-                                Parent = virtualDiskItem
+                                Parent = hyperVSystem
                             });
-                            hyperVItem.Children.Add(virtualDiskItem);
                         }
                     }
 
@@ -1603,6 +1618,64 @@ namespace SecureServerBackup.Windows
                 }
                 catch { }
             });
+        }
+
+        private void AddHyperVVirtualDiskItem(DriveTreeItem hyperVItem, HyperVVirtualDiskInfo diskInfo)
+        {
+            if (hyperVItem.Children.Any(item =>
+                    item.ItemType == DriveTreeItemType.HyperVVirtualDisk &&
+                    string.Equals(item.VirtualDiskPath, diskInfo.VirtualDiskPath, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            var virtualDiskItem = new DriveTreeItem
+            {
+                Name = Path.GetFileName(diskInfo.VirtualDiskPath),
+                FullPath = HyperVGuestSelectionPath.Encode(HyperVGuestSelectionKind.VirtualDisk, diskInfo.VirtualMachineName, diskInfo.VirtualDiskPath, 0, string.Empty),
+                VirtualMachineName = diskInfo.VirtualMachineName,
+                VirtualDiskPath = diskInfo.VirtualDiskPath,
+                ItemType = DriveTreeItemType.HyperVVirtualDisk,
+                Parent = hyperVItem
+            };
+            virtualDiskItem.Children.Add(new DriveTreeItem
+            {
+                Name = "Loading...",
+                ItemType = DriveTreeItemType.Folder,
+                Parent = virtualDiskItem
+            });
+            hyperVItem.Children.Add(virtualDiskItem);
+        }
+
+        private IReadOnlyList<HyperVVirtualDiskInfo> EnumerateHyperVVirtualDiskInfos()
+        {
+            var diskBuffer = new StringBuilder(32768);
+            var diskResult = BackupEngineInterop.EnumerateHyperVVirtualMachineDisks(diskBuffer, diskBuffer.Capacity);
+            IReadOnlyList<HyperVVirtualDiskInfo> disks = HyperVBackupTreeHelper.ParseVirtualDiskEnumeration(diskBuffer.ToString());
+            if (disks.Count > 0)
+            {
+                return disks;
+            }
+
+            var error = new StringBuilder(1024);
+            BackupEngineInterop.GetLastErrorMessage(error, error.Capacity);
+            Debug.WriteLine($"EnumerateHyperVVirtualMachineDisks returned {diskResult}: {error}");
+
+            try
+            {
+                string fallbackOutput = RunPowerShell("$ErrorActionPreference='Stop'; Get-VM -ErrorAction Stop | ForEach-Object { $vm = $_; $displayName = $vm.Name; if ($vm.State) { $displayName += ' (' + $vm.State.ToString() + ')'; } Get-VMHardDiskDrive -VMName $vm.Name -ErrorAction SilentlyContinue | ForEach-Object { if (-not [string]::IsNullOrWhiteSpace($_.Path)) { [Console]::WriteLine(($vm.Name + \"`t\" + $displayName + \"`t\" + $_.Path)); } } }");
+                disks = HyperVBackupTreeHelper.ParseVirtualDiskEnumeration(fallbackOutput);
+                if (disks.Count > 0)
+                {
+                    Debug.WriteLine($"Enumerated {disks.Count} Hyper-V virtual disks using PowerShell fallback.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"PowerShell Hyper-V disk fallback failed: {ex.Message}");
+            }
+
+            return disks;
         }
 
         private async Task LoadNetworkDrives()

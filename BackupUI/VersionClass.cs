@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.81";
+        private static readonly string version_fallback_number = "6.2.3.82";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,8 @@ namespace SecureServerBackup
 
 /*
  * 
+ * Version 6.2.3.82 Fixed the New/Edit Backup Hyper-V tree so guest disks and files still list when native
+ *                  Hyper-V disk enumeration returns no results by falling back to PowerShell VM disk discovery. mdail 4/30/2026
  * Version 6.2.3.81 Fixed Hyper-V guest disk and volume restores to use the mounted guest VHDX target and
  *                  corrected Linux Hyper-V selected-item path resolution during restore. mdail 4/30/2026
  * Version 6.2.3.80 Fixed Hyper-V guest access-denied folder selections so saved jobs keep stable encoded

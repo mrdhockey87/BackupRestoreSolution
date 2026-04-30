@@ -5,6 +5,39 @@ namespace SecureServerBackup.Tests;
 
 public sealed class RegularHyperVRestoreHelperTests
 {
+    [Fact]
+    public void ParseVirtualDiskEnumeration_WhenLinesContainValidEntries_ReturnsNormalizedDiskInfos()
+    {
+        string output = "VmOne\tVmOne (Running)\t\"C:\\HyperV\\Disk1.vhdx\"\nVmTwo\tVmTwo\tD:\\VMs\\Disk2.vhdx\n";
+
+        var result = BackupWindowNew.HyperVBackupTreeHelper.ParseVirtualDiskEnumeration(output);
+
+        Assert.Collection(
+            result,
+            first =>
+            {
+                Assert.Equal("VmOne", first.VirtualMachineName);
+                Assert.Equal("VmOne (Running)", first.VirtualMachineDisplayName);
+                Assert.Equal(@"C:\HyperV\Disk1.vhdx", first.VirtualDiskPath);
+            },
+            second =>
+            {
+                Assert.Equal("VmTwo", second.VirtualMachineName);
+                Assert.Equal("VmTwo", second.VirtualMachineDisplayName);
+                Assert.Equal(@"D:\VMs\Disk2.vhdx", second.VirtualDiskPath);
+            });
+    }
+
+    [Fact]
+    public void ParseVirtualDiskEnumeration_WhenLinesAreInvalid_SkipsThem()
+    {
+        string output = "VmOne\tOnlyTwoColumns\n\t\t\nVmTwo\tVmTwo\t \n";
+
+        var result = BackupWindowNew.HyperVBackupTreeHelper.ParseVirtualDiskEnumeration(output);
+
+        Assert.Empty(result);
+    }
+
     [Theory]
     [InlineData(@"\\?\Volume{1234}\")]
     [InlineData("C:\\")]
