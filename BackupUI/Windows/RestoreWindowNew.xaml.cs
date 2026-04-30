@@ -67,6 +67,47 @@ namespace SecureServerBackup.Windows
                 int stateIndex = displayText.LastIndexOf(" (", StringComparison.Ordinal);
                 return stateIndex > 0 ? displayText[..stateIndex].Trim() : displayText.Trim();
             }
+
+            public static string GetDefaultHyperVVmName(string virtualDiskPath)
+            {
+                if (string.IsNullOrWhiteSpace(virtualDiskPath))
+                {
+                    return string.Empty;
+                }
+
+                return Path.GetFileNameWithoutExtension(virtualDiskPath)?.Trim() ?? string.Empty;
+            }
+
+            public static string GetDefaultHyperVVmStoragePath(string virtualDiskPath)
+            {
+                if (string.IsNullOrWhiteSpace(virtualDiskPath))
+                {
+                    return string.Empty;
+                }
+
+                return Path.GetDirectoryName(virtualDiskPath)?.Trim() ?? string.Empty;
+            }
+
+            public static string BuildCreateVirtualMachineScript(string vmName, string vmStoragePath, string virtualDiskPath, int generation, bool startAfterCreate)
+            {
+                string escapedVmName = EscapePowerShellSingleQuotedString(vmName);
+                string escapedVmStoragePath = EscapePowerShellSingleQuotedString(vmStoragePath);
+                string escapedVirtualDiskPath = EscapePowerShellSingleQuotedString(virtualDiskPath);
+                string controllerType = generation == 1 ? "IDE" : "SCSI";
+                string firmwareCommand = generation == 2
+                    ? $"; $bootDisk = Get-VMHardDiskDrive -VMName '{escapedVmName}' | Where-Object {{ $_.Path -eq '{escapedVirtualDiskPath}' }} | Select-Object -First 1; if ($null -eq $bootDisk) {{ throw 'The restored virtual disk could not be located on the new virtual machine.'; }}; Set-VMFirmware -VMName '{escapedVmName}' -FirstBootDevice $bootDisk -EnableSecureBoot Off -ErrorAction Stop"
+                    : string.Empty;
+                string startCommand = startAfterCreate
+                    ? $"; Start-VM -Name '{escapedVmName}' -ErrorAction Stop | Out-Null"
+                    : string.Empty;
+
+                return $"$vmName='{escapedVmName}'; $vmPath='{escapedVmStoragePath}'; $diskPath='{escapedVirtualDiskPath}'; if ([string]::IsNullOrWhiteSpace($vmName)) {{ throw 'A virtual machine name is required.'; }}; if ([string]::IsNullOrWhiteSpace($vmPath)) {{ throw 'A virtual machine storage path is required.'; }}; if ([string]::IsNullOrWhiteSpace($diskPath)) {{ throw 'A Hyper-V virtual disk path is required.'; }}; New-Item -ItemType Directory -Path $vmPath -Force | Out-Null; if (Get-VM -Name $vmName -ErrorAction SilentlyContinue) {{ throw \"A Hyper-V virtual machine named '$vmName' already exists.\"; }}; New-VM -Name $vmName -Generation {generation} -Path $vmPath -MemoryStartupBytes 2GB -ErrorAction Stop | Out-Null; Add-VMHardDiskDrive -VMName $vmName -ControllerType {controllerType} -ControllerNumber 0 -ControllerLocation 0 -Path $diskPath -ErrorAction Stop | Out-Null{firmwareCommand}{startCommand}";
+            }
+
+            private static string EscapePowerShellSingleQuotedString(string value)
+            {
+                return (value ?? string.Empty).Replace("'", "''", StringComparison.Ordinal);
+            }
         }
 
         public static class HyperVRestorePointHelper
@@ -687,18 +728,56 @@ namespace SecureServerBackup.Windows
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
+            if (pnlRegularHyperVRestore.Visibility == Visibility.Visible)
+            {
+                ApplyDefaultNewHyperVVmSettings();
+            }
+
             UpdateExistingHyperVVmOptions();
         }
 
         private void UpdateExistingHyperVVmOptions()
         {
-            if (pnlExistingHyperVVmOptions == null || chkAttachToExistingHyperVVm == null)
+            if (pnlExistingHyperVVmOptions == null || pnlNewHyperVVmOptions == null || chkAttachToExistingHyperVVm == null || rbCreateNewHyperVVm == null)
             {
                 return;
             }
 
-            bool visible = pnlRegularHyperVRestore.Visibility == Visibility.Visible && chkAttachToExistingHyperVVm.IsChecked == true;
-            pnlExistingHyperVVmOptions.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            bool isHyperVRestoreVisible = pnlRegularHyperVRestore.Visibility == Visibility.Visible;
+            bool attachExistingVisible = isHyperVRestoreVisible && chkAttachToExistingHyperVVm.IsChecked == true;
+            bool createNewVisible = isHyperVRestoreVisible && rbCreateNewHyperVVm.IsChecked == true;
+
+            pnlExistingHyperVVmOptions.Visibility = attachExistingVisible ? Visibility.Visible : Visibility.Collapsed;
+            pnlNewHyperVVmOptions.Visibility = createNewVisible ? Visibility.Visible : Visibility.Collapsed;
+
+            if (createNewVisible)
+            {
+                ApplyDefaultNewHyperVVmSettings();
+            }
+        }
+
+        private void ApplyDefaultNewHyperVVmSettings()
+        {
+            if (txtHyperVVirtualDiskPath == null || txtNewHyperVVmName == null || txtNewHyperVVmPath == null)
+            {
+                return;
+            }
+
+            string virtualDiskPath = txtHyperVVirtualDiskPath.Text.Trim();
+            if (string.IsNullOrWhiteSpace(virtualDiskPath))
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(txtNewHyperVVmName.Text))
+            {
+                txtNewHyperVVmName.Text = RegularHyperVRestoreHelper.GetDefaultHyperVVmName(virtualDiskPath);
+            }
+
+            if (string.IsNullOrWhiteSpace(txtNewHyperVVmPath.Text))
+            {
+                txtNewHyperVVmPath.Text = RegularHyperVRestoreHelper.GetDefaultHyperVVmStoragePath(virtualDiskPath);
+            }
         }
 
         private void LoadAvailableHyperVVirtualMachines()
@@ -837,6 +916,21 @@ namespace SecureServerBackup.Windows
                 _selectedTargetPath = saveDialog.FileName;
                 txtHyperVVirtualDiskPath.Text = saveDialog.FileName;
                 txtRestoreDestination.Text = saveDialog.FileName;
+                ApplyDefaultNewHyperVVmSettings();
+            }
+        }
+
+        private void BrowseNewHyperVVmLocation_Click(object sender, RoutedEventArgs e)
+        {
+            using var folderDialog = new FolderBrowserDialog
+            {
+                Description = "Select Hyper-V virtual machine storage folder",
+                ShowNewFolderButton = true
+            };
+
+            if (folderDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                txtNewHyperVVmPath.Text = folderDialog.SelectedPath;
             }
         }
 
@@ -1077,6 +1171,23 @@ namespace SecureServerBackup.Windows
                         return false;
                     }
                 }
+
+                if (rbCreateNewHyperVVm.IsChecked == true)
+                {
+                    if (string.IsNullOrWhiteSpace(txtNewHyperVVmName.Text))
+                    {
+                        MessageBox.Show("Please enter the name for the new Hyper-V virtual machine.", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return false;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(txtNewHyperVVmPath.Text))
+                    {
+                        MessageBox.Show("Please select the storage folder for the new Hyper-V virtual machine.", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return false;
+                    }
+                }
             }
 
             if (_restoreTargetKind == RestoreTargetKind.Volume && string.IsNullOrWhiteSpace(_selectedTargetPath) && string.IsNullOrWhiteSpace(txtRestoreDestination.Text))
@@ -1246,6 +1357,26 @@ namespace SecureServerBackup.Windows
                 callback(95, $"Attaching restored virtual disk to Hyper-V VM '{vmName}'...");
                 AttachVirtualDiskToExistingHyperVVm(vmName, virtualDiskPath);
             }
+            else if (rbCreateNewHyperVVm.IsChecked == true)
+            {
+                string vmName = txtNewHyperVVmName.Text.Trim();
+                string vmStoragePath = txtNewHyperVVmPath.Text.Trim();
+                int generation = GetSelectedNewHyperVVmGeneration();
+
+                callback(95, $"Creating Hyper-V VM '{vmName}'...");
+                CreateNewHyperVVm(vmName, vmStoragePath, virtualDiskPath, generation, chkStartCreatedHyperVVm.IsChecked == true);
+            }
+        }
+
+        private int GetSelectedNewHyperVVmGeneration()
+        {
+            if (cmbNewHyperVGeneration?.SelectedItem is ComboBoxItem selectedItem &&
+                int.TryParse(selectedItem.Tag?.ToString(), out int generation))
+            {
+                return generation;
+            }
+
+            return 2;
         }
 
         private static void PrepareHyperVVirtualDiskFile(string virtualDiskPath, bool createFixedDisk)
@@ -1322,6 +1453,29 @@ namespace SecureServerBackup.Windows
             if (process == null || process.ExitCode != 0)
             {
                 throw new InvalidOperationException($"Failed to attach the restored virtual disk to the selected Hyper-V virtual machine. {errors}".Trim());
+            }
+        }
+
+        private static void CreateNewHyperVVm(string vmName, string vmStoragePath, string virtualDiskPath, int generation, bool startAfterCreate)
+        {
+            string script = RegularHyperVRestoreHelper.BuildCreateVirtualMachineScript(vmName, vmStoragePath, virtualDiskPath, generation, startAfterCreate);
+
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Failed to create the new Hyper-V virtual machine. {errors}".Trim());
             }
         }
 

@@ -195,11 +195,27 @@
 								Click="BrowseHyperVVirtualDisk_Click"
 								Content="Browse..." />
 						</Grid>
-						<CheckBox
+                       <TextBlock
+							Margin="0,0,0,5"
+							FontWeight="Bold"
+							Text="After restore:" />
+						<RadioButton
+							Name="rbLeaveHyperVDiskDetached"
+							Margin="0,0,0,5"
+							Checked="ExistingHyperVVmAttach_Changed"
+							Content="Leave the restored virtual disk detached"
+							IsChecked="True" />
+						<RadioButton
 							Name="chkAttachToExistingHyperVVm"
 							Margin="0,0,0,8"
 							Checked="ExistingHyperVVmAttach_Changed"
 							Content="Attach the restored virtual disk to an existing Hyper-V virtual machine after restore"
+							Unchecked="ExistingHyperVVmAttach_Changed" />
+                     <RadioButton
+							Name="rbCreateNewHyperVVm"
+							Margin="0,0,0,8"
+							Checked="ExistingHyperVVmAttach_Changed"
+							Content="Create a new Hyper-V virtual machine using the restored virtual disk"
 							Unchecked="ExistingHyperVVmAttach_Changed" />
 						<StackPanel
 							Name="pnlExistingHyperVVmOptions"
@@ -208,6 +224,45 @@
 							<ComboBox
 								Name="cmbExistingHyperVVm"
 								MinWidth="260" />
+						</StackPanel>
+                       <StackPanel
+							Name="pnlNewHyperVVmOptions"
+							Visibility="Collapsed">
+							<TextBlock Margin="0,0,0,5" Text="New Hyper-V virtual machine name:" />
+							<TextBox
+								Name="txtNewHyperVVmName"
+								Height="25"
+								Margin="0,0,0,8" />
+							<TextBlock Margin="0,0,0,5" Text="Virtual machine storage folder:" />
+							<Grid Margin="0,0,0,8">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="Auto" />
+								</Grid.ColumnDefinitions>
+								<TextBox
+									Name="txtNewHyperVVmPath"
+									Grid.Column="0"
+									Height="25"
+									Margin="0,0,5,0" />
+								<Button
+									Grid.Column="1"
+									Width="80"
+									Click="BrowseNewHyperVVmLocation_Click"
+									Content="Browse..." />
+							</Grid>
+							<TextBlock Margin="0,0,0,5" Text="Virtual machine generation:" />
+							<ComboBox
+								Name="cmbNewHyperVGeneration"
+								Margin="0,0,0,8"
+								MinWidth="160"
+								SelectedIndex="1">
+								<ComboBoxItem Content="Generation 1" Tag="1" />
+								<ComboBoxItem Content="Generation 2" Tag="2" />
+							</ComboBox>
+							<CheckBox
+								Name="chkStartCreatedHyperVVm"
+								Content="Start the new virtual machine after restore"
+								IsChecked="True" />
 						</StackPanel>
 					</StackPanel>
 					<RadioButton

@@ -40,4 +40,52 @@ public sealed class RegularHyperVRestoreHelperTests
 
         Assert.Equal("Test VM", result);
     }
+
+    [Fact]
+    public void GetDefaultHyperVVmName_WhenVirtualDiskPathProvided_ReturnsFileNameWithoutExtension()
+    {
+        string result = RestoreWindowNew.RegularHyperVRestoreHelper.GetDefaultHyperVVmName(@"D:\HyperV\RestoredServer.vhdx");
+
+        Assert.Equal("RestoredServer", result);
+    }
+
+    [Fact]
+    public void GetDefaultHyperVVmStoragePath_WhenVirtualDiskPathProvided_ReturnsContainingDirectory()
+    {
+        string result = RestoreWindowNew.RegularHyperVRestoreHelper.GetDefaultHyperVVmStoragePath(@"D:\HyperV\RestoredServer.vhdx");
+
+        Assert.Equal(@"D:\HyperV", result);
+    }
+
+    [Fact]
+    public void BuildCreateVirtualMachineScript_WhenGenerationTwoAndAutoStartEnabled_UsesFirmwareAndStartCommands()
+    {
+        string result = RestoreWindowNew.RegularHyperVRestoreHelper.BuildCreateVirtualMachineScript(
+            "Restored VM",
+            @"D:\HyperV\VMs",
+            @"D:\HyperV\Disks\Restored VM.vhdx",
+            2,
+            true);
+
+        Assert.Contains("New-VM -Name $vmName -Generation 2", result);
+        Assert.Contains("Add-VMHardDiskDrive -VMName $vmName -ControllerType SCSI", result);
+        Assert.Contains("Set-VMFirmware -VMName 'Restored VM' -FirstBootDevice $bootDisk -EnableSecureBoot Off -ErrorAction Stop", result);
+        Assert.Contains("Start-VM -Name 'Restored VM' -ErrorAction Stop | Out-Null", result);
+    }
+
+    [Fact]
+    public void BuildCreateVirtualMachineScript_WhenGenerationOneAndAutoStartDisabled_UsesIdeAndOmitsFirmwareAndStartCommands()
+    {
+        string result = RestoreWindowNew.RegularHyperVRestoreHelper.BuildCreateVirtualMachineScript(
+            "Legacy VM",
+            @"E:\Legacy",
+            @"E:\Legacy\Legacy VM.vhdx",
+            1,
+            false);
+
+        Assert.Contains("New-VM -Name $vmName -Generation 1", result);
+        Assert.Contains("Add-VMHardDiskDrive -VMName $vmName -ControllerType IDE", result);
+        Assert.DoesNotContain("Set-VMFirmware", result);
+        Assert.DoesNotContain("Start-VM", result);
+    }
 }
