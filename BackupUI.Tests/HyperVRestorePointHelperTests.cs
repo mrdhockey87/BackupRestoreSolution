@@ -63,6 +63,17 @@ public sealed class HyperVRestorePointHelperTests : IDisposable
         Assert.Equal("Full_20260429_120000", result);
     }
 
+    [Fact]
+    public void IsHyperVBackupPoint_WhenArchiveFileExists_ReturnsFalse()
+    {
+        string backupFile = Path.Combine(_tempDirectory, "Win10OEM.ssb");
+        File.WriteAllText(backupFile, string.Empty);
+
+        bool result = RestoreWindowNew.HyperVRestorePointHelper.IsHyperVBackupPoint(backupFile);
+
+        Assert.False(result);
+    }
+
     private string CreateBackupPointDirectory(bool createExportFolder = true)
     {
         string backupPoint = Path.Combine(_tempDirectory, "Full_20260429_120000.ssb");

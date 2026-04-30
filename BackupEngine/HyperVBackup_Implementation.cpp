@@ -221,6 +221,89 @@ HRESULT ExecuteWMIMethod(IWbemServices* pSvc, const std::wstring& objectPath,
         NULL);
 }
 
+std::wstring GetWmiErrorMessage(HRESULT hr) {
+    _com_error error(hr);
+    const wchar_t* description = error.ErrorMessage();
+    if (description == nullptr || *description == L'\0') {
+        return L"Unknown WMI error";
+    }
+
+    return description;
+}
+
+bool BuildHyperVExportSettingData(
+    IWbemServices* pSvc,
+    IWbemClassObject* pClass,
+    const std::wstring& backupType,
+    std::wstring& exportSettingData,
+    std::wstring& errorMessage) {
+
+    CComPtr<IWbemClassObject> pSettingClass;
+    HRESULT hr = pSvc->GetObject(
+        CComBSTR(L"Msvm_VirtualSystemExportSettingData"),
+        0,
+        NULL,
+        &pSettingClass,
+        NULL);
+
+    if (FAILED(hr)) {
+        errorMessage = L"Failed to get export setting data class: " + GetWmiErrorMessage(hr);
+        return false;
+    }
+
+    CComPtr<IWbemClassObject> pSettingInstance;
+    hr = pSettingClass->SpawnInstance(0, &pSettingInstance);
+    if (FAILED(hr)) {
+        errorMessage = L"Failed to create export setting data instance: " + GetWmiErrorMessage(hr);
+        return false;
+    }
+
+    CComVariant varCopyVmStorage(VARIANT_TRUE);
+    hr = pSettingInstance->Put(L"CopyVmStorage", 0, &varCopyVmStorage, 0);
+    if (FAILED(hr)) {
+        errorMessage = L"Failed to set CopyVmStorage export setting: " + GetWmiErrorMessage(hr);
+        return false;
+    }
+
+    CComVariant varCopyRuntime(VARIANT_TRUE);
+    hr = pSettingInstance->Put(L"CopyVmRuntimeInformation", 0, &varCopyRuntime, 0);
+    if (FAILED(hr)) {
+        errorMessage = L"Failed to set CopyVmRuntimeInformation export setting: " + GetWmiErrorMessage(hr);
+        return false;
+    }
+
+    CComVariant varCreateSubdirectory(VARIANT_TRUE);
+    hr = pSettingInstance->Put(L"CreateVmExportSubdirectory", 0, &varCreateSubdirectory, 0);
+    if (FAILED(hr)) {
+        errorMessage = L"Failed to set CreateVmExportSubdirectory export setting: " + GetWmiErrorMessage(hr);
+        return false;
+    }
+
+    if (_wcsicmp(backupType.c_str(), L"Differential") == 0) {
+        CComVariant varBackupIntent(static_cast<unsigned char>(0));
+        hr = pSettingInstance->Put(L"BackupIntent", 0, &varBackupIntent, 0);
+        if (FAILED(hr)) {
+            errorMessage = L"Failed to set BackupIntent export setting: " + GetWmiErrorMessage(hr);
+            return false;
+        }
+    }
+
+    BSTR bstrObjectText = NULL;
+    hr = pSettingInstance->GetObjectText(0, &bstrObjectText);
+    if (FAILED(hr) || bstrObjectText == NULL) {
+        if (bstrObjectText != NULL) {
+            SysFreeString(bstrObjectText);
+        }
+
+        errorMessage = L"Failed to serialize export setting data: " + GetWmiErrorMessage(hr);
+        return false;
+    }
+
+    exportSettingData.assign(bstrObjectText, SysStringLen(bstrObjectText));
+    SysFreeString(bstrObjectText);
+    return true;
+}
+
 // Get Hyper-V management service
 HRESULT GetManagementService(IWbemServices* pSvc, IWbemClassObject** ppManagementService, std::wstring& servicePath) {
     CComPtr<IEnumWbemClassObject> pEnumerator;
@@ -489,17 +572,21 @@ namespace {
             return -1;
         }
 
-        // Set CopyVmStorage (copy VHD files)
-        CComVariant varCopyVmStorage(true);
-        pInParams->Put(L"CopyVmStorage", 0, &varCopyVmStorage, 0);
+        std::wstring exportSettingData;
+        std::wstring exportSettingError;
+        if (!BuildHyperVExportSettingData(pSvc, pClass, backupType, exportSettingData, exportSettingError)) {
+            SetLastErrorMessage(exportSettingError);
+            if (coinitCalled) CoUninitialize();
+            return -1;
+        }
 
-        // Set CopyVmRuntimeInformation (copy snapshots)
-        CComVariant varCopyRuntime(true);
-        pInParams->Put(L"CopyVmRuntimeInformation", 0, &varCopyRuntime, 0);
-
-        // Set CreateVmExportSubdirectory
-        CComVariant varSubdir(true);
-        pInParams->Put(L"CreateVmExportSubdirectory", 0, &varSubdir, 0);
+        CComVariant varExportSettingData(exportSettingData.c_str());
+        hr = pInParams->Put(L"ExportSettingData", 0, &varExportSettingData, 0);
+        if (FAILED(hr)) {
+            SetLastErrorMessage(L"Failed to set ExportSettingData parameter: " + GetWmiErrorMessage(hr));
+            if (coinitCalled) CoUninitialize();
+            return -1;
+        }
 
         if (callback) {
             std::wstring status = L"Starting " + backupType + L" export...";
@@ -518,7 +605,7 @@ namespace {
             NULL);
 
         if (FAILED(hr)) {
-            SetLastErrorMessage(L"Failed to execute export method");
+            SetLastErrorMessage(L"Failed to execute export method: " + GetWmiErrorMessage(hr));
             if (coinitCalled) CoUninitialize();
             return -1;
         }

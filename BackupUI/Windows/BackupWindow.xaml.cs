@@ -326,7 +326,13 @@ namespace SecureServerBackup.Windows
             if (job.IsHyperVBackup)
             {
                 foreach (var item in lstHyperVMachines.SelectedItems)
-                    job.HyperVMachines.Add(item.ToString()!);
+                {
+                    string vmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(item.ToString() ?? string.Empty);
+                    if (!string.IsNullOrWhiteSpace(vmName))
+                    {
+                        job.HyperVMachines.Add(vmName);
+                    }
+                }
             }
 
             if (chkEnableSchedule.IsChecked == true)

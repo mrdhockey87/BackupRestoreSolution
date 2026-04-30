@@ -16,6 +16,17 @@ namespace SecureServerBackupService
         private const string DllName = "SecureServerBackupEngine.dll";
         private static readonly SemaphoreSlim NativeExecutionLock = new(1, 1);
 
+        public static string NormalizeHyperVVirtualMachineName(string displayText)
+        {
+            if (string.IsNullOrWhiteSpace(displayText))
+            {
+                return string.Empty;
+            }
+
+            int stateIndex = displayText.LastIndexOf(" (", StringComparison.Ordinal);
+            return stateIndex > 0 ? displayText[..stateIndex].Trim() : displayText.Trim();
+        }
+
         public static string GetHyperVBackupMode(BackupType backupType, bool hasExistingFullBackup, bool hasAnyExistingBackup)
         {
             return backupType switch
@@ -24,6 +35,172 @@ namespace SecureServerBackupService
                 BackupType.Differential when hasExistingFullBackup => "Differential",
                 _ => "Full"
             };
+        }
+
+        public static bool HasAnyHyperVBackupPoint(string destinationPath)
+        {
+            return HasHyperVBackupArchive(destinationPath, requireLegacyFullPoint: false);
+        }
+
+        public static bool HasFullHyperVBackupPoint(string destinationPath)
+        {
+            return HasHyperVBackupArchive(destinationPath, requireLegacyFullPoint: true);
+        }
+
+        private static bool HasHyperVBackupArchive(string destinationPath, bool requireLegacyFullPoint)
+        {
+            if (string.IsNullOrWhiteSpace(destinationPath))
+            {
+                return false;
+            }
+
+            if (File.Exists(destinationPath))
+            {
+                return true;
+            }
+
+            if (!Directory.Exists(destinationPath))
+            {
+                return false;
+            }
+
+            if (string.Equals(Path.GetExtension(destinationPath), ".ssb", StringComparison.OrdinalIgnoreCase))
+            {
+                return !requireLegacyFullPoint || Path.GetFileName(destinationPath).StartsWith("Full_", StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (Directory.EnumerateFiles(destinationPath, "*.ssb", SearchOption.TopDirectoryOnly).Any())
+            {
+                return true;
+            }
+
+            var legacyBackupPointDirectories = Directory.EnumerateDirectories(destinationPath, "*.ssb", SearchOption.TopDirectoryOnly);
+            return requireLegacyFullPoint
+                ? legacyBackupPointDirectories.Any(path => Path.GetFileName(path).StartsWith("Full_", StringComparison.OrdinalIgnoreCase))
+                : legacyBackupPointDirectories.Any();
+        }
+
+        private static string GetHyperVArchivePath(BackupJob job, string normalizedVmName)
+        {
+            string fileName = job.HyperVMachines.Count > 1
+                ? $"{job.Name}_{SanitizeFileName(normalizedVmName)}.ssb"
+                : $"{job.Name}.ssb";
+
+            return Path.Combine(job.DestinationPath, fileName);
+        }
+
+        private static string SanitizeFileName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "HyperV";
+            }
+
+            var invalidCharacters = Path.GetInvalidFileNameChars();
+            return new string(value.Select(ch => invalidCharacters.Contains(ch) ? '_' : ch).ToArray());
+        }
+
+        private static string EscapePowerShellSingleQuotedString(string value)
+        {
+            return (value ?? string.Empty).Replace("'", "''", StringComparison.Ordinal);
+        }
+
+        private static string FindNewestHyperVExportPoint(string exportRootPath)
+        {
+            if (!Directory.Exists(exportRootPath))
+            {
+                return string.Empty;
+            }
+
+            return Directory.EnumerateDirectories(exportRootPath, "*.ssb", SearchOption.TopDirectoryOnly)
+                .OrderByDescending(Directory.GetLastWriteTimeUtc)
+                .FirstOrDefault() ?? string.Empty;
+        }
+
+        private static string ResolveHyperVExportPath(string exportPointPath)
+        {
+            if (string.IsNullOrWhiteSpace(exportPointPath) || !Directory.Exists(exportPointPath))
+            {
+                return string.Empty;
+            }
+
+            string exportPath = Path.Combine(exportPointPath, "Export");
+            return Directory.Exists(exportPath) ? exportPath : string.Empty;
+        }
+
+        private static string FindPrimaryHyperVVirtualDisk(string exportPointPath)
+        {
+            string exportPath = ResolveHyperVExportPath(exportPointPath);
+            if (string.IsNullOrWhiteSpace(exportPath))
+            {
+                return string.Empty;
+            }
+
+            return Directory.EnumerateFiles(exportPath, "*.vhd*", SearchOption.AllDirectories)
+                .Select(path => new FileInfo(path))
+                .OrderByDescending(file => file.Length)
+                .ThenBy(file => file.FullName, StringComparer.OrdinalIgnoreCase)
+                .Select(file => file.FullName)
+                .FirstOrDefault() ?? string.Empty;
+        }
+
+        private static int MountVirtualDiskAndGetDiskNumber(string virtualDiskPath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(virtualDiskPath);
+
+            string escapedPath = EscapePowerShellSingleQuotedString(virtualDiskPath);
+            string script = $"Mount-DiskImage -ImagePath '{escapedPath}' -Access ReadOnly -ErrorAction Stop | Out-Null; Start-Sleep -Milliseconds 500; (Get-DiskImage -ImagePath '{escapedPath}' -ErrorAction Stop | Get-Disk -ErrorAction Stop | Select-Object -ExpandProperty Number)";
+
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string output = process?.StandardOutput.ReadToEnd() ?? string.Empty;
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0 ||
+                !int.TryParse(output.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault(), out int diskNumber))
+            {
+                throw new InvalidOperationException($"Failed to mount the exported Hyper-V virtual disk. {errors}".Trim());
+            }
+
+            return diskNumber;
+        }
+
+        private static void UnmountVirtualDisk(string virtualDiskPath)
+        {
+            if (string.IsNullOrWhiteSpace(virtualDiskPath))
+            {
+                return;
+            }
+
+            string escapedPath = EscapePowerShellSingleQuotedString(virtualDiskPath);
+            string script = $"Dismount-DiskImage -ImagePath '{escapedPath}' -ErrorAction Stop";
+
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Failed to unmount the exported Hyper-V virtual disk. {errors}".Trim());
+            }
         }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -231,8 +408,9 @@ namespace SecureServerBackupService
                             LogFromEngine(job.Name, level, message, details);
                         };
 
+                        bool isHyperVBackup = job.IsHyperVBackup || job.Target == BackupTarget.HyperV;
                         string? newBackupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
-                        if (job.Type == BackupType.Incremental || job.Type == BackupType.Differential)
+                        if (!isHyperVBackup && (job.Type == BackupType.Incremental || job.Type == BackupType.Differential))
                         {
                             if (!File.Exists(newBackupPath))
                             {
@@ -268,7 +446,7 @@ namespace SecureServerBackupService
                             }
                         }
 
-                        if (job.IsHyperVBackup || job.Target == BackupTarget.HyperV)
+                        if (isHyperVBackup)
                         {
                             foreach (var vm in job.HyperVMachines)
                             {
@@ -278,21 +456,104 @@ namespace SecureServerBackupService
                                     return false;
                                 }
 
-                                newBackupPath = job.DestinationPath;
+                                string normalizedVmName = NormalizeHyperVVirtualMachineName(vm);
+                                if (string.IsNullOrWhiteSpace(normalizedVmName))
+                                {
+                                    logger?.Invoke("Hyper-V backup failed: the selected virtual machine name is empty after normalization.");
+                                    return false;
+                                }
 
-                                logger?.Invoke($"Creating Hyper-V backup point in: {newBackupPath}");
-                                progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {vm}...");
+                                newBackupPath = GetHyperVArchivePath(job, normalizedVmName);
 
-                                bool hasAnyExistingHyperVPoint = Directory.Exists(newBackupPath) && Directory.EnumerateDirectories(newBackupPath, "*.ssb", SearchOption.TopDirectoryOnly).Any();
-                                bool hasExistingFullHyperVPoint = Directory.Exists(newBackupPath) && Directory.EnumerateDirectories(newBackupPath, "Full_*.ssb", SearchOption.TopDirectoryOnly).Any();
+                                logger?.Invoke($"Creating Hyper-V backup archive: {Path.GetFileName(newBackupPath)}");
+                                progressCallback?.Invoke(0, $"Backing up Hyper-V VM: {normalizedVmName}...");
+
+                                bool hasAnyExistingHyperVPoint = HasAnyHyperVBackupPoint(newBackupPath);
+                                bool hasExistingFullHyperVPoint = HasFullHyperVBackupPoint(newBackupPath);
+
+                                if ((job.Type == BackupType.Incremental || job.Type == BackupType.Differential) && !hasAnyExistingHyperVPoint)
+                                {
+                                    logger?.Invoke($"No Hyper-V base backup archive exists. Automatically switching from {job.Type} to Full backup for VM: {normalizedVmName}");
+                                }
+
                                 string hyperVBackupMode = GetHyperVBackupMode(job.Type, hasExistingFullHyperVPoint, hasAnyExistingHyperVPoint);
 
-                                int result = hyperVBackupMode switch
+                                string temporaryExportRoot = Path.Combine(Path.GetTempPath(), "SecureServerBackup", "HyperV", Guid.NewGuid().ToString("N"));
+                                Directory.CreateDirectory(temporaryExportRoot);
+
+                                int result;
+                                string exportPointPath = string.Empty;
+                                string virtualDiskPath = string.Empty;
+                                int mountedDiskNumber = -1;
+
+                                try
                                 {
-                                    "Incremental" => BackupHyperVVMIncremental(vm, newBackupPath, nativeCallback),
-                                    "Differential" => BackupHyperVVMDifferential(vm, newBackupPath, nativeCallback),
-                                    _ => BackupHyperVVM(vm, newBackupPath, nativeCallback)
-                                };
+                                    result = hyperVBackupMode switch
+                                    {
+                                        "Incremental" => BackupHyperVVMIncremental(normalizedVmName, temporaryExportRoot, nativeCallback),
+                                        "Differential" => BackupHyperVVMDifferential(normalizedVmName, temporaryExportRoot, nativeCallback),
+                                        _ => BackupHyperVVM(normalizedVmName, temporaryExportRoot, nativeCallback)
+                                    };
+
+                                    if (result != 0)
+                                    {
+                                        var exportError = new StringBuilder(1024);
+                                        GetLastErrorMessage(exportError, exportError.Capacity);
+                                        logger?.Invoke($"Hyper-V export failed: {exportError}");
+                                        return false;
+                                    }
+
+                                    exportPointPath = FindNewestHyperVExportPoint(temporaryExportRoot);
+                                    if (string.IsNullOrWhiteSpace(exportPointPath))
+                                    {
+                                        logger?.Invoke("Hyper-V backup failed: the temporary export did not create a backup point folder.");
+                                        return false;
+                                    }
+
+                                    virtualDiskPath = FindPrimaryHyperVVirtualDisk(exportPointPath);
+                                    if (string.IsNullOrWhiteSpace(virtualDiskPath))
+                                    {
+                                        logger?.Invoke("Hyper-V backup failed: the temporary export did not contain a VHD or VHDX disk to capture.");
+                                        return false;
+                                    }
+
+                                    logger?.Invoke($"Capturing Hyper-V virtual disk into backup archive: {Path.GetFileName(newBackupPath)}");
+                                    mountedDiskNumber = MountVirtualDiskAndGetDiskNumber(virtualDiskPath);
+
+                                    result = hyperVBackupMode switch
+                                    {
+                                        "Incremental" => BackupDiskIncremental(mountedDiskNumber, newBackupPath, includeSystemState: false, compress: true, Array.Empty<string>(), 0, nativeCallback, nativeLogCallback),
+                                        "Differential" => BackupDiskDifferential(mountedDiskNumber, newBackupPath, includeSystemState: false, compress: true, Array.Empty<string>(), 0, nativeCallback, nativeLogCallback),
+                                        _ => BackupDisk(mountedDiskNumber, newBackupPath, includeSystemState: false, compress: true, Array.Empty<string>(), 0, nativeCallback, nativeLogCallback)
+                                    };
+                                }
+                                finally
+                                {
+                                    if (!string.IsNullOrWhiteSpace(virtualDiskPath))
+                                    {
+                                        try
+                                        {
+                                            UnmountVirtualDisk(virtualDiskPath);
+                                        }
+                                        catch (Exception unmountEx)
+                                        {
+                                            logger?.Invoke($"Warning: Failed to unmount the temporary Hyper-V export disk: {unmountEx.Message}");
+                                        }
+                                    }
+
+                                    try
+                                    {
+                                        if (Directory.Exists(temporaryExportRoot))
+                                        {
+                                            Directory.Delete(temporaryExportRoot, recursive: true);
+                                        }
+                                    }
+                                    catch (Exception cleanupEx)
+                                    {
+                                        logger?.Invoke($"Warning: Failed to delete the temporary Hyper-V export folder: {cleanupEx.Message}");
+                                    }
+                                }
+
                                 if (result != 0)
                                 {
                                     var error = new StringBuilder(1024);

@@ -12,6 +12,26 @@ namespace SecureServerBackupService.Tests;
 public sealed class BackupServiceCommunicationTests
 {
     [Fact]
+    public void IsExpectedPipeDisconnect_WhenBrokenPipeIOException_ReturnsTrue()
+    {
+        IOException exception = CreateIOException("Pipe is broken.", unchecked((int)0x8007006D));
+
+        bool result = InvokeIsExpectedPipeDisconnect(exception);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsExpectedPipeDisconnect_WhenUnexpectedIOException_ReturnsFalse()
+    {
+        IOException exception = CreateIOException("Access denied.", unchecked((int)0x80070005));
+
+        bool result = InvokeIsExpectedPipeDisconnect(exception);
+
+        Assert.False(result);
+    }
+
+    [Fact]
     public void ProcessMessage_WithRunBackup_RaisesCommandReceived()
     {
         BackupServiceCommunication service = new();
@@ -162,5 +182,19 @@ public sealed class BackupServiceCommunicationTests
     {
         using JsonDocument document = JsonDocument.Parse(json);
         return document.RootElement.GetProperty("Success").GetBoolean();
+    }
+
+    private static bool InvokeIsExpectedPipeDisconnect(IOException exception)
+    {
+        MethodInfo method = typeof(BackupServiceCommunication).GetMethod("IsExpectedPipeDisconnect", BindingFlags.Static | BindingFlags.NonPublic)!;
+        return (bool)method.Invoke(null, new object[] { exception })!;
+    }
+
+    private static IOException CreateIOException(string message, int hResult)
+    {
+        IOException exception = new(message);
+        typeof(Exception).GetProperty("HResult", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
+            .SetValue(exception, hResult);
+        return exception;
     }
 }

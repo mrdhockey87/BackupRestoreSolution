@@ -2460,7 +2460,11 @@ namespace SecureServerBackup.Windows
             {
                 if (drive.ItemType == DriveTreeItemType.HyperVSystem && drive.IsChecked == true)
                 {
-                    job.HyperVMachines.Add(drive.FullPath);
+                    string vmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(drive.FullPath);
+                    if (!string.IsNullOrWhiteSpace(vmName))
+                    {
+                        job.HyperVMachines.Add(vmName);
+                    }
                 }
             }
         }
@@ -2492,7 +2496,11 @@ namespace SecureServerBackup.Windows
                     else if (drive.ItemType == DriveTreeItemType.HyperVSystem)
                     {
                         job.Target = BackupTarget.HyperV;
-                        job.HyperVMachines.Add(drive.FullPath);
+                        string vmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(drive.FullPath);
+                        if (!string.IsNullOrWhiteSpace(vmName))
+                        {
+                            job.HyperVMachines.Add(vmName);
+                        }
                     }
                 }
                 else if (drive.IsChecked == null && drive.Children.Count > 0)

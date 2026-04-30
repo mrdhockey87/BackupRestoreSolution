@@ -114,7 +114,13 @@ namespace SecureServerBackup.Windows
         {
             public static bool IsHyperVBackupPoint(string path)
             {
-                return Directory.Exists(path) && File.Exists(Path.Combine(path, "hyperv_backup_info.txt"));
+                if (!Directory.Exists(path))
+                {
+                    return false;
+                }
+
+                return File.Exists(Path.Combine(path, "hyperv_backup_info.txt")) ||
+                       Directory.Exists(Path.Combine(path, "Export"));
             }
 
             public static string? ResolveExportPath(string backupPointPath)

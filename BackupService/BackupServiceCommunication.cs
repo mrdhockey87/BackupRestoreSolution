@@ -121,6 +121,9 @@ namespace SecureServerBackupService
 					await writer.FlushAsync();
 				}
 			}
+         catch (IOException ex) when (IsExpectedPipeDisconnect(ex))
+			{
+			}
            catch (Exception ex)
 			{
                 BackupLogger.LogServiceWarning("Named pipe client communication failed", ex.Message);
@@ -129,6 +132,19 @@ namespace SecureServerBackupService
 			{
 				pipeServer.Dispose();
 			}
+		}
+
+		private static bool IsExpectedPipeDisconnect(IOException exception)
+		{
+			ArgumentNullException.ThrowIfNull(exception);
+
+			const int BrokenPipeHResult = unchecked((int)0x8007006D);
+			const int NoProcessOnOtherEndHResult = unchecked((int)0x800700E9);
+
+			return exception.HResult == BrokenPipeHResult ||
+				exception.HResult == NoProcessOnOtherEndHResult ||
+				exception.Message.Contains("Pipe is broken", StringComparison.OrdinalIgnoreCase) ||
+				exception.Message.Contains("pipe has been ended", StringComparison.OrdinalIgnoreCase);
 		}
 
 		private string ProcessMessage(string message)

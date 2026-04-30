@@ -145,8 +145,8 @@
 						<ComboBox
 							Name="cmbHyperVRestoreTarget"
 							MinWidth="260"
-							SelectionChanged="HyperVRestoreTarget_Changed"
-							SelectedIndex="0">
+							SelectedIndex="0"
+							SelectionChanged="HyperVRestoreTarget_Changed">
 							<ComboBoxItem Content="Restore exported files/folders" Tag="Files" />
 							<ComboBoxItem Content="Restore guest disk to volume" Tag="Volume" />
 							<ComboBoxItem Content="Restore guest disk to disk" Tag="Disk" />
@@ -167,7 +167,7 @@
 							Content="Start the virtual machine after restore"
 							IsChecked="True" />
 					</StackPanel>
-                    <CheckBox
+					<CheckBox
 						Name="chkRestoreToHyperVDisk"
 						Margin="0,0,0,8"
 						Checked="RegularHyperVRestoreOption_Changed"
@@ -195,7 +195,7 @@
 								Click="BrowseHyperVVirtualDisk_Click"
 								Content="Browse..." />
 						</Grid>
-                       <TextBlock
+						<TextBlock
 							Margin="0,0,0,5"
 							FontWeight="Bold"
 							Text="After restore:" />
@@ -211,23 +211,17 @@
 							Checked="ExistingHyperVVmAttach_Changed"
 							Content="Attach the restored virtual disk to an existing Hyper-V virtual machine after restore"
 							Unchecked="ExistingHyperVVmAttach_Changed" />
-                     <RadioButton
+						<RadioButton
 							Name="rbCreateNewHyperVVm"
 							Margin="0,0,0,8"
 							Checked="ExistingHyperVVmAttach_Changed"
 							Content="Create a new Hyper-V virtual machine using the restored virtual disk"
 							Unchecked="ExistingHyperVVmAttach_Changed" />
-						<StackPanel
-							Name="pnlExistingHyperVVmOptions"
-							Visibility="Collapsed">
+						<StackPanel Name="pnlExistingHyperVVmOptions" Visibility="Collapsed">
 							<TextBlock Margin="0,0,0,5" Text="Existing Hyper-V virtual machine:" />
-							<ComboBox
-								Name="cmbExistingHyperVVm"
-								MinWidth="260" />
+							<ComboBox Name="cmbExistingHyperVVm" MinWidth="260" />
 						</StackPanel>
-                       <StackPanel
-							Name="pnlNewHyperVVmOptions"
-							Visibility="Collapsed">
+						<StackPanel Name="pnlNewHyperVVmOptions" Visibility="Collapsed">
 							<TextBlock Margin="0,0,0,5" Text="New Hyper-V virtual machine name:" />
 							<TextBox
 								Name="txtNewHyperVVmName"
@@ -253,8 +247,8 @@
 							<TextBlock Margin="0,0,0,5" Text="Virtual machine generation:" />
 							<ComboBox
 								Name="cmbNewHyperVGeneration"
-								Margin="0,0,0,8"
 								MinWidth="160"
+								Margin="0,0,0,8"
 								SelectedIndex="1">
 								<ComboBoxItem Content="Generation 1" Tag="1" />
 								<ComboBoxItem Content="Generation 2" Tag="2" />

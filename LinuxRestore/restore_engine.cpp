@@ -147,7 +147,9 @@ private:
     bool IsHyperVBackupPointDirectory(const std::string& path) {
         std::error_code ec;
         fs::path directory(path);
-        return fs::is_directory(directory, ec) && fs::exists(directory / "hyperv_backup_info.txt", ec);
+        return fs::is_directory(directory, ec) &&
+               (fs::exists(directory / "hyperv_backup_info.txt", ec) ||
+                fs::is_directory(directory / "Export", ec));
     }
 
     std::string ResolveHyperVExportPath(const std::string& backupPath) {

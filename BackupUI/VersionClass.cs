@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.72";
+        private static readonly string version_fallback_number = "6.2.3.77";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,17 @@ namespace SecureServerBackup
 
 /*
  * 
+ * Version 6.2.3.77 Matched Linux recovery Hyper-V backup-point detection to the Windows compatibility
+ *                  flow so legacy export-folder backups are still recognized during recovery restores. mdail 4/30/2026
+ * Version 6.2.3.76 Changed Hyper-V backups to restore through the normal .ssb archive flow while keeping
+ *                  legacy export-folder backup-point detection for older Hyper-V backups. mdail 4/30/2026
+ * Version 6.2.3.75 Fixed Hyper-V export to use the v2 ExportSettingData contract and corrected Hyper-V
+ *                  backup-point fallback detection for first-run incremental and differential jobs. mdail 4/30/2026
+ * Version 6.2.3.74 Fixed benign named-pipe client disconnects so the service no longer logs expected broken-pipe
+ *                  warnings after one-shot UI requests complete normally. mdail 4/30/2026
+ * Version 6.2.3.73 Fixed Hyper-V backup job VM name handling so saved selections strip display-state text like
+ *                  Running before manual or scheduled full, incremental, and differential backups call 
+ *                  the Hyper-V engine. mdail 4/30/2026
  * Version 6.2.3.72 Added creation of new Hyper-V virtual machines from regular-backup restores, including
  *                  generation selection, VM storage path selection, and optional auto-start after VHDX restore. mdail 4/30/2026
  * Version 6.2.3.71 Added restore support to write regular full, incremental, differential, and file backups into

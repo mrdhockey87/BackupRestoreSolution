@@ -124,6 +124,10 @@ int main()
     allPassed &= Expect(engine.IsHyperVBackupPointDirectory(hyperVBackupPoint.string()), "IsHyperVBackupPointDirectory should detect Hyper-V backup-point metadata.");
     allPassed &= Expect(engine.ResolveHyperVExportPath(hyperVBackupPoint.string()) == exportRoot.string(), "ResolveHyperVExportPath should return the Hyper-V export folder from metadata.");
 
+    fs::path exportOnlyBackupPoint = fs::path(tempDirectory) / "Full_20260429_130000.ssb";
+    fs::create_directories(exportOnlyBackupPoint / "Export");
+    allPassed &= Expect(engine.IsHyperVBackupPointDirectory(exportOnlyBackupPoint.string()), "IsHyperVBackupPointDirectory should detect legacy Hyper-V backup-point folders by Export content alone.");
+
     auto backupDates = engine.EnumerateBackupDates(tempDirectory);
     auto hyperVDate = std::find_if(backupDates.begin(), backupDates.end(), [&](const RestoreEngine::BackupDate& date) {
         return date.path == hyperVBackupPoint.string();
