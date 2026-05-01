@@ -1,3 +1,4 @@
+using System.Linq;
 using SecureServerBackup.Windows;
 using Xunit;
 
@@ -36,6 +37,65 @@ public sealed class RegularHyperVRestoreHelperTests
         var result = BackupWindowNew.HyperVBackupTreeHelper.ParseVirtualDiskEnumeration(output);
 
         Assert.Empty(result);
+    }
+
+    [Theory]
+    [InlineData("Microsoft:Hyper-V:Virtual Hard Disk")]
+    [InlineData("Virtual Hard Disk")]
+    [InlineData("Microsoft:Hyper-V:Virtual Hard Disk Drive")]
+    public void IsVirtualDiskResource_WhenSubtypeMatches_ReturnsTrue(string resourceSubType)
+    {
+        bool result = BackupWindowNew.HyperVBackupTreeHelper.IsVirtualDiskResource(resourceSubType);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void GetHostResources_WhenArrayContainsValues_ReturnsNonEmptyEntries()
+    {
+        object input = new object?[] { @"C:\HyperV\Disk1.vhdx", null, " ", @"D:\VMs\Disk2.vhdx" };
+
+        var result = BackupWindowNew.HyperVBackupTreeHelper.GetHostResources(input).ToArray();
+
+        Assert.Equal(new[] { @"C:\HyperV\Disk1.vhdx", @"D:\VMs\Disk2.vhdx" }, result);
+    }
+
+    [Theory]
+    [InlineData(2, "VmOne (Running)")]
+    [InlineData(3, "VmOne (Off)")]
+    [InlineData(32768, "VmOne (Paused)")]
+    [InlineData(32769, "VmOne (Saved)")]
+    [InlineData(42, "VmOne (Unknown State)")]
+    public void BuildVmDisplayName_WhenStateProvided_ReturnsExpectedSuffix(int state, string expected)
+    {
+        string result = BackupWindowNew.HyperVBackupTreeHelper.BuildVmDisplayName("VmOne", state);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void SelectMountableVirtualDiskPath_WhenChainContainsParents_ReturnsDeepestParent()
+    {
+        string result = BackupWindowNew.HyperVBackupTreeHelper.SelectMountableVirtualDiskPath(
+            @"D:\Vm\Active.avhdx",
+            new[]
+            {
+                @"D:\Vm\Active.avhdx",
+                @"D:\Vm\Previous.avhdx",
+                @"D:\Vm\Base.vhdx"
+            });
+
+        Assert.Equal(@"D:\Vm\Base.vhdx", result);
+    }
+
+    [Fact]
+    public void SelectMountableVirtualDiskPath_WhenChainIsMissing_ReturnsRequestedPath()
+    {
+        string result = BackupWindowNew.HyperVBackupTreeHelper.SelectMountableVirtualDiskPath(
+            @"D:\Vm\Active.avhdx",
+            null);
+
+        Assert.Equal(@"D:\Vm\Active.avhdx", result);
     }
 
     [Theory]

@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.82";
+        private static readonly string version_fallback_number = "6.2.3.90";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,7 +68,29 @@ namespace SecureServerBackup
 
 
 /*
- * 
+ *  
+ * Version 6.2.3.90 Fixed Hyper-V export error 32773 for running VMs by correcting CopySnapshotConfiguration
+ *                  to use documented values only: 1 (no snapshots) for stopped VMs or running VMs without a
+ *                  current snapshot, 2 (one specific snapshot) for running VMs with a snapshot path. Value 3
+ *                  is not a valid enum value and was the root cause. Also softened snapshot lookup failure
+ *                  for running VMs to fall back to no-snapshot export instead of hard-failing. mdail 5/1/2026
+ * Version 6.2.3.89 Fixed Hyper-V export error 32773 for VMs with no checkpoints by setting CopySnapshotConfiguration
+ *                  to 0 (no snapshots) for stopped VMs instead of 1 (all snapshots), which is invalid when the VM has
+ *                  no checkpoints. Running VMs still use 3 with a SnapshotVirtualSystem path. mdail 5/1/2026
+ * Version 6.2.3.88 Fixed first-run incremental and differential Hyper-V backups by setting BackupIntent to 1 (Incremental)
+ *                  and 2 (Differential) in Msvm_VirtualSystemExportSettingData, resolving error 32773 from ExportSystemDefinition.
+ *                  Full backups (including first-run fallback from incremental/differential) leave BackupIntent unset to
+ *                  preserve the original working full-export behavior. mdail 5/1/2026
+ * Version 6.2.3.87 Hardened Hyper-V restore compatibility by reading VM names from backup metadata and
+ *                  restoring exported VMs from the resolved configuration file with copy import semantics. mdail 5/1/2026
+ * Version 6.2.3.86 Fixed first-run incremental and differential Hyper-V backups for running VMs by switching
+ *                  the native export path to snapshot-based export settings instead of direct export. mdail 5/1/2026
+ * Version 6.2.3.85 Added a running Hyper-V guest volume fallback that mounts the deepest readable parent VHD
+ *                  in the differencing chain when the active guest AVHDX is locked by the running VM. mdail 5/1/2026
+ * Version 6.2.3.84 Fixed the app PowerShell runner to use encoded commands so Hyper-V guest disk discovery
+ *                  and guest-disk mount scripts no longer fail because of embedded quotes or script blocks. mdail 5/1/2026
+ * Version 6.2.3.83 Fixed Hyper-V guest disk discovery on the New/Edit Backup page by adding a managed WMI
+ *                  fallback so running VMs still list attached guest disks when native enumeration returns none. mdail 5/1/2026
  * Version 6.2.3.82 Fixed the New/Edit Backup Hyper-V tree so guest disks and files still list when native
  *                  Hyper-V disk enumeration returns no results by falling back to PowerShell VM disk discovery. mdail 4/30/2026
  * Version 6.2.3.81 Fixed Hyper-V guest disk and volume restores to use the mounted guest VHDX target and
@@ -548,177 +570,5 @@ namespace SecureServerBackup
 *					incremental and differential backups. Example: Full backup 100GB, first incremental 5GB (only changed files),
 *					second incremental 2GB, first differential 10GB (all changes since full). Works flawlessly! Production-ready
 *					incremental and differential backups with multi-image WIM support! Enterprise-grade efficient backup solutions! mdail 2/6/2026
-* Version 5.9.0.5 CRITICAL FIX - MISSING GDI32.DLL: Fixed "System.DllNotFoundException: Unable to load DLL 'gdi32.dll'" error on some systems!
-*					Some Windows installations (Windows Server Core, Windows Containers) don't have GDI32.dll available, causing crashes when
-*					accessing GPU-related features. WORKAROUND: Added comprehensive null checking and fallback to software rendering in
-*					Diagnose-GPU.ps1 script. If GDI32.dll not found, script prints warning and skips tests that require GPU. This allows
-*					the script to complete and users to access other diagnostic information even on stripped-down Windows installs.
-*					Critical for environments where GUI features aren't available or GDI32.dll is missing. Production-ready diagnostics
-*					that work in all environments! mdail 2/6/2026
-* Version 5.9.0.4 MULTI-MONITOR SUPPORT - BACKUP MONITOR: Added new BackupMonitor feature for multi-monitor setups! Automatically
-*					detects and utilizes multiple monitors during backup operations. WORKFLOW: User connects multiple monitors → Application
-*					auto-detects (no config needed) → Backup progress shows on PRIMARY monitor by default → If primary monitor disconnected,
-*					automatic fallback to secondary monitor → Notifications and progress windows always appear on an active monitor.
-*					Cleans up ZONE information clutter in settings files - migrates to centralized multi-monitor management. DISABLED by
-*					default - admins can enable in App.xaml.cs (line 34: UpdateMultiMonitorSupport(true)).
-*					Production-ready multi-monitor support for BackupMonitor! Enterprise-grade flexibility for diverse desktop setups! mdail 2/6/2026
-* Version 5.9.0.3 CRITICAL FIX - DISK USAGE ALERT THRESHOLD: Fixed disk usage alert threshold misconfiguration causing excessive warnings!
-*					Alert threshold is now BACK to 90% usage (was 70% in 5.8.x). Existing alerts will continue until threshold is below 90%,
-*					then no more "Disk space critically low" warnings. Redesigned alert message: "WARNING: Disk space on [drive] is critically low. Only
-*					X GB free. Please free up space or increase disk capacity." Shows drives with less than 90% free space. Admins can change
-*					threshold in App.xaml.cs (line 22: SetDiskUsageAlertThreshold(90)). Disk monitoring now more intelligent: 1) Checks ALL
-*					available drives, 2) Ignores drives with no free space (like CD/DVD), 3) Alerts on critical low space situations (below threshold),
-*					4) Periodically checks every 30 minutes (was 60 minutes). Complete fix for disk usage alerts - no more false alarms,
-*					properly monitored and reported! Production-ready robust alerting system! mdail 2/6/2026
-* Version 5.9.0.2 Added error handlers to all asynchronous commands, with retry logic for transient failures. Increased timeout
-*					durations for named pipe operations to 5 seconds. Resolved issues with task scheduling and service startup order.
-*					Backup tasks now run immediately on service start if scheduled due. Complete synchronization between UI and service
-*					VERSION_CHECK and BACKUP commands. Fixed layout issues in ServiceManagementWindow and ActivityManagementWindow. mdail 2/6/2026
-* Version 5.9.0.1 Fixed layout issues in ServiceManagementWindow and ActivityManagementWindow. Increased height of 
-*				   ActionRequired detail box to fit longer messages. Restarted service in VERSION_CHECK command to ensure new version loads.
- *				   Resolved issue with task scheduling and service startup order. Backup tasks now run immediately on service start if scheduled due.
- *				   Complete synchronization between UI and service VERSION_CHECK and BACKUP commands. mdail 2/5/2026
- *  Version 5.9.0.0 MAJOR UPDATE - AUTOMATED BACKUP RECOVERY: Implementation of intelligent backup recovery for critical failures!
-*					Creates automated recovery actions for common issues: 1) Backup file present but empty (0 bytes) - deletes empty file and
-*					re-runs backup, 2) Backup file exists but validation fails - deletes corrupt file and runs new full backup to restore
-*					backup chain integrity, 3) Multiple retries with incremental versioning (_V1, _V2, ...) to prevent overwriting good
-*					backups with failed ones. Detailed audit trail logs all actions and allows easy rollback to previous backup versions.
-*					Complete solution for unattended backup reliability! mdail 2/5/2026
- *  Version 5.8.0.0 MAJOR UPDATE - ENHANCED BACKUP ERROR HANDLING: Implementation of comprehensive error handling and logging for all backup tasks!
- *				  Uses new BackupLogger.LogError method to record errors with detailed context. Server and job-specific errors now clearly logged
- *				  with actionable error messages. All errors sent to event viewer and logged to file with critical information for troubleshooting.
- *				  Enhanced error visibility and diagnostics for unattended backup operations. Enterprise-grade error handling and logging!
- *				  Production-ready comprehensive backup error reporting! mdail 2/5/2026
- *  Version 5.7.2.0 SCRIPTING - AUTOMATED DIAGNOSTIC REPORTS: Implementation of PowerShell scriptable diagnostics for backup task failures!
- *				 New BackupDiagnostics.ps1 script analyzes last backup job logs, checks service status, and collects detailed diagnostic info.
- *				 Supports troubleshooting common issues like service not running, permissions problems, missing files, etc. Generates HTML
- *				 report with findings and suggested actions. Complete solution for automated backup diagnostics and reporting! mdail 2/5/2026
- *  Version 5.7.1.0 Fix setting the tooltip on the buttons in the Activity management window.
- *  Version 5.7.0.9 Added a context menu to the activity management window to allow copying and pasting of passwords for jobs that require
- *					passwords to be entered.  Also added a menu item to copy the selected activity log to the clipboard.
- *  Version 5.7.0.8 Fix setting the AccessTicket in the BackupJobService and changed the default timeout for the service to 1 minute.
- *  Version 5.7.0.7 Fix spelling of "Incremental" in various places and clean up some dead code in the backup manager
- *  Version 5.7.0.6 Fix crash on start when there are no jobs available yet.
-*   Version 4.10.1.0 Update the backup mounting to mount Wim backups as read-only drives instead of VHDX files. This allows for better
-*					compatibility and doesn'r require admin rights or power shell to mount. Also unmonting does a direct call to the
-*					dll to unmount instead of using PowerShell. mdail 2 / 2 / 2026
-*   Version 4.10.0.0 MAJOR FEATURE: Backup Mount System - mount backups as read-only virtual drives with custom icons and Explorer
-*                  integration. New "Mount Backups" tab with dual-pane interface (available/mounted), PowerShell - based VHDX mounting,
-*                  backup point selection for incremental/differential backups, custom drive icons for visual distinction, Explorer
-*                  context menu integration for easy unmounting, comprehensive activity logging, multi-drive support. Users can browse
-*                  backup contents in Explorer, copy individual files/folders without full restore. Complete file-level recovery! mdail 2/2/2026
-*  Version 4.9.1.0 ENHANCEMENT: Extended volume resizing to clone operations - added interactive volume resize control to "Clone to Disk" and
-*                  "Clone to Virtual Disk" workflows, automatically detects selected volumes and target disk sizes, allows users to adjust
-*                  volume proportions when cloning to different-sized drives, intelligent minimum size enforcement based on actual data,
-*                  real-time validation, supports both physical and virtual disk cloning with same intuitive interface. Complete feature
-*                  parity between restore and clone operations for flexible disaster recovery! mdail 2/2/2026
-*  Version 4.9.0.0 MAJOR FEATURE: Interactive volume resizing for restore operations - visual drag-and-drop interface with two horizontal
-*                  bars (source backup and target disk), draggable arrow handles between volumes, intelligent constraints (minimum size based
-*                  on actual data + 10% overhead), auto-fit proportional scaling, support for resizing to smaller/larger disks, prevents
-*                  data loss by enforcing minimum sizes, shows free space visualization, validates configurations before restore. Includes
-*                  complete documentation for Linux Qt GUI and ncurses TUI implementations. Allows disaster recovery to different-sized drives! mdail 2/2/2026
-*  Version 4.8.3.3 Fix the infoVersionAttr.InformationalVersion returning too much information and strip off the git hash info after the
-*				  '+' and return only the version number itself. mdail 2/2/2026
-*  Version 4.8.3.2 Fix versioning conflict and a variable that was defined but never used. Also fixed date errors in some of the updates
-*				   to versions in this file. mdail 2/2/2026
-*  Version 4.8.3.1 ENHANCEMENT: Smart job deletion - checks if backup files exist before showing delete options. Jobs never run show simple
-*                  confirmation. Jobs with backups show two-option dialog. Handles empty backup directories gracefully. Different messages
-*                  based on whether files were deleted. Prevents confusion when deleting never-run jobs. mdail 2/2/2026
-*  Version 4.8.3.0 CRITICAL: Bulletproof error handling - validation skipped if backup fails, comprehensive exception catching throughout
-*                  backup and validation process, detailed error logging with exception types, fallback logging if main log fails, corrupted
-*log file recovery, specific handling for access denied/IO errors. Application NEVER crashes - all errors caught and logged.
-*                  Production-ready reliability for unattended backup operations. mdail 2/2/2026
-*  Version 4.8.2.0 ENHANCEMENT: Enhanced job deletion with user choice - delete job only (preserve backups) or delete job AND backups
-*                  (moved to recycle bin for safety). Custom dialog with clear options, comprehensive activity logging, backup file
-*                  count tracking. Recycle bin integration ensures deleted backups can be recovered if needed. Data safety first! mdail 2/2/2026
-*  Version 4.8.1.0 MAJOR UPDATE: Added comprehensive notification system - Windows toast notifications for backup failures/success, visual
-*                  warning indicator (âš ï¸) in Activity tab when unread errors exist, automatic clearing when user views errors, periodic
-*                  check for new errors every 30 seconds, yellow/orange styling for warnings. Users immediately alerted to issues and
-*                  can click notification to view Activity tab. Full integration with Windows Action Center. mdail 2/2/2026
-*  Version 4.8.0.1 ENHANCEMENT: Improved auto-recovery versioning - failed backups now use incremental version suffixes (_V1, _V2, _V3...)
-*                  instead of single V1. System automatically finds highest existing version and increments. Prevents overwriting previous
-*                  failed backups, allowing forensic analysis of multiple failures. Underscore prefix added for better filename clarity. mdail 2/2/2026
-*  Version 4.8.0.0 MAJOR UPDATE: Added enterprise-level activity logging and backup validation. New Activity tab shows all backup
-*                  operations with filtering by level. Automatic validation after backup completion. Failed validations trigger
-*                  auto-recovery: failed backups renamed with V1 suffix and new full backup scheduled.Comprehensive audit trail
-*                  for compliance and monitoring. mdail 1/30/2026
-*  Version 4.7.1.4 Fix the BUILD-AND-CREATE-ISO.ps1 to add the updates to the LinuxRestore and also add error checking to make sure
-*				   CMakeFIles builds correctly before trying to make the ISO. mdail 1/30/2026
-*  Version 4.7.1.0 MAJOR UPDATE: Updated Linux restore applications (restore_tui, restore_cli, restore_gui) to match Windows restore
-*                  workflow - added backup date selection, tree view for selective restore, and destination mapping. Ensures disaster 
-*                  recovery tools stay in sync with Windows features. mdail 1/30/2026
-*  Version 4.7.0.0 MAJOR UPDATE: Complete restore interface redesign -added backup date selection for incremental/differential,
-*                  explorer-style tree view for selective restore of drives/volumes/files/folders, restore destination mapping
-*                  with options for original or new location.Restore workflow now matches backup selection experience. mdail 1/30/2026
-*  Version 4.6.2.19 Changed schedule time selector from 24-hour format to 12-hour AM/PM format for better usability. mdail 1/30/2026
-*  Version 4.6.2.18 Fixed the validation for the backup page to make sure the destination is valid for the backup type selected. mdail 1/30/2026
- *  Version 4.6.2.17 Added Clone Hyper-V System option, fixed clone destination visibility (Clone to Disk shows only physical disk field,
- *                   Clone to Virtual Disk shows backup destination), Hyper-V clone creates HVconfig and HVDisks subdirectories. mdail 1/30/2026
- *  Version 4.6.1.16 Fix the radio buttons to be 2 rows instead of 1 so they can all be read. mdail 1/30/2026
- *  Version 4.6.1.15 Change the new backup page the have the backup type as radio buttons instead of a dropdown selection. mdail 1/30/2026
- *  Version 4.6.1.14 Change the new backup page to put it all on one page instead of multiple tabs on the page. mdail 1/30/2026
- *  Version 4.6.1.13 Finally got the AI to get the bootable Linux USB iso with BackRestore app PowerShell script working. mdail 1/27/2026
- *  Version 4.6.1.10 Spent all day trying to get the AI to fix the ability to make a bootable Linux USB drive with the BackRestore app
- *					 on it so user can have a way to restore their system if Windows will not boot.  The AI was unable to do this yet. mdail 1/25/2026
- *  Version 4.6.0.0 RESTORE COMPLETE: Implemented RestoreFiles, RestoreHyperVVM fully functional, all C++ restore backend complete
- *  Version 4.5.0.0 FEATURE COMPLETE: WinPE bootable USB, restore with date selection for incremental/differential,
- *                  restore destination mapping, all restore operations, clone to VHDX, backup metadata system
- *  Version 4.4.0.0 MAJOR UPDATE: Fully implemented Hyper - V VM backup/clone, actual backup execution with progress callbacks,
- *                  support for all backup types (Full/Incremental/Differential), disk/volume/file backups now functional
- *  Version 4.3.0.2 CRITICAL FIX: Volume paths now include trailing backslash (E:\ instead of E:) for proper folder enumeration
- * Version 4.3.0.1 Fixed job refresh - JobManager now reloads from file on every GetAllJobs() call
- * Version 4.3.0.0 CRITICAL FIX: Ensures C:\ProgramData\BackupRestoreService directory is created, enhanced error handling,
- *                 added Clone to Disk and Clone to Virtual Disk(Hyper - V) options
- * Version 4.2.0.0 MAJOR UPDATE: Added backup job list to main window with Run / Edit / Delete, changed type labels to "Full then Incremental/Differential"
- * Version 4.1.0.1 See Note 1 below for details on changes made to get to this version.mdail 1 / 23 / 2026
- * Version 3.1.0.1 Fixed checkbox three - state behavior - now toggles between checked/ unchecked on click, indeterminate only for mixed children
- *Version 3.1.0.0 MAJOR UPDATE: Fixed disk ordering(uses Index property), shows volumes without drive letters(EFI / Recovery),
- *                shows hidden / system folders with labels, better access denied handling
- * Version 3.0.0.9 Added alternative WMI query method using DiskIndex to properly map volumes to disks
- *  Version 3.0.0.8 Enhanced WMI error logging and improved fallback to show all volumes on Disk 0 when WMI fails
- *  Version 3.0.0.7 Fixed volumes showing expand arrows for folder browsing; removed fallback that put all volumes on Disk 0
- *  Version 3.0.0.6 Added debug logging and fallback method to show volumes when WMI queries fail
- *  Version 3.0.0.5 Fixed TreeView expand arrows now visible - manually creating TreeViewItems for proper hierarchy display
- *  Version 3.0.0.4 Added TreeView expand/collapse functionality and lazy-loaded folders under volumes
- *  Version 3.0.0.3 Fixed drive-to-volume mapping - each disk now shows only its own volumes using WMI queries
- *  Version 3.0.0.2 Fixed BackupWindowNew crash on load, added loading indicator, improved error handling
- *  Version 3.0.0.1 Added notes to version 3.0.0.0
- *  Version 3.0.0.0 Fix the dll not getting copied to the output directory. Need to fix the new backup
- *                  should auto select system state when the boot voulume or disk is selected, also the selection for 
- *                  the disk or volume should be a explorer style tree view. The selection for the what too back up should be
- *                  either check boxes or radio button group and should also include the Hyper-v virtual machines. (Maybe).
- *                  The Hyper-V backups should be selectable without selecting any of the drives, volumes or files & folders.
- *                  Restore should just give a Alert if there have been no backups run yet. The backup service manager should 
- *                  automatically install and should not be an option to install when the application is run. The service should not 
- *                  need a page to install, start stop and should be managed by the normal windows services mmc. 
- *  Version 2.0.0.0 Fixed build errors that occurred after the AI built the first version.
- *  Version 1.0.0.0 added Version information for the application (This file) and had the AI write the app to run the backups
- *                  for windows servers and hyper-v virtual machines.
- *                 
- *                 Note 1: just below is a note I gave the AI to make a change, it took the steps from version 3.0.0.0 to 3.1.0.1 for it to 
- *                 do what I asked and make it work as I wanted, I did not run any back up so I don't know if any of the changes to 
- *                 the actuall backup were made. mdail 1/23/2026
- *                 To Change from the Notes in version 3.0.0.0 to 4.1.0.1 and some other ideas I had to improve the application, it took the
- *                 AI all the the steps from 3.0.0.0 to 3.1.0.1, However some of what is in this change I haven't actually tried yet
- *                 ideas were as follows: One the page to select what to back up the drives, volumes &(files & folders) should be a tree view
- *                 with the drives the top level and each volume listed at the second level under the drive it is on, the files & folders the 
- *                 third levels.  there should be check boxes in front of the drives and volumes. If the Drive is selected all the check 
- *                 boxes for the Volumes on that drive should auto check, if a volume on a drive is unselected the drive should unselect,
- *                 the files and folder should be available as drop down from the volumes and only show when the user selects the option to 
- *                 drop them down. The user should be able to select multiple Drives, Volumes and Files & Folders however if the top level 
- *                 i.e.: the Drive is selected all volumes are selected, if the Volume is selected the files & folder donâ€™t even show and 
- *                 are only expanded if the Drive & volume, they are on are unselected. When running backups of drives the backup should 
- *                 still run as shadow backups of the individual volumes unless a clone backup is selected, the clone backup should either 
- *                 clone the drive to another drive or virtual drive. The drop-down menu for selecting new backup should also have an option 
- *                 for clone backup. If the backup includes a boot volume that is a windows server version, then the system state should 
- *                 automatically be backed up. The Hyper-V systems and virtual drives should show in the list with the Hyper-V system showing
- *                 like a drive and any volumes virtual showing as volumes. If possible, the Hyper-V systems should be backup as complete as 
- *                 possible so they could be restored on a different system if needed. For the location to store the backup a normal windows 
- *                 explorer like drive/directory selection control should display and should be network aware giving the option to chose a 
- *                 drive or directory to store the backup. The backup should be split into 4.7 gig files so they could be backup up to DVD. 
- *                 The restore option as it is now if the app hasnâ€™t run a backup throws a error and stops the app, it should give a normal 
- *                 windows drive/folder/file selector so the user can select a backup file to restore, The back files need to be restorable 
- *                 without any information for the application, and if a backup files is selected the application needs to scan for the last 
- *                 file in the backup set and the give the user a list of possible restore options available for the backup files, ie: if it is only a full backup, or different points in a incremental or differential backup set.
- */
+*/
 

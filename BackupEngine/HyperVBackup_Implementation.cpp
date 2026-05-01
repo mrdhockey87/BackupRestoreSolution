@@ -204,6 +204,7 @@ namespace {
         const std::wstring& backupType,
         const std::wstring& parentPath,
         ProgressCallback callback);
+
 }
 
 // Helper to execute WMI method
@@ -235,6 +236,8 @@ bool BuildHyperVExportSettingData(
     IWbemServices* pSvc,
     IWbemClassObject* pClass,
     const std::wstring& backupType,
+    bool isVmRunning,
+    const std::wstring& snapshotPath,
     std::wstring& exportSettingData,
     std::wstring& errorMessage) {
 
@@ -279,11 +282,29 @@ bool BuildHyperVExportSettingData(
         return false;
     }
 
-    CComVariant varCopySnapshotConfiguration(static_cast<unsigned char>(1));
+    // CopySnapshotConfiguration:
+    //   0 = ExportAllSnapshots  (fails if VM has no checkpoints)
+    //   1 = ExportNoSnapshots   (stopped VM or running VM with no current snapshot)
+    //   2 = ExportOneSnapshot   (running VM with a specific snapshot to export)
+    unsigned char copySnapshotConfiguration = 1;  // 1 = ExportNoSnapshots
+    if (isVmRunning && !snapshotPath.empty()) {
+        copySnapshotConfiguration = 2;  // 2 = ExportOneSnapshot
+    }
+
+    CComVariant varCopySnapshotConfiguration(copySnapshotConfiguration);
     hr = pSettingInstance->Put(L"CopySnapshotConfiguration", 0, &varCopySnapshotConfiguration, 0);
     if (FAILED(hr)) {
         errorMessage = L"Failed to set CopySnapshotConfiguration export setting: " + GetWmiErrorMessage(hr);
         return false;
+    }
+
+    if (isVmRunning && !snapshotPath.empty()) {
+        CComVariant varSnapshotVirtualSystem(snapshotPath.c_str());
+        hr = pSettingInstance->Put(L"SnapshotVirtualSystem", 0, &varSnapshotVirtualSystem, 0);
+        if (FAILED(hr)) {
+            errorMessage = L"Failed to set SnapshotVirtualSystem export setting: " + GetWmiErrorMessage(hr);
+            return false;
+        }
     }
 
     CComVariant varCreateSubdirectory(VARIANT_TRUE);
@@ -293,14 +314,23 @@ bool BuildHyperVExportSettingData(
         return false;
     }
 
-    if (_wcsicmp(backupType.c_str(), L"Differential") == 0) {
-        CComVariant varBackupIntent(static_cast<unsigned char>(0));
+    if (_wcsicmp(backupType.c_str(), L"Incremental") == 0) {
+        CComVariant varBackupIntent(static_cast<unsigned char>(1));
         hr = pSettingInstance->Put(L"BackupIntent", 0, &varBackupIntent, 0);
         if (FAILED(hr)) {
             errorMessage = L"Failed to set BackupIntent export setting: " + GetWmiErrorMessage(hr);
             return false;
         }
     }
+    else if (_wcsicmp(backupType.c_str(), L"Differential") == 0) {
+        CComVariant varBackupIntent(static_cast<unsigned char>(2));
+        hr = pSettingInstance->Put(L"BackupIntent", 0, &varBackupIntent, 0);
+        if (FAILED(hr)) {
+            errorMessage = L"Failed to set BackupIntent export setting: " + GetWmiErrorMessage(hr);
+            return false;
+        }
+    }
+    // Full backup: do not set BackupIntent - leave unset (default behavior, matches original working full exports)
 
     BSTR bstrObjectText = NULL;
     hr = pSettingInstance->GetObjectText(0, &bstrObjectText);
@@ -315,6 +345,66 @@ bool BuildHyperVExportSettingData(
 
     exportSettingData.assign(bstrObjectText, SysStringLen(bstrObjectText));
     SysFreeString(bstrObjectText);
+    return true;
+}
+
+bool IsVmRunning(IWbemClassObject* pVM, bool& isRunning) {
+    if (!pVM) {
+        return false;
+    }
+
+    CComVariant varState;
+    HRESULT hr = pVM->Get(L"EnabledState", 0, &varState, 0, 0);
+    if (FAILED(hr) || varState.vt != VT_I4) {
+        return false;
+    }
+
+    isRunning = varState.intVal == 2;
+    return true;
+}
+
+bool TryGetCurrentSnapshotPath(
+    IWbemServices* pSvc,
+    const std::wstring& vmPath,
+    std::wstring& snapshotPath,
+    std::wstring& errorMessage) {
+
+    snapshotPath.clear();
+    if (!pSvc || vmPath.empty()) {
+        errorMessage = L"Hyper-V snapshot lookup parameters are invalid.";
+        return false;
+    }
+
+    std::wstring query = L"ASSOCIATORS OF {" + vmPath + L"} WHERE AssocClass=Msvm_MostCurrentSnapshotInBranch ResultClass=Msvm_VirtualSystemSettingData";
+    CComPtr<IEnumWbemClassObject> pEnumerator;
+    HRESULT hr = pSvc->ExecQuery(
+        CComBSTR(L"WQL"),
+        CComBSTR(query.c_str()),
+        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+        NULL,
+        &pEnumerator);
+
+    if (FAILED(hr)) {
+        errorMessage = L"Failed to query current Hyper-V snapshot: " + GetWmiErrorMessage(hr);
+        return false;
+    }
+
+    CComPtr<IWbemClassObject> pSnapshot;
+    ULONG uReturn = 0;
+    hr = pEnumerator->Next(WBEM_INFINITE, 1, &pSnapshot, &uReturn);
+    if (FAILED(hr) || uReturn == 0) {
+        errorMessage = L"No current Hyper-V snapshot was found for the running VM.";
+        return false;
+    }
+
+    CComVariant varPath;
+    hr = pSnapshot->Get(L"__PATH", 0, &varPath, 0, 0);
+    if (FAILED(hr) || varPath.vt != VT_BSTR || varPath.bstrVal == nullptr) {
+        errorMessage = L"Failed to read current Hyper-V snapshot path.";
+        return false;
+    }
+
+    snapshotPath.assign(varPath.bstrVal, SysStringLen(varPath.bstrVal));
     return true;
 }
 
@@ -508,6 +598,9 @@ namespace {
 
         if (callback) callback(20, L"Found virtual machine");
 
+        bool isVmRunning = false;
+        IsVmRunning(pVM, isVmRunning);
+
         // Get management service
         CComPtr<IWbemClassObject> pMgmtService;
         std::wstring mgmtPath;
@@ -586,9 +679,18 @@ namespace {
             return -1;
         }
 
+        std::wstring snapshotPath;
+        if (isVmRunning) {
+            std::wstring snapshotError;
+            if (!TryGetCurrentSnapshotPath(pSvc, vmPath, snapshotPath, snapshotError)) {
+                // No current snapshot found - fall back to exporting without snapshots
+                snapshotPath.clear();
+            }
+        }
+
         std::wstring exportSettingData;
         std::wstring exportSettingError;
-        if (!BuildHyperVExportSettingData(pSvc, pClass, backupType, exportSettingData, exportSettingError)) {
+        if (!BuildHyperVExportSettingData(pSvc, pClass, backupType, isVmRunning, snapshotPath, exportSettingData, exportSettingError)) {
             SetLastErrorMessage(exportSettingError);
             if (coinitCalled) CoUninitialize();
             return -1;

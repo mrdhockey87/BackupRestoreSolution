@@ -54,6 +54,93 @@ namespace SecureServerBackup.Windows
 
                 return disks;
             }
+
+            public static bool IsVirtualDiskResource(string? resourceSubType)
+            {
+                if (string.IsNullOrWhiteSpace(resourceSubType))
+                {
+                    return false;
+                }
+
+                return resourceSubType.Contains("Virtual Hard Disk", StringComparison.OrdinalIgnoreCase) ||
+                       resourceSubType.Contains("Microsoft:Hyper-V:Virtual Hard Disk", StringComparison.OrdinalIgnoreCase);
+            }
+
+            public static IEnumerable<string> GetHostResources(object? hostResourceValue)
+            {
+                if (hostResourceValue is string singleValue)
+                {
+                    yield return singleValue;
+                    yield break;
+                }
+
+                if (hostResourceValue is string[] array)
+                {
+                    foreach (string value in array)
+                    {
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            yield return value;
+                        }
+                    }
+
+                    yield break;
+                }
+
+                if (hostResourceValue is Array values)
+                {
+                    foreach (object? value in values)
+                    {
+                        string? resource = value?.ToString();
+                        if (!string.IsNullOrWhiteSpace(resource))
+                        {
+                            yield return resource;
+                        }
+                    }
+                }
+            }
+
+            public static string BuildVmDisplayName(string vmName, object? enabledState)
+            {
+                if (enabledState is null || !int.TryParse(enabledState.ToString(), out int state))
+                {
+                    return vmName;
+                }
+
+                return state switch
+                {
+                    2 => $"{vmName} (Running)",
+                    3 => $"{vmName} (Off)",
+                    32768 => $"{vmName} (Paused)",
+                    32769 => $"{vmName} (Saved)",
+                    _ => $"{vmName} (Unknown State)"
+                };
+            }
+
+            public static string SelectMountableVirtualDiskPath(string requestedPath, IEnumerable<string>? chainPaths)
+            {
+                if (string.IsNullOrWhiteSpace(requestedPath))
+                {
+                    return string.Empty;
+                }
+
+                string selectedPath = requestedPath;
+                if (chainPaths is null)
+                {
+                    return selectedPath;
+                }
+
+                foreach (string chainPath in chainPaths)
+                {
+                    string normalizedPath = chainPath.Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(normalizedPath))
+                    {
+                        selectedPath = normalizedPath;
+                    }
+                }
+
+                return selectedPath;
+            }
         }
 
         private const double DefaultWindowHeight = 850;
@@ -69,10 +156,12 @@ namespace SecureServerBackup.Windows
         private bool _isUpdatingEncryptionPasswordDisplay;
         private string? _decryptedEncryptionPassword;
         private bool _windowHeightWasAutoAdjusted;
-        private readonly Dictionary<string, List<string>> _hyperVDiskMountDirectories = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, MountedHyperVGuestTreeDisk> _hyperVDiskMountDirectories = new(StringComparer.OrdinalIgnoreCase);
         private string? _hyperVGuestMountRoot;
 
         private sealed record MountedHyperVGuestExecutionPartition(int PartitionNumber, string MountPath, bool CreatedMountDirectory);
+
+        private sealed record MountedHyperVGuestTreeDisk(string MountedDiskPath, List<string> MountDirectories);
 
         private sealed class MountedHyperVGuestExecutionDisk : IDisposable
         {
@@ -94,7 +183,7 @@ namespace SecureServerBackup.Windows
             {
                 try
                 {
-                    RunPowerShell($"Dismount-DiskImage -ImagePath '{EscapePowerShellSingleQuotedString(VirtualDiskPath)}' -ErrorAction SilentlyContinue | Out-Null");
+                    RunPowerShell($"Dismount-VHD -Path '{EscapePowerShellSingleQuotedString(VirtualDiskPath)}' -ErrorAction SilentlyContinue | Out-Null");
                 }
                 catch
                 {
@@ -459,16 +548,16 @@ namespace SecureServerBackup.Windows
             {
                 try
                 {
-                    RunPowerShell($"Dismount-DiskImage -ImagePath '{EscapePowerShellSingleQuotedString(virtualDiskPath)}' -ErrorAction SilentlyContinue | Out-Null");
+                    RunPowerShell($"Dismount-VHD -Path '{EscapePowerShellSingleQuotedString(_hyperVDiskMountDirectories[virtualDiskPath].MountedDiskPath)}' -ErrorAction SilentlyContinue | Out-Null");
                 }
                 catch
                 {
                 }
             }
 
-            foreach (var mountDirectories in _hyperVDiskMountDirectories.Values)
+            foreach (MountedHyperVGuestTreeDisk mountedDisk in _hyperVDiskMountDirectories.Values)
             {
-                foreach (string directory in mountDirectories)
+                foreach (string directory in mountedDisk.MountDirectories)
                 {
                     try
                     {
@@ -505,12 +594,16 @@ namespace SecureServerBackup.Windows
 
         private static string RunPowerShell(string script)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(script);
+
+            string encodedCommand = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+
             using var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "powershell.exe",
-                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -EncodedCommand {encodedCommand}",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -529,6 +622,78 @@ namespace SecureServerBackup.Windows
             }
 
             return output;
+        }
+
+        private static bool IsHyperVVirtualDiskSharingViolation(Exception ex)
+            => ex.Message.Contains("being used by another process", StringComparison.OrdinalIgnoreCase) ||
+               ex.Message.Contains("0x80070020", StringComparison.OrdinalIgnoreCase);
+
+        private static string ResolveMountableHyperVVirtualDiskPath(string virtualDiskPath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(virtualDiskPath);
+
+            string script = $"$path = '{EscapePowerShellSingleQuotedString(virtualDiskPath)}'; while (-not [string]::IsNullOrWhiteSpace($path)) {{ $vhd = Get-VHD -Path $path -ErrorAction Stop; [Console]::WriteLine($vhd.Path); if ([string]::IsNullOrWhiteSpace($vhd.ParentPath)) {{ break }} $path = $vhd.ParentPath }}";
+            string output = RunPowerShell(script);
+            string resolvedPath = HyperVBackupTreeHelper.SelectMountableVirtualDiskPath(
+                virtualDiskPath,
+                output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+
+            if (!string.Equals(resolvedPath, virtualDiskPath, StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.WriteLine($"Using parent Hyper-V virtual disk fallback for {virtualDiskPath}: {resolvedPath}");
+            }
+
+            return resolvedPath;
+        }
+
+        private static List<MountedHyperVGuestExecutionPartition> MountHyperVGuestDiskReadOnlyCore(string virtualDiskPath, string mountRoot, out string mountedDiskPath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(virtualDiskPath);
+            ArgumentException.ThrowIfNullOrWhiteSpace(mountRoot);
+
+            static List<MountedHyperVGuestExecutionPartition> MountCore(string diskPath, string root)
+            {
+                string escapedPath = EscapePowerShellSingleQuotedString(diskPath);
+                string escapedRoot = EscapePowerShellSingleQuotedString(root);
+                string script = $"$vhd = Mount-VHD -Path '{escapedPath}' -ReadOnly -Passthru -ErrorAction Stop; $disk = $vhd | Get-Disk -ErrorAction Stop; Get-Partition -DiskNumber $disk.Number -ErrorAction Stop | Sort-Object PartitionNumber | ForEach-Object {{ $partition = $_; $mountPath = $null; $created = $false; if ($partition.AccessPaths) {{ $mountPath = @($partition.AccessPaths | Where-Object {{ $_ }}) | Select-Object -First 1; }} if ([string]::IsNullOrWhiteSpace($mountPath)) {{ $folder = Join-Path '{escapedRoot}' ('Partition' + $partition.PartitionNumber); New-Item -ItemType Directory -Path $folder -Force | Out-Null; Add-PartitionAccessPath -DiskNumber $disk.Number -PartitionNumber $partition.PartitionNumber -AccessPath $folder -ErrorAction Stop | Out-Null; $mountPath = $folder; $created = $true; }} [Console]::WriteLine(($partition.PartitionNumber.ToString() + \"`t\" + $mountPath + \"`t\" + $created.ToString())); }}";
+                string output = RunPowerShell(script);
+                List<MountedHyperVGuestExecutionPartition> partitions = new();
+                foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string[] parts = line.Split('\t');
+                    if (parts.Length < 3 ||
+                        !int.TryParse(parts[0], out int partitionNumber) ||
+                        string.IsNullOrWhiteSpace(parts[1]))
+                    {
+                        continue;
+                    }
+
+                    partitions.Add(new MountedHyperVGuestExecutionPartition(
+                        partitionNumber,
+                        parts[1].Trim(),
+                        bool.TryParse(parts[2], out bool createdMountDirectory) && createdMountDirectory));
+                }
+
+                return partitions;
+            }
+
+            mountedDiskPath = virtualDiskPath;
+
+            try
+            {
+                return MountCore(virtualDiskPath, mountRoot);
+            }
+            catch (Exception ex) when (IsHyperVVirtualDiskSharingViolation(ex))
+            {
+                string fallbackDiskPath = ResolveMountableHyperVVirtualDiskPath(virtualDiskPath);
+                if (string.Equals(fallbackDiskPath, virtualDiskPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw;
+                }
+
+                mountedDiskPath = fallbackDiskPath;
+                return MountCore(fallbackDiskPath, mountRoot);
+            }
         }
 
         private static string BuildHyperVGuestRelativePath(DriveTreeItem parentItem, string childResolvedPath)
@@ -555,31 +720,10 @@ namespace SecureServerBackup.Windows
             string mountRoot = Path.Combine(Path.GetTempPath(), "SecureServerBackup", "HyperVGuestMounts", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(mountRoot);
 
-            string escapedPath = EscapePowerShellSingleQuotedString(virtualDiskPath);
-            string escapedRoot = EscapePowerShellSingleQuotedString(mountRoot);
-            string script = $"$image = Mount-DiskImage -ImagePath '{escapedPath}' -Access ReadOnly -PassThru -ErrorAction Stop; $disk = $image | Get-Disk -ErrorAction Stop; Get-Partition -DiskNumber $disk.Number -ErrorAction Stop | Sort-Object PartitionNumber | ForEach-Object {{ $partition = $_; $mountPath = $null; $created = $false; if ($partition.AccessPaths) {{ $mountPath = @($partition.AccessPaths | Where-Object {{ $_ }}) | Select-Object -First 1; }} if ([string]::IsNullOrWhiteSpace($mountPath)) {{ $folder = Join-Path '{escapedRoot}' ('Partition' + $partition.PartitionNumber); New-Item -ItemType Directory -Path $folder -Force | Out-Null; Add-PartitionAccessPath -DiskNumber $disk.Number -PartitionNumber $partition.PartitionNumber -AccessPath $folder -ErrorAction Stop | Out-Null; $mountPath = $folder; $created = $true; }} [Console]::WriteLine(($partition.PartitionNumber.ToString() + \"`t\" + $mountPath + \"`t\" + $created.ToString())); }}";
-
             try
             {
-                string output = RunPowerShell(script);
-                List<MountedHyperVGuestExecutionPartition> partitions = new();
-                foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-                {
-                    string[] parts = line.Split('\t');
-                    if (parts.Length < 3 ||
-                        !int.TryParse(parts[0], out int partitionNumber) ||
-                        string.IsNullOrWhiteSpace(parts[1]))
-                    {
-                        continue;
-                    }
-
-                    partitions.Add(new MountedHyperVGuestExecutionPartition(
-                        partitionNumber,
-                        parts[1].Trim(),
-                        bool.TryParse(parts[2], out bool createdMountDirectory) && createdMountDirectory));
-                }
-
-                return new MountedHyperVGuestExecutionDisk(virtualDiskPath, mountRoot, partitions);
+                List<MountedHyperVGuestExecutionPartition> partitions = MountHyperVGuestDiskReadOnlyCore(virtualDiskPath, mountRoot, out string mountedDiskPath);
+                return new MountedHyperVGuestExecutionDisk(mountedDiskPath, mountRoot, partitions);
             }
             catch
             {
@@ -629,19 +773,12 @@ namespace SecureServerBackup.Windows
                 string diskMountRoot = Path.Combine(root, diskFolderName + "_" + Math.Abs(StringComparer.OrdinalIgnoreCase.GetHashCode(virtualDiskItem.VirtualDiskPath)).ToString("X8"));
                 Directory.CreateDirectory(diskMountRoot);
 
-                string script = $"$image = Mount-DiskImage -ImagePath '{EscapePowerShellSingleQuotedString(virtualDiskItem.VirtualDiskPath)}' -Access ReadOnly -PassThru -ErrorAction Stop; $disk = $image | Get-Disk -ErrorAction Stop; Get-Partition -DiskNumber $disk.Number -ErrorAction Stop | Sort-Object PartitionNumber | ForEach-Object {{ $partition = $_; $mountPath = $null; if ($partition.AccessPaths) {{ $mountPath = @($partition.AccessPaths | Where-Object {{ $_ }}) | Select-Object -First 1; }} if ([string]::IsNullOrWhiteSpace($mountPath)) {{ $folder = Join-Path '{EscapePowerShellSingleQuotedString(diskMountRoot)}' ('Partition' + $partition.PartitionNumber); New-Item -ItemType Directory -Path $folder -Force | Out-Null; Add-PartitionAccessPath -DiskNumber $disk.Number -PartitionNumber $partition.PartitionNumber -AccessPath $folder -ErrorAction Stop | Out-Null; $mountPath = $folder; }} [Console]::WriteLine(($partition.PartitionNumber.ToString() + \"`t\" + $mountPath)); }}";
-                string output = RunPowerShell(script);
-
                 List<string> mountDirectories = new();
-                foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                List<MountedHyperVGuestExecutionPartition> partitions = MountHyperVGuestDiskReadOnlyCore(virtualDiskItem.VirtualDiskPath, diskMountRoot, out string mountedDiskPath);
+                foreach (MountedHyperVGuestExecutionPartition partition in partitions)
                 {
-                    string[] parts = line.Split('\t');
-                    if (parts.Length < 2 || !int.TryParse(parts[0], out int partitionNumber))
-                    {
-                        continue;
-                    }
-
-                    string mountPath = parts[1].Trim();
+                    int partitionNumber = partition.PartitionNumber;
+                    string mountPath = partition.MountPath;
                     if (string.IsNullOrWhiteSpace(mountPath) || !Directory.Exists(mountPath))
                     {
                         continue;
@@ -684,7 +821,7 @@ namespace SecureServerBackup.Windows
                     virtualDiskItem.Children.Add(volumeItem);
                 }
 
-                _hyperVDiskMountDirectories[virtualDiskItem.VirtualDiskPath] = mountDirectories;
+                _hyperVDiskMountDirectories[virtualDiskItem.VirtualDiskPath] = new MountedHyperVGuestTreeDisk(mountedDiskPath, mountDirectories);
 
                 if (virtualDiskItem.Children.Count == 0)
                 {
@@ -1661,6 +1798,13 @@ namespace SecureServerBackup.Windows
             BackupEngineInterop.GetLastErrorMessage(error, error.Capacity);
             Debug.WriteLine($"EnumerateHyperVVirtualMachineDisks returned {diskResult}: {error}");
 
+            disks = EnumerateHyperVVirtualDiskInfosFromWmi();
+            if (disks.Count > 0)
+            {
+                Debug.WriteLine($"Enumerated {disks.Count} Hyper-V virtual disks using managed WMI fallback.");
+                return disks;
+            }
+
             try
             {
                 string fallbackOutput = RunPowerShell("$ErrorActionPreference='Stop'; Get-VM -ErrorAction Stop | ForEach-Object { $vm = $_; $displayName = $vm.Name; if ($vm.State) { $displayName += ' (' + $vm.State.ToString() + ')'; } Get-VMHardDiskDrive -VMName $vm.Name -ErrorAction SilentlyContinue | ForEach-Object { if (-not [string]::IsNullOrWhiteSpace($_.Path)) { [Console]::WriteLine(($vm.Name + \"`t\" + $displayName + \"`t\" + $_.Path)); } } }");
@@ -1676,6 +1820,72 @@ namespace SecureServerBackup.Windows
             }
 
             return disks;
+        }
+
+        private IReadOnlyList<HyperVVirtualDiskInfo> EnumerateHyperVVirtualDiskInfosFromWmi()
+        {
+            foreach (string scopePath in new[] { @"\\.\ROOT\virtualization\v2", @"\\.\ROOT\virtualization" })
+            {
+                try
+                {
+                    var scope = new ManagementScope(scopePath);
+                    scope.Connect();
+
+                    var disks = EnumerateHyperVVirtualDiskInfosFromWmiScope(scope);
+                    if (disks.Count > 0)
+                    {
+                        return disks;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Managed Hyper-V WMI disk fallback failed for {scopePath}: {ex.Message}");
+                }
+            }
+
+            return Array.Empty<HyperVVirtualDiskInfo>();
+        }
+
+        private static IReadOnlyList<HyperVVirtualDiskInfo> EnumerateHyperVVirtualDiskInfosFromWmiScope(ManagementScope scope)
+        {
+            Dictionary<string, HyperVVirtualDiskInfo> disks = new(StringComparer.OrdinalIgnoreCase);
+            using var vmSearcher = new ManagementObjectSearcher(
+                scope,
+                new ObjectQuery("SELECT ElementName, EnabledState, __PATH FROM Msvm_ComputerSystem WHERE Caption='Virtual Machine'"));
+
+            foreach (ManagementObject vm in vmSearcher.Get().OfType<ManagementObject>())
+            {
+                string vmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(vm["ElementName"]?.ToString());
+                string vmPath = vm.Path?.Path ?? vm["__PATH"]?.ToString() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(vmName) || string.IsNullOrWhiteSpace(vmPath))
+                {
+                    continue;
+                }
+
+                string vmDisplayName = HyperVBackupTreeHelper.BuildVmDisplayName(vmName, vm["EnabledState"]);
+                string query = $"ASSOCIATORS OF {{{vmPath}}} WHERE AssocClass=Msvm_SystemDevice ResultClass=Msvm_StorageAllocationSettingData";
+                using var storageSearcher = new ManagementObjectSearcher(scope, new ObjectQuery(query));
+                foreach (ManagementObject storage in storageSearcher.Get().OfType<ManagementObject>())
+                {
+                    if (!HyperVBackupTreeHelper.IsVirtualDiskResource(storage["ResourceSubType"]?.ToString()))
+                    {
+                        continue;
+                    }
+
+                    foreach (string hostResource in HyperVBackupTreeHelper.GetHostResources(storage["HostResource"]))
+                    {
+                        if (string.IsNullOrWhiteSpace(hostResource))
+                        {
+                            continue;
+                        }
+
+                        string normalizedPath = hostResource.Trim().Trim('"');
+                        disks[vmName + "|" + normalizedPath] = new HyperVVirtualDiskInfo(vmName, vmDisplayName, normalizedPath);
+                    }
+                }
+            }
+
+            return disks.Values.ToArray();
         }
 
         private async Task LoadNetworkDrives()
@@ -3128,7 +3338,7 @@ namespace SecureServerBackup.Windows
                 {
                     job.Target = BackupTarget.Disk;
                 }
-                // Check for Volume GUID paths (e.g., \\?\Volume{guid})
+                // Check for Volume GUID paths (e.g., \\?\\Volume{guid})
                 else if (firstPath.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase) &&
                          firstPath.Contains("Volume{", StringComparison.OrdinalIgnoreCase))
                 {

@@ -112,6 +112,27 @@ namespace SecureServerBackup.Windows
 
         public static class HyperVRestorePointHelper
         {
+            private static string? ReadMetadataValue(string backupPointPath, string key)
+            {
+                string metadataPath = Path.Combine(backupPointPath, "hyperv_backup_info.txt");
+                if (!File.Exists(metadataPath))
+                {
+                    return null;
+                }
+
+                foreach (string line in File.ReadLines(metadataPath))
+                {
+                    string[] parts = line.Split('=', 2);
+                    if (parts.Length == 2 && string.Equals(parts[0].Trim(), key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string value = parts[1].Trim();
+                        return string.IsNullOrWhiteSpace(value) ? null : value;
+                    }
+                }
+
+                return null;
+            }
+
             public static bool IsHyperVBackupPoint(string path)
             {
                 if (!Directory.Exists(path))
@@ -136,23 +157,10 @@ namespace SecureServerBackup.Windows
                     return exportFolder;
                 }
 
-                string metadataPath = Path.Combine(backupPointPath, "hyperv_backup_info.txt");
-                if (!File.Exists(metadataPath))
-                {
-                    return null;
-                }
-
-                foreach (string line in File.ReadLines(metadataPath))
-                {
-                    string[] parts = line.Split('=', 2);
-                    if (parts.Length == 2 && string.Equals(parts[0].Trim(), "ExportPath", StringComparison.OrdinalIgnoreCase))
-                    {
-                        string exportPath = parts[1].Trim();
-                        return Directory.Exists(exportPath) ? exportPath : null;
-                    }
-                }
-
-                return null;
+                string? exportPath = ReadMetadataValue(backupPointPath, "ExportPath");
+                return !string.IsNullOrWhiteSpace(exportPath) && Directory.Exists(exportPath)
+                    ? exportPath
+                    : null;
             }
 
             public static string? FindPrimaryVirtualDisk(string backupPointPath)
@@ -181,6 +189,12 @@ namespace SecureServerBackup.Windows
             {
                 try
                 {
+                    string? vmNameFromMetadata = ReadMetadataValue(backupPointPath, "VmName");
+                    if (!string.IsNullOrWhiteSpace(vmNameFromMetadata))
+                    {
+                        return vmNameFromMetadata;
+                    }
+
                     string? exportPath = ResolveExportPath(backupPointPath);
                     if (string.IsNullOrWhiteSpace(exportPath) || !Directory.Exists(exportPath))
                     {

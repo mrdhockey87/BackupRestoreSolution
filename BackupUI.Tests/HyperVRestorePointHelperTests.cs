@@ -82,6 +82,19 @@ public sealed class HyperVRestorePointHelperTests : IDisposable
     }
 
     [Fact]
+    public void ResolveVmName_WhenMetadataContainsVmName_ReturnsMetadataVmName()
+    {
+        string backupPoint = CreateBackupPointDirectory();
+        File.WriteAllText(
+            Path.Combine(backupPoint, "hyperv_backup_info.txt"),
+            $"Type=Full{Environment.NewLine}PointId=20260429_120000{Environment.NewLine}VmName=Win10OEM{Environment.NewLine}");
+
+        string result = RestoreWindowNew.HyperVRestorePointHelper.ResolveVmName(backupPoint);
+
+        Assert.Equal("Win10OEM", result);
+    }
+
+    [Fact]
     public void IsHyperVBackupPoint_WhenArchiveFileExists_ReturnsFalse()
     {
         string backupFile = Path.Combine(_tempDirectory, "Win10OEM.ssb");

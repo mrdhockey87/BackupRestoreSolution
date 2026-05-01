@@ -41,6 +41,14 @@ public sealed class BackupExecutorHyperVTests
     }
 
     [Fact]
+    public void GetHyperVBackupMode_WhenDifferentialWithoutAnyBackup_ReturnsFull()
+    {
+        string mode = BackupExecutor.GetHyperVBackupMode(BackupType.Differential, hasExistingFullBackup: false, hasAnyExistingBackup: false);
+
+        Assert.Equal("Full", mode);
+    }
+
+    [Fact]
     public void GetHyperVBackupMode_WhenDifferentialWithFullBackup_ReturnsDifferential()
     {
         string mode = BackupExecutor.GetHyperVBackupMode(BackupType.Differential, hasExistingFullBackup: true, hasAnyExistingBackup: true);
