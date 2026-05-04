@@ -39,6 +39,8 @@
       <PreprocessorDefinitions>BACKUPENGINE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <WarningLevel>Level3</WarningLevel>
+      <!-- Async (SEH) EH (/EHa): makes catch(...) intercept hardware faults such as null WMI pointer AV, preventing service crashes. -->
+      <ExceptionHandling>Async</ExceptionHandling>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Include</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\SDKs\Wimgapi\Include</AdditionalIncludeDirectories>
     </ClCompile>
@@ -120,3 +122,4 @@
     <Error Condition="!Exists('..\packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets'))" />
   </Target>
 </Project>
+

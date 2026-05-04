@@ -143,6 +143,46 @@ namespace {
         return ss.str();
     }
 
+    bool TryResolveOfflineWindowsPaths(const std::wstring& mountedRoot, std::wstring& windowsDirectory, std::wstring& systemDrive) {
+        std::error_code ec;
+        if (mountedRoot.empty() || !fs::exists(mountedRoot, ec)) {
+            return false;
+        }
+
+        auto normalizeRoot = [](const std::wstring& value) {
+            std::wstring normalized = TrimTrailingSlash(value);
+            if (normalized.empty()) {
+                normalized = value;
+            }
+
+            return normalized;
+        };
+
+        fs::path rootPath(mountedRoot);
+        fs::path directWindows = rootPath / L"Windows";
+        if (fs::exists(directWindows, ec) && fs::is_directory(directWindows, ec)) {
+            windowsDirectory = directWindows.wstring();
+            systemDrive = normalizeRoot(rootPath.wstring());
+            return true;
+        }
+
+        for (const auto& entry : fs::directory_iterator(rootPath, fs::directory_options::skip_permission_denied, ec)) {
+            if (ec || !entry.is_directory(ec)) {
+                continue;
+            }
+
+            fs::path candidateRoot = entry.path();
+            fs::path candidateWindows = candidateRoot / L"Windows";
+            if (fs::exists(candidateWindows, ec) && fs::is_directory(candidateWindows, ec)) {
+                windowsDirectory = candidateWindows.wstring();
+                systemDrive = normalizeRoot(candidateRoot.wstring());
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     std::wstring StageBackupForSSB(const std::wstring& backupPath, bool& cleanupRequired) {
         cleanupRequired = false;
 
@@ -303,8 +343,17 @@ extern "C" {
             return -5;
         }
 
+        std::wstring windowsDirectory;
+        std::wstring systemDrive;
+        PCWSTR windowsDirectoryArg = nullptr;
+        PCWSTR systemDriveArg = nullptr;
+        if (TryResolveOfflineWindowsPaths(workRoot, windowsDirectory, systemDrive)) {
+            windowsDirectoryArg = windowsDirectory.c_str();
+            systemDriveArg = systemDrive.c_str();
+        }
+
         SSBSession session = SSB_SESSION_DEFAULT;
-        hr = SSBOpenSession(workRoot.c_str(), nullptr, nullptr, &session);
+        hr = SSBOpenSession(workRoot.c_str(), windowsDirectoryArg, systemDriveArg, &session);
         if (FAILED(hr)) {
             SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
             RemoveDirectoryTree(workRoot);
@@ -313,6 +362,12 @@ extern "C" {
             }
 
             std::wstring message = L"SSBOpenSession failed. " + GetSSBErrorMessage(hr);
+            if (!windowsDirectory.empty()) {
+                message += L" WindowsDirectory=" + windowsDirectory;
+            }
+            if (!systemDrive.empty()) {
+                message += L" SystemDrive=" + systemDrive;
+            }
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -6;
@@ -428,8 +483,17 @@ extern "C" {
             return -5;
         }
 
+        std::wstring windowsDirectory;
+        std::wstring systemDrive;
+        PCWSTR windowsDirectoryArg = nullptr;
+        PCWSTR systemDriveArg = nullptr;
+        if (TryResolveOfflineWindowsPaths(workRoot, windowsDirectory, systemDrive)) {
+            windowsDirectoryArg = windowsDirectory.c_str();
+            systemDriveArg = systemDrive.c_str();
+        }
+
         SSBSession session = SSB_SESSION_DEFAULT;
-        hr = SSBOpenSession(workRoot.c_str(), nullptr, nullptr, &session);
+        hr = SSBOpenSession(workRoot.c_str(), windowsDirectoryArg, systemDriveArg, &session);
         if (FAILED(hr)) {
             SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
             RemoveDirectoryTree(workRoot);
@@ -438,6 +502,12 @@ extern "C" {
             }
 
             std::wstring message = L"SSBOpenSession failed. " + GetSSBErrorMessage(hr);
+            if (!windowsDirectory.empty()) {
+                message += L" WindowsDirectory=" + windowsDirectory;
+            }
+            if (!systemDrive.empty()) {
+                message += L" SystemDrive=" + systemDrive;
+            }
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -6;

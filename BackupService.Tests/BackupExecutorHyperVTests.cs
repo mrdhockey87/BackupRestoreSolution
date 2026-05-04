@@ -93,6 +93,27 @@ public sealed class BackupExecutorHyperVTests
     }
 
     [Fact]
+    public void HasFullHyperVBackupPoint_WhenArchiveFileExists_ReturnsFalse()
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            string archivePath = Path.Combine(tempRoot, "Win10OEM.ssb");
+            File.WriteAllText(archivePath, string.Empty);
+
+            bool result = BackupExecutor.HasFullHyperVBackupPoint(archivePath);
+
+            Assert.False(result);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public void HasAnyHyperVBackupPoint_WhenArchiveFileExists_ReturnsTrue()
     {
         string tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

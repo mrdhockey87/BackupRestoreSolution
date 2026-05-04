@@ -57,7 +57,7 @@ namespace SecureServerBackup.Windows
                        selectedItemText.Contains("SystemState", StringComparison.OrdinalIgnoreCase);
             }
 
-            public static string NormalizeHyperVVmName(string displayText)
+            public static string NormalizeHyperVVmName(string? displayText)
             {
                 if (string.IsNullOrWhiteSpace(displayText))
                 {

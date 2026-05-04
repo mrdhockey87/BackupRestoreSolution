@@ -2055,7 +2055,7 @@ namespace SecureServerBackup
                             Dispatcher.Invoke(() =>
                             {
                                 progressWindow.SetStatus(healthMessage.ToString(), checkResult == 0 ? 100 : -1);
-                                UpdateVerificationLog($"DISM health check result: {checkResult}");
+                                UpdateVerificationLog($"SSB health check result: {checkResult}");
                                 UpdateVerificationLog($"Health details: {healthMessage}");
                             });
 
@@ -2112,7 +2112,7 @@ namespace SecureServerBackup
 
                                     Dispatcher.Invoke(() =>
                                     {
-                                        UpdateVerificationLog($"DISM repair result: {repairResult}");
+                                        UpdateVerificationLog($"SSB repair result: {repairResult}");
                                         UpdateVerificationLog($"Repair details: {repairMessage}");
                                         progressWindow.SetStatus(
                                             repairResult == 0 ? "Repair completed successfully." : "Repair failed.",

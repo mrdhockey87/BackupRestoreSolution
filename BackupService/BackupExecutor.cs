@@ -56,7 +56,7 @@ namespace SecureServerBackupService
 
             if (File.Exists(destinationPath))
             {
-                return true;
+                return !requireLegacyFullPoint;
             }
 
             if (!Directory.Exists(destinationPath))
@@ -103,6 +103,137 @@ namespace SecureServerBackupService
         private static string EscapePowerShellSingleQuotedString(string value)
         {
             return (value ?? string.Empty).Replace("'", "''", StringComparison.Ordinal);
+        }
+
+        private static string RunPowerShell(string script)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(script);
+
+            string encodedCommand = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+
+            var output = new StringBuilder();
+            var errors = new StringBuilder();
+            object syncRoot = new();
+
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encodedCommand}",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                },
+                EnableRaisingEvents = true
+            };
+
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data == null)
+                {
+                    return;
+                }
+
+                lock (syncRoot)
+                {
+                    output.AppendLine(e.Data);
+                }
+            };
+
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data == null)
+                {
+                    return;
+                }
+
+                lock (syncRoot)
+                {
+                    errors.AppendLine(e.Data);
+                }
+            };
+
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            if (!process.WaitForExit((int)TimeSpan.FromHours(2).TotalMilliseconds))
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                }
+
+                throw new TimeoutException("The PowerShell command timed out after waiting 2 hours.");
+            }
+
+            process.WaitForExit();
+
+            string outputText;
+            string errorText;
+            lock (syncRoot)
+            {
+                outputText = output.ToString();
+                errorText = errors.ToString();
+            }
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(errorText) ? "The PowerShell command failed." : errorText.Trim());
+            }
+
+            return outputText;
+        }
+
+        private static string CreateHyperVExportPoint(string exportRootPath, string backupType, string vmName)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(exportRootPath);
+            ArgumentException.ThrowIfNullOrWhiteSpace(backupType);
+            ArgumentException.ThrowIfNullOrWhiteSpace(vmName);
+
+            string pointId = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+            string backupPointPath = Path.Combine(exportRootPath, $"{backupType}_{pointId}.ssb");
+            string exportPath = Path.Combine(backupPointPath, "Export");
+
+            Directory.CreateDirectory(exportPath);
+
+            string metadataPath = Path.Combine(backupPointPath, "hyperv_backup_info.txt");
+            string metadata = string.Join(
+                Environment.NewLine,
+                $"Type={backupType}",
+                $"PointId={pointId}",
+                $"VmName={vmName}",
+                $"ExportPath={exportPath}");
+
+            File.WriteAllText(metadataPath, metadata + Environment.NewLine);
+            return backupPointPath;
+        }
+
+        private static string ExportHyperVVmWithPowerShell(string vmName, string exportRootPath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(vmName);
+            ArgumentException.ThrowIfNullOrWhiteSpace(exportRootPath);
+
+            string backupPointPath = CreateHyperVExportPoint(exportRootPath, "Full", vmName);
+            string exportPath = Path.Combine(backupPointPath, "Export");
+            string escapedVmName = EscapePowerShellSingleQuotedString(vmName);
+            string escapedExportPath = EscapePowerShellSingleQuotedString(exportPath);
+
+            string script =
+                "$ProgressPreference = 'SilentlyContinue'; $VerbosePreference = 'SilentlyContinue'; $WarningPreference = 'Continue'; " +
+                $"Import-Module Hyper-V -ErrorAction Stop; " +
+                $"$vmName = '{escapedVmName}'; " +
+                $"$exportPath = '{escapedExportPath}'; " +
+                "try { Export-VM -Name $vmName -Path $exportPath -CaptureLiveState CaptureDataConsistentState -ErrorAction Stop | Out-Null } " +
+                "catch { Export-VM -Name $vmName -Path $exportPath -ErrorAction Stop | Out-Null }";
+
+            RunPowerShell(script);
+            return backupPointPath;
         }
 
         private static string FindNewestHyperVExportPoint(string exportRootPath)
@@ -639,11 +770,39 @@ namespace SecureServerBackupService
                                     {
                                         var exportError = new StringBuilder(1024);
                                         GetLastErrorMessage(exportError, exportError.Capacity);
-                                        logger?.Invoke($"Hyper-V export failed: {exportError}");
-                                        return false;
+                                        string exportErrorMessage = exportError.ToString();
+                                        if (string.Equals(hyperVBackupMode, "Full", StringComparison.OrdinalIgnoreCase) &&
+                                            exportErrorMessage.Contains("32773", StringComparison.Ordinal))
+                                        {
+                                            logger?.Invoke("Native Hyper-V full export returned 32773. Trying PowerShell Export-VM fallback.");
+
+                                            try
+                                            {
+                                                logger?.Invoke($"Starting PowerShell Hyper-V export fallback for VM: {normalizedVmName}");
+                                                progressCallback?.Invoke(35, $"Retrying Hyper-V export for {normalizedVmName} using PowerShell...");
+                                                exportPointPath = ExportHyperVVmWithPowerShell(normalizedVmName, temporaryExportRoot);
+                                                logger?.Invoke($"PowerShell Hyper-V export fallback completed for VM: {normalizedVmName}");
+                                                result = 0;
+                                            }
+                                            catch (Exception fallbackEx)
+                                            {
+                                                logger?.Invoke($"Hyper-V export fallback failed: {fallbackEx.Message}");
+                                                logger?.Invoke($"Hyper-V export failed: {exportErrorMessage}");
+                                                return false;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            logger?.Invoke($"Hyper-V export failed: {exportErrorMessage}");
+                                            return false;
+                                        }
                                     }
 
-                                    exportPointPath = FindNewestHyperVExportPoint(temporaryExportRoot);
+                                    if (string.IsNullOrWhiteSpace(exportPointPath))
+                                    {
+                                        exportPointPath = FindNewestHyperVExportPoint(temporaryExportRoot);
+                                    }
+
                                     if (string.IsNullOrWhiteSpace(exportPointPath))
                                     {
                                         logger?.Invoke("Hyper-V backup failed: the temporary export did not create a backup point folder.");
@@ -855,14 +1014,14 @@ namespace SecureServerBackupService
 
                         if (healthState < 0)
                         {
-                            logger?.Invoke($"[DISM VERIFY FAILED] Result code: {healthState}");
-                            logger?.Invoke($"[DISM VERIFY FAILED] {healthMsg}");
+                            logger?.Invoke($"[SSB VERIFY FAILED] Result code: {healthState}");
+                            logger?.Invoke($"[SSB VERIFY FAILED] {healthMsg}");
                             return false;
                         }
 
                         if (healthState == (int)DismImageHealthState.Repairable)
                         {
-                            logger?.Invoke($"[DISM] Image is repairable. Attempting RestoreHealth: {healthMsg}");
+                            logger?.Invoke($"[SSB] Image is repairable. Attempting RestoreHealth: {healthMsg}");
                             progressCallback?.Invoke(95, "Repairing image...");
 
                             var repairMsg = new StringBuilder(1024);
@@ -878,21 +1037,21 @@ namespace SecureServerBackupService
 
                             if (repairResult != 0)
                             {
-                                logger?.Invoke($"[DISM REPAIR FAILED] Result code: {repairResult}");
-                                logger?.Invoke($"[DISM REPAIR FAILED] {repairMsg}");
+                                logger?.Invoke($"[SSB REPAIR FAILED] Result code: {repairResult}");
+                                logger?.Invoke($"[SSB REPAIR FAILED] {repairMsg}");
                                 return false;
                             }
 
-                            logger?.Invoke($"[DISM] Repair completed: {repairMsg}");
+                            logger?.Invoke($"[SSB] Repair completed: {repairMsg}");
                         }
                         else if (healthState == (int)DismImageHealthState.NonRepairable)
                         {
-                            logger?.Invoke($"[DISM VERIFY FAILED] Image is non-repairable: {healthMsg}");
+                            logger?.Invoke($"[SSB VERIFY FAILED] Image is non-repairable: {healthMsg}");
                             return false;
                         }
                         else
                         {
-                            logger?.Invoke($"[DISM VERIFY PASSED] {healthMsg}");
+                            logger?.Invoke($"[SSB VERIFY PASSED] {healthMsg}");
                         }
 
                         progressCallback?.Invoke(100, "Verification completed successfully!");

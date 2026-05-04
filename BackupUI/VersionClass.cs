@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.3.90";
+        private static readonly string version_fallback_number = "6.2.5.0";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,44 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.1  Fixed service process crash during Hyper-V export by enabling async SEH
+ *                  exception handling (/EHa) in BackupEngine so catch(...) intercepts access
+ *                  violations from null WMI output pointers, added null guard on pOutParams after
+ *                  ExecMethod, and fixed missing namespace closing brace. mdail 5/5/2026
+ * Version 6.2.4.0  Fixed Hyper-V export job polling hang at 95%
+ *                  handling all terminal CIM_ConcreteJob states (7=Completed, 8=Terminated, 9=Killed,
+ *                  10=Exception, 32768=CompletedWithWarnings), and reading PercentComplete directly
+ *                  from the WMI job object so progress moves smoothly from 40-94% during export
+ *                  instead of stalling. Poll interval raised to 2 s to reduce WMI churn. mdail 5/4/2026
+ * Version 6.2.3.99 Fixed running-VM Hyper-V export failure (0x80070020) caused by AVHDX chain merge
+ *                  while the differencing disk is locked by a running VM. Full backups of running VMs
+ *                  now use CopySnapshotConfiguration=2 (ExportOneSnapshot) and incremental/differential
+ *                  use value 3 (ExportOneSnapshotForBackup), both with SnapshotVirtualSystem set.
+ *                  Stopped VMs continue to use value 1 (ExportNoSnapshots). mdail 5/4/2026
+ * Version 6.2.3.98 Version metadata consolidated: confirms 6.2.3.96 Hyper-V export fixes
+ *                  (IWbemObjectTextSrc DTD 2.0 serialization, VT_BSTR async job polling) and
+ *                  6.2.3.97 SSB branding cleanup are both in this build. mdail 5/4/2026
+ * Version 6.2.3.97 Replaced all user-visible DISM and WIM references with SSB in verify/health-check
+ *                  log messages across BackupExecutor and MainWindow so internal engine names never
+ *                  appear in the UI or user-facing log output. mdail 5/4/2026
+ * Version 6.2.3.96 Fixed two native Hyper-V export bugs: replaced GetObjectText() MOF serialization with
+ *                  IWbemObjectTextSrc WMI DTD 2.0 format to eliminate 32773 invalid-parameter errors;
+ *                  fixed async export job polling to handle VT_BSTR job path returned by WMI instead of
+ *                  VT_UNKNOWN, ending "Failed to get export job" errors after ExecMethod succeeds. mdail 5/4/2026
+ * Version 6.2.3.95 Fixed DISM backup health checks for mounted system images by resolving the offline Windows
+ *                  directory and system-drive path before opening the SSB session, avoiding path-not-found
+ *                  failures like HRESULT 0x80070003 during Hyper-V backup verify/mount follow-up checks. mdail 5/4/2026
+ * Version 6.2.3.94 Fixed the Hyper-V PowerShell export fallback hang by making the process non-interactive,
+ *                  draining stdout/stderr asynchronously, and timing out instead of blocking indefinitely. mdail 5/4/2026
+ * Version 6.2.3.93 Added a PowerShell Export-VM fallback for Hyper-V full exports that fail with 32773 so first-run
+ *                  incremental backups can still fall back to a full export, create the expected temporary backup-point
+ *                  structure, and continue to virtual-disk capture. mdail 5/4/2026
+ * Version 6.2.3.92 Fixed Hyper-V full-export fallback settings by loading the VM's associated export-setting instance
+ *                  instead of spawning a blank one, preserving valid defaults and avoiding the 32773 invalid-parameter
+ *                  failure when first-run incremental backups fall back to a full Hyper-V export. mdail 5/4/2026
+ * Version 6.2.3.91 Fixed Hyper-V first-run incremental backup routing and native export settings so plain .ssb
+ *                  files no longer count as a valid Hyper-V full base, running VM backup exports use the backup
+ *                  snapshot mode, and BackupIntent now uses documented values to avoid export error 32773. mdail 5/1/2026
  * Version 6.2.3.90 Fixed Hyper-V export error 32773 for running VMs by correcting CopySnapshotConfiguration
  *                  to use documented values only: 1 (no snapshots) for stopped VMs or running VMs without a
  *                  current snapshot, 2 (one specific snapshot) for running VMs with a snapshot path. Value 3
