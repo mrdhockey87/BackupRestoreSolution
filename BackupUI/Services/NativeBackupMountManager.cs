@@ -253,14 +253,6 @@ namespace SecureServerBackup.Services
             out SYSTEMTIME mountTime  // ? NEW: Get mount time from C++
         );
 
-        [DllImport(NativeDllName, EntryPoint = "SsbMount_ValidateArchive", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
-        private static extern bool SsbMount_ValidateArchive(
-            [MarshalAs(UnmanagedType.LPWStr)] string ssbPath,
-            out int imageCount,
-            [MarshalAs(UnmanagedType.LPWStr)] StringBuilder errorMsg,
-            int errorMsgSize
-        );
-
         [DllImport(NativeDllName, EntryPoint = "SsbMount_GetImageCount", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern int SsbMount_GetImageCount(
             [MarshalAs(UnmanagedType.LPWStr)] string ssbPath,
@@ -392,11 +384,13 @@ namespace SecureServerBackup.Services
 
                 // Validate backup archive BEFORE attempting to mount
                 var errorMsg = new StringBuilder(512);
-                int imageCount;
+                int imageCount = SsbMount_GetImageCount(ssbPath, errorMsg, 512);
 
-                if (!SsbMount_ValidateArchive(ssbPath, out imageCount, errorMsg, 512))
+                if (imageCount <= 0)
                 {
-                    string validationError = errorMsg.ToString();
+                    string validationError = errorMsg.Length > 0
+                        ? errorMsg.ToString()
+                        : "Archive contains no images or could not be read.";
 
                     BackupLogger.LogError("BackupMount",
                         $"Archive validation failed for {backupName}",

@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.7.4";
+        private static readonly string version_fallback_number = "6.2.7.5";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,7 +69,11 @@ namespace SecureServerBackup
 
 /*
  *  
- * Version 6.2.7.4 Fixed BackupServiceManager.InstallServiceAsync to pass DisplayName and Description
+ * Version 6.2.7.5 Fixed mount failure caused by missing native export SsbMount_ValidateArchive:
+ *                 replaced the non-existent P/Invoke with SsbMount_GetImageCount which returns
+ *                 the image count (<=0 on failure) so archive validation works without the
+ *                 missing entry point. mdail 5/5/2026
+ * Version 6.2.7.4 Fixed BackupServiceManager.InstallServiceAsync
  *                 to sc.exe create and add a follow-up sc.exe description call so Services MMC always
  *                 shows the friendly spaced name and description on fresh installs. Fixed invalid
  *                 double-dot version string (6.2..4.003) in Directory.Build.props that blocked all
