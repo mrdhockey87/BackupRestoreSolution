@@ -13,9 +13,9 @@ namespace SecureServerBackup.Services
     /// </summary>
     public static class ServiceInstaller
     {
-        private const string ServiceName = "BackupRestoreService";
-        private const string ServiceDisplayName = "Backup & Restore Service";
-        private const string ServiceDescription = "Enterprise backup and restore service for Windows servers and Hyper-V VMs";
+        private const string ServiceName = "SecureServerBackupService";
+        private const string ServiceDisplayName = "Secure Server Backup Service";
+        private const string ServiceDescription = "Secure Server Backup Service for Secure Server Backup Application. Manages encrypted and unencrypted backups and restores for server infrastructure.";
 
         /// <summary>
         /// Resolve the service executable path from the shared output directory without relying on a fixed file name.
@@ -270,7 +270,11 @@ namespace SecureServerBackup.Services
             // Check if already installed
             if (IsServiceInstalled())
             {
-                BackupLogger.LogServiceInfo("Service already installed, attempting to start...");
+                BackupLogger.LogServiceInfo("Service already installed, updating metadata and attempting to start...");
+
+                // Always refresh display name and description in case they are stale
+                await UpdateServiceMetadataAsync();
+
                 return await StartServiceAsync();
             }
 
@@ -298,15 +302,12 @@ namespace SecureServerBackup.Services
         {
             try
             {
-                var versionNumber = VersionClass.GetAssemblyVersion();
-                var description = $"{ServiceDescription} (Version {versionNumber})";
-
                 var process = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = "sc.exe",
-                        Arguments = $"description {ServiceName} \"{description}\"",
+                        Arguments = $"description {ServiceName} \"{ServiceDescription}\"",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -320,6 +321,42 @@ namespace SecureServerBackup.Services
             catch
             {
                 // Ignore errors setting description - not critical
+            }
+        }
+
+        /// <summary>
+        /// Update the display name and description of an already-installed service so
+        /// Services MMC reflects the correct friendly name and description.
+        /// </summary>
+        private static async Task UpdateServiceMetadataAsync()
+        {
+            try
+            {
+                // Update display name
+                var configProcess = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "sc.exe",
+                        Arguments = $"config {ServiceName} DisplayName= \"{ServiceDisplayName}\"",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                configProcess.Start();
+                await configProcess.WaitForExitAsync();
+
+                // Update description
+                await SetServiceDescriptionAsync();
+
+                BackupLogger.LogServiceInfo("Service display name and description updated");
+            }
+            catch
+            {
+                // Ignore errors updating metadata - not critical
             }
         }
     }

@@ -14,7 +14,7 @@ namespace SecureServerBackup.Services
         private static readonly Mutex JobsFileMutex = new(false, JobsFileMutexName);
         private static readonly string JobsFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "BackupRestoreService",
+            "SecureServerBackupService",
             "jobs.json");
 
         private List<BackupJob> jobs = new();

@@ -20,7 +20,7 @@ namespace SecureServerBackupService
 	/// </summary>
 	public class BackupServiceCommunication : IHostedService, IDisposable
 	{
-        private const string DefaultPipeName = "BackupRestoreServicePipe";
+		private const string DefaultPipeName = "SecureServerBackupServicePipe";
 		private static readonly PipeSecurity PipeServerSecurity = new PipeSecurity
 		{
 		};

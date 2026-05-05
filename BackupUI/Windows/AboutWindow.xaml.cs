@@ -36,7 +36,7 @@ namespace SecureServerBackup.Windows
             try
             {
                 // Check if service is installed and running
-                using var service = new ServiceController("BackupRestoreService");
+                using var service = new ServiceController("SecureServerBackupService");
                 
                 if (service.Status == ServiceControllerStatus.Running)
                 {

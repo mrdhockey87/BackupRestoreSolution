@@ -14,7 +14,7 @@ namespace SecureServerBackupService
         private static readonly Mutex JobsFileMutex = new(false, JobsFileMutexName);
         private static readonly string JobsFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "BackupRestoreService",
+            "SecureServerBackupService",
             "jobs.json");
 
         private List<BackupJob> jobs = new();
@@ -363,7 +363,7 @@ namespace SecureServerBackupService
                     {
                         var logPath = Path.Combine(
                             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                            "BackupRestoreService",
+                            "SecureServerBackupService",
                             "save_error.log");
                         File.AppendAllText(logPath,
                             $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Failed to save jobs: {ex.Message}\n");

@@ -6,7 +6,9 @@ namespace SecureServerBackup.Services
 {
     public class BackupServiceManager
     {
-        private const string ServiceName = "BackupRestoreService";
+        private const string ServiceName = "SecureServerBackupService";
+        private const string ServiceDisplayName = "Secure Server Backup Service";
+        private const string ServiceDescription = "Secure Server Backup Service for Secure Server Backup Application. Manages encrypted and unencrypted backups and restores for server infrastructure.";
 
         public async Task<bool> IsServiceInstalledAsync()
         {
@@ -106,7 +108,7 @@ namespace SecureServerBackup.Services
                     var startInfo = new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = "sc.exe",
-                        Arguments = $"create {ServiceName} binPath= \"{executablePath}\" start= auto",
+                        Arguments = $"create {ServiceName} binPath= \"{executablePath}\" start= auto DisplayName= \"{ServiceDisplayName}\"",
                         UseShellExecute = false,
                         CreateNoWindow = true,
                         Verb = "runas"
@@ -114,7 +116,23 @@ namespace SecureServerBackup.Services
 
                     using var process = System.Diagnostics.Process.Start(startInfo);
                     process?.WaitForExit();
-                    return process?.ExitCode == 0;
+
+                    if (process?.ExitCode == 0)
+                    {
+                        // Set service description as a separate sc.exe call
+                        var descInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "sc.exe",
+                            Arguments = $"description {ServiceName} \"{ServiceDescription}\"",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        };
+                        using var descProcess = System.Diagnostics.Process.Start(descInfo);
+                        descProcess?.WaitForExit();
+                        return true;
+                    }
+
+                    return false;
                 }
                 catch
                 {

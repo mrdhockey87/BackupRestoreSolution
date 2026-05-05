@@ -16,21 +16,21 @@ try
         Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Normal;
         File.AppendAllText(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "BackupRestoreService", "startup.log"),
+            "SecureServerBackupService", "startup.log"),
             $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Process priority set to Normal{Environment.NewLine}");
     }
     catch (Exception prioEx)
     {
         File.AppendAllText(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "BackupRestoreService", "startup.log"),
+            "SecureServerBackupService", "startup.log"),
             $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Warning: Failed to set priority: {prioEx.Message}{Environment.NewLine}");
     }
 
     // Simple startup logging
     var logDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "BackupRestoreService");
+        "SecureServerBackupService");
     Directory.CreateDirectory(logDir);
     var startupLog = Path.Combine(logDir, "startup.log");
     File.AppendAllText(startupLog, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] BackupService starting{Environment.NewLine}");
@@ -49,7 +49,7 @@ try
     var builder = Host.CreateApplicationBuilder(args);
     builder.Services.AddWindowsService(options =>
     {
-        options.ServiceName = "BackupRestoreService";
+        options.ServiceName = "SecureServerBackupService";
     });
 
     var communicationInstance = new BackupServiceCommunication();
@@ -72,7 +72,7 @@ catch (Exception ex)
 {
     var errorLog = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "BackupRestoreService",
+        "SecureServerBackupService",
         "startup_error.log");
     
     try
@@ -104,14 +104,14 @@ static void SetServiceDescription()
         }
         
         // Set service description
-        using (var sc = new ServiceController("BackupRestoreService"))
+        using (var sc = new ServiceController("SecureServerBackupService"))
         {
             // Use WMI to set description
-            var wmiPath = $"Win32_Service.Name='BackupRestoreService'";
+            var wmiPath = $"Win32_Service.Name='SecureServerBackupService'";
             using (var service = new System.Management.ManagementObject(wmiPath))
             {
                 service.Get();
-                var description = $"Enterprise backup and restore service for Windows servers and Hyper-V VMs (Version {version})";
+                var description = $"Secure Server Backup Service for Secure Server Backup Application (Version {version})";
                 service["Description"] = description;
                 service.Put();
             }

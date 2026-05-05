@@ -1001,57 +1001,64 @@ namespace SecureServerBackupService
                         }
 
                         logger?.Invoke($"Archive verification PASSED: {errorMsg}");
-                        progressCallback?.Invoke(90, "Checking image health...");
 
-                        var healthMsg = new StringBuilder(1024);
-                        int healthState = CheckBackupImageHealth(
-                            backupPath,
-                            1,
-                            true,
-                            healthMsg,
-                            healthMsg.Capacity,
-                            nativeCallback);
-
-                        if (healthState < 0)
+                        // SSB component-store health checks only apply to Windows OS volume backups.
+                        // Hyper-V backups contain guest VM disks, not a Windows installation, so
+                        // SSBOpenSession would fail with 0x80070003. Archive integrity is sufficient.
+                        if (job.Target != BackupTarget.HyperV)
                         {
-                            logger?.Invoke($"[SSB VERIFY FAILED] Result code: {healthState}");
-                            logger?.Invoke($"[SSB VERIFY FAILED] {healthMsg}");
-                            return false;
-                        }
+                            progressCallback?.Invoke(90, "Checking image health...");
 
-                        if (healthState == (int)DismImageHealthState.Repairable)
-                        {
-                            logger?.Invoke($"[SSB] Image is repairable. Attempting RestoreHealth: {healthMsg}");
-                            progressCallback?.Invoke(95, "Repairing image...");
-
-                            var repairMsg = new StringBuilder(1024);
-                            int repairResult = RestoreBackupImageHealth(
+                            var healthMsg = new StringBuilder(1024);
+                            int healthState = CheckBackupImageHealth(
                                 backupPath,
                                 1,
-                                null,
-                                0,
-                                false,
-                                repairMsg,
-                                repairMsg.Capacity,
+                                true,
+                                healthMsg,
+                                healthMsg.Capacity,
                                 nativeCallback);
 
-                            if (repairResult != 0)
+                            if (healthState < 0)
                             {
-                                logger?.Invoke($"[SSB REPAIR FAILED] Result code: {repairResult}");
-                                logger?.Invoke($"[SSB REPAIR FAILED] {repairMsg}");
+                                logger?.Invoke($"[SSB VERIFY FAILED] Result code: {healthState}");
+                                logger?.Invoke($"[SSB VERIFY FAILED] {healthMsg}");
                                 return false;
                             }
 
-                            logger?.Invoke($"[SSB] Repair completed: {repairMsg}");
-                        }
-                        else if (healthState == (int)DismImageHealthState.NonRepairable)
-                        {
-                            logger?.Invoke($"[SSB VERIFY FAILED] Image is non-repairable: {healthMsg}");
-                            return false;
-                        }
-                        else
-                        {
-                            logger?.Invoke($"[SSB VERIFY PASSED] {healthMsg}");
+                            if (healthState == (int)DismImageHealthState.Repairable)
+                            {
+                                logger?.Invoke($"[SSB] Image is repairable. Attempting RestoreHealth: {healthMsg}");
+                                progressCallback?.Invoke(95, "Repairing image...");
+
+                                var repairMsg = new StringBuilder(1024);
+                                int repairResult = RestoreBackupImageHealth(
+                                    backupPath,
+                                    1,
+                                    null,
+                                    0,
+                                    false,
+                                    repairMsg,
+                                    repairMsg.Capacity,
+                                    nativeCallback);
+
+                                if (repairResult != 0)
+                                {
+                                    logger?.Invoke($"[SSB REPAIR FAILED] Result code: {repairResult}");
+                                    logger?.Invoke($"[SSB REPAIR FAILED] {repairMsg}");
+                                    return false;
+                                }
+
+                                logger?.Invoke($"[SSB] Repair completed: {repairMsg}");
+                            }
+                            else if (healthState == (int)DismImageHealthState.NonRepairable)
+                            {
+                                logger?.Invoke($"[SSB VERIFY FAILED] Image is non-repairable: {healthMsg}");
+                                return false;
+                            }
+                            else
+                            {
+                                logger?.Invoke($"[SSB VERIFY PASSED] {healthMsg}");
+                            }
                         }
 
                         progressCallback?.Invoke(100, "Verification completed successfully!");

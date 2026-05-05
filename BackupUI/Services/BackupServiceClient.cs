@@ -14,7 +14,7 @@ namespace SecureServerBackup.Services
     /// </summary>
     public class BackupServiceClient
     {
-        private const string DefaultPipeName = "BackupRestoreServicePipe";
+        private const string DefaultPipeName = "SecureServerBackupServicePipe";
         private const int Timeout = 5000;
         private readonly string _pipeName;
 

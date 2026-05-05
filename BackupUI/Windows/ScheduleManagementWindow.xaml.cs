@@ -155,7 +155,7 @@ namespace SecureServerBackup.Windows
         {
             if (dgJobs.SelectedItem is BackupJob job)
             {
-                // Check if BackupRestoreService is installed and running
+                // Check if SecureServerBackupService is installed and running
                 bool serviceOk = CheckBackupService();
                 if (!serviceOk)
                 {
@@ -188,11 +188,11 @@ namespace SecureServerBackup.Windows
                     else
                     {
                         // Log the failure to Activity tab
-                        BackupLogger.LogError(job.Name, "Failed to communicate with BackupRestoreService - backup was not started");
+                        BackupLogger.LogError(job.Name, "Failed to communicate with Secure Server Backup Service - backup was not started");
                         
                         MessageBox.Show(
                             "Failed to start backup. The service may be busy or not responding.\n\n" +
-                            "Try again in a few moments, or restart the BackupRestoreService from Windows Services.",
+                            "Try again in a few moments, or restart the Secure Server Backup Service from Windows Services.",
                             "Service Error",
                             MessageBoxButton.OK,
                             MessageBoxImage.Error);
@@ -210,15 +210,15 @@ namespace SecureServerBackup.Windows
         {
             try
             {
-                using var service = new System.ServiceProcess.ServiceController("BackupRestoreService");
+                using var service = new System.ServiceProcess.ServiceController("SecureServerBackupService");
                 
                 if (service.Status != System.ServiceProcess.ServiceControllerStatus.Running)
                 {
                     // Log service status issue to Activity tab
-                    BackupLogger.LogWarning("System", $"BackupRestoreService is not running (Status: {service.Status})");
+                    BackupLogger.LogWarning("System", $"Secure Server Backup Service is not running (Status: {service.Status})");
                     
                     var result = MessageBox.Show(
-                        $"The BackupRestoreService is not running (Status: {service.Status}).\n\n" +
+                        $"The Secure Server Backup Service is not running (Status: {service.Status}).\n\n" +
                         "Would you like to start it now?\n\n" +
                         "Note: You may need to run this application as Administrator to start the service.",
                         "Service Not Running",
@@ -229,12 +229,12 @@ namespace SecureServerBackup.Windows
                     {
                         try
                         {
-                            BackupLogger.LogInfo("System", "Attempting to start BackupRestoreService...");
+                            BackupLogger.LogInfo("System", "Attempting to start Secure Server Backup Service...");
                             service.Start();
                             service.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Running, TimeSpan.FromSeconds(10));
-                            BackupLogger.LogInfo("System", "BackupRestoreService started successfully");
+                            BackupLogger.LogInfo("System", "Secure Server Backup Service started successfully");
                             MessageBox.Show(
-                                "BackupRestoreService started successfully.",
+                                "Secure Server Backup Service started successfully.",
                                 "Service Started",
                                 MessageBoxButton.OK,
                                 MessageBoxImage.Information);
@@ -242,7 +242,7 @@ namespace SecureServerBackup.Windows
                         }
                         catch (Exception ex)
                         {
-                            BackupLogger.LogError("System", $"Failed to start BackupRestoreService: {ex.Message}");
+                            BackupLogger.LogError("System", $"Failed to start Secure Server Backup Service: {ex.Message}");
                             MessageBox.Show(
                                 $"Failed to start service: {ex.Message}\n\n" +
                                 "Please start the service manually from Windows Services (services.msc) or run this application as Administrator.",
@@ -259,10 +259,10 @@ namespace SecureServerBackup.Windows
             catch (System.InvalidOperationException)
             {
                 // Service doesn't exist - log this critical issue
-                BackupLogger.LogError("System", "BackupRestoreService is not installed on this system");
+                BackupLogger.LogError("System", "Secure Server Backup Service is not installed on this system");
                 
                 var result = MessageBox.Show(
-                    "The BackupRestoreService is not installed on this system.\n\n" +
+                    "The Secure Server Backup Service is not installed on this system.\n\n" +
                     "The service must be installed before backups can run.\n\n" +
                     "To install the service:\n" +
                     "1. Open PowerShell as Administrator\n" +
@@ -288,7 +288,7 @@ namespace SecureServerBackup.Windows
             }
             catch (Exception ex)
             {
-                BackupLogger.LogError("System", $"Error checking BackupRestoreService status: {ex.Message}");
+                BackupLogger.LogError("System", $"Error checking Secure Server Backup Service status: {ex.Message}");
                 MessageBox.Show(
                     $"Error checking service status: {ex.Message}",
                     "Service Check Error",

@@ -38,7 +38,7 @@ namespace SecureServerBackupCommon
     {
         private static readonly string LogDirectory = 
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), 
-                        "BackupRestoreService", "Logs");
+                        "SecureServerBackupService", "Logs");
 
         // Service log file for service-only messages
         private static readonly string ServiceLogFile = Path.Combine(LogDirectory, "service.json");
@@ -52,8 +52,19 @@ namespace SecureServerBackupCommon
 
         static BackupLogger()
         {
-            // Ensure log directory exists
-            Directory.CreateDirectory(LogDirectory);
+            // Migrate logs from old BackupRestoreService folder if present
+            var oldLogDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "BackupRestoreService", "Logs");
+            if (Directory.Exists(oldLogDir) && !Directory.Exists(LogDirectory))
+            {
+                try { Directory.Move(oldLogDir, LogDirectory); }
+                catch { Directory.CreateDirectory(LogDirectory); }
+            }
+            else
+            {
+                Directory.CreateDirectory(LogDirectory);
+            }
         }
 
         #region Job-Specific Logging

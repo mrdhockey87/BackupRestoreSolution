@@ -330,11 +330,11 @@ namespace SecureServerBackup
                     else
                     {
                         // Log the failure to Activity tab
-                        BackupLogger.LogError(job.Name, "Failed to communicate with BackupRestoreService - backup was not started");
+                        BackupLogger.LogError(job.Name, "Failed to communicate with Secure Server Backup Service - backup was not started");
 
                         CustomDialogService.ShowError(this,
                             "Failed to start backup. The service may be busy or not responding.\n\n" +
-                            "Try again in a few moments, or restart the BackupRestoreService from Windows Services.",
+                            "Try again in a few moments, or restart the Secure Server Backup Service from Windows Services.",
                             "Service Error");
                     }
                 }
@@ -348,14 +348,14 @@ namespace SecureServerBackup
                 // Check if service is installed
                 if (!Services.ServiceInstaller.IsServiceInstalled())
                 {
-                    BackupLogger.LogServiceInfo("BackupRestoreService not installed - installing automatically...");
+                    BackupLogger.LogServiceInfo("Secure Server Backup Service not installed - installing automatically...");
 
                     // Install and start service automatically without confirmation
                     var (success, message) = await Services.ServiceInstaller.InstallAndStartServiceAsync();
 
                     if (success)
                     {
-                        BackupLogger.LogServiceInfo("BackupRestoreService installed and started successfully");
+                        BackupLogger.LogServiceInfo("Secure Server Backup Service installed and started successfully");
                         return true;
                     }
                     else
@@ -379,14 +379,14 @@ namespace SecureServerBackup
                 var status = Services.ServiceInstaller.GetServiceStatus();
                 if (status != System.ServiceProcess.ServiceControllerStatus.Running)
                 {
-                    BackupLogger.LogServiceInfo($"BackupRestoreService not running (Status: {status}) - starting automatically...");
+                    BackupLogger.LogServiceInfo($"Secure Server Backup Service not running (Status: {status}) - starting automatically...");
 
                     // Start service automatically without confirmation
                     var (success, message) = await Services.ServiceInstaller.StartServiceAsync();
 
                     if (success)
                     {
-                        BackupLogger.LogServiceInfo("BackupRestoreService started successfully");
+                        BackupLogger.LogServiceInfo("Secure Server Backup Service started successfully");
                         return true;
                     }
                     else

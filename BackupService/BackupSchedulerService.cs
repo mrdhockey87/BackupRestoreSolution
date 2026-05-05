@@ -17,7 +17,7 @@ namespace SecureServerBackupService
         private readonly BackupServiceCommunication _communication;
         private static readonly string LogFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "BackupRestoreService",
+            "SecureServerBackupService",
             "service.log");
 
         public BackupSchedulerService(

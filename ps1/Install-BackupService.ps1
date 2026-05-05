@@ -1,5 +1,5 @@
 # Install-BackupService.ps1
-# Installs the BackupRestoreService as a Windows Service
+# Installs the SecureServerBackupService as a Windows Service
 
 # Requires Administrator privileges
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -15,7 +15,7 @@ if ($args.Count -gt 0) {
 }
 
 # Path to the service executable
-$serviceExePath = Join-Path $PSScriptRoot "artifacts\bin\$configuration\BackupService.exe"
+$serviceExePath = Join-Path $PSScriptRoot "artifacts\bin\$configuration\SecureServerBackupService.exe"
 
 # Check if the executable exists
 if (-not (Test-Path $serviceExePath)) {
@@ -25,12 +25,12 @@ if (-not (Test-Path $serviceExePath)) {
     exit 1
 }
 
-Write-Host "Installing BackupRestoreService..." -ForegroundColor Cyan
+Write-Host "Installing SecureServerBackupService..." -ForegroundColor Cyan
 Write-Host "Service Executable: $serviceExePath" -ForegroundColor Gray
 
 try {
     # Check if service already exists
-    $existingService = Get-Service -Name "BackupRestoreService" -ErrorAction SilentlyContinue
+    $existingService = Get-Service -Name "SecureServerBackupService" -ErrorAction SilentlyContinue
     
     if ($existingService) {
         Write-Host "Service already exists! Uninstalling first..." -ForegroundColor Yellow
@@ -38,34 +38,34 @@ try {
         # Stop the service if running
         if ($existingService.Status -eq "Running") {
             Write-Host "Stopping service..." -ForegroundColor Gray
-            Stop-Service -Name "BackupRestoreService" -Force
+            Stop-Service -Name "SecureServerBackupService" -Force
             Start-Sleep -Seconds 2
         }
         
         # Delete the service
         Write-Host "Removing existing service..." -ForegroundColor Gray
-        sc.exe delete BackupRestoreService
+        sc.exe delete SecureServerBackupService
         Start-Sleep -Seconds 2
     }
     
     # Install the service
     Write-Host "Creating service..." -ForegroundColor Gray
-    New-Service -Name "BackupRestoreService" `
+    New-Service -Name "SecureServerBackupService" `
                 -BinaryPathName $serviceExePath `
-                -DisplayName "Backup & Restore Service" `
-                -Description "Manages scheduled backups and backup execution for the Backup & Restore Solution" `
+                -DisplayName "Secure Server Backup Service" `
+                -Description "Enterprise backup and restore service for Windows servers and Hyper-V VMs" `
                 -StartupType Automatic
     
     Write-Host "Starting service..." -ForegroundColor Gray
-    Start-Service -Name "BackupRestoreService"
+    Start-Service -Name "SecureServerBackupService"
     
     # Wait for service to start
     Start-Sleep -Seconds 3
     
     # Check service status
-    $service = Get-Service -Name "BackupRestoreService"
+    $service = Get-Service -Name "SecureServerBackupService"
     if ($service.Status -eq "Running") {
-        Write-Host "`nSUCCESS! BackupRestoreService installed and started." -ForegroundColor Green
+        Write-Host "`nSUCCESS! SecureServerBackupService installed and started." -ForegroundColor Green
         Write-Host "Status: $($service.Status)" -ForegroundColor Green
         
         # Get version if possible

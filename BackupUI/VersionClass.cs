@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.0";
+        private static readonly string version_fallback_number = "6.2.7.4";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,15 +69,29 @@ namespace SecureServerBackup
 
 /*
  *  
- * Version 6.2.4.1  Fixed service process crash during Hyper-V export by enabling async SEH
- *                  exception handling (/EHa) in BackupEngine so catch(...) intercepts access
- *                  violations from null WMI output pointers, added null guard on pOutParams after
- *                  ExecMethod, and fixed missing namespace closing brace. mdail 5/5/2026
- * Version 6.2.4.0  Fixed Hyper-V export job polling hang at 95%
- *                  handling all terminal CIM_ConcreteJob states (7=Completed, 8=Terminated, 9=Killed,
- *                  10=Exception, 32768=CompletedWithWarnings), and reading PercentComplete directly
- *                  from the WMI job object so progress moves smoothly from 40-94% during export
- *                  instead of stalling. Poll interval raised to 2 s to reduce WMI churn. mdail 5/4/2026
+ * Version 6.2.7.4 Fixed BackupServiceManager.InstallServiceAsync to pass DisplayName and Description
+ *                 to sc.exe create and add a follow-up sc.exe description call so Services MMC always
+ *                 shows the friendly spaced name and description on fresh installs. Fixed invalid
+ *                 double-dot version string (6.2..4.003) in Directory.Build.props that blocked all
+ *                 NuGet restores with NETSDK1005 project.assets.json errors. mdail 5/5/2026
+ * Version 6.2.4.3 Renamed all Windows service registration, display names, log folder paths, and
+ *                 installer scripts from the old BackupRestoreService identity to SecureServerBackupService
+ *                 so the service list, Event Viewer, and on-disk log folders match the renamed project
+ *                 outputs. BackupLogger migrates existing logs from the old folder on first run.
+ *                 Also changed the name of a application to be correct in the MainPage of the UI. mdail 5/5/2026
+ * Version 6.2.4.2 Fixed false post-backup verification failure
+ *                 SSB component-store health check on Hyper-V .ssb archives. Hyper-V backups
+ *                 contain guest VM disks, not Windows OS volumes, so SSBOpenSession always
+ *                 fails with HRESULT 0x80070003. Archive integrity check is sufficient. mdail 5/5/2026
+ * Version 6.2.4.1 Fixed service process crash during Hyper-V export by enabling async SEH
+ *                 exception handling (/EHa) in BackupEngine so catch(...) intercepts access
+ *                 violations from null WMI output pointers, added null guard on pOutParams after
+ *                 ExecMethod, and fixed missing namespace closing brace. mdail 5/5/2026
+ * Version 6.2.4.0 Fixed Hyper-V export job polling hang at 95%
+ *                 handling all terminal CIM_ConcreteJob states (7=Completed, 8=Terminated, 9=Killed,
+ *                 10=Exception, 32768=CompletedWithWarnings), and reading PercentComplete directly
+ *                 from the WMI job object so progress moves smoothly from 40-94% during export
+ *                 instead of stalling. Poll interval raised to 2 s to reduce WMI churn. mdail 5/4/2026
  * Version 6.2.3.99 Fixed running-VM Hyper-V export failure (0x80070020) caused by AVHDX chain merge
  *                  while the differencing disk is locked by a running VM. Full backups of running VMs
  *                  now use CopySnapshotConfiguration=2 (ExportOneSnapshot) and incremental/differential

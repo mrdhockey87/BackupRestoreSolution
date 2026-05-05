@@ -17,7 +17,7 @@ if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 $solutionRoot = $PSScriptRoot
-$serviceName = "BackupRestoreService"
+$serviceName = "SecureServerBackupService"
 
 Write-Host "[1/5] Stopping service..." -ForegroundColor Yellow
 try {
@@ -63,11 +63,11 @@ if ($LASTEXITCODE -eq 0) {
 
 Write-Host ""
 Write-Host "[4/5] Installing service..." -ForegroundColor Yellow
-$exePath = "$solutionRoot\artifacts\bin\Release\BackupService.exe"
+$exePath = "$solutionRoot\artifacts\bin\Release\SecureServerBackupService.exe"
 if (Test-Path $exePath) {
     Write-Host "  EXE found: $exePath" -ForegroundColor Gray
     
-    sc.exe create $serviceName binPath= "$exePath" start= auto DisplayName= "Backup & Restore Service" | Out-Null
+    sc.exe create $serviceName binPath= "$exePath" start= auto DisplayName= "Secure Server Backup Service" | Out-Null
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  ✓ Service installed successfully!" -ForegroundColor Green

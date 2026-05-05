@@ -3147,7 +3147,7 @@ namespace SecureServerBackup.Windows
                     jobManager.UpdateJob(job);
                     _hasSavedEncryptionPassword = job.EncryptBackup && !string.IsNullOrWhiteSpace(job.ProtectedEncryptionPassword);
                     UpdateEncryptionUiState();
-                    CustomDialogService.ShowSuccess($"Backup job '{job.Name}' updated successfully!\n\nJob saved to:\nC:\\ProgramData\\BackupRestoreService\\jobs.json", 
+                    CustomDialogService.ShowSuccess($"Backup job '{job.Name}' updated successfully!\n\nJob saved to:\nC:\\ProgramData\\SecureServerBackupService\\jobs.json", 
                         "Success");
                 }
                 else
@@ -3155,7 +3155,7 @@ namespace SecureServerBackup.Windows
                     jobManager.AddJob(job);
                     _hasSavedEncryptionPassword = job.EncryptBackup && !string.IsNullOrWhiteSpace(job.ProtectedEncryptionPassword);
                     UpdateEncryptionUiState();
-                    CustomDialogService.ShowSuccess($"Backup job '{job.Name}' created successfully!\n\nJob saved to:\nC:\\ProgramData\\BackupRestoreService\\jobs.json", 
+                    CustomDialogService.ShowSuccess($"Backup job '{job.Name}' created successfully!\n\nJob saved to:\nC:\\ProgramData\\SecureServerBackupService\\jobs.json", 
                         "Success");
                 }
 

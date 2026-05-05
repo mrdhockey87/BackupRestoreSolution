@@ -258,7 +258,7 @@ namespace SecureServerBackup.Windows
                 // Get the jobs.json file path (same location as service uses)
                 string jobsFilePath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                    "BackupRestoreService",
+                    "SecureServerBackupService",
                     "jobs.json");
 
                 if (!File.Exists(jobsFilePath))
