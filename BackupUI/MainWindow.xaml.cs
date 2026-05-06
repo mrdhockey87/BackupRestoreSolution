@@ -2008,7 +2008,10 @@ namespace SecureServerBackup
                             return;
                         }
 
-                        var imageDialog = new SecureServerBackup.Windows.ImageSelectionDialog(images)
+                        var imageDialog = new SecureServerBackup.Windows.ImageSelectionDialog(
+                            images,
+                            "Verify Selected",
+                            "This backup contains multiple restore points. Select which point to verify:")
                         {
                             Owner = this
                         };
@@ -2034,6 +2037,7 @@ namespace SecureServerBackup
                     progressWindow.Show();
 
                     var verificationResult = new StringBuilder();
+                    var verifyJobName = $"{backup.BackupName} [Verify]";
                     verificationResult.AppendLine($"Verification started at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                     verificationResult.AppendLine($"Backup: {backup.BackupName}");
                     verificationResult.AppendLine($"Type: {backup.BackupType}");
@@ -2044,9 +2048,14 @@ namespace SecureServerBackup
                     }
                     verificationResult.AppendLine(new string('-', 60));
 
+                    BackupLogger.LogInfo(verifyJobName,
+                        $"Verification started for {backup.BackupName}",
+                        $"Path: {backup.BackupPath}" + (imageCount > 1 ? $" | Image {selectedImageIndex} of {imageCount}" : string.Empty));
+
                     void UpdateVerificationLog(string message)
                     {
                         verificationResult.AppendLine(message);
+                        BackupLogger.LogInfo(verifyJobName, message);
 
                         if (txtVerificationResults != null)
                         {
@@ -2179,6 +2188,10 @@ namespace SecureServerBackup
                                 txtVerificationResults.Foreground = new SolidColorBrush(Colors.Green);
                             }
 
+                            BackupLogger.LogSuccess(verifyJobName,
+                                $"Verification passed for {backup.BackupName}",
+                                backup.BackupPath);
+
                             CustomDialogService.ShowSuccess(this,
                                 $"Backup verification completed successfully!\n\nBackup: {backup.BackupName}\n\nThe backup integrity has been verified and is valid.",
                                 "Verification Complete");
@@ -2193,6 +2206,10 @@ namespace SecureServerBackup
                                 txtVerificationResults.Text = verificationResult.ToString();
                                 txtVerificationResults.Foreground = new SolidColorBrush(Colors.Red);
                             }
+
+                            BackupLogger.LogError(verifyJobName,
+                                $"Verification failed for {backup.BackupName} (code {verificationResultCode})",
+                                backup.BackupPath);
 
                             CustomDialogService.ShowError(this,
                                 $"Backup verification failed!\n\nBackup: {backup.BackupName}\n\nThe backup may be corrupted or inaccessible.",
@@ -2211,6 +2228,10 @@ namespace SecureServerBackup
                             txtVerificationResults.Foreground = new SolidColorBrush(Colors.Red);
                         }
 
+                        BackupLogger.LogError(verifyJobName,
+                            $"Verification exception for {backup.BackupName}: {verifyEx.Message}",
+                            verifyEx.ToString());
+
                         CustomDialogService.ShowError(this,
                             $"Backup verification failed:\n{verifyEx.Message}",
                             "Verification Error");
@@ -2227,6 +2248,10 @@ namespace SecureServerBackup
                         txtVerificationResults.Text = $"Error initializing verification:\n{ex.Message}";
                         txtVerificationResults.Foreground = new SolidColorBrush(Colors.Red);
                     }
+
+                    BackupLogger.LogError($"{backup.BackupName} [Verify]",
+                        $"Failed to start verification for {backup.BackupName}: {ex.Message}",
+                        ex.ToString());
 
                     CustomDialogService.ShowError($"Error initializing verification:\n{ex.Message}",
                                   "Error");

@@ -23,6 +23,7 @@
 				Foreground="{DynamicResource PrimaryText}"
 				Text="Multiple Restore Points Available" />
 			<TextBlock
+				x:Name="txtSubtitle"
 				Margin="0,5,0,0"
 				Foreground="{DynamicResource SecondaryText}"
 				Text="This backup contains multiple restore points. Select which point to mount:"
@@ -75,7 +76,8 @@
 			HorizontalAlignment="Right"
 			Orientation="Horizontal">
 			<Button
-				Width="120"
+				x:Name="btnAction"
+				Width="130"
 				Height="32"
 				Margin="0,0,10,0"
 				Click="btnMount_Click"

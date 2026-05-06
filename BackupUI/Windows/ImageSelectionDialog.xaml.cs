@@ -10,20 +10,26 @@ namespace SecureServerBackup.Windows
     {
         public int SelectedImageIndex { get; private set; } = -1;
 
-        public ImageSelectionDialog(List<BackupImageInfo> images)
+        /// <param name="images">List of images in the backup.</param>
+        /// <param name="actionLabel">Label for the primary action button, e.g. "Mount Selected" or "Verify Selected".</param>
+        /// <param name="subtitleText">Optional subtitle shown below the header.</param>
+        public ImageSelectionDialog(List<BackupImageInfo> images, string actionLabel = "Mount Selected", string? subtitleText = null)
         {
             InitializeComponent();
-            
-            if (images == null || images.Count == 0)
-            {
+
+            ArgumentNullException.ThrowIfNull(images);
+            if (images.Count == 0)
                 throw new ArgumentException("No images provided", nameof(images));
-            }
+
+            btnAction.Content = actionLabel;
+            if (subtitleText != null)
+                txtSubtitle.Text = subtitleText;
 
             // Sort images by date (most recent first)
             var sortedImages = images.OrderByDescending(i => i.ImageDate).ToList();
-            
+
             dgImages.ItemsSource = sortedImages;
-            
+
             // Pre-select most recent (first row after sorting)
             if (sortedImages.Count > 0)
             {
@@ -42,7 +48,7 @@ namespace SecureServerBackup.Windows
             else
             {
                 MessageBox.Show(
-                    "Please select a restore point to mount.",
+                    "Please select a restore point.",
                     "No Selection",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);

@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.7.8";
+        private static readonly string version_fallback_number = "6.2.4.8";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,8 +69,13 @@ namespace SecureServerBackup
 
 /*
  *  
- * Version 6.2.4.8 Added volume selection dialog on the Verify tab for multi-volume backups.
- *                 When the selected .ssb contains more than one image, the same ImageSelectionDialog
+ * Version 6.2.4.9 Added verify logging to the Activity page: every verification run on the Verify tab
+ *                 now writes start, progress, success, warning, and error entries to BackupLogger under
+ *                 a "<JobName> [Verify]" job name so the Activity page shows a full trace of each verify run.
+ *                 Fixed the multi-volume image-selection dialog to show "Verify Selected" and verify-specific
+ *                 subtitle text instead of the mount-oriented "Mount Selected" label when opened from the
+ *                 Verify tab. mdail 5/6/2026
+ * Version 6.2.4.8 When the selected .ssb contains more than one image, the same ImageSelectionDialog
  *                 used by the Mount tab is shown before verification starts so the user can pick the volume
  *                  to check. The chosen image index is passed to both the health-check and repair calls.
  *                 The result log now shows "Image: N of M" for multi-volume files. Also fix version number. mdail 5/6/2026
