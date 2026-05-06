@@ -347,10 +347,23 @@ extern "C" {
         std::wstring systemDrive;
         PCWSTR windowsDirectoryArg = nullptr;
         PCWSTR systemDriveArg = nullptr;
-        if (TryResolveOfflineWindowsPaths(workRoot, windowsDirectory, systemDrive)) {
-            windowsDirectoryArg = windowsDirectory.c_str();
-            systemDriveArg = systemDrive.c_str();
+        bool hasWindowsInstall = TryResolveOfflineWindowsPaths(workRoot, windowsDirectory, systemDrive);
+        if (!hasWindowsInstall) {
+            // No Windows installation in this image (data drive, non-OS volume).
+            // SSBOpenSession requires a Windows directory and always fails with 0x80070003
+            // on data drives. Archive integrity was already verified, so skip the
+            // component-store health check and report healthy.
+            SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
+            RemoveDirectoryTree(workRoot);
+            if (stagedCleanup) {
+                fs::remove(SSBSource, ec);
+            }
+            WriteMessageBuffer(healthMessage, healthMessageSize,
+                L"SSB component-store check skipped: no Windows installation in image (data drive backup). Archive integrity verified.");
+            return 0;
         }
+        windowsDirectoryArg = windowsDirectory.c_str();
+        systemDriveArg = systemDrive.c_str();
 
         SSBSession session = SSB_SESSION_DEFAULT;
         hr = SSBOpenSession(workRoot.c_str(), windowsDirectoryArg, systemDriveArg, &session);
@@ -362,12 +375,8 @@ extern "C" {
             }
 
             std::wstring message = L"SSBOpenSession failed. " + GetSSBErrorMessage(hr);
-            if (!windowsDirectory.empty()) {
-                message += L" WindowsDirectory=" + windowsDirectory;
-            }
-            if (!systemDrive.empty()) {
-                message += L" SystemDrive=" + systemDrive;
-            }
+            message += L" WindowsDirectory=" + windowsDirectory;
+            message += L" SystemDrive=" + systemDrive;
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -6;
@@ -487,10 +496,22 @@ extern "C" {
         std::wstring systemDrive;
         PCWSTR windowsDirectoryArg = nullptr;
         PCWSTR systemDriveArg = nullptr;
-        if (TryResolveOfflineWindowsPaths(workRoot, windowsDirectory, systemDrive)) {
-            windowsDirectoryArg = windowsDirectory.c_str();
-            systemDriveArg = systemDrive.c_str();
+        bool hasWindowsInstall = TryResolveOfflineWindowsPaths(workRoot, windowsDirectory, systemDrive);
+        if (!hasWindowsInstall) {
+            // No Windows installation in this image (data drive, non-OS volume).
+            // SSBOpenSession requires a Windows directory and always fails with 0x80070003
+            // on data drives. Nothing to repair on a non-OS volume.
+            SSBUnmountImage(workRoot.c_str(), SSB_DISCARD_IMAGE, nullptr, nullptr, nullptr);
+            RemoveDirectoryTree(workRoot);
+            if (stagedCleanup) {
+                fs::remove(SSBSource, ec);
+            }
+            WriteMessageBuffer(healthMessage, healthMessageSize,
+                L"SSB component-store repair skipped: no Windows installation in image (data drive backup).");
+            return 0;
         }
+        windowsDirectoryArg = windowsDirectory.c_str();
+        systemDriveArg = systemDrive.c_str();
 
         SSBSession session = SSB_SESSION_DEFAULT;
         hr = SSBOpenSession(workRoot.c_str(), windowsDirectoryArg, systemDriveArg, &session);
@@ -502,12 +523,8 @@ extern "C" {
             }
 
             std::wstring message = L"SSBOpenSession failed. " + GetSSBErrorMessage(hr);
-            if (!windowsDirectory.empty()) {
-                message += L" WindowsDirectory=" + windowsDirectory;
-            }
-            if (!systemDrive.empty()) {
-                message += L" SystemDrive=" + systemDrive;
-            }
+            message += L" WindowsDirectory=" + windowsDirectory;
+            message += L" SystemDrive=" + systemDrive;
             SetLastErrorMessage(message);
             WriteMessageBuffer(healthMessage, healthMessageSize, message);
             return -6;

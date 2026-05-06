@@ -2151,41 +2151,55 @@ extern "C" {
                                std::to_wstring(volumeIndex) + L": " + actualSourcePath);
                     }
                     else {
-                        vssError = L"VSS CreateVolumeSnapshot failed with HRESULT: 0x" + 
-                                  std::to_wstring(static_cast<unsigned long>(hr));
+                        wchar_t hrHex[32];
+                        swprintf_s(hrHex, L"0x%08X", static_cast<unsigned long>(hr));
+                        vssError = L"VSS CreateVolumeSnapshot failed with HRESULT: " + std::wstring(hrHex);
 
                         // Provide specific guidance for common VSS errors
-                        if (hr == 0x80042308) { // VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER
+                        if (hr == (HRESULT)0x80042308) { // VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER
                             vssError += L" (VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER)";
                             LogError(L"BackupDiskIncremental: VSS does not support direct physical drive snapshots");
                             LogError(L"BackupDiskIncremental: Physical drives (\\\\?\\PHYSICALDRIVE*) cannot be snapshotted via VSS");
                             LogError(L"BackupDiskIncremental: Consider backing up individual mounted volumes instead");
                         }
-                        else if (hr == 0x80042306) { // VSS_E_PROVIDER_VETO
+                        else if (hr == (HRESULT)0x8004230C) { // VSS_E_VOLUME_NOT_SUPPORTED
+                            vssError += L" (VSS_E_VOLUME_NOT_SUPPORTED)";
+                            LogError(L"BackupDiskIncremental: Volume is not supported by VSS (e.g. VHD-mounted virtual disk).");
+                            LogError(L"BackupDiskIncremental: Falling back to direct capture - source is already a consistent image.");
+                        }
+                        else if (hr == (HRESULT)0x80042306) { // VSS_E_PROVIDER_VETO
                             vssError += L" (VSS_E_PROVIDER_VETO - Provider error, check event logs)";
                         }
-                        else if (hr == 0x80070005) { // E_ACCESSDENIED
+                        else if (hr == (HRESULT)0x80070005) { // E_ACCESSDENIED
                             vssError += L" (E_ACCESSDENIED - Insufficient privileges for VSS operations)";
                         }
 
                         LogError(L"BackupDiskIncremental: " + vssError);
-                        LogError(L"BackupDiskIncremental: VSS snapshot creation failed - cannot proceed with incremental disk backup");
+                        LogError(L"BackupDiskIncremental: VSS snapshot creation failed");
                     }
                 }
                 else {
-                    vssError = L"VSS Initialize failed with HRESULT: 0x" + 
-                              std::to_wstring(static_cast<unsigned long>(hr));
+                    wchar_t hrHex[32];
+                    swprintf_s(hrHex, L"0x%08X", static_cast<unsigned long>(hr));
+                    vssError = L"VSS Initialize failed with HRESULT: " + std::wstring(hrHex);
                     LogError(L"BackupDiskIncremental: " + vssError);
-                    LogError(L"BackupDiskIncremental: VSS initialization failed - cannot proceed with incremental disk backup");
+                    LogError(L"BackupDiskIncremental: VSS initialization failed");
                 }
 
+                // VSS_E_VOLUME_NOT_SUPPORTED and VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER:
+                // fall back to direct capture from the original volume path.
+                // Hyper-V exported VHDs are already consistent; VSS is not required.
+                bool vssRequiredFailure = !vssSucceeded &&
+                    hr != (HRESULT)0x8004230C &&   // VSS_E_VOLUME_NOT_SUPPORTED
+                    hr != (HRESULT)0x80042308;     // VSS_E_VOLUME_NOT_SUPPORTED_BY_PROVIDER
+
                 // For physical drive backups, VSS failure is critical as we need consistent disk state
-                if (!vssSucceeded) {
+                if (!vssSucceeded && vssRequiredFailure) {
                     WIMCloseHandle(hWim);
                     std::wstring err = L"Critical: VSS snapshot creation failed for incremental disk backup. ";
 
                     // Provide specific error message based on the VSS failure
-                    if (hr == 0x80042308) {
+                    if (hr == (HRESULT)0x80042308) {
                         err += L"VSS does not support physical drive snapshots (\\\\?\\PHYSICALDRIVE* paths). ";
                         err += L"To perform disk-level incremental backups, consider: ";
                         err += L"1) Backing up individual mounted volumes on the disk, or ";
@@ -2198,6 +2212,11 @@ extern "C" {
                     LogError(L"BackupDiskIncremental: " + err);
                     SetLastErrorMessage(err);
                     return -7;  // New error code for VSS failure
+                }
+
+                if (!vssSucceeded) {
+                    // Non-critical VSS failure (unsupported volume type) - continue with direct capture
+                    LogInfo(L"BackupDiskIncremental: VSS not available for this volume; using direct capture.");
                 }
 
                 if (callback) {
@@ -2454,11 +2473,27 @@ extern "C" {
                         if (!actualSourcePath.empty() && actualSourcePath.back() != L'\\') {
                             actualSourcePath += L'\\';
                         }
+                        LogInfo(L"BackupDiskDifferential: VSS snapshot created for volume " + std::to_wstring(volumeIndex));
+                    } else {
+                        wchar_t hrHex[32];
+                        swprintf_s(hrHex, L"0x%08X", static_cast<unsigned long>(hr));
+                        std::wstring vssMsg = L"BackupDiskDifferential: VSS unavailable (" + std::wstring(hrHex) + L"), using direct capture.";
+                        if (hr == (HRESULT)0x8004230C || hr == (HRESULT)0x80042308) {
+                            // Non-fatal: unsupported volume type (e.g. VHD-mounted virtual disk).
+                            // Exported VHDs are already consistent; direct capture is safe.
+                            LogInfo(vssMsg);
+                        } else {
+                            LogError(vssMsg);
+                        }
                     }
+                } else {
+                    wchar_t hrHex[32];
+                    swprintf_s(hrHex, L"0x%08X", static_cast<unsigned long>(hr));
+                    LogError(L"BackupDiskDifferential: VSS Init failed (" + std::wstring(hrHex) + L"), using direct capture.");
                 }
 
                 if (callback) {
-                    callback(progressBase + 10, L"VSS snapshot created. Appending differential image to backup archive...");
+                    callback(progressBase + 10, L"Appending differential image to backup archive...");
                 }
 
                 // Capture new image referencing base backup (differential)

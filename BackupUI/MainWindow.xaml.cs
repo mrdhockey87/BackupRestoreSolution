@@ -1990,6 +1990,37 @@ namespace SecureServerBackup
                         txtVerificationResults.Foreground = new SolidColorBrush(Colors.Blue);
                     }
 
+                    // Determine which image to verify; for multi-volume backups, ask the user.
+                    int selectedImageIndex = 1;
+                    var (countSuccess, imageCount, countError) = NativeBackupMountManager.GetImageCount(backup.BackupPath);
+                    if (!countSuccess)
+                    {
+                        CustomDialogService.ShowError(this, $"Failed to read backup images:\n{countError}", "Error");
+                        return;
+                    }
+
+                    if (imageCount > 1)
+                    {
+                        var (infoSuccess, images, infoError) = NativeBackupMountManager.GetImageInfo(backup.BackupPath);
+                        if (!infoSuccess || images.Count == 0)
+                        {
+                            CustomDialogService.ShowError(this, $"Failed to get image details:\n{infoError}", "Error");
+                            return;
+                        }
+
+                        var imageDialog = new SecureServerBackup.Windows.ImageSelectionDialog(images)
+                        {
+                            Owner = this
+                        };
+
+                        if (imageDialog.ShowDialog() != true)
+                        {
+                            return;
+                        }
+
+                        selectedImageIndex = imageDialog.SelectedImageIndex;
+                    }
+
                     var progressWindow = new MountProgressWindow
                     {
                         Owner = this,
@@ -2007,6 +2038,10 @@ namespace SecureServerBackup
                     verificationResult.AppendLine($"Backup: {backup.BackupName}");
                     verificationResult.AppendLine($"Type: {backup.BackupType}");
                     verificationResult.AppendLine($"Path: {backup.BackupPath}");
+                    if (imageCount > 1)
+                    {
+                        verificationResult.AppendLine($"Image: {selectedImageIndex} of {imageCount}");
+                    }
                     verificationResult.AppendLine(new string('-', 60));
 
                     void UpdateVerificationLog(string message)
@@ -2035,7 +2070,7 @@ namespace SecureServerBackup
 
                             int checkResult = BackupEngineInterop.CheckBackupImageStatusWithProgress(
                                 preparedBackup.WorkingPath,
-                                1,
+                                selectedImageIndex,
                                 true,
                                 healthMessage,
                                 healthMessage.Capacity,
@@ -2091,7 +2126,7 @@ namespace SecureServerBackup
 
                                     int repairResult = BackupEngineInterop.RepairBackupImageStatusWithProgress(
                                         preparedBackup.WorkingPath,
-                                        1,
+                                        selectedImageIndex,
                                         null,
                                         0,
                                         false,

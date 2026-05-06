@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.7.5";
+        private static readonly string version_fallback_number = "6.2.7.8";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,11 +69,27 @@ namespace SecureServerBackup
 
 /*
  *  
- * Version 6.2.7.5 Fixed mount failure caused by missing native export SsbMount_ValidateArchive:
+ * Version 6.2.4.8 Added volume selection dialog on the Verify tab for multi-volume backups.
+ *                 When the selected .ssb contains more than one image, the same ImageSelectionDialog
+ *                 used by the Mount tab is shown before verification starts so the user can pick the volume
+ *                  to check. The chosen image index is passed to both the health-check and repair calls.
+ *                 The result log now shows "Image: N of M" for multi-volume files. Also fix version number. mdail 5/6/2026
+ * Version 6.2.4.7 Fixed Hyper-V incremental and differential backups failing with VSS error
+ *                 0x8004230C (VSS_E_VOLUME_NOT_SUPPORTED) when capturing the mounted exported
+ *                 VHDX. VSS cannot snapshot VHD-mounted virtual disks; since the Hyper-V
+ *                 export is already a consistent point, fall back to direct capture instead
+ *                 of hard-failing. Also fixed HRESULT formatting in VSS error messages
+ *                 (were printing decimal instead of hex). mdail 5/6/2026
+ * Version 6.2.4.6 Fixed false post-backup verification failure on regular hard-drive
+ *                 (non-OS) incremental backups: when TryResolveOfflineWindowsPaths finds no
+ *                 Windows installation in the mounted image, skip SSBOpenSession/SSBCheckImageHealth
+ *                 entirely and return healthy, since archive integrity was already confirmed.
+ *                 Same guard applied in RestoreBackupImageHealth. mdail 5/6/2026
+ * Version 6.2.4.5 Fixed mount failure caused by missing native export SsbMount_ValidateArchive:
  *                 replaced the non-existent P/Invoke with SsbMount_GetImageCount which returns
  *                 the image count (<=0 on failure) so archive validation works without the
  *                 missing entry point. mdail 5/5/2026
- * Version 6.2.7.4 Fixed BackupServiceManager.InstallServiceAsync
+ * Version 6.2.4.4 Fixed BackupServiceManager.InstallServiceAsync
  *                 to sc.exe create and add a follow-up sc.exe description call so Services MMC always
  *                 shows the friendly spaced name and description on fresh installs. Fixed invalid
  *                 double-dot version string (6.2..4.003) in Directory.Build.props that blocked all
