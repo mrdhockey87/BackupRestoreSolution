@@ -40,6 +40,10 @@ namespace SecureServerBackup.Windows
         private NativeBackupMountManager.RestoreDiskPlan? _diskRestorePlan;
         private bool _isHyperVBackupPoint;
 
+        // Selected volumes/disk-group from the restore-volume selection dialog
+        private VolumeInfo? _selectedRestoreVolume;
+        private IReadOnlyList<VolumeInfo>? _selectedRestoreDiskGroup;
+
         public static class RegularHyperVRestoreHelper
         {
             public static bool SupportsHyperVVirtualDiskRestore(string selectedItemText)
@@ -201,7 +205,7 @@ namespace SecureServerBackup.Windows
                         return Path.GetFileNameWithoutExtension(backupPointPath);
                     }
 
-                    string configFile = Directory.GetFiles(exportPath, "*.xml", SearchOption.AllDirectories)
+                    string? configFile = Directory.GetFiles(exportPath, "*.xml", SearchOption.AllDirectories)
                         .FirstOrDefault(file =>
                             string.Equals(Path.GetFileName(Path.GetDirectoryName(file)), "Virtual Machines", StringComparison.OrdinalIgnoreCase) ||
                             string.Equals(Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(file) ?? string.Empty)), "Virtual Machines", StringComparison.OrdinalIgnoreCase));
@@ -680,8 +684,11 @@ namespace SecureServerBackup.Windows
 
         private void RestoreLocation_Changed(object sender, RoutedEventArgs e)
         {
-            pnlAlternateLocation.Visibility = rbAlternateLocation.IsChecked == true 
-                ? Visibility.Visible 
+            if (pnlAlternateLocation == null || rbAlternateLocation == null)
+                return;
+
+            pnlAlternateLocation.Visibility = rbAlternateLocation.IsChecked == true
+                ? Visibility.Visible
                 : Visibility.Collapsed;
 
             UpdateDestinationHelpText();
@@ -959,6 +966,11 @@ namespace SecureServerBackup.Windows
             if (!ValidateRestore())
                 return;
 
+            // For disk and Hyper-V backups with metadata, prompt for volume/group selection
+            // and let the user size each partition before confirming the restore.
+            if (!await PromptVolumeSelectionAndSizingAsync())
+                return;
+
             var result = MessageBox.Show(
                 "Are you sure you want to restore? This may overwrite existing files.",
                 "Confirm Restore",
@@ -992,6 +1004,166 @@ namespace SecureServerBackup.Windows
                 pnlProgress.Visibility = Visibility.Collapsed;
             }
         }
+
+        /// <summary>
+        /// For multi-image disk/Hyper-V backups: shows the volume-selection dialog followed by
+        /// the partition-sizing window.  Returns false if the user cancels at any step.
+        /// </summary>
+        private async Task<bool> PromptVolumeSelectionAndSizingAsync()
+        {
+            // Only needed for disk and Hyper-V restore kinds with restore metadata.
+            if (_restoreTargetKind != RestoreTargetKind.Disk &&
+                _restoreTargetKind != RestoreTargetKind.Volume)
+            {
+                return true;
+            }
+
+            if (_diskRestorePlan == null || !_diskRestorePlan.HasMetadata)
+                return true;
+
+            if (_diskRestorePlan.Volumes.Count <= 1 && !_isHyperVBackupPoint)
+                return true;
+
+            // Build VolumeInfo list from the restore plan, ordered by partition offset
+            var planVolumes = _diskRestorePlan.Volumes
+                .OrderBy(v => v.PartitionOffsetBytes)
+                .ThenBy(v => v.PartitionNumber)
+                .ToList();
+
+            var volumes = planVolumes.Select((v, idx) => new VolumeInfo
+            {
+                ImageIndex            = idx + 1, // 1-based image index into the SSB archive
+                Label                 = !string.IsNullOrWhiteSpace(v.SourceVolumeLabel) ? v.SourceVolumeLabel : $"Volume {v.PartitionNumber}",
+                Size                  = (long)v.PartitionLengthBytes,
+                UsedSpace             = 0,  // Unknown until mounted; resize window guards on Size
+                PartitionNumber       = v.PartitionNumber,
+                PartitionOffsetBytes  = v.PartitionOffsetBytes,
+                PartitionLengthBytes  = v.PartitionLengthBytes,
+                PartitionStyle        = v.PartitionStyle,
+                PartitionType         = v.PartitionType,
+                SourceVolumeGuidPath  = v.SourceVolumeGuidPath,
+                SourceVolumeMountPath = v.SourceVolumeMountPath,
+                IsBootVolume          = v.IsBootVolume,
+                IsSystemVolume        = v.IsSystemVolume,
+                FileSystem            = v.SourceFileSystem,
+                IsResizable           = true,
+                TargetSize            = (long)v.PartitionLengthBytes
+            }).ToList();
+
+            bool isDiskOrHyperV = _restoreTargetKind == RestoreTargetKind.Disk || _isHyperVBackupPoint;
+
+            // Step 1 – volume selection dialog
+            var selectionDialog = new RestoreVolumeSelectionDialog(
+                volumes,
+                isDiskOrHyperV,
+                isDiskOrHyperV
+                    ? "This backup contains multiple volumes. Select a single volume or the entire disk group to restore."
+                    : "Select the volume to restore from this backup.") { Owner = this };
+
+            if (selectionDialog.ShowDialog() != true || !selectionDialog.Confirmed)
+                return false;
+
+            IReadOnlyList<VolumeInfo> volumesToResize;
+            bool isGroupRestore = selectionDialog.SelectedDiskGroup != null;
+
+            if (isGroupRestore)
+                volumesToResize = selectionDialog.SelectedDiskGroup!;
+            else
+                volumesToResize = new[] { selectionDialog.SelectedVolume! };
+
+            // Step 2 – partition sizing (requires a target disk to know capacity)
+            long targetDiskSizeBytes = await GetTargetDiskSizeBytesAsync();
+            if (targetDiskSizeBytes <= 0)
+            {
+                // Can't determine target size; skip resize and proceed with original sizes
+                _selectedRestoreVolume  = isGroupRestore ? null : (VolumeInfo?)selectionDialog.SelectedVolume;
+                _selectedRestoreDiskGroup = isGroupRestore ? selectionDialog.SelectedDiskGroup : null;
+                return true;
+            }
+
+            var sizingWindow = new VolumeConfigurationWindow(
+                volumesToResize.ToList(),
+                targetDiskSizeBytes,
+                sourceAUS: 4096,
+                targetAUS: 4096)
+            { Owner = this };
+
+            if (sizingWindow.ShowDialog() != true || sizingWindow.FinalConfiguration == null)
+                return false;
+
+            // Ordered by partition offset (preserved from the input list ordering)
+            var resized = sizingWindow.FinalConfiguration
+                .OrderBy(v => v.PartitionOffsetBytes)
+                .ThenBy(v => v.PartitionNumber)
+                .ToList();
+
+            if (isGroupRestore)
+            {
+                _selectedRestoreDiskGroup = resized;
+                _selectedRestoreVolume    = null;
+            }
+            else
+            {
+                _selectedRestoreVolume    = resized.FirstOrDefault();
+                _selectedRestoreDiskGroup = null;
+            }
+
+            return true;
+        }
+
+        /// <summary>Returns the size of the target disk in bytes, or -1 when it cannot be determined.</summary>
+        private async Task<long> GetTargetDiskSizeBytesAsync()
+        {
+            if (_selectedTargetDiskNumber.HasValue)
+            {
+                return await Task.Run(() =>
+                {
+                    try
+                    {
+                        using var searcher = new ManagementObjectSearcher(
+                            $"SELECT Size FROM Win32_DiskDrive WHERE Index = {_selectedTargetDiskNumber.Value}");
+                        foreach (ManagementObject disk in searcher.Get())
+                        {
+                            if (long.TryParse(disk["Size"]?.ToString(), out long size))
+                                return size;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"GetTargetDiskSizeBytesAsync: {ex.Message}");
+                    }
+                    return -1L;
+                });
+            }
+
+            if (!string.IsNullOrWhiteSpace(_selectedTargetPath))
+            {
+                return await Task.Run(() =>
+                {
+                    try
+                    {
+                        string drive = Path.GetPathRoot(_selectedTargetPath)?.TrimEnd('\\') ?? string.Empty;
+                        if (string.IsNullOrWhiteSpace(drive)) return -1L;
+
+                        using var searcher = new ManagementObjectSearcher(
+                            $"SELECT Size FROM Win32_LogicalDisk WHERE DeviceID = '{drive}'");
+                        foreach (ManagementObject vol in searcher.Get())
+                        {
+                            if (long.TryParse(vol["Size"]?.ToString(), out long size))
+                                return size;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"GetTargetDiskSizeBytesAsync (volume): {ex.Message}");
+                    }
+                    return -1L;
+                });
+            }
+
+            return -1L;
+        }
+
 
         private async Task PerformRestore()
         {
@@ -1075,38 +1247,66 @@ namespace SecureServerBackup.Windows
         {
             PrepareDiskTarget();
 
+            // When a disk-group was resized, restore volumes in partition-offset order
+            if (_selectedRestoreDiskGroup != null && _selectedRestoreDiskGroup.Count > 0)
+            {
+                int lastResult = 0;
+                int targetDisk = _selectedTargetDiskNumber ?? -1;
+                var ordered = _selectedRestoreDiskGroup
+                    .OrderBy(v => v.PartitionOffsetBytes)
+                    .ThenBy(v => v.PartitionNumber)
+                    .ToList();
+
+                for (int i = 0; i < ordered.Count; i++)
+                {
+                    var vol = ordered[i];
+                    int pct = (int)((i / (double)ordered.Count) * 90);
+                    callback(pct, $"Restoring partition {i + 1} of {ordered.Count}: {vol.Label}…");
+                    lastResult = BackupEngineInterop.RestoreDiskFromImage(
+                        preparedBackupPath, vol.ImageIndex, targetDisk, vol.IsBootVolume || vol.IsSystemVolume, callback);
+                    if (lastResult != 0)
+                        return lastResult;
+                }
+                callback(100, "All partitions restored.");
+                return 0;
+            }
+
             if (_isHyperVBackupPoint)
             {
                 using var mountedDisk = MountPrimaryHyperVVirtualDisk(selectedBackupPath);
                 int mountedDiskNumber = GetDiskNumberForDriveLetter(mountedDisk.DriveRoot);
-
-                return _diskRestorePlan?.HasMetadata == true
-                    ? BackupEngineInterop.RestoreDiskFromImage(preparedBackupPath, _diskRestorePlan.ImageIndex, mountedDiskNumber, false, callback)
-                    : BackupEngineInterop.RestoreDisk(preparedBackupPath, mountedDiskNumber, false, callback);
+                int imageIndex = _selectedRestoreVolume?.ImageIndex ?? _diskRestorePlan?.ImageIndex ?? 1;
+                return BackupEngineInterop.RestoreDiskFromImage(preparedBackupPath, imageIndex, mountedDiskNumber, false, callback);
             }
 
-            return _diskRestorePlan?.HasMetadata == true
-                ? BackupEngineInterop.RestoreDiskFromImage(preparedBackupPath, _diskRestorePlan.ImageIndex, _selectedTargetDiskNumber ?? -1, false, callback)
-                : BackupEngineInterop.RestoreDisk(preparedBackupPath, _selectedTargetDiskNumber ?? -1, false, callback);
+            {
+                int imageIndex = _selectedRestoreVolume?.ImageIndex ?? _diskRestorePlan?.ImageIndex ?? -1;
+                return _diskRestorePlan?.HasMetadata == true
+                    ? BackupEngineInterop.RestoreDiskFromImage(preparedBackupPath, imageIndex, _selectedTargetDiskNumber ?? -1, false, callback)
+                    : BackupEngineInterop.RestoreDisk(preparedBackupPath, _selectedTargetDiskNumber ?? -1, false, callback);
+            }
         }
 
         private int RestoreVolumeTarget(string preparedBackupPath, string selectedBackupPath, BackupEngineInterop.ProgressCallback callback)
         {
             PrepareVolumeTarget();
 
+            string targetPath = _selectedTargetPath ?? string.Empty;
+
             if (_isHyperVBackupPoint)
             {
                 using var mountedDisk = MountPrimaryHyperVVirtualDisk(selectedBackupPath);
-                string targetVolumePath = mountedDisk.DriveRoot;
-
-                return _diskRestorePlan?.HasMetadata == true
-                    ? BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, _diskRestorePlan.ImageIndex, targetVolumePath, false, callback)
-                    : BackupEngineInterop.RestoreVolume(preparedBackupPath, targetVolumePath, false, callback);
+                targetPath = mountedDisk.DriveRoot;
+                int imageIndex = _selectedRestoreVolume?.ImageIndex ?? _diskRestorePlan?.ImageIndex ?? 1;
+                return BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, imageIndex, targetPath, false, callback);
             }
 
-            return _diskRestorePlan?.HasMetadata == true
-                ? BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, _diskRestorePlan.ImageIndex, _selectedTargetPath ?? string.Empty, false, callback)
-                : BackupEngineInterop.RestoreVolume(preparedBackupPath, _selectedTargetPath ?? string.Empty, false, callback);
+            {
+                int imageIndex = _selectedRestoreVolume?.ImageIndex ?? _diskRestorePlan?.ImageIndex ?? -1;
+                return _diskRestorePlan?.HasMetadata == true
+                    ? BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, imageIndex, targetPath, false, callback)
+                    : BackupEngineInterop.RestoreVolume(preparedBackupPath, targetPath, false, callback);
+            }
         }
 
         private bool ValidateRestore()

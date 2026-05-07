@@ -114,6 +114,13 @@
 							Width="80"
 							Click="CollapseAll_Click"
 							Content="Collapse All" />
+						<CheckBox
+							Name="chkShowHiddenPartitions"
+							Margin="10,0,0,0"
+							VerticalAlignment="Center"
+							Click="ShowHiddenPartitions_Click"
+							Content="Show Hidden Partitions"
+							ToolTip="Include EFI, Recovery, and System Reserved partitions in the drive tree" />
 					</StackPanel>
 				</Grid>
 			</GroupBox>

@@ -35,7 +35,10 @@ namespace SecureServerBackup.Windows
             public bool IsSystemVolume { get; set; }
             public string FileSystem { get; set; } = string.Empty;
             public int AllocationUnitSize { get; set; }
-            
+
+            // Original VolumeInfo so restore metadata is preserved on Accept
+            public VolumeInfo? Source { get; set; }
+
             // UI State
             public int Index { get; set; }
             public bool IsSelected { get; set; }
@@ -110,7 +113,8 @@ namespace SecureServerBackup.Windows
                 FileSystem = v.FileSystem,
                 AllocationUnitSize = v.AllocationUnitSize,
                 MinSize = CalculateMinimumSize(v),
-                MaxSize = v.Size  // Will be recalculated based on target
+                MaxSize = v.Size,  // Will be recalculated based on target
+                Source = v
             }).ToList();
             
             resizeHandles = new List<ResizeHandle>();
@@ -879,16 +883,27 @@ namespace SecureServerBackup.Windows
                 }
             }
 
-            // Return final configuration (convert back to VolumeInfo)
+            // Return final configuration (convert back to VolumeInfo, preserving restore metadata)
             FinalConfiguration = volumes.Select(v => new VolumeInfo
             {
                 Label = v.Label,
-                Size = v.CurrentSize,  // Use modified size
+                Size = v.CurrentSize,           // user-adjusted size
                 UsedSpace = v.UsedSpace,
                 IsResizable = v.IsResizable,
                 IsSystemVolume = v.IsSystemVolume,
                 FileSystem = v.FileSystem,
-                AllocationUnitSize = v.AllocationUnitSize
+                AllocationUnitSize = v.AllocationUnitSize,
+                // Propagate restore-layout metadata so ordering is preserved downstream
+                ImageIndex            = v.Source?.ImageIndex            ?? 0,
+                PartitionNumber       = v.Source?.PartitionNumber       ?? 0,
+                PartitionOffsetBytes  = v.Source?.PartitionOffsetBytes  ?? 0,
+                PartitionLengthBytes  = v.Source?.PartitionLengthBytes  ?? 0,
+                PartitionStyle        = v.Source?.PartitionStyle        ?? string.Empty,
+                PartitionType         = v.Source?.PartitionType         ?? string.Empty,
+                SourceVolumeGuidPath  = v.Source?.SourceVolumeGuidPath  ?? string.Empty,
+                SourceVolumeMountPath = v.Source?.SourceVolumeMountPath ?? string.Empty,
+                IsBootVolume          = v.Source?.IsBootVolume          ?? false,
+                TargetSize            = v.CurrentSize
             }).ToArray();
             DialogResult = true;
             Close();

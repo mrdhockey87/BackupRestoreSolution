@@ -87,24 +87,32 @@ namespace SecureServerBackup.Windows
 
                         if (progress.Success)
                         {
+                            // Ensure the bar always shows 100% on success regardless of
+                            // what the last native callback reported (fixes the 50% hang
+                            // seen on first-run incremental/differential disk backups).
+                            progressBar.Value = 100;
+                            txtPercentage.Text = "100%";
                             txtProgress.Text = "Backup completed successfully!";
-                            MessageBox.Show(
-                                $"Backup job '{_jobName}' completed successfully!",
-                                "Backup Complete",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Information);
                         }
                         else
                         {
                             txtProgress.Text = $"Backup failed: {progress.ErrorMessage ?? "Unknown error"}";
-                            MessageBox.Show(
-                                $"Backup job '{_jobName}' failed!\n\nError: {progress.ErrorMessage ?? "Unknown error"}\n\nCheck Activity log for details.",
-                                "Backup Failed",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Error);
                         }
 
-                        Close();
+                        var completionDialog = new BackupCompletionDialog { Owner = this };
+
+                        if (progress.Success)
+                            completionDialog.ConfigureSuccess(_jobName);
+                        else
+                            completionDialog.ConfigureFailure(_jobName, progress.ErrorMessage);
+
+                        completionDialog.ShowDialog();
+
+                        // If the timer auto-closed the alert, also close the progress window.
+                        // If the user dismissed the alert themselves, leave the progress window
+                        // open so they can close it at their own pace.
+                        if (completionDialog.WasAutoClose)
+                            Close();
                     }
                 }
                 else

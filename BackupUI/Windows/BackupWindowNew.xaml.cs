@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Management;
+using System.Net;
 using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading.Tasks;
@@ -220,6 +221,7 @@ namespace SecureServerBackup.Windows
         private bool hasSourceSelected = false;
         private bool hasTargetSelected = false;
         private bool volumeConfigShown = false;
+        private bool _showHiddenPartitions = false;
 
         public BackupWindowNew()
         {
@@ -390,11 +392,11 @@ namespace SecureServerBackup.Windows
             try
             {
                 await LoadDrives();
-                
+
                 // Pre-select items if editing a job
                 if (_pathsToPreselect != null && _pathsToPreselect.Count > 0)
                 {
-                    PreSelectItems(_pathsToPreselect);
+                    await PreSelectItemsAsync(_pathsToPreselect);
                 }
 
                 // Update retention settings visibility based on initially selected backup type
@@ -415,13 +417,17 @@ namespace SecureServerBackup.Windows
         /// <summary>
         /// Pre-selects items in the tree based on saved paths
         /// </summary>
-        private void PreSelectItems(List<string> pathsToSelect)
+        private async Task PreSelectItemsAsync(List<string> pathsToSelect)
         {
             foreach (var path in pathsToSelect)
             {
                 if (HyperVGuestSelectionPath.TryParse(path, out HyperVGuestSelectionInfo? guestSelection) && guestSelection != null)
                 {
-                    PreSelectHyperVGuestItem(guestSelection);
+                    await PreSelectHyperVGuestItemAsync(guestSelection);
+                }
+                else if (PreSelectHyperVSystemByName(path))
+                {
+                    // Matched a saved Hyper-V VM name — done for this entry
                 }
                 else
                 {
@@ -430,7 +436,28 @@ namespace SecureServerBackup.Windows
             }
         }
 
-        private void PreSelectHyperVGuestItem(HyperVGuestSelectionInfo selection)
+        /// <summary>
+        /// Selects the HyperVSystem tree node whose normalized VirtualMachineName matches the saved name.
+        /// Returns true if a match was found and selected.
+        /// </summary>
+        private bool PreSelectHyperVSystemByName(string savedVmName)
+        {
+            if (string.IsNullOrWhiteSpace(savedVmName))
+                return false;
+
+            DriveTreeItem? match = driveItems.FirstOrDefault(item =>
+                item.ItemType == DriveTreeItemType.HyperVSystem &&
+                (string.Equals(item.VirtualMachineName, savedVmName, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(item.FullPath), savedVmName, StringComparison.OrdinalIgnoreCase)));
+
+            if (match == null)
+                return false;
+
+            match.IsChecked = true;
+            return true;
+        }
+
+        private async Task PreSelectHyperVGuestItemAsync(HyperVGuestSelectionInfo selection)
         {
             DriveTreeItem? hyperVSystem = driveItems.FirstOrDefault(item =>
                 item.ItemType == DriveTreeItemType.HyperVSystem &&
@@ -456,7 +483,7 @@ namespace SecureServerBackup.Windows
 
             if (!virtualDiskItem.ChildrenLoaded)
             {
-                LoadHyperVVirtualDiskChildren(virtualDiskItem);
+                await LoadHyperVVirtualDiskChildrenAsync(virtualDiskItem);
                 virtualDiskItem.ChildrenLoaded = true;
             }
 
@@ -618,10 +645,50 @@ namespace SecureServerBackup.Windows
 
             if (process.ExitCode != 0)
             {
-                throw new InvalidOperationException(string.IsNullOrWhiteSpace(errors) ? "The PowerShell command failed." : errors.Trim());
+                string message = string.IsNullOrWhiteSpace(errors)
+                    ? "The PowerShell command failed."
+                    : StripCliXml(errors).Trim();
+                throw new InvalidOperationException(message);
             }
 
             return output;
+        }
+
+        /// <summary>
+        /// Extracts readable text from a PowerShell CLIXML error stream.
+        /// If the string does not contain CLIXML markup, it is returned unchanged.
+        /// </summary>
+        private static string StripCliXml(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return raw;
+
+            // PowerShell stderr starts with "#< CLIXML" when it wraps errors in XML
+            const string clixmlMarker = "#< CLIXML";
+            if (!raw.Contains(clixmlMarker, StringComparison.OrdinalIgnoreCase))
+                return raw;
+
+            try
+            {
+                // Extract all <S S="Error">...</S> text nodes — these carry the human-readable message
+                var matches = System.Text.RegularExpressions.Regex.Matches(
+                    raw,
+                    @"<S S=""Error"">(?<msg>.*?)</S>",
+                    System.Text.RegularExpressions.RegexOptions.Singleline);
+
+                var lines = matches
+                    .Select(m => System.Net.WebUtility.HtmlDecode(m.Groups["msg"].Value)
+                        .Replace("_x000D__x000A_", "\n", StringComparison.Ordinal)
+                        .Trim())
+                    .Where(l => !string.IsNullOrWhiteSpace(l))
+                    .ToList();
+
+                return lines.Count > 0 ? string.Join("\n", lines) : raw;
+            }
+            catch
+            {
+                return raw;
+            }
         }
 
         private static bool IsHyperVVirtualDiskSharingViolation(Exception ex)
@@ -751,7 +818,7 @@ namespace SecureServerBackup.Windows
                 .ToArray();
         }
 
-        private void LoadHyperVVirtualDiskChildren(DriveTreeItem virtualDiskItem)
+        private async Task LoadHyperVVirtualDiskChildrenAsync(DriveTreeItem virtualDiskItem)
         {
             virtualDiskItem.Children.Clear();
 
@@ -773,8 +840,14 @@ namespace SecureServerBackup.Windows
                 string diskMountRoot = Path.Combine(root, diskFolderName + "_" + Math.Abs(StringComparer.OrdinalIgnoreCase.GetHashCode(virtualDiskItem.VirtualDiskPath)).ToString("X8"));
                 Directory.CreateDirectory(diskMountRoot);
 
+                // Run blocking PowerShell mount on a background thread
+                (List<MountedHyperVGuestExecutionPartition> partitions, string mountedDiskPath) = await Task.Run(() =>
+                {
+                    List<MountedHyperVGuestExecutionPartition> p = MountHyperVGuestDiskReadOnlyCore(virtualDiskItem.VirtualDiskPath, diskMountRoot, out string mdp);
+                    return (p, mdp);
+                });
+
                 List<string> mountDirectories = new();
-                List<MountedHyperVGuestExecutionPartition> partitions = MountHyperVGuestDiskReadOnlyCore(virtualDiskItem.VirtualDiskPath, diskMountRoot, out string mountedDiskPath);
                 foreach (MountedHyperVGuestExecutionPartition partition in partitions)
                 {
                     int partitionNumber = partition.PartitionNumber;
@@ -1170,12 +1243,12 @@ namespace SecureServerBackup.Windows
             
             // Bind expansion state AFTER adding children
             treeViewItem.IsExpanded = item.IsExpanded;
-            treeViewItem.Expanded += (s, e) =>
+            treeViewItem.Expanded += async (s, e) =>
             {
                 if (e.Source == treeViewItem)
                 {
                     item.IsExpanded = true;
-                    
+
                     // Handle "Add Network Path..." click
                     if (item.ItemType == DriveTreeItemType.NetworkBrowser)
                     {
@@ -1187,12 +1260,53 @@ namespace SecureServerBackup.Windows
                         e.Handled = true;
                         return;
                     }
-                    
+
                     if (item.ItemType == DriveTreeItemType.HyperVVirtualDisk && !item.ChildrenLoaded)
                     {
-                        LoadHyperVVirtualDiskChildren(item);
-                        item.ChildrenLoaded = true;
+                        // Show a spinner placeholder immediately before the async mount
+                        treeViewItem.Items.Clear();
+                        var mountingItem = new TreeViewItem
+                        {
+                            Header = new StackPanel
+                            {
+                                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                                Children =
+                                {
+                                    new System.Windows.Controls.ProgressBar
+                                    {
+                                        IsIndeterminate = true,
+                                        Width = 16,
+                                        Height = 16,
+                                        Margin = new Thickness(0, 0, 6, 0),
+                                        VerticalAlignment = VerticalAlignment.Center
+                                    },
+                                    new TextBlock
+                                    {
+                                        Text = "Mounting virtual disk...",
+                                        VerticalAlignment = VerticalAlignment.Center
+                                    }
+                                }
+                            },
+                            IsEnabled = false
+                        };
+                        treeViewItem.Items.Add(mountingItem);
 
+                        try
+                        {
+                            await LoadHyperVVirtualDiskChildrenAsync(item);
+                        }
+                        catch (Exception ex)
+                        {
+                            item.Children.Clear();
+                            item.Children.Add(new DriveTreeItem
+                            {
+                                Name = $"(Error mounting virtual disk: {ex.Message})",
+                                ItemType = DriveTreeItemType.Folder,
+                                Parent = item
+                            });
+                        }
+
+                        item.ChildrenLoaded = true;
                         treeViewItem.Items.Clear();
                         foreach (var child in item.Children)
                         {
@@ -1209,7 +1323,7 @@ namespace SecureServerBackup.Windows
                     {
                         LoadFoldersForVolume(item);
                         item.ChildrenLoaded = true;
-                        
+
                         // Rebuild children
                         treeViewItem.Items.Clear();
                         foreach (var child in item.Children)
@@ -1499,7 +1613,8 @@ namespace SecureServerBackup.Windows
                                         ItemType = DriveTreeItemType.Volume,
                                         Size = volumeCapacity,
                                         Parent = diskItem,
-                                        IsBootVolume = volumeType.Contains("EFI")
+                                        IsBootVolume = volumeType.Contains("EFI"),
+                                        IsHiddenPartition = true
                                     };
 
                                     // These volumes typically can't be browsed
@@ -1510,10 +1625,13 @@ namespace SecureServerBackup.Windows
                                         Parent = volumeItem
                                     });
 
-                                    diskItem.Children.Add(volumeItem);
-                                    volumesFound = true;
-                                    
-                                    System.Diagnostics.Debug.WriteLine($"      Added system volume: {volumeType}");
+                                    if (_showHiddenPartitions)
+                                    {
+                                        diskItem.Children.Add(volumeItem);
+                                        volumesFound = true;
+                                    }
+
+                                    System.Diagnostics.Debug.WriteLine($"      {(_showHiddenPartitions ? "Added" : "Skipped (hidden)")} system volume: {volumeType}");
                                     break; // Found matching volume
                                 }
                             }
@@ -2052,6 +2170,19 @@ namespace SecureServerBackup.Windows
 
         private async void RefreshDrives_Click(object sender, RoutedEventArgs e)
         {
+            try
+            {
+                await LoadDrives();
+            }
+            catch (Exception ex)
+            {
+                CustomDialogService.ShowError($"Error refreshing drives: {ex.Message}", "Error");
+            }
+        }
+
+        private async void ShowHiddenPartitions_Click(object sender, RoutedEventArgs e)
+        {
+            _showHiddenPartitions = chkShowHiddenPartitions.IsChecked == true;
             try
             {
                 await LoadDrives();
@@ -2647,7 +2778,8 @@ namespace SecureServerBackup.Windows
 
             if (!encryptionEnabled)
             {
-                chkShowEncryptionPassword.IsChecked = false;
+                if (chkShowEncryptionPassword != null)
+                    chkShowEncryptionPassword.IsChecked = false;
                 ClearEncryptionPasswordEntry();
             }
         }
@@ -3269,13 +3401,27 @@ namespace SecureServerBackup.Windows
 
             foreach (var drive in driveItems)
             {
-                if (drive.ItemType == DriveTreeItemType.HyperVSystem && drive.IsChecked == true)
+                CollectHyperVMachinesRecursive(drive, job);
+            }
+        }
+
+        private void CollectHyperVMachinesRecursive(DriveTreeItem item, BackupJob job)
+        {
+            if (item.ItemType == DriveTreeItemType.HyperVSystem && item.IsChecked == true)
+            {
+                string vmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(item.FullPath);
+                if (!string.IsNullOrWhiteSpace(vmName))
                 {
-                    string vmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(drive.FullPath);
-                    if (!string.IsNullOrWhiteSpace(vmName))
-                    {
-                        job.HyperVMachines.Add(vmName);
-                    }
+                    job.HyperVMachines.Add(vmName);
+                }
+                return; // whole VM selected; don't recurse into its children
+            }
+
+            if (item.IsChecked == null || item.IsChecked == true)
+            {
+                foreach (var child in item.Children)
+                {
+                    CollectHyperVMachinesRecursive(child, job);
                 }
             }
         }
@@ -3298,7 +3444,6 @@ namespace SecureServerBackup.Windows
             {
                 if (drive.IsChecked == true)
                 {
-                    // Whole disk selected
                     if (drive.ItemType == DriveTreeItemType.Disk)
                     {
                         job.Target = BackupTarget.Disk;
@@ -3313,15 +3458,24 @@ namespace SecureServerBackup.Windows
                             job.HyperVMachines.Add(vmName);
                         }
                     }
-                    else if (drive.ItemType == DriveTreeItemType.HyperVVirtualDisk || drive.ItemType == DriveTreeItemType.HyperVVolume)
+                    else if (drive.ItemType == DriveTreeItemType.HyperVVirtualDisk ||
+                             drive.ItemType == DriveTreeItemType.HyperVVolume)
+                    {
+                        // Guest-disk or guest-volume path backup — treated as files/folders
+                        job.Target = BackupTarget.FilesAndFolders;
+                        job.SourcePaths.Add(drive.FullPath);
+                    }
+                    else if (drive.ItemType == DriveTreeItemType.NetworkDrive ||
+                             drive.ItemType == DriveTreeItemType.NetworkShare)
                     {
                         job.Target = BackupTarget.FilesAndFolders;
                         job.SourcePaths.Add(drive.FullPath);
                     }
+                    // NetworkRoot and NetworkBrowser are display-only sentinels; skip them
                 }
                 else if (drive.IsChecked == null && drive.Children.Count > 0)
                 {
-                    // Partial selection - check children
+                    // Partial selection — recurse into children
                     CollectSelectedChildren(drive, job);
                 }
             }
@@ -3374,22 +3528,64 @@ namespace SecureServerBackup.Windows
                         if (job.Target == 0) job.Target = BackupTarget.Volume;
                         job.SourcePaths.Add(child.FullPath);
                     }
-                    else if (child.ItemType == DriveTreeItemType.HyperVVirtualDisk || child.ItemType == DriveTreeItemType.HyperVVolume)
+                    else if (child.ItemType == DriveTreeItemType.Disk)
+                    {
+                        job.Target = BackupTarget.Disk;
+                        job.SourcePaths.Add(child.FullPath);
+                    }
+                    else if (child.ItemType == DriveTreeItemType.HyperVSystem)
+                    {
+                        string vmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(child.FullPath);
+                        if (!string.IsNullOrWhiteSpace(vmName))
+                        {
+                            job.HyperVMachines.Add(vmName);
+                        }
+                    }
+                    else if (child.ItemType == DriveTreeItemType.HyperVVirtualDisk ||
+                             child.ItemType == DriveTreeItemType.HyperVVolume)
                     {
                         job.Target = BackupTarget.FilesAndFolders;
                         job.SourcePaths.Add(child.FullPath);
                     }
-                    else if (child.ItemType == DriveTreeItemType.Folder)
+                    else if (child.ItemType == DriveTreeItemType.Folder ||
+                             child.ItemType == DriveTreeItemType.File)
+                    {
+                        // Skip placeholder nodes that are children of Hyper-V items
+                        if (IsDescendantOfHyperVItem(child))
+                            continue;
+                        job.Target = BackupTarget.FilesAndFolders;
+                        job.SourcePaths.Add(child.FullPath);
+                    }
+                    else if (child.ItemType == DriveTreeItemType.NetworkDrive ||
+                             child.ItemType == DriveTreeItemType.NetworkShare)
                     {
                         job.Target = BackupTarget.FilesAndFolders;
                         job.SourcePaths.Add(child.FullPath);
                     }
+                    // NetworkRoot and NetworkBrowser are display-only sentinels; skip them
                 }
                 else if (child.IsChecked == null && child.Children.Count > 0)
                 {
                     CollectSelectedChildren(child, job);
                 }
             }
+        }
+
+        private static bool IsHyperVItem(DriveTreeItem item) =>
+            item.ItemType == DriveTreeItemType.HyperVSystem ||
+            item.ItemType == DriveTreeItemType.HyperVVirtualDisk ||
+            item.ItemType == DriveTreeItemType.HyperVVolume;
+
+        private static bool IsDescendantOfHyperVItem(DriveTreeItem item)
+        {
+            DriveTreeItem? parent = item.Parent;
+            while (parent != null)
+            {
+                if (IsHyperVItem(parent))
+                    return true;
+                parent = parent.Parent;
+            }
+            return false;
         }
 
         private bool ValidateInputs()
@@ -3421,8 +3617,12 @@ namespace SecureServerBackup.Windows
 
             // Validate selections based on backup type
             var selectedItems = GetCheckedDriveItems();
-            var selectedHyperV = selectedItems.Where(item => item.ItemType == DriveTreeItemType.HyperVSystem).ToList();
-            var selectedNonHyperV = selectedItems.Where(item => item.ItemType != DriveTreeItemType.HyperVSystem).ToList();
+            var selectedHyperV = selectedItems.Where(IsHyperVItem).ToList();
+            var selectedNonHyperV = selectedItems.Where(item =>
+                !IsHyperVItem(item) &&
+                !IsDescendantOfHyperVItem(item) &&
+                item.ItemType != DriveTreeItemType.NetworkRoot &&
+                item.ItemType != DriveTreeItemType.NetworkBrowser).ToList();
 
             if (rbCloneHyperV?.IsChecked == true)
             {

@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.8";
+        private static readonly string version_fallback_number = "6.2.4.23";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,7 +69,83 @@ namespace SecureServerBackup
 
 /*
  *  
- * Version 6.2.4.9 Added verify logging to the Activity page: every verification run on the Verify tab
+ * Version 6.2.4.23 Replaced completion MessageBox with timed BackupCompletionDialog; auto-closes
+ *                  both alert and progress window after 15 minutes, user-dismiss only closes alert.
+ *                  Progress bar now explicitly set to 100% on success, fixing perceived 50% hang
+ *                  on first-run incremental/differential disk backups. mdail 5/7/2026
+ * Version 6.2.4.22 Fixed backup type shown as "Full" for Incremental and Differential jobs on
+ *                  Mount, Restore, and Verify tabs. BackupType is now read from the job definition
+ *                  instead of being inferred from the filename. mdail 5/7/2026
+ * Version 6.2.4.21 Fixed Hyper-V virtual disk expansion
+ *                  markup is now stripped from error messages so the user sees plain text instead
+ *                  of raw XML. Mount-VHD is now run asynchronously on a background thread; the
+ *                  tree node shows an animated spinner (ProgressBar) while the disk is mounting
+ *                  so the UI no longer appears frozen. Pre-select path also awaits the mount
+ *                  properly. mdail 5/7/2026
+ * Version 6.2.4.20 Added Show Hidden Partitions toggle to VolumeSelectionWindow (restore target
+ *                  selection). EFI, Recovery, and System Reserved volumes without a drive letter
+ *                  are hidden by default; the checkbox reveals them. VolumeInfo gains
+ *                  IsHiddenPartition flag. mdail 5/7/2026
+ * Version 6.2.4.19 Added Show Hidden Partitions toggle to the backup drive tree toolbar.
+ *                  EFI, Recovery, and System Reserved (no-drive-letter) partitions are now
+ *                  hidden by default; checking the checkbox and refreshing makes them visible.
+ *                  DriveTreeItem gains IsHiddenPartition flag for future filtering. mdail 5/7/2026
+ * Version 6.2.4.18 Fixed Hyper-V backup edit re-opening with nothing selected.
+ *                  Hyper-V system backup, VM names are stored in HyperVMachines as normalized
+ *                  strings (e.g. "MyVM"), but pre-selection was falling through to path-based
+ *                  recursive search which compared against FullPath (the raw display name like
+ *                  "MyVM (Running)") and never matched. Added PreSelectHyperVSystemByName that
+ *                  matches against VirtualMachineName (normalized) or a re-normalized FullPath
+ *                  so the correct HyperVSystem node is checked on edit. mdail 5/7/2026
+ * Version 6.2.4.17 Fixed persistent "cannot combine Hyper-V systems with disks" alert when editing
+ *                  a Hyper-V backup. Placeholder Folder children ("Loading...", "No guest disks",
+ *                  error nodes) are propagated IsChecked=true when a HyperVSystem is fully checked,
+ *                  and were being counted as real non-Hyper-V sources. Added IsHyperVItem and
+ *                  IsDescendantOfHyperVItem helpers; validation now ignores any item whose ancestor
+ *                  is a Hyper-V node, and CollectSelectedChildren skips those same placeholder nodes
+ *                  instead of adding them to SourcePaths. mdail 5/7/2026
+ * Version 6.2.4.16 Fixed item-type classification bugs in backup source collection and validation.
+ *                  CollectSelectedChildren now handles HyperVSystem, File, NetworkDrive, and
+ *                  NetworkShare items that were silently dropped. CollectSelectedHyperVMachines now
+ *                  recurses through partially-checked parents so Hyper-V VMs under a partially-
+ *                  selected group are no longer missed. Validation now excludes NetworkRoot and
+ *                  NetworkBrowser sentinel nodes from the non-Hyper-V count so they cannot trigger
+ *                  a false mixed-source alert. mdail 5/7/2026
+ * Version 6.2.4.15 Fixed false "cannot combine Hyper-V systems with disks, volumes, or folders"
+ *                  validation error when selecting Incremental or Differential backup for a Hyper-V
+ *                  disk job. The validator was only checking for HyperVSystem item type; child nodes
+ *                  typed as HyperVVirtualDisk or HyperVVolume were being counted as non-Hyper-V,
+ *                  triggering the mixed-source alert. Fixed by including all three Hyper-V item types
+ *                  in both the Hyper-V and non-Hyper-V filter sets. mdail 5/7/2026
+ * Version 6.2.4.14 Fixed startup crash caused by a stale SecureServerBackup.deps.json
+ *                  referenced SecureServerBackupCommon version 6.2.5.1 (a leftover from an earlier
+ *                  padded-zero version experiment) while the actual DLL was 6.2.4.13. The runtime
+ *                  EEFileLoadException / FileNotFoundException on startup was caused by this mismatch.
+ *                  Deleted the stale deps.json and forced a full no-incremental rebuild so the correct
+ *                  6.2.4.13 reference is regenerated. mdail 5/7/2026
+ * Version 6.2.4.13 Enabled TreatWarningsAsErrors for all projects in Directory.Build.props so
+ *                  every C# and C++ compiler warning is promoted to a build error, preventing
+ *                  potential bugs from being silently ignored. mdail 5/7/2026
+ * Version 6.2.4.12 Fixed two nullable-reference warnings that were promoted to errors:
+ *                  changed string configFile to string? in RestoreWindowNew.xaml.cs (CS8600,
+ *                  FirstOrDefault return value) and added a null guard before accessing
+ *                  chkShowEncryptionPassword.IsChecked in BackupWindowNew.xaml.cs (CS8602,
+ *                  possible dereference during initialization). mdail 5/7/2026
+ * Version 6.2.4.11 Added multi-volume restore selector: when restoring a disk or Hyper-V backup the
+ *                  user is now prompted to choose a single volume or the entire disk group. Full-disk
+ *                  restores allow each partition to be shrunk (down to used-data size + 10%) or grown
+ *                  (up to available target capacity) via the existing interactive resize canvas. Partitions
+ *                  are then restored in partition-offset order so layout is correctly reconstructed on the
+ *                  target disk. Restore metadata (partition number, offset, type, boot/system flags) is
+ *                  preserved through the selection and sizing windows into the final restore calls. mdail 5/7/2026
+ * Version 6.2.4.10 now queries WMI Win32_DiskPartition.BootPartition to identify the currently
+ *                  active OS disk and only flags Disk-target backups when their source path matches
+ *                  that disk. Secondary and dual-boot disks that are not currently booted are fully
+ *                  restorable from Windows without the recovery-disk warning. Fixed
+ *                  NullReferenceException in RestoreWindowNew.RestoreLocation_Changed when the
+ *                  handler fires during InitializeComponent before rbAlternateLocation is ready.
+ *                  mdail 5/7/2026
+ * Version 6.2.4.9 Added verify logging to the Activity page:
  *                 now writes start, progress, success, warning, and error entries to BackupLogger under
  *                 a "<JobName> [Verify]" job name so the Activity page shows a full trace of each verify run.
  *                 Fixed the multi-volume image-selection dialog to show "Verify Selected" and verify-specific

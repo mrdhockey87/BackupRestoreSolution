@@ -5,8 +5,8 @@
         ================================================================
                ALL PROJECTS (BackupUI, BackupService, BackupEngine) use this single version.
               Change version HERE and it updates everywhere automatically.
-       Current Version: 6.2.4.9
-              Last Updated: 5/6/2026
+       Current Version: 6.2.4.23
+              Last Updated: 5/7/2026
 
              UPDATE VERSION IN ONE PLACE: Change ProductVersion property below.
              All version properties (Version, AssemblyVersion, FileVersion, 
@@ -14,7 +14,7 @@
              ================================================================ -->
        <PropertyGroup>
           <!-- SINGLE VERSION DEFINITION - Update this value only -->
-                                 <ProductVersion>6.2.4.9</ProductVersion>
+                                    <ProductVersion>6.2.4.23</ProductVersion>
     
     <!-- All version properties use the ProductVersion variable -->
     <Version>$(ProductVersion)</Version>
@@ -61,6 +61,8 @@
     <PlatformToolset>v145</PlatformToolset>
     <!-- Specific Windows 10 SDK for broad compatibility -->
     <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
+    <!-- Treat all warnings as errors -->
+    <TreatWarningAsError>true</TreatWarningAsError>
   </PropertyGroup>
 
   <!-- ================================================================
@@ -111,6 +113,8 @@
     <EmbedAllSources>false</EmbedAllSources>
     <PublishRepositoryUrl>false</PublishRepositoryUrl>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- Treat all warnings as errors -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Force full rebuild to ensure runtime configs regenerate in Visual Studio -->
     <DisableIncrementalBuild Condition="'$(Configuration)' == 'Release'">true</DisableIncrementalBuild>
   </PropertyGroup>

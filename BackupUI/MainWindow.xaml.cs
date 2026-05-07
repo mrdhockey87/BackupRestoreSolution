@@ -862,7 +862,7 @@ namespace SecureServerBackup
                         backups.Add(new AvailableBackupInfo
                         {
                             BackupName = job.Name,
-                            BackupType = GetBackupTypeFromFilename(Path.GetFileNameWithoutExtension(ssb)),
+                            BackupType = job.Type.ToString(),
                             BackupDate = backupDate,
                             BackupPath = ssb,
                             IsEncrypted = isEncrypted,
@@ -962,7 +962,32 @@ namespace SecureServerBackup
 
             if (matchingJob.Target == BackupTarget.Disk)
             {
-                return true;
+                // Only flag as boot-related if the source disk is the currently booted disk.
+                // A non-booted disk (e.g. secondary or dual-boot disk) is fully restorable from Windows.
+                int bootDiskNumber = GetBootDiskNumber();
+                if (bootDiskNumber < 0)
+                {
+                    // Could not determine boot disk - fail safe: allow restore without warning.
+                    return false;
+                }
+
+                string bootDevicePath = $@"\\.\PHYSICALDRIVE{bootDiskNumber}";
+
+                foreach (var sourcePath in matchingJob.SourcePaths)
+                {
+                    if (string.IsNullOrWhiteSpace(sourcePath))
+                        continue;
+
+                    string normalized = sourcePath.TrimEnd('\\');
+                    if (string.Equals(normalized, bootDevicePath, StringComparison.OrdinalIgnoreCase))
+                        return true;
+
+                    // Support numeric disk index stored as plain integer string.
+                    if (int.TryParse(normalized, out int diskIndex) && diskIndex == bootDiskNumber)
+                        return true;
+                }
+
+                return false;
             }
 
             foreach (var sourcePath in matchingJob.SourcePaths)
@@ -1004,6 +1029,35 @@ namespace SecureServerBackup
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Returns the disk index (e.g. 3 for PHYSICALDRIVE3) of the disk that contains the
+        /// currently active boot partition, or -1 if it cannot be determined.
+        /// </summary>
+        private static int GetBootDiskNumber()
+        {
+            try
+            {
+                // Win32_DiskPartition.BootPartition flags the partition that holds the active OS.
+                using var searcher = new System.Management.ManagementObjectSearcher(
+                    "SELECT DiskIndex FROM Win32_DiskPartition WHERE BootPartition = TRUE");
+
+                foreach (System.Management.ManagementObject partition in searcher.Get())
+                {
+                    if (int.TryParse(partition["DiskIndex"]?.ToString(), out int diskIndex))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"GetBootDiskNumber: boot disk is PHYSICALDRIVE{diskIndex}");
+                        return diskIndex;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"GetBootDiskNumber warning: {ex.Message}");
+            }
+
+            return -1;
         }
 
         // NEW: Load job logs for Activity tab
@@ -1756,7 +1810,7 @@ namespace SecureServerBackup
                             backups.Add(new AvailableBackupInfo
                             {
                                 BackupName = job.Name,
-                                BackupType = GetBackupTypeFromFilename(System.IO.Path.GetFileNameWithoutExtension(ssb)),
+                                BackupType = job.Type.ToString(),
                                 BackupDate = fileInfo.LastWriteTime,
                                 BackupPath = ssb,
                                 IsEncrypted = BackupEncryptionService.IsEncryptedBackupFile(ssb),
@@ -1883,7 +1937,7 @@ namespace SecureServerBackup
                             backups.Add(new AvailableBackupInfo
                             {
                                 BackupName = job.Name,
-                                BackupType = GetBackupTypeFromFilename(System.IO.Path.GetFileNameWithoutExtension(ssb)),
+                                BackupType = job.Type.ToString(),
                                 BackupDate = backupDate,
                                 BackupPath = ssb
                             });

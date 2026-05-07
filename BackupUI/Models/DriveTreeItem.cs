@@ -21,6 +21,8 @@ namespace SecureServerBackup.Models
         public long Size { get; set; }
         public bool IsBootVolume { get; set; }
         public bool IsWindowsServer { get; set; }
+        /// <summary>True for no-drive-letter system partitions (EFI, Recovery, System Reserved).</summary>
+        public bool IsHiddenPartition { get; set; }
         public ObservableCollection<DriveTreeItem> Children { get; set; } = new();
         public DriveTreeItem? Parent { get; set; }
 

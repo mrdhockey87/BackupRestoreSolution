@@ -11,6 +11,7 @@
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
 		</Grid.RowDefinitions>
 
 		<TextBlock
@@ -26,8 +27,16 @@
 			DisplayMemberPath="DisplayName"
 			SelectionChanged="VolumeList_SelectionChanged" />
 
-		<StackPanel
+		<CheckBox
+			x:Name="chkShowHiddenPartitions"
 			Grid.Row="2"
+			Margin="0,8,0,0"
+			Click="ShowHiddenPartitions_Click"
+			Content="Show Hidden Partitions"
+			ToolTip="Include EFI, Recovery, and System Reserved partitions in the volume list" />
+
+		<StackPanel
+			Grid.Row="3"
 			Margin="0,10,0,0"
 			HorizontalAlignment="Right"
 			Orientation="Horizontal">

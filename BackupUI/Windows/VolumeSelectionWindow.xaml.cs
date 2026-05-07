@@ -14,6 +14,8 @@ namespace SecureServerBackup.Windows
             public string DisplayName { get; set; } = string.Empty;
             public string FileSystem { get; set; } = string.Empty;
             public bool IsBootVolume { get; set; }
+            /// <summary>True for no-drive-letter system partitions (EFI, Recovery, System Reserved).</summary>
+            public bool IsHiddenPartition { get; set; }
         }
 
         public VolumeInfo? SelectedVolume { get; private set; }
@@ -35,10 +37,15 @@ namespace SecureServerBackup.Windows
 
         private void VolumeSelectionWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            LoadVolumes();
+            LoadVolumes(showHidden: false);
         }
 
-        private void LoadVolumes()
+        private void ShowHiddenPartitions_Click(object sender, RoutedEventArgs e)
+        {
+            LoadVolumes(showHidden: chkShowHiddenPartitions.IsChecked == true);
+        }
+
+        private void LoadVolumes(bool showHidden)
         {
             try
             {
@@ -68,18 +75,26 @@ namespace SecureServerBackup.Windows
                         continue;
                     }
 
+                    bool isHiddenPartition = string.IsNullOrWhiteSpace(driveLetter);
+
+                    if (isHiddenPartition && !showHidden)
+                    {
+                        continue;
+                    }
+
                     string label = volume["VolumeName"]?.ToString() ?? "Unnamed Volume";
                     string fileSystem = volume["FileSystem"]?.ToString() ?? "Unknown";
                     string display = !string.IsNullOrWhiteSpace(driveLetter)
                         ? $"{driveLetter} - {label} ({fileSystem})"
-                        : $"{label} ({fileSystem})";
+                        : $"(No Letter) {label} ({fileSystem})";
 
                     volumes.Add(new VolumeInfo
                     {
                         VolumePath = !string.IsNullOrWhiteSpace(driveLetter) ? driveLetter : deviceId,
                         DisplayName = display,
                         FileSystem = fileSystem,
-                        IsBootVolume = isBootVolume
+                        IsBootVolume = isBootVolume,
+                        IsHiddenPartition = isHiddenPartition
                     });
                 }
 

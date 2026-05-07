@@ -2,8 +2,10 @@
 
 ## General Guidelines
 - When making phased code changes, continue through and fix build errors before pausing so the current implementation compiles cleanly.
-- Always apply the Version Tracker skill for version updates and follow its exact output/update requirements, including updating `Directory.Build.props` and `BackupUI/VersionClass.cs` version numbers/notes for restore workflow changes. Keep the newest release note at the top of the notes block. After every code update in this repo, update the version number and release note entries, including those in `BackupUI/VersionClass.cs` and version properties such as those in `Directory.Build.props`.
+- Always apply the Version Tracker skill for version updates and follow its exact output/update requirements, including updating `Directory.Build.props` and `BackupUI/VersionClass.cs` version numbers/notes for restore workflow changes. Keep the newest release note at the top of the notes block. After every code update in this repo, update the version number and release note entries, including those in `BackupUI/VersionClass.cs` and version properties such as those in `Directory.Build.props`. 
+  - Version numbers must never have leading zeros (use 6.2.4.13, not 06.02.04.13). When bumping a version, always read the last version entry in `VersionClass.cs` release notes to determine the current version and increment the last segment by 1 from there. Only bump a higher segment when the lower one reaches 99 or when the change is significant enough to warrant it.
 - When a plan is created, continue executing the planned investigation or fix instead of stopping after announcing the first step.
+- Always treat compiler warnings as errors — they point to possible bugs. Enable `TreatWarningsAsErrors` in the build configuration for all projects.
 
 ## Backup Password Management
 - Use DPAPI LocalMachine for stored scheduled-backup passwords.

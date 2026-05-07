@@ -1,0 +1,97 @@
+<Window
+    x:Class="SecureServerBackup.Windows.RestoreVolumeSelectionDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Select Volume to Restore"
+    Width="640"
+    Height="480"
+    MinWidth="480"
+    MinHeight="360"
+    WindowStartupLocation="CenterOwner"
+    ResizeMode="CanResizeWithGrip">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   FontSize="16" FontWeight="Bold"
+                   Margin="0,0,0,6"
+                   Text="Select Volume to Restore" />
+
+        <TextBlock Grid.Row="1"
+                   Name="txtSubtitle"
+                   Foreground="Gray"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,10"
+                   Text="Choose which volume from the backup you want to restore." />
+
+        <!-- Volume list -->
+        <ListView Grid.Row="2"
+                  Name="lvVolumes"
+                  SelectionMode="Single"
+                  SelectionChanged="LvVolumes_SelectionChanged"
+                  MouseDoubleClick="LvVolumes_MouseDoubleClick">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Label" Width="140"
+                                    DisplayMemberBinding="{Binding Label}" />
+                    <GridViewColumn Header="Type" Width="80"
+                                    DisplayMemberBinding="{Binding PartitionType}" />
+                    <GridViewColumn Header="Original Size" Width="110"
+                                    DisplayMemberBinding="{Binding OriginalSizeDisplay}" />
+                    <GridViewColumn Header="Used" Width="110"
+                                    DisplayMemberBinding="{Binding UsedSizeDisplay}" />
+                    <GridViewColumn Header="File System" Width="90"
+                                    DisplayMemberBinding="{Binding FileSystem}" />
+                    <GridViewColumn Header="Mount Path" Width="100"
+                                    DisplayMemberBinding="{Binding SourceVolumeMountPath}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+
+        <!-- Disk group note -->
+        <TextBlock Grid.Row="3"
+                   Name="txtDiskGroupNote"
+                   Foreground="DarkGoldenrod"
+                   TextWrapping="Wrap"
+                   Margin="0,8,0,0"
+                   Visibility="Collapsed"
+                   Text="" />
+
+        <!-- Buttons -->
+        <Grid Grid.Row="4" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Name="txtSelectionHint"
+                       VerticalAlignment="Center"
+                       Foreground="Gray"
+                       Text="Select a volume above." />
+
+            <Button Grid.Column="1"
+                    Name="btnSelectAll"
+                    Width="110" Height="28"
+                    Margin="0,0,8,0"
+                    Click="BtnSelectAll_Click"
+                    Visibility="Collapsed"
+                    Content="Select Full Disk" />
+
+            <Button Grid.Column="2"
+                    Name="btnRestore"
+                    Width="80" Height="28"
+                    IsDefault="True"
+                    IsEnabled="False"
+                    Click="BtnRestore_Click"
+                    Content="Restore" />
+        </Grid>
+    </Grid>
+</Window>
