@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.29";
+        private static readonly string version_fallback_number = "6.2.4.30";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,7 +69,12 @@ namespace SecureServerBackup
 
 /*
  *  
- * Version 6.2.4.29 Added hidden-partition support to LinuxRestore for disk & volume restores.
+ * Version 6.2.4.30 Fixed single-instance mutex not released before UAC elevation relaunch,
+ *                  causing the elevated instance to see the mutex as already owned and exit
+ *                  immediately, making the app appear to still be running after close. Mutex
+ *                  is now explicitly released and disposed before spawning the elevated process.
+ *                  mdail 5/7/2026
+ * Version 6.2.4.29 Added hidden-partition support
  *                  BackupEngine now emits IS_HIDDEN_PARTITION in disk backup metadata, detecting
  *                  EFI System, MSR, and Windows Recovery GPT partition types as well as volumes
  *                  with no drive-letter mount path. LinuxRestore parses the new field and exposes

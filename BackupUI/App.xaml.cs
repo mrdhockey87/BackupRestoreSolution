@@ -66,18 +66,24 @@ namespace SecureServerBackup
                         Verb = "runas" // This triggers UAC elevation
                     };
 
-                    Process.Start(processInfo);
-                }
-                catch (Exception)
-                {
-                    // User cancelled the UAC prompt
-                    CustomDialogService.ShowWarning(
-                        "This application requires administrator privileges to access backup services, VSS snapshots, and Hyper-V.\n\nPlease run as Administrator.",
-                        "Administrator Rights Required");
-                }
+                    // Release the mutex before launching the elevated instance so it
+                    // can acquire it successfully (we are about to exit anyway).
+                    _singleInstanceMutex.ReleaseMutex();
+                    _singleInstanceMutex.Dispose();
+                    _singleInstanceMutex = null;
 
-                // Shutdown the current non-elevated instance
-                Shutdown();
+                    Process.Start(processInfo);
+                    }
+                    catch (Exception)
+                    {
+                        // User cancelled the UAC prompt
+                        CustomDialogService.ShowWarning(
+                            "This application requires administrator privileges to access backup services, VSS snapshots, and Hyper-V.\n\nPlease run as Administrator.",
+                            "Administrator Rights Required");
+                    }
+
+                    // Shutdown the current non-elevated instance
+                    Shutdown();
                 return;
             }
 
