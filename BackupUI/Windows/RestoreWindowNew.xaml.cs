@@ -40,6 +40,9 @@ namespace SecureServerBackup.Windows
         private NativeBackupMountManager.RestoreDiskPlan? _diskRestorePlan;
         private bool _isHyperVBackupPoint;
 
+        // Restore target drive tree items
+        private readonly ObservableCollection<DriveTreeItem> _restoreTargetItems = new();
+
         // Selected volumes/disk-group from the restore-volume selection dialog
         private VolumeInfo? _selectedRestoreVolume;
         private IReadOnlyList<VolumeInfo>? _selectedRestoreDiskGroup;
@@ -694,6 +697,108 @@ namespace SecureServerBackup.Windows
             UpdateDestinationHelpText();
         }
 
+        private void HyperVVmRestoreMode_Changed(object sender, RoutedEventArgs e)
+        {
+            UpdateHyperVVmRestoreOptions();
+        }
+
+        private void UpdateHyperVVmRestoreOptions()
+        {
+            if (pnlHyperVReplaceExistingOptions == null || pnlHyperVDirectoryOptions == null)
+                return;
+
+            bool replaceMode = rbHyperVReplaceExisting?.IsChecked == true;
+            pnlHyperVReplaceExistingOptions.Visibility = replaceMode ? Visibility.Visible : Visibility.Collapsed;
+            pnlHyperVDirectoryOptions.Visibility = replaceMode ? Visibility.Collapsed : Visibility.Visible;
+
+            if (replaceMode && cmbHyperVVmToReplace.Items.Count == 0)
+            {
+                LoadNonRunningHyperVVms();
+            }
+        }
+
+        private void LoadNonRunningHyperVVms()
+        {
+            if (cmbHyperVVmToReplace == null)
+                return;
+
+            cmbHyperVVmToReplace.Items.Clear();
+
+            try
+            {
+                // List VMs that are Off or Saved (not Running or Paused)
+                string script = "Get-VM | Where-Object { $_.State -notin @('Running','Paused') } | Select-Object -ExpandProperty Name";
+                var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                });
+
+                string output = process?.StandardOutput.ReadToEnd() ?? string.Empty;
+                process?.WaitForExit();
+
+                foreach (string vm in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string trimmed = vm.Trim();
+                    if (!string.IsNullOrWhiteSpace(trimmed))
+                        cmbHyperVVmToReplace.Items.Add(trimmed);
+                }
+
+                if (cmbHyperVVmToReplace.Items.Count > 0)
+                    cmbHyperVVmToReplace.SelectedIndex = 0;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"LoadNonRunningHyperVVms warning: {ex.Message}");
+            }
+        }
+
+        /// <summary>Shows the correct destination panel based on the current restore target kind.</summary>
+        private void UpdateLocationPanelVisibility()
+        {
+            if (pnlLocationChoice == null)
+                return;
+
+            bool isFileFolder = _restoreTargetKind == RestoreTargetKind.FileOrFolder;
+            bool isDisk = _restoreTargetKind == RestoreTargetKind.Disk;
+            bool isHyperVVm = _restoreTargetKind == RestoreTargetKind.HyperVVm;
+            bool isHyperVVirtualDisk = _restoreTargetKind == RestoreTargetKind.HyperVVirtualDisk;
+
+            // The drive tree is shown for every restore kind except Hyper-V VM and Hyper-V virtual disk
+            // (those have their own dedicated destination panels).
+            bool showTree = !isHyperVVm && !isHyperVVirtualDisk;
+
+            // File/folder restores also keep the original/alternate location choice visible
+            // so the user can still restore to the original path or type a custom folder path.
+            pnlLocationChoice.Visibility = isFileFolder ? Visibility.Visible : Visibility.Collapsed;
+            pnlDriveTargetTree.Visibility = showTree ? Visibility.Visible : Visibility.Collapsed;
+
+            // For Hyper-V VM restores the sub-options panel handles destination; hide generic pickers
+            if (isHyperVVm)
+            {
+                pnlLocationChoice.Visibility = Visibility.Collapsed;
+                pnlDriveTargetTree.Visibility = Visibility.Collapsed;
+            }
+
+            // Update the tree help text and trigger a load when first shown
+            if (showTree && pnlDriveTargetTree.Visibility == Visibility.Visible)
+            {
+                txtDriveTreeHelp.Text = isDisk
+                    ? "Choose the target disk to restore onto. The boot/system disk is shown but cannot be selected."
+                    : isFileFolder
+                        ? "Select a target drive or volume to restore files to. Clicking a drive sets it as the Alternate Location above. The boot disk is shown but cannot be selected."
+                        : "Choose the target volume to restore onto. Boot/system volumes cannot be selected.";
+
+                // Only reload when items are not already present
+                if (treeViewRestoreTarget.Items.Count == 0)
+                    _ = LoadRestoreTargetDrivesAsync();
+            }
+        }
+
         private void RegularHyperVRestoreOption_Changed(object sender, RoutedEventArgs e)
         {
             UpdateRegularHyperVRestoreMode();
@@ -722,6 +827,7 @@ namespace SecureServerBackup.Windows
             if (!_isHyperVBackupPoint)
             {
                 pnlHyperVVmOptions.Visibility = Visibility.Collapsed;
+                UpdateLocationPanelVisibility();
                 return;
             }
 
@@ -729,9 +835,13 @@ namespace SecureServerBackup.Windows
             {
                 bool isHyperVVm = string.Equals(selectedItem.Tag?.ToString(), "HyperVVm", StringComparison.OrdinalIgnoreCase);
                 pnlHyperVVmOptions.Visibility = isHyperVVm ? Visibility.Visible : Visibility.Collapsed;
+
+                if (isHyperVVm)
+                    UpdateHyperVVmRestoreOptions();
             }
 
             UpdateRegularHyperVRestoreMode();
+            UpdateLocationPanelVisibility();
         }
 
         private void UpdateRegularHyperVRestoreMode()
@@ -848,71 +958,7 @@ namespace SecureServerBackup.Windows
 
         private void BrowseRestoreDestination_Click(object sender, RoutedEventArgs e)
         {
-            if (_restoreTargetKind == RestoreTargetKind.Disk)
-            {
-                var excludedDisks = GetProtectedDiskIndexes();
-                var diskWindow = new DiskSelectionWindow(excludedDisks) { Owner = this };
-                if (diskWindow.ShowDialog() == true && diskWindow.SelectedDisk != null)
-                {
-                    _selectedTargetDiskNumber = diskWindow.SelectedDisk.DiskIndex;
-                    _selectedTargetPath = diskWindow.SelectedDisk.DisplayName;
-                    txtRestoreDestination.Text = diskWindow.SelectedDisk.DisplayName;
-                    _restoreTargetKind = RestoreTargetKind.Disk;
-                }
-                return;
-            }
-
-            if (_restoreTargetKind == RestoreTargetKind.HyperVVm)
-            {
-                using var hyperVFolderDialog = new FolderBrowserDialog
-                {
-                    Description = "Select Hyper-V virtual machine storage folder",
-                    ShowNewFolderButton = true
-                };
-
-                if (hyperVFolderDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-                {
-                    _selectedTargetPath = hyperVFolderDialog.SelectedPath;
-                    txtRestoreDestination.Text = hyperVFolderDialog.SelectedPath;
-                }
-
-                return;
-            }
-
-            if (_restoreTargetKind == RestoreTargetKind.HyperVVirtualDisk)
-            {
-                using var saveDialog = new SaveFileDialog
-                {
-                    Title = "Select Hyper-V virtual disk destination",
-                    Filter = "Hyper-V Virtual Disk (*.vhdx)|*.vhdx",
-                    DefaultExt = "vhdx",
-                    AddExtension = true,
-                    OverwritePrompt = false,
-                    CheckPathExists = true
-                };
-
-                if (saveDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-                {
-                    _selectedTargetPath = saveDialog.FileName;
-                    txtHyperVVirtualDiskPath.Text = saveDialog.FileName;
-                    txtRestoreDestination.Text = saveDialog.FileName;
-                }
-
-                return;
-            }
-
-            if (_restoreTargetKind == RestoreTargetKind.Volume)
-            {
-                var volumeWindow = new VolumeSelectionWindow(_bootProtectedTargets) { Owner = this };
-                if (volumeWindow.ShowDialog() == true && volumeWindow.SelectedVolume != null)
-                {
-                    _selectedTargetPath = volumeWindow.SelectedVolume.VolumePath;
-                    txtRestoreDestination.Text = volumeWindow.SelectedVolume.DisplayName;
-                    _restoreTargetKind = RestoreTargetKind.Volume;
-                }
-                return;
-            }
-
+            // File / folder restore: browse for alternate folder
             using var dialog = new FolderBrowserDialog
             {
                 Description = "Select Restore Destination",
@@ -922,7 +968,22 @@ namespace SecureServerBackup.Windows
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                 _selectedTargetPath = dialog.SelectedPath;
-                txtRestoreDestination.Text = dialog.SelectedPath;
+                txtFolderRestoreDestination.Text = dialog.SelectedPath;
+            }
+        }
+
+        private void BrowseHyperVRestoreDirectory_Click(object sender, RoutedEventArgs e)
+        {
+            using var folderDialog = new FolderBrowserDialog
+            {
+                Description = "Select an empty directory to restore the Hyper-V virtual machine into",
+                ShowNewFolderButton = true
+            };
+
+            if (folderDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                _selectedTargetPath = folderDialog.SelectedPath;
+                txtHyperVRestoreDirectory.Text = folderDialog.SelectedPath;
             }
         }
 
@@ -942,7 +1003,6 @@ namespace SecureServerBackup.Windows
             {
                 _selectedTargetPath = saveDialog.FileName;
                 txtHyperVVirtualDiskPath.Text = saveDialog.FileName;
-                txtRestoreDestination.Text = saveDialog.FileName;
                 ApplyDefaultNewHyperVVmSettings();
             }
         }
@@ -1170,9 +1230,9 @@ namespace SecureServerBackup.Windows
             var selectedPoint = lstRestorePoints.SelectedItem as RestorePoint;
             if (selectedPoint == null) return;
 
-            var destination = rbAlternateLocation.IsChecked == true
-                ? txtRestoreDestination.Text
-                : ""; // Original location
+            var destination = _restoreTargetKind == RestoreTargetKind.FileOrFolder
+                ? (rbAlternateLocation.IsChecked == true ? txtFolderRestoreDestination.Text : string.Empty)
+                : (_selectedTargetPath ?? string.Empty);
 
             await Task.Run(() =>
             {
@@ -1212,12 +1272,7 @@ namespace SecureServerBackup.Windows
                         break;
 
                     case RestoreTargetKind.HyperVVm:
-                        result = BackupEngineInterop.RestoreHyperVVM(
-                            preparedBackup.WorkingPath,
-                            txtHyperVVmName.Text.Trim(),
-                            txtRestoreDestination.Text.Trim(),
-                            chkStartHyperVVm.IsChecked == true,
-                            callback);
+                        result = ReplaceOrRestoreHyperVVm(preparedBackup.WorkingPath, callback);
                         break;
 
                     case RestoreTargetKind.HyperVVirtualDisk:
@@ -1318,41 +1373,44 @@ namespace SecureServerBackup.Windows
                 return false;
             }
 
-            if (rbAlternateLocation.IsChecked == true && string.IsNullOrWhiteSpace(txtRestoreDestination.Text))
+            if (_restoreTargetKind == RestoreTargetKind.FileOrFolder)
             {
-                MessageBox.Show("Please select a restore destination.", "Validation Error",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
-            }
-
-            if (_requireAlternateDestination && rbOriginalLocation.IsChecked == true)
-            {
-                MessageBox.Show("This backup includes the currently booted system/boot drive. Restore it to a non-boot destination from Windows, or boot from the recovery disk for an in-place restore.",
-                    "Recovery Environment Required",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return false;
-            }
-
-            if (_requireAlternateDestination && rbAlternateLocation.IsChecked == true)
-            {
-                string destinationRoot = (_selectedTargetPath ?? txtRestoreDestination.Text);
-                destinationRoot = Path.GetPathRoot(destinationRoot)?.TrimEnd('\\') ?? destinationRoot.TrimEnd('\\');
-                string systemRoot = Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? string.Empty;
-                if (!string.IsNullOrWhiteSpace(destinationRoot) &&
-                    string.Equals(destinationRoot, systemRoot, StringComparison.OrdinalIgnoreCase))
+                if (rbAlternateLocation.IsChecked == true && string.IsNullOrWhiteSpace(txtFolderRestoreDestination.Text))
                 {
-                    MessageBox.Show("Please select a restore destination that is not on the currently booted drive.",
-                        "Validation Error",
+                    MessageBox.Show("Please select a restore destination folder.", "Validation Error",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                if (_requireAlternateDestination && rbOriginalLocation.IsChecked == true)
+                {
+                    MessageBox.Show("This backup includes the currently booted system/boot drive. Restore it to a non-boot destination from Windows, or boot from the recovery disk for an in-place restore.",
+                        "Recovery Environment Required",
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                     return false;
+                }
+
+                if (_requireAlternateDestination && rbAlternateLocation.IsChecked == true)
+                {
+                    string destinationRoot = (_selectedTargetPath ?? txtFolderRestoreDestination.Text);
+                    destinationRoot = Path.GetPathRoot(destinationRoot)?.TrimEnd('\\') ?? destinationRoot.TrimEnd('\\');
+                    string systemRoot = Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(destinationRoot) &&
+                        string.Equals(destinationRoot, systemRoot, StringComparison.OrdinalIgnoreCase))
+                    {
+                        MessageBox.Show("Please select a restore destination that is not on the currently booted drive.",
+                            "Validation Error",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                        return false;
+                    }
                 }
             }
 
             UpdateSelectedRestoreTargetKind();
 
-            if (_restoreTargetKind == RestoreTargetKind.Disk && (!_selectedTargetDiskNumber.HasValue || string.IsNullOrWhiteSpace(txtRestoreDestination.Text)))
+            if (_restoreTargetKind == RestoreTargetKind.Disk && !_selectedTargetDiskNumber.HasValue)
             {
                 MessageBox.Show("Please select the target disk to restore to.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -1361,16 +1419,37 @@ namespace SecureServerBackup.Windows
 
             if (_restoreTargetKind == RestoreTargetKind.HyperVVm)
             {
-                if (string.IsNullOrWhiteSpace(txtRestoreDestination.Text))
+                bool isReplaceMode = rbHyperVReplaceExisting?.IsChecked == true;
+                if (isReplaceMode)
                 {
-                    MessageBox.Show("Please select the Hyper-V virtual machine storage folder.", "Validation Error",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return false;
+                    if (cmbHyperVVmToReplace.SelectedItem == null || string.IsNullOrWhiteSpace(cmbHyperVVmToReplace.SelectedItem.ToString()))
+                    {
+                        MessageBox.Show("Please select a non-running Hyper-V virtual machine to replace.", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return false;
+                    }
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(txtHyperVRestoreDirectory?.Text))
+                    {
+                        MessageBox.Show("Please select an empty directory to restore the Hyper-V virtual machine into.", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return false;
+                    }
+
+                    string restoreDir = txtHyperVRestoreDirectory.Text.Trim();
+                    if (Directory.Exists(restoreDir) && Directory.EnumerateFileSystemEntries(restoreDir).Any())
+                    {
+                        MessageBox.Show("The selected restore directory is not empty. Please choose an empty directory.", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return false;
+                    }
                 }
 
                 if (string.IsNullOrWhiteSpace(txtHyperVVmName.Text))
                 {
-                    MessageBox.Show("Please enter a virtual machine name.", "Validation Error",
+                    MessageBox.Show("Please enter a virtual machine name for the restored VM.", "Validation Error",
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
@@ -1414,7 +1493,7 @@ namespace SecureServerBackup.Windows
                 }
             }
 
-            if (_restoreTargetKind == RestoreTargetKind.Volume && string.IsNullOrWhiteSpace(_selectedTargetPath) && string.IsNullOrWhiteSpace(txtRestoreDestination.Text))
+            if (_restoreTargetKind == RestoreTargetKind.Volume && string.IsNullOrWhiteSpace(_selectedTargetPath))
             {
                 MessageBox.Show("Please select the target volume to restore to.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -1486,6 +1565,7 @@ namespace SecureServerBackup.Windows
             }
 
             UpdateDestinationHelpText();
+            UpdateLocationPanelVisibility();
         }
 
         private void UpdateDestinationHelpText()
@@ -1495,14 +1575,114 @@ namespace SecureServerBackup.Windows
                 return;
             }
 
+            string hyperVVmSubText = string.Empty;
+            if (_restoreTargetKind == RestoreTargetKind.HyperVVm)
+            {
+                hyperVVmSubText = rbHyperVReplaceExisting?.IsChecked == true
+                    ? " Select a non-running virtual machine to replace."
+                    : " Select an empty directory as the restore destination."; 
+            }
+
             txtDestinationHelp.Text = _restoreTargetKind switch
             {
-                RestoreTargetKind.Disk => "Disk restore: choose a target disk. It will be formatted and repartitioned before restore.",
-                RestoreTargetKind.Volume => "Volume restore: choose a target volume. It will be formatted before restore.",
-                RestoreTargetKind.HyperVVm => "Hyper-V restore: import the selected Hyper-V backup point as a virtual machine on this host.",
+                RestoreTargetKind.Disk => "Disk restore: choose a target hard drive. It will be formatted and repartitioned. The currently booted system disk cannot be selected.",
+                RestoreTargetKind.Volume => "Volume restore: choose a target volume. It will be formatted before restore. Boot/system volumes are excluded.",
+                RestoreTargetKind.HyperVVm => $"Hyper-V VM restore: import the selected Hyper-V backup as a virtual machine.{hyperVVmSubText}",
                 RestoreTargetKind.HyperVVirtualDisk => "Hyper-V virtual disk restore: write the restored backup into a .vhdx file, then optionally attach that disk to an existing Hyper-V VM.",
                 _ => "File/folder restore: choose a destination folder, or restore to the original location if allowed."
             };
+        }
+
+        /// <summary>
+        /// Handles Hyper-V system restore: either replaces an existing non-running VM or
+        /// imports the backup into an empty directory as a new VM.
+        /// </summary>
+        private int ReplaceOrRestoreHyperVVm(string preparedBackupPath, BackupEngineInterop.ProgressCallback callback)
+        {
+            string vmName = txtHyperVVmName.Text.Trim();
+            bool isReplaceMode = rbHyperVReplaceExisting?.IsChecked == true;
+
+            if (isReplaceMode)
+            {
+                string targetVmName = cmbHyperVVmToReplace.SelectedItem?.ToString()?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(targetVmName))
+                    throw new InvalidOperationException("No target Hyper-V virtual machine was selected for replacement.");
+
+                callback(5, $"Removing existing Hyper-V virtual machine '{targetVmName}'...");
+                RemoveHyperVVm(targetVmName);
+
+                // Resolve the VM's storage path before removal for the import destination
+                string vmStoragePath = GetHyperVVmStoragePath(targetVmName) ?? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments), "Hyper-V", "Virtual Machines");
+
+                callback(15, $"Importing Hyper-V backup as '{vmName}'...");
+                return BackupEngineInterop.RestoreHyperVVM(
+                    preparedBackupPath,
+                    string.IsNullOrWhiteSpace(vmName) ? targetVmName : vmName,
+                    vmStoragePath,
+                    chkStartHyperVVm.IsChecked == true,
+                    callback);
+            }
+            else
+            {
+                string restoreDir = txtHyperVRestoreDirectory.Text.Trim();
+                if (string.IsNullOrWhiteSpace(restoreDir))
+                    throw new InvalidOperationException("No restore directory was specified.");
+
+                Directory.CreateDirectory(restoreDir);
+                callback(5, $"Restoring Hyper-V virtual machine to '{restoreDir}'...");
+                return BackupEngineInterop.RestoreHyperVVM(
+                    preparedBackupPath,
+                    vmName,
+                    restoreDir,
+                    chkStartHyperVVm.IsChecked == true,
+                    callback);
+            }
+        }
+
+        private static void RemoveHyperVVm(string vmName)
+        {
+            string escaped = vmName.Replace("'", "''");
+            string script = $"Remove-VM -Name '{escaped}' -Force -ErrorAction Stop";
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+            if (process == null || process.ExitCode != 0)
+                throw new InvalidOperationException($"Failed to remove the existing Hyper-V virtual machine. {errors}".Trim());
+        }
+
+        private static string? GetHyperVVmStoragePath(string vmName)
+        {
+            try
+            {
+                string escaped = vmName.Replace("'", "''");
+                string script = $"(Get-VM -Name '{escaped}' -ErrorAction SilentlyContinue).Path";
+                var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                });
+                string output = process?.StandardOutput.ReadToEnd() ?? string.Empty;
+                process?.WaitForExit();
+                string path = output.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? string.Empty;
+                return string.IsNullOrWhiteSpace(path) ? null : Path.GetDirectoryName(path);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void RestoreToHyperVVirtualDisk(string preparedBackupPath, BackupEngineInterop.ProgressCallback callback)
@@ -1703,20 +1883,205 @@ namespace SecureServerBackup.Windows
             }
         }
 
+        // -----------------------------------------------------------------------
+        //  Restore target drive tree
+        // -----------------------------------------------------------------------
+
+        private async void RefreshRestoreTarget_Click(object sender, RoutedEventArgs e)
+        {
+            await LoadRestoreTargetDrivesAsync();
+        }
+
+        /// <summary>
+        /// Populates the restore-target tree with physical disks and their volumes.
+        /// Boot/system disk items are shown greyed-out and unselectable.
+        /// </summary>
+        private async Task LoadRestoreTargetDrivesAsync()
+        {
+            loadingTargetOverlay.Visibility = Visibility.Visible;
+            treeViewRestoreTarget.Items.Clear();
+            _restoreTargetItems.Clear();
+            _selectedTargetPath = null;
+            _selectedTargetDiskNumber = null;
+            txtSelectedTargetLabel.Text = "No target selected";
+
+            try
+            {
+                var protectedIndexes = GetProtectedDiskIndexes();
+                bool diskMode = _restoreTargetKind == RestoreTargetKind.Disk;
+
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        using var diskSearcher = new ManagementObjectSearcher(
+                            "SELECT Index, Model, Size FROM Win32_DiskDrive ORDER BY Index");
+
+                        foreach (ManagementObject disk in diskSearcher.Get())
+                        {
+                            if (!int.TryParse(disk["Index"]?.ToString(), out int diskIdx))
+                                continue;
+
+                            bool isProtected = protectedIndexes.Contains(diskIdx);
+                            long diskBytes = long.TryParse(disk["Size"]?.ToString(), out long db) ? db : 0;
+                            double diskGb = diskBytes / (1024.0 * 1024.0 * 1024.0);
+                            string model = disk["Model"]?.ToString()?.Trim() ?? $"Disk {diskIdx}";
+                            string diskLabel = $"Disk {diskIdx}:  {model}  ({diskGb:F1} GB){(isProtected ? "  [Boot — cannot restore]" : string.Empty)}";
+
+                            var diskItem = new DriveTreeItem
+                            {
+                                Name = diskLabel,
+                                FullPath = $"\\\\.\\PHYSICALDRIVE{diskIdx}",
+                                ItemType = DriveTreeItemType.Disk,
+                                PartitionNumber = diskIdx,
+                                Size = diskBytes,
+                                IsBootVolume = isProtected
+                            };
+
+                            // Load child volumes via WMI association
+                            using var partSearcher = new ManagementObjectSearcher(
+                                $"ASSOCIATORS OF {{Win32_DiskDrive.DeviceID='\\\\\\\\.\\\\PHYSICALDRIVE{diskIdx}'}} " +
+                                "WHERE AssocClass=Win32_DiskDriveToDiskPartition");
+
+                            foreach (ManagementObject partition in partSearcher.Get())
+                            {
+                                using var logicalSearcher = new ManagementObjectSearcher(
+                                    $"ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{partition["DeviceID"]}'}} " +
+                                    "WHERE AssocClass=Win32_LogicalDiskToPartition");
+
+                                foreach (ManagementObject logical in logicalSearcher.Get())
+                                {
+                                    string? driveLetter = logical["DeviceID"]?.ToString();
+                                    if (string.IsNullOrWhiteSpace(driveLetter))
+                                        continue;
+
+                                    long volBytes = long.TryParse(logical["Size"]?.ToString(), out long vb) ? vb : 0;
+                                    double volGb = volBytes / (1024.0 * 1024.0 * 1024.0);
+                                    string volLabel = logical["VolumeName"]?.ToString()?.Trim() ?? "Local Disk";
+                                    string volDisplay = $"{driveLetter}\\  ({volLabel})  {volGb:F1} GB{(isProtected ? "  [Boot]" : string.Empty)}";
+
+                                    diskItem.Children.Add(new DriveTreeItem
+                                    {
+                                        Name = volDisplay,
+                                        FullPath = driveLetter + "\\",
+                                        ItemType = DriveTreeItemType.Volume,
+                                        Size = volBytes,
+                                        IsBootVolume = isProtected,
+                                        Parent = diskItem,
+                                        PartitionNumber = diskIdx
+                                    });
+                                }
+                            }
+
+                            Dispatcher.Invoke(() =>
+                            {
+                                _restoreTargetItems.Add(diskItem);
+                                var tvi = CreateRestoreTargetTreeItem(diskItem, diskMode, isProtected);
+                                treeViewRestoreTarget.Items.Add(tvi);
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Dispatcher.Invoke(() =>
+                            Debug.WriteLine($"LoadRestoreTargetDrivesAsync inner: {ex.Message}"));
+                    }
+                });
+            }
+            finally
+            {
+                loadingTargetOverlay.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        /// <summary>
+        /// Creates a tree view item for the restore-target tree.
+        /// Both disk and volume items are selectable unless boot-protected.
+        /// Boot/protected items are greyed and not selectable.
+        /// </summary>
+        private TreeViewItem CreateRestoreTargetTreeItem(DriveTreeItem item, bool diskMode, bool isProtected)
+        {
+            var tvi = new TreeViewItem { IsExpanded = true };
+
+            var panel = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+
+            // Disks are selectable in disk-restore mode; volumes are always selectable
+            // (they cover both volume-restore and file/folder "pick a drive" modes).
+            bool isSelectable = !isProtected &&
+                (item.ItemType == DriveTreeItemType.Volume ||
+                 (diskMode && item.ItemType == DriveTreeItemType.Disk));
+
+            var rb = new System.Windows.Controls.RadioButton
+            {
+                GroupName = "RestoreTarget",
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0),
+                IsEnabled = isSelectable,
+                Visibility = (item.ItemType == DriveTreeItemType.Disk || item.ItemType == DriveTreeItemType.Volume)
+                    ? Visibility.Visible : Visibility.Collapsed
+            };
+
+            rb.Checked += (s, e) => OnRestoreTargetSelected(item);
+
+            var txt = new TextBlock
+            {
+                Text = item.Name,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (!isSelectable && (item.ItemType == DriveTreeItemType.Disk || item.ItemType == DriveTreeItemType.Volume))
+                    ? System.Windows.SystemColors.GrayTextBrush
+                    : System.Windows.SystemColors.ControlTextBrush
+            };
+
+            panel.Children.Add(rb);
+            panel.Children.Add(txt);
+            tvi.Header = panel;
+
+            foreach (var child in item.Children)
+            {
+                tvi.Items.Add(CreateRestoreTargetTreeItem(child, diskMode, child.IsBootVolume));
+            }
+
+            return tvi;
+        }
+
+        private void OnRestoreTargetSelected(DriveTreeItem item)
+        {
+            _selectedTargetPath = item.FullPath;
+            _selectedTargetDiskNumber = item.ItemType == DriveTreeItemType.Disk
+                ? item.PartitionNumber
+                : item.Parent?.PartitionNumber;
+
+            txtSelectedTargetLabel.Text = $"Selected: {item.Name.Split(new[] { "  [" }, StringSplitOptions.None)[0].Trim()}";
+
+            // For file/folder restores the tree acts as a drive picker for the alternate-location
+            // path: auto-check Alternate Location and pre-fill the destination text box so the
+            // existing validation and restore code picks it up without any extra changes.
+            if (_restoreTargetKind == RestoreTargetKind.FileOrFolder
+                && rbAlternateLocation != null
+                && txtFolderRestoreDestination != null)
+            {
+                rbAlternateLocation.IsChecked = true;
+                txtFolderRestoreDestination.Text = item.FullPath;
+            }
+        }
+
         private List<int> GetProtectedDiskIndexes()
         {
             var indexes = new List<int>();
             try
             {
-                using var searcher = new ManagementObjectSearcher("SELECT DeviceID, Index FROM Win32_DiskDrive");
-                foreach (ManagementObject disk in searcher.Get())
+                // Find which disk number backs the currently booted OS partition via WMI.
+                // Win32_DiskPartition.BootPartition identifies the active boot partition; from there
+                // we walk the association to Win32_DiskDrive to get the physical disk Index.
+                using var partSearcher = new ManagementObjectSearcher(
+                    "SELECT DiskIndex FROM Win32_DiskPartition WHERE BootPartition = TRUE");
+
+                foreach (ManagementObject part in partSearcher.Get())
                 {
-                    string deviceId = disk["DeviceID"]?.ToString() ?? string.Empty;
-                    if (deviceId.IndexOf("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase) >= 0 &&
-                        int.TryParse(disk["Index"]?.ToString(), out int index) &&
-                        deviceId.IndexOf(Environment.SystemDirectory.Substring(0, 2), StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (int.TryParse(part["DiskIndex"]?.ToString(), out int diskIdx))
                     {
-                        indexes.Add(index);
+                        if (!indexes.Contains(diskIdx))
+                            indexes.Add(diskIdx);
                     }
                 }
             }

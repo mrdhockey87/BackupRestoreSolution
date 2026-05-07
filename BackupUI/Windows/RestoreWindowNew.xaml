@@ -134,6 +134,8 @@
 						Foreground="{StaticResource SecondaryText}"
 						Text="Select where the restore should be written."
 						TextWrapping="Wrap" />
+
+					<!--  Hyper-V backup point restore mode selector  -->
 					<StackPanel
 						Name="pnlHyperVRestoreMode"
 						Margin="0,0,0,10"
@@ -153,11 +155,62 @@
 							<ComboBoxItem Content="Restore as Hyper-V virtual machine" Tag="HyperVVm" />
 						</ComboBox>
 					</StackPanel>
+
+					<!--  Hyper-V VM restore sub-options (replace existing VM or restore to directory)  -->
 					<StackPanel
 						Name="pnlHyperVVmOptions"
 						Margin="0,0,0,10"
 						Visibility="Collapsed">
-						<TextBlock Margin="0,0,0,5" Text="Virtual machine name:" />
+						<TextBlock
+							Margin="0,0,0,5"
+							FontWeight="Bold"
+							Text="Restore Mode:" />
+						<RadioButton
+							Name="rbHyperVReplaceExisting"
+							Margin="0,0,0,5"
+							Checked="HyperVVmRestoreMode_Changed"
+							Content="Replace a non-running Hyper-V virtual machine"
+							IsChecked="True" />
+						<RadioButton
+							Name="rbHyperVRestoreToDirectory"
+							Margin="0,0,0,8"
+							Checked="HyperVVmRestoreMode_Changed"
+							Content="Restore to an empty directory" />
+
+						<!--  Replace existing VM picker  -->
+						<StackPanel Name="pnlHyperVReplaceExistingOptions" Margin="20,0,0,8">
+							<TextBlock Margin="0,0,0,5" Text="Select a non-running virtual machine to replace:" />
+							<ComboBox
+								Name="cmbHyperVVmToReplace"
+								MinWidth="260"
+								Margin="0,0,0,5" />
+						</StackPanel>
+
+						<!--  Restore to directory picker  -->
+						<StackPanel
+							Name="pnlHyperVDirectoryOptions"
+							Margin="20,0,0,8"
+							Visibility="Collapsed">
+							<TextBlock Margin="0,0,0,5" Text="Restore destination directory (must be empty):" />
+							<Grid>
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="Auto" />
+								</Grid.ColumnDefinitions>
+								<TextBox
+									Name="txtHyperVRestoreDirectory"
+									Grid.Column="0"
+									Height="25"
+									Margin="0,0,5,0" />
+								<Button
+									Grid.Column="1"
+									Width="80"
+									Click="BrowseHyperVRestoreDirectory_Click"
+									Content="Browse..." />
+							</Grid>
+						</StackPanel>
+
+						<TextBlock Margin="0,4,0,5" Text="Virtual machine name after restore:" />
 						<TextBox
 							Name="txtHyperVVmName"
 							Height="25"
@@ -165,8 +218,65 @@
 						<CheckBox
 							Name="chkStartHyperVVm"
 							Content="Start the virtual machine after restore"
-							IsChecked="True" />
+							IsChecked="False" />
 					</StackPanel>
+
+					<!--  Drive / Volume target tree (for disk and volume backups)  -->
+					<StackPanel
+						Name="pnlDriveTargetTree"
+						Margin="0,0,0,10"
+						Visibility="Collapsed">
+						<TextBlock
+							Margin="0,0,0,5"
+							FontWeight="Bold"
+							Text="Select Restore Target:" />
+						<TextBlock
+							Name="txtDriveTreeHelp"
+							Margin="0,0,0,6"
+							Foreground="{StaticResource SecondaryText}"
+							Text="Choose the target disk or volume. Boot and system disks are shown but cannot be selected."
+							TextWrapping="Wrap" />
+						<Grid>
+							<TreeView
+								Name="treeViewRestoreTarget"
+								Height="160"
+								BorderBrush="{StaticResource LightBorderBrush}"
+								BorderThickness="1" />
+							<Border
+								Name="loadingTargetOverlay"
+								Background="{StaticResource PanelBackground}"
+								Opacity="0.9"
+								Visibility="Collapsed">
+								<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+									<TextBlock
+										Margin="0,0,0,6"
+										HorizontalAlignment="Center"
+										FontSize="12"
+										Text="Loading drives..." />
+									<ProgressBar
+										Width="160"
+										Height="16"
+										IsIndeterminate="True" />
+								</StackPanel>
+							</Border>
+						</Grid>
+						<StackPanel Margin="0,5,0,0" Orientation="Horizontal">
+							<Button
+								Width="80"
+								Margin="0,0,5,0"
+								Click="RefreshRestoreTarget_Click"
+								Content="Refresh" />
+							<TextBlock
+								Name="txtSelectedTargetLabel"
+								Margin="10,0,0,0"
+								VerticalAlignment="Center"
+								FontStyle="Italic"
+								Foreground="{StaticResource SecondaryText}"
+								Text="No target selected" />
+						</StackPanel>
+					</StackPanel>
+
+					<!--  Regular Hyper-V virtual disk restore (restore physical/volume backup into .vhdx)  -->
 					<CheckBox
 						Name="chkRestoreToHyperVDisk"
 						Margin="0,0,0,8"
@@ -259,41 +369,44 @@
 								IsChecked="True" />
 						</StackPanel>
 					</StackPanel>
-					<RadioButton
-						Name="rbOriginalLocation"
-						Margin="0,0,0,5"
-						Checked="RestoreLocation_Changed"
-						Content="Original location"
-						IsChecked="True" />
-					<RadioButton
-						Name="rbAlternateLocation"
-						Margin="0,0,0,5"
-						Checked="RestoreLocation_Changed"
-						Content="Alternate location" />
 
-					<Grid
-						Name="pnlAlternateLocation"
-						Margin="0,5,0,15"
-						Visibility="Collapsed">
-						<Grid.ColumnDefinitions>
-							<ColumnDefinition Width="*" />
-							<ColumnDefinition Width="Auto" />
-						</Grid.ColumnDefinitions>
-						<TextBox
-							Name="txtRestoreDestination"
-							Grid.Column="0"
-							Height="25"
-							Margin="0,0,5,0" />
-						<Button
-							Grid.Column="1"
-							Width="80"
-							Click="BrowseRestoreDestination_Click"
-							Content="Browse..." />
-					</Grid>
+					<!--  File / folder restore location choice  -->
+					<StackPanel Name="pnlLocationChoice" Margin="0,0,0,0">
+						<RadioButton
+							Name="rbOriginalLocation"
+							Margin="0,0,0,5"
+							Checked="RestoreLocation_Changed"
+							Content="Original location"
+							IsChecked="True" />
+						<RadioButton
+							Name="rbAlternateLocation"
+							Margin="0,0,0,5"
+							Checked="RestoreLocation_Changed"
+							Content="Alternate location" />
+						<Grid
+							Name="pnlAlternateLocation"
+							Margin="0,5,0,15"
+							Visibility="Collapsed">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
+							<TextBox
+								Name="txtFolderRestoreDestination"
+								Grid.Column="0"
+								Height="25"
+								Margin="0,0,5,0" />
+							<Button
+								Grid.Column="1"
+								Width="80"
+								Click="BrowseRestoreDestination_Click"
+								Content="Browse..." />
+						</Grid>
+					</StackPanel>
 
 					<CheckBox
 						Name="chkOverwrite"
-						Margin="0,0,0,10"
+						Margin="0,10,0,10"
 						Content="Overwrite existing files"
 						IsChecked="False" />
 					<CheckBox

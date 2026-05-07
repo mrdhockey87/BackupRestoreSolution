@@ -1,6 +1,7 @@
 // LinuxRestore/restore_cli.cpp
-// Command-line interface for Linux restore - Version 4.7.2.0
-// Enhanced with backup date selection, item selection, destination mapping, and metadata-driven disk restore mapping
+// Command-line interface for Linux restore - Version 4.7.3.0
+// Enhanced with backup date selection, item selection, destination mapping, metadata-driven disk restore mapping,
+// and restore-target disk tree (matching Windows restore page)
 
 #include <iostream>
 #include <string>
@@ -12,7 +13,7 @@ void printHeader() {
     std::cout << "\n";
     std::cout << "========================================\n";
     std::cout << " Backup & Restore - Linux Recovery CLI\n";
-    std::cout << " Version 4.7.2.0\n";
+    std::cout << " Version 4.7.3.0\n";
     std::cout << "========================================\n";
     std::cout << "\n";
 }
@@ -47,6 +48,7 @@ void printUsage() {
     std::cout << "    --overwrite                 Overwrite existing files\n";
     std::cout << "  --interactive                 Interactive mode with menus\n";
     std::cout << "  --list-disks                  List available disks\n";
+    std::cout << "  --list-target-disks           List disks available as restore targets (boot disk flagged)\n";
     std::cout << "  --mount <device> <path>       Mount NTFS partition\n";
     std::cout << "  --restore-disk <backup> <device>  Metadata-driven disk reconstruction restore\n";
     std::cout << "    --show-hidden               Include hidden partitions in the restore\n";
@@ -216,7 +218,7 @@ void listVolumesInBackup(RestoreEngine& engine, const std::string& backupPath, b
 void listDisks(RestoreEngine& engine) {
     std::cout << "\nScanning for disks and partitions...\n\n";
     auto disks = engine.ListDisks();
-    
+
     if (disks.empty()) {
         std::cout << "No disks found!\n";
         return;
@@ -228,6 +230,50 @@ void listDisks(RestoreEngine& engine) {
         std::cout << disk;
     }
     std::cout << "\nTip: Use 'lsblk -f' for more details\n";
+}
+
+// -----------------------------------------------------------------------
+//  Restore-target disk tree (matching Windows restore page)
+// -----------------------------------------------------------------------
+
+void printTargetDiskTree(const std::vector<RestoreEngine::DiskInfo>& disks) {
+    if (disks.empty()) {
+        std::cout << "No disks found.\n";
+        return;
+    }
+
+    for (const auto& disk : disks) {
+        if (disk.isBootDisk) {
+            printf("  [BOOT - cannot restore]  /dev/%-8s  %s\n",
+                   disk.device.c_str(), disk.size.c_str());
+        } else {
+            printf("  ( )  /dev/%-8s  %s\n",
+                   disk.device.c_str(), disk.size.c_str());
+        }
+
+        for (const auto& part : disk.partitions) {
+            std::string extra;
+            if (!part.fsType.empty())   extra += "  fs:" + part.fsType;
+            if (!part.mountPoint.empty()) extra += "  mount:" + part.mountPoint;
+
+            if (disk.isBootDisk) {
+                printf("         [boot]  /dev/%-10s  %s%s\n",
+                       part.device.c_str(), part.size.c_str(), extra.c_str());
+            } else {
+                printf("         ( )     /dev/%-10s  %s%s\n",
+                       part.device.c_str(), part.size.c_str(), extra.c_str());
+            }
+        }
+    }
+}
+
+void listTargetDisks(RestoreEngine& engine) {
+    std::cout << "\nAvailable restore target disks:\n";
+    std::cout << "(Boot disk is shown but cannot be used as a restore target)\n";
+    std::cout << "================================================================\n";
+    auto disks = engine.ListTargetDisks();
+    printTargetDiskTree(disks);
+    std::cout << "\n";
 }
 
 void mountPartition(RestoreEngine& engine, const std::string& device, 
@@ -335,20 +381,73 @@ void runInteractive(RestoreEngine& engine) {
 
     std::cout << "Selected " << selectedItems.size() << " item(s) to restore.\n\n";
 
-    // Step 3: Select destination
-    std::cout << "Step 3: Select Restore Destination\n";
-    std::cout << "===================================\n";
-    std::cout << "1. Restore to original location\n";
-    std::cout << "2. Restore to new location\n";
-    std::cout << "Select option (1-2): ";
-    
+    // Step 3: Select destination — always show the target disk tree first,
+    // matching the Windows restore page behavior.
+    std::cout << "\nStep 3: Select Restore Target Disk or Partition\n";
+    std::cout << "================================================\n";
+    std::cout << "Boot/system disk is shown greyed and cannot be selected as a restore target.\n\n";
+
+    auto targetDisks = engine.ListTargetDisks();
+    printTargetDiskTree(targetDisks);
+    std::cout << "\n";
+
+    // Collect only non-boot devices as selectable options.
+    std::vector<std::string> selectableDevices;
+    for (const auto& d : targetDisks) {
+        if (!d.isBootDisk) {
+            selectableDevices.push_back("/dev/" + d.device);
+            for (const auto& p : d.partitions) {
+                selectableDevices.push_back("/dev/" + p.device);
+            }
+        }
+    }
+
+    std::cout << "Restore destination options:\n";
+    std::cout << "  1. Restore to original location\n";
+    std::cout << "  2. Restore to selected target disk or partition (from tree above)\n";
+    std::cout << "  3. Restore to alternate folder path\n";
+    std::cout << "  4. Metadata-driven disk reconstruction restore\n";
+    std::cout << "Select option (1-4): ";
+
     int destChoice = 0;
     std::cin >> destChoice;
     std::cin.ignore();
 
     if (destChoice == 2) {
-        std::cout << "Enter destination path: ";
+        if (selectableDevices.empty()) {
+            std::cout << "No non-boot disks available as restore targets. Aborting.\n";
+            return;
+        }
+
+        std::cout << "Enter target disk or partition device (e.g. /dev/sdb or /dev/sdb1): ";
         std::getline(std::cin, destination);
+
+        bool valid = false;
+        for (const auto& dev : selectableDevices) {
+            if (dev == destination) { valid = true; break; }
+        }
+        if (!valid) {
+            std::cout << "Warning: '" << destination << "' is not in the listed non-boot devices. Proceeding anyway.\n";
+        }
+    } else if (destChoice == 3) {
+        std::cout << "Enter destination folder path: ";
+        std::getline(std::cin, destination);
+    } else if (destChoice == 4) {
+        if (selectableDevices.empty()) {
+            std::cout << "No non-boot disks available as restore targets. Aborting.\n";
+            return;
+        }
+
+        std::cout << "Enter target disk device for reconstruction (e.g. /dev/sdb): ";
+        std::getline(std::cin, destination);
+
+        bool valid = false;
+        for (const auto& dev : selectableDevices) {
+            if (dev == destination) { valid = true; break; }
+        }
+        if (!valid) {
+            std::cout << "Warning: '" << destination << "' is not a listed non-boot disk. Proceeding anyway.\n";
+        }
     }
 
     std::cout << "\nReady to restore. Continue? (y/n): ";
@@ -405,6 +504,13 @@ int main(int argc, char* argv[]) {
     if (command == "--list-disks") {
         printHeader();
         listDisks(engine);
+        return 0;
+    }
+
+    // List restore target disks (boot disk flagged)
+    if (command == "--list-target-disks") {
+        printHeader();
+        listTargetDisks(engine);
         return 0;
     }
 

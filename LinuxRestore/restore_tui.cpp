@@ -1,6 +1,7 @@
 // LinuxRestore/restore_tui.cpp
-// Terminal UI for Linux restore (using ncurses) - Version 4.7.1.0
-// Enhanced with backup date selection, tree view, and destination mapping
+// Terminal UI for Linux restore (using ncurses) - Version 4.7.2.0
+// Enhanced with backup date selection, tree view, destination mapping,
+// and restore-target disk tree (matching Windows restore page)
 
 #include <ncurses.h>
 #include <menu.h>
@@ -25,6 +26,8 @@ private:
     std::string selectedBackupPath;
     std::string restoreDestination;
     bool restoreToOriginal = true;
+    bool restoreToDisk = false;   // true when disk/volume target mode is selected
+    std::vector<RestoreEngine::DiskInfo> targetDisks;
     int currentStep = 1; // 1=Select Date, 2=Select Items, 3=Select Destination
 
     void EnsurePasswordForSelectedBackup() {
@@ -79,7 +82,7 @@ private:
     void ShowTitle() {
         int width = getmaxx(mainWin);
         wattron(mainWin, COLOR_PAIR(1) | A_BOLD);
-        mvwprintw(mainWin, 1, (width - 45) / 2, " BACKUP & RESTORE - Linux Recovery v4.7.1 ");
+        mvwprintw(mainWin, 1, (width - 45) / 2, " BACKUP & RESTORE - Linux Recovery v4.7.2 ");
         wattroff(mainWin, COLOR_PAIR(1) | A_BOLD);
         
         // Show current step
@@ -344,85 +347,225 @@ private:
         return false;
     }
 
-    // Step 3: Select destination
+    // Step 3: Select destination — shows the restore target tree first, then
+    // destination mode options, mirroring the Windows restore page.
     bool SelectDestination() {
+        // Always show the target disk tree first so the user can pick where to restore.
+        // This is the primary selection; the mode options below refine the behavior.
+        if (!SelectTargetDisk()) {
+            // User went back or quit
+            if (currentStep == 2) return false;
+            return false;
+        }
+
+        // After a target is chosen, let the user pick the restore mode.
         wclear(mainWin);
         box(mainWin, 0, 0);
         ShowTitle();
 
         int startY = 4;
         int selected = 0;
-        
+
         std::vector<std::string> options = {
             "Restore to original location",
-            "Restore to new location",
+            "Restore to selected target (alternate location / overwrite disk)",
             "Metadata-driven disk reconstruction restore"
         };
 
+        // Default to "restore to selected target" since the user just picked one.
+        selected = 1;
+
         while (true) {
-            mvwprintw(mainWin, startY, 2, "Restore Destination:");
+            wclear(mainWin);
+            box(mainWin, 0, 0);
+            ShowTitle();
+            startY = 4;
+
+            std::string targetLabel = restoreDestination.empty() ? "(none selected)" : restoreDestination;
+            mvwprintw(mainWin, startY, 2, "Target selected: %s", targetLabel.c_str());
+            startY += 2;
+
+            mvwprintw(mainWin, startY, 2, "Restore Mode:");
             startY += 2;
 
             for (size_t i = 0; i < options.size(); i++) {
-                if (i == selected) {
+                if ((int)i == selected) {
                     wattron(mainWin, COLOR_PAIR(2) | A_REVERSE);
                 }
-                
-                char bullet = (i == (restoreToOriginal ? 0 : 1)) ? '*' : ' ';
-                mvwprintw(mainWin, startY + i, 4, " %c %s", bullet, options[i].c_str());
-                
-                if (i == selected) {
+                mvwprintw(mainWin, startY + (int)i, 4, "  %s", options[i].c_str());
+                if ((int)i == selected) {
                     wattroff(mainWin, COLOR_PAIR(2) | A_REVERSE);
                 }
             }
 
-                if (!restoreToOriginal && selected != 2) {
-                mvwprintw(mainWin, startY + 4, 4, "Destination path: %s", 
-                    restoreDestination.empty() ? "(not set)" : restoreDestination.c_str());
-                mvwprintw(mainWin, startY + 5, 4, "Press 'P' to set path");
-                } else if (selected == 2) {
-                    mvwprintw(mainWin, startY + 4, 4, "Disk mapping uses backup metadata and target disk selection");
-                    mvwprintw(mainWin, startY + 5, 4, "Press 'D' to set target disk device");
+            int infoY = startY + (int)options.size() + 1;
+            if (selected == 0) {
+                mvwprintw(mainWin, infoY, 4, "Files will be restored to their original paths.");
+            } else if (selected == 1) {
+                mvwprintw(mainWin, infoY, 4, "Files restore to target; disk restores overwrite target.");
+                mvwprintw(mainWin, infoY + 1, 4, "Press 'T' to re-select target disk");
+            } else if (selected == 2) {
+                mvwprintw(mainWin, infoY, 4, "Partition layout rebuilt from backup metadata.");
+                mvwprintw(mainWin, infoY + 1, 4, "Press 'D' to enter target disk device manually");
             }
 
             int helpY = getmaxy(mainWin) - 4;
-            mvwprintw(mainWin, helpY, 2, "UP/DOWN: Navigate | ENTER: Select | R: Start Restore | B: Back | Q: Quit");
+            mvwprintw(mainWin, helpY, 2, "UP/DOWN: Navigate | ENTER/R: Start Restore | T: Re-select target | B: Back | Q: Quit");
             wrefresh(mainWin);
 
             int ch = getch();
-
             switch (ch) {
                 case KEY_UP:
-                    selected = (selected > 0) ? selected - 1 : options.size() - 1;
+                    selected = (selected > 0) ? selected - 1 : (int)options.size() - 1;
                     break;
                 case KEY_DOWN:
-                    selected = (selected < options.size() - 1) ? selected + 1 : 0;
+                    selected = (selected < (int)options.size() - 1) ? selected + 1 : 0;
                     break;
-                case 10: // Enter
+                case 10:
                 case KEY_ENTER:
-                    restoreToOriginal = (selected == 0);
+                    if (selected == 0) {
+                        restoreToOriginal = true;
+                        restoreToDisk = false;
+                        restoreDestination.clear();
+                    } else if (selected == 1) {
+                        restoreToOriginal = false;
+                        restoreToDisk = true;
+                    } else if (selected == 2) {
+                        restoreToOriginal = false;
+                        restoreToDisk = true;
+                    }
+                    if (restoreToOriginal || !restoreDestination.empty()) {
+                        return ConfirmRestore();
+                    }
                     break;
-                case 'p':
-                case 'P':
-                    if (!restoreToOriginal && selected != 2) {
-                        restoreDestination = PromptForPath("Enter restore destination path:");
+                case 't':
+                case 'T':
+                    if (SelectTargetDisk()) {
+                        restoreToDisk = true;
+                        restoreToOriginal = false;
+                        selected = 1;
                     }
                     break;
                 case 'd':
                 case 'D':
                     if (selected == 2) {
                         restoreDestination = PromptForPath("Enter target disk device (e.g. /dev/sda):");
+                        restoreToDisk = true;
                     }
                     break;
                 case 'r':
                 case 'R':
-                    if (restoreToOriginal || !restoreDestination.empty() || selected == 2) {
+                    if (restoreToOriginal || !restoreDestination.empty()) {
                         return ConfirmRestore();
                     } else {
-                        UpdateStatus("Please set destination path", true);
+                        UpdateStatus("Please select a target disk first", true);
                         getch();
                     }
                     break;
+                case 'b':
+                case 'B':
+                    currentStep = 2;
+                    return false;
+                case 'q':
+                case 'Q':
+                    return false;
+            }
+        }
+    }
+
+    // Disk target tree — primary selection screen for Step 3.
+    // Shows all disks/partitions; boot disk is greyed and unselectable.
+    bool SelectTargetDisk() {
+        // Reload target disks each time so the list is fresh
+        targetDisks = engine->ListTargetDisks();
+
+        // Build a flat list of selectable (non-boot) entries
+        struct TargetEntry {
+            std::string label;
+            std::string device;   // full /dev/xxx path
+            bool isDisk;          // disk-level vs partition-level
+        };
+        std::vector<TargetEntry> entries;
+        for (const auto& d : targetDisks) {
+            if (d.isBootDisk) continue;
+            entries.push_back({ "/dev/" + d.device + "  [disk]  " + d.size, "/dev/" + d.device, true });
+            for (const auto& p : d.partitions) {
+                std::string label = "  /dev/" + p.device + "  " + p.size;
+                if (!p.fsType.empty())     label += "  " + p.fsType;
+                if (!p.mountPoint.empty()) label += "  " + p.mountPoint;
+                entries.push_back({ label, "/dev/" + p.device, false });
+            }
+        }
+
+        int selected = 0;
+        while (true) {
+            wclear(mainWin);
+            box(mainWin, 0, 0);
+
+            int width = getmaxx(mainWin);
+            wattron(mainWin, COLOR_PAIR(1) | A_BOLD);
+            mvwprintw(mainWin, 1, (width - 45) / 2, " BACKUP & RESTORE - Linux Recovery ");
+            wattroff(mainWin, COLOR_PAIR(1) | A_BOLD);
+            wattron(mainWin, COLOR_PAIR(6));
+            const char* heading = "Step 3: Select Restore Target Disk or Partition";
+            mvwprintw(mainWin, 2, (width - (int)strlen(heading)) / 2, "%s", heading);
+            wattroff(mainWin, COLOR_PAIR(6));
+
+            int startY = 4;
+            mvwprintw(mainWin, startY, 2, "Click any non-boot disk or partition to restore to it.");
+            mvwprintw(mainWin, startY + 1, 2, "Boot/system disk is shown greyed and cannot be selected.");
+            startY += 3;
+
+            // Show boot disks greyed-out
+            for (const auto& d : targetDisks) {
+                if (!d.isBootDisk) continue;
+                wattron(mainWin, A_DIM);
+                mvwprintw(mainWin, startY++, 2, "[BOOT - cannot restore] /dev/%s  %s",
+                          d.device.c_str(), d.size.c_str());
+                for (const auto& p : d.partitions) {
+                    std::string info = "  /dev/" + p.device + "  " + p.size;
+                    if (!p.fsType.empty())     info += "  " + p.fsType;
+                    if (!p.mountPoint.empty()) info += "  " + p.mountPoint;
+                    mvwprintw(mainWin, startY++, 4, "[boot] %s", info.c_str());
+                }
+                wattroff(mainWin, A_DIM);
+            }
+            if (!targetDisks.empty()) startY++;
+
+            if (entries.empty()) {
+                wattron(mainWin, COLOR_PAIR(5));
+                mvwprintw(mainWin, startY, 2, "No non-boot disks available as restore targets.");
+                wattroff(mainWin, COLOR_PAIR(5));
+                mvwprintw(mainWin, startY + 2, 2, "Press any key to go back...");
+                wrefresh(mainWin);
+                getch();
+                currentStep = 2;
+                return false;
+            }
+
+            for (size_t i = 0; i < entries.size(); i++) {
+                bool isCurrent = ((int)i == selected);
+                if (isCurrent) wattron(mainWin, COLOR_PAIR(2) | A_REVERSE);
+                mvwprintw(mainWin, startY + (int)i, 2, "( ) %s", entries[i].label.c_str());
+                if (isCurrent) wattroff(mainWin, COLOR_PAIR(2) | A_REVERSE);
+            }
+
+            int helpY = getmaxy(mainWin) - 4;
+            mvwprintw(mainWin, helpY, 2, "UP/DOWN: Navigate | ENTER: Select target | B: Back | Q: Quit");
+            wrefresh(mainWin);
+
+            int ch = getch();
+            switch (ch) {
+                case KEY_UP:
+                    selected = (selected > 0) ? selected - 1 : (int)entries.size() - 1;
+                    break;
+                case KEY_DOWN:
+                    selected = (selected < (int)entries.size() - 1) ? selected + 1 : 0;
+                    break;
+                case 10:
+                case KEY_ENTER:
+                    restoreDestination = entries[selected].device;
+                    return true;
                 case 'b':
                 case 'B':
                     currentStep = 2;

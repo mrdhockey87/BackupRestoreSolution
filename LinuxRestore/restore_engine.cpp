@@ -3,6 +3,7 @@
 // Version 5.13.7.0 - Added SSB archive support for unified backup format
 
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -770,6 +771,101 @@ public:
     void SetBackupPassword(const std::string& password) {
         backupPassword = password;
         backupPasswordVerified = !password.empty();
+    }
+
+    // Returns the root block device that backs the currently mounted '/' filesystem.
+    // e.g. "sda" (without /dev/ prefix). Returns empty string if it cannot be determined.
+    std::string GetBootDiskDevice() {
+        // findmnt gives us the source device for /; strip partition suffix to get the disk.
+        std::string out = Trim(CaptureCommandOutput("findmnt -no SOURCE / 2>/dev/null"));
+        if (out.empty()) return {};
+
+        // Strip /dev/ prefix so we have e.g. "sda2"
+        if (out.rfind("/dev/", 0) == 0) out = out.substr(5);
+
+        // Remove trailing digits to get the disk name (sda2 -> sda, nvme0n1p2 -> nvme0n1)
+        // Handle nvmeXnYpZ naming as well as sdXN naming.
+        std::string disk = out;
+        // For NVMe: strip trailing pN suffix
+        auto nvmeP = disk.rfind('p');
+        if (nvmeP != std::string::npos && nvmeP > 0 && std::isdigit(disk.back())) {
+            std::string suffix = disk.substr(nvmeP + 1);
+            bool allDigits = !suffix.empty() && std::all_of(suffix.begin(), suffix.end(), ::isdigit);
+            if (allDigits) { disk = disk.substr(0, nvmeP); }
+        } else {
+            // For sdX: strip trailing digits
+            while (!disk.empty() && std::isdigit(disk.back())) {
+                disk.pop_back();
+            }
+        }
+        return disk;
+    }
+
+    // Structured disk/partition info for the restore target tree.
+    struct DiskInfo {
+        std::string device;    // e.g. "sda"
+        std::string size;      // human-readable size
+        bool isBootDisk = false;
+
+        struct PartitionInfo {
+            std::string device;   // e.g. "sda1"
+            std::string size;
+            std::string fsType;
+            std::string mountPoint;
+            bool isBootDisk = false;
+        };
+        std::vector<PartitionInfo> partitions;
+    };
+
+    // Returns a structured list of block disks and their partitions.
+    // The boot disk is flagged so UIs can show it greyed-out.
+    std::vector<DiskInfo> ListTargetDisks() {
+        std::vector<DiskInfo> result;
+        std::string bootDisk = GetBootDiskDevice();
+
+        // lsblk -Jpno to get JSON, but for broadest compatibility use paired output.
+        // Columns: NAME, SIZE, TYPE, FSTYPE, MOUNTPOINT
+        std::string raw = CaptureCommandOutput("lsblk -nlo NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT 2>/dev/null");
+
+        DiskInfo* current = nullptr;
+        std::istringstream ss(raw);
+        std::string line;
+        while (std::getline(ss, line)) {
+            if (line.empty()) continue;
+
+            // Split on whitespace
+            std::istringstream ls(line);
+            std::string name, size, type, fstype, mount;
+            ls >> name >> size >> type;
+            std::getline(ls, fstype);
+            // fstype and mount are together; re-split
+            std::istringstream ls2(fstype);
+            fstype.clear();
+            ls2 >> fstype >> mount;
+
+            name = Trim(name);
+            size = Trim(size);
+            type = Trim(type);
+            fstype = Trim(fstype);
+            mount = Trim(mount);
+
+            if (type == "disk") {
+                result.push_back({});
+                current = &result.back();
+                current->device = name;
+                current->size = size;
+                current->isBootDisk = (!bootDisk.empty() && name == bootDisk);
+            } else if (type == "part" && current != nullptr) {
+                DiskInfo::PartitionInfo p;
+                p.device = name;
+                p.size = size;
+                p.fsType = fstype;
+                p.mountPoint = mount;
+                p.isBootDisk = current->isBootDisk;
+                current->partitions.push_back(p);
+            }
+        }
+        return result;
     }
 
     // Restore files from backup to destination

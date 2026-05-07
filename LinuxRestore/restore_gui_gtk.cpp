@@ -1,6 +1,7 @@
 // LinuxRestore/restore_gui_gtk.cpp
-// Graphical User Interface using GTK+ 3.0 - Version 4.7.1.0
-// Enhanced with 3-step wizard matching Windows restore interface
+// Graphical User Interface using GTK+ 3.0 - Version 4.7.2.0
+// Enhanced with 3-step wizard matching Windows restore interface,
+// and restore-target disk tree (matching Windows restore page)
 
 #include <gtk/gtk.h>
 #include <string>
@@ -28,10 +29,16 @@ private:
     // Step 3 widgets
     GtkWidget *radioOriginal;
     GtkWidget *radioNew;
+    GtkWidget *radioDiskTarget;   // new: restore to disk/partition
+    GtkWidget *radioDisk;         // existing: metadata-driven disk reconstruction
     GtkWidget *txtDestPath;
     GtkWidget *btnBrowseDest;
     GtkWidget *chkOverwrite;
     GtkWidget *chkPreservePerms;
+    GtkWidget *treeViewTargetDisks;  // new: disk target tree
+    GtkWidget *lblDiskMapping;
+    GtkWidget *boxDiskTarget;        // container shown when radioDiskTarget is selected
+    GtkWidget *lblSelectedTarget;    // shows the currently selected target device
     
     // Progress dialog
     GtkWidget *progressDialog;
@@ -41,6 +48,7 @@ private:
     RestoreEngine engine;
     
     std::string selectedBackupPath;
+    std::string selectedTargetDevice;   // device chosen in the disk target tree
     std::vector<RestoreEngine::BackupDate> backupDates;
     std::vector<RestoreEngine::RestoreItem> restoreTree;
     
@@ -150,11 +158,14 @@ private:
 
     static void onStep2Next(GtkWidget *widget, gpointer data) {
         RestoreGUI* gui = static_cast<RestoreGUI*>(data);
-        
+
         if (!gui->hasCheckedItems()) {
             gui->showError("Please select at least one item to restore");
             return;
         }
+
+        // Pre-load the target disk tree so it is populated when the user arrives at Step 3.
+        gui->loadTargetDisks();
 
         gtk_stack_set_visible_child_name(GTK_STACK(gui->stack), "step3");
         gui->currentStep = 2;
@@ -222,15 +233,103 @@ private:
 
     static void onDestLocationChanged(GtkToggleButton *button, gpointer data) {
         RestoreGUI* gui = static_cast<RestoreGUI*>(data);
-        
-        gboolean newLocation = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(gui->radioNew));
-        gtk_widget_set_sensitive(gui->txtDestPath, newLocation);
+
+        // Only update the active-radio's toggle; ignore deactivating partner radio signals.
+        if (!gtk_toggle_button_get_active(button)) return;
+
+        gboolean newLocation     = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(gui->radioNew));
+        gboolean diskReconstruct = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(gui->radioDisk));
+
+        // Alternate-folder path row is sensitive only in radioNew mode.
+        gtk_widget_set_sensitive(gui->txtDestPath,   newLocation);
         gtk_widget_set_sensitive(gui->btnBrowseDest, newLocation);
+
+        // Disk reconstruction guidance appears only for the metadata-driven mode.
+        gtk_widget_set_visible(gui->lblDiskMapping, diskReconstruct);
     }
 
     static gboolean onDelete(GtkWidget *widget, GdkEvent *event, gpointer data) {
         gtk_main_quit();
         return FALSE;
+    }
+
+    // Callback: user clicked a row in the disk target tree
+    static void onTargetDiskSelected(GtkTreeSelection *selection, gpointer data) {
+        RestoreGUI* gui = static_cast<RestoreGUI*>(data);
+
+        GtkTreeIter iter;
+        GtkTreeModel* model;
+        if (!gtk_tree_selection_get_selected(selection, &model, &iter)) return;
+
+        gboolean isBootDisk;
+        gchar* device;
+        gtk_tree_model_get(model, &iter, 0, &device, 2, &isBootDisk, -1);
+
+        if (isBootDisk) {
+            gui->showError("The boot/system disk cannot be used as a restore target. Please select a different disk or partition.");
+            gtk_tree_selection_unselect_all(selection);
+            g_free(device);
+            return;
+        }
+
+        // Re-read the actual device path from column 3
+        g_free(device);
+        gchar* devicePath;
+        gtk_tree_model_get(model, &iter, 3, &devicePath, -1);
+        gui->selectedTargetDevice = devicePath ? devicePath : "";
+        g_free(devicePath);
+
+        std::string msg = "Selected target: " + gui->selectedTargetDevice;
+        gtk_label_set_text(GTK_LABEL(gui->lblSelectedTarget), msg.c_str());
+
+        // Auto-switch to "Restore to target disk (overwrite)" mode so the destination
+        // is wired up, mirroring the Windows restore-target-tree behavior.
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gui->radioDiskTarget), TRUE);
+    }
+
+    void loadTargetDisks() {
+        auto disks = engine.ListTargetDisks();
+
+        GtkTreeStore* store = GTK_TREE_STORE(
+            gtk_tree_view_get_model(GTK_TREE_VIEW(treeViewTargetDisks)));
+        gtk_tree_store_clear(store);
+        selectedTargetDevice.clear();
+        gtk_label_set_text(GTK_LABEL(lblSelectedTarget), "No target selected");
+
+        for (const auto& d : disks) {
+            GtkTreeIter diskIter;
+            gtk_tree_store_append(store, &diskIter, NULL);
+
+            std::string diskLabel = "/dev/" + d.device + "  [disk]  " + d.size;
+            if (d.isBootDisk) diskLabel += "  [BOOT - cannot restore]";
+
+            gtk_tree_store_set(store, &diskIter,
+                0, diskLabel.c_str(),            // display name
+                1, d.size.c_str(),               // size
+                2, (gboolean)d.isBootDisk,       // is boot disk
+                3, ("/dev/" + d.device).c_str(), // device path
+                -1);
+
+            for (const auto& p : d.partitions) {
+                GtkTreeIter partIter;
+                gtk_tree_store_append(store, &partIter, &diskIter);
+
+                std::string partLabel = "  /dev/" + p.device + "  " + p.size;
+                if (!p.fsType.empty())     partLabel += "  " + p.fsType;
+                if (!p.mountPoint.empty()) partLabel += "  " + p.mountPoint;
+                if (d.isBootDisk)          partLabel += "  [boot]";
+
+                gtk_tree_store_set(store, &partIter,
+                    0, partLabel.c_str(),
+                    1, p.size.c_str(),
+                    2, (gboolean)d.isBootDisk,
+                    3, ("/dev/" + p.device).c_str(),
+                    -1);
+            }
+        }
+
+        gtk_tree_view_expand_all(GTK_TREE_VIEW(treeViewTargetDisks));
+        updateStatusBar("Target disks loaded");
     }
 
     void loadBackupDates(const std::string& backupPath) {
@@ -359,15 +458,22 @@ private:
 
     void performRestore() {
         // Validate
-        bool newLocation = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(radioNew));
+        bool newLocation    = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(radioNew));
+        bool diskTarget     = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(radioDiskTarget));
         std::string dest;
-        
+
         if (newLocation) {
             dest = gtk_entry_get_text(GTK_ENTRY(txtDestPath));
             if (dest.empty()) {
                 showError("Please select a restore destination");
                 return;
             }
+        } else if (diskTarget) {
+            if (selectedTargetDevice.empty()) {
+                showError("Please select a target disk or partition from the list");
+                return;
+            }
+            dest = selectedTargetDevice;
         }
 
         // Collect checked items
@@ -603,42 +709,108 @@ private:
 
         // Title
         GtkWidget *lblTitle = gtk_label_new(NULL);
-        gtk_label_set_markup(GTK_LABEL(lblTitle), 
+        gtk_label_set_markup(GTK_LABEL(lblTitle),
             "<b>Step 3: Select Restore Destination</b>");
         gtk_box_pack_start(GTK_BOX(box), lblTitle, FALSE, FALSE, 10);
 
-        // Destination options
-        radioOriginal = gtk_radio_button_new_with_label(NULL, 
+        // ------------------------------------------------------------------
+        // Restore target disk/partition tree — always visible, mirrors the
+        // Windows restore page. Boot disk is shown greyed and unselectable.
+        // ------------------------------------------------------------------
+        GtkWidget *lblTargetHdr = gtk_label_new(NULL);
+        gtk_label_set_markup(GTK_LABEL(lblTargetHdr),
+            "<b>Select Restore Target Disk or Partition:</b>\n"
+            "<small>Click any non-boot disk or partition below. "
+            "Boot/system disk is shown greyed and cannot be selected.</small>");
+        gtk_label_set_xalign(GTK_LABEL(lblTargetHdr), 0.0f);
+        gtk_box_pack_start(GTK_BOX(box), lblTargetHdr, FALSE, FALSE, 0);
+
+        boxDiskTarget = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+
+        GtkWidget *scrolledDisks = gtk_scrolled_window_new(NULL, NULL);
+        gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledDisks),
+            GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+        gtk_widget_set_size_request(scrolledDisks, -1, 200);
+        gtk_widget_set_vexpand(scrolledDisks, TRUE);
+
+        // Store: display name, size, isBootDisk (gboolean), device path
+        GtkTreeStore *diskStore = gtk_tree_store_new(4,
+            G_TYPE_STRING, G_TYPE_STRING, G_TYPE_BOOLEAN, G_TYPE_STRING);
+        treeViewTargetDisks = gtk_tree_view_new_with_model(GTK_TREE_MODEL(diskStore));
+
+        GtkCellRenderer *textRend = gtk_cell_renderer_text_new();
+        gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(treeViewTargetDisks),
+            -1, "Device", textRend, "text", 0, NULL);
+        gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(treeViewTargetDisks),
+            -1, "Size", textRend, "text", 1, NULL);
+
+        GtkTreeSelection *diskSel = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeViewTargetDisks));
+        gtk_tree_selection_set_mode(diskSel, GTK_SELECTION_SINGLE);
+        g_signal_connect(diskSel, "changed", G_CALLBACK(onTargetDiskSelected), this);
+
+        gtk_container_add(GTK_CONTAINER(scrolledDisks), treeViewTargetDisks);
+        gtk_box_pack_start(GTK_BOX(boxDiskTarget), scrolledDisks, TRUE, TRUE, 0);
+
+        lblSelectedTarget = gtk_label_new("No target selected");
+        gtk_label_set_xalign(GTK_LABEL(lblSelectedTarget), 0.0f);
+        gtk_box_pack_start(GTK_BOX(boxDiskTarget), lblSelectedTarget, FALSE, FALSE, 0);
+
+        gtk_box_pack_start(GTK_BOX(box), boxDiskTarget, TRUE, TRUE, 5);
+
+        // ------------------------------------------------------------------
+        // Destination mode radios — used to fine-tune where the restore lands
+        // once a target disk/partition has been chosen above.
+        // ------------------------------------------------------------------
+        GtkWidget *lblDestMode = gtk_label_new(NULL);
+        gtk_label_set_markup(GTK_LABEL(lblDestMode), "<b>Restore Mode:</b>");
+        gtk_label_set_xalign(GTK_LABEL(lblDestMode), 0.0f);
+        gtk_box_pack_start(GTK_BOX(box), lblDestMode, FALSE, FALSE, 4);
+
+        radioOriginal = gtk_radio_button_new_with_label(NULL,
             "Restore to original location");
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(radioOriginal), TRUE);
         g_signal_connect(radioOriginal, "toggled", G_CALLBACK(onDestLocationChanged), this);
         gtk_box_pack_start(GTK_BOX(box), radioOriginal, FALSE, FALSE, 0);
 
         radioNew = gtk_radio_button_new_with_label_from_widget(
-            GTK_RADIO_BUTTON(radioOriginal), "Restore to new location");
+            GTK_RADIO_BUTTON(radioOriginal), "Restore to alternate folder / selected target");
         g_signal_connect(radioNew, "toggled", G_CALLBACK(onDestLocationChanged), this);
         gtk_box_pack_start(GTK_BOX(box), radioNew, FALSE, FALSE, 0);
+
+        radioDiskTarget = gtk_radio_button_new_with_label_from_widget(
+            GTK_RADIO_BUTTON(radioOriginal), "Restore to target disk (overwrite)");
+        g_signal_connect(radioDiskTarget, "toggled", G_CALLBACK(onDestLocationChanged), this);
+        gtk_box_pack_start(GTK_BOX(box), radioDiskTarget, FALSE, FALSE, 0);
 
         radioDisk = gtk_radio_button_new_with_label_from_widget(
             GTK_RADIO_BUTTON(radioOriginal), "Metadata-driven disk reconstruction restore");
         g_signal_connect(radioDisk, "toggled", G_CALLBACK(onDestLocationChanged), this);
         gtk_box_pack_start(GTK_BOX(box), radioDisk, FALSE, FALSE, 0);
 
-        // Destination path
+        // Alternate folder path entry (shown when radioNew is active)
         GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-        GtkWidget *lblDest = gtk_label_new("Destination:");
+        GtkWidget *lblDest = gtk_label_new("Alternate folder:");
         gtk_box_pack_start(GTK_BOX(hbox), lblDest, FALSE, FALSE, 0);
-        
+
         txtDestPath = gtk_entry_new();
         gtk_widget_set_sensitive(txtDestPath, FALSE);
         gtk_box_pack_start(GTK_BOX(hbox), txtDestPath, TRUE, TRUE, 0);
-        
+
         btnBrowseDest = gtk_button_new_with_label("Browse...");
         gtk_widget_set_sensitive(btnBrowseDest, FALSE);
         g_signal_connect(btnBrowseDest, "clicked", G_CALLBACK(onBrowseDest), this);
         gtk_box_pack_start(GTK_BOX(hbox), btnBrowseDest, FALSE, FALSE, 0);
-        
-        gtk_box_pack_start(GTK_BOX(box), hbox, FALSE, FALSE, 10);
+
+        gtk_box_pack_start(GTK_BOX(box), hbox, FALSE, FALSE, 5);
+
+        // Disk reconstruction guidance
+        lblDiskMapping = gtk_label_new(
+            "For disk reconstruction restore, the restore engine rebuilds the partition\n"
+            "layout from backup metadata onto the selected target disk.");
+        gtk_label_set_line_wrap(GTK_LABEL(lblDiskMapping), TRUE);
+        gtk_label_set_xalign(GTK_LABEL(lblDiskMapping), 0.0f);
+        gtk_widget_set_visible(lblDiskMapping, FALSE);
+        gtk_box_pack_start(GTK_BOX(box), lblDiskMapping, FALSE, FALSE, 4);
 
         // Options
         chkOverwrite = gtk_check_button_new_with_label("Overwrite existing files");
@@ -650,11 +822,6 @@ private:
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(chkPreservePerms), TRUE);
         gtk_box_pack_start(GTK_BOX(box), chkPreservePerms, FALSE, FALSE, 0);
 
-        // Disk mapping guidance
-        lblDiskMapping = gtk_label_new("For disk reconstruction restore, select a target disk device (e.g. /dev/sda) and the restore engine will rebuild the partition layout from backup metadata.");
-        gtk_label_set_line_wrap(GTK_LABEL(lblDiskMapping), TRUE);
-        gtk_box_pack_start(GTK_BOX(box), lblDiskMapping, FALSE, FALSE, 8);
-
         // Spacer
         GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
         gtk_widget_set_vexpand(spacer, TRUE);
@@ -662,7 +829,7 @@ private:
 
         // Navigation buttons
         GtkWidget *navBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-        
+
         GtkWidget *btnBack = gtk_button_new_with_label("< Back");
         g_signal_connect(btnBack, "clicked", G_CALLBACK(onStep3Back), this);
         gtk_box_pack_start(GTK_BOX(navBox), btnBack, FALSE, FALSE, 0);
@@ -681,7 +848,7 @@ public:
         // Create window
         window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
         gtk_window_set_title(GTK_WINDOW(window), 
-            "Backup & Restore - Linux Recovery v4.7.1");
+            "Backup & Restore - Linux Recovery v4.7.2");
         gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
         g_signal_connect(window, "delete-event", G_CALLBACK(onDelete), NULL);
 

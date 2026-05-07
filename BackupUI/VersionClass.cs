@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.30";
+        private static readonly string version_fallback_number = "6.2.4.34";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,29 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.34 Linux restore UIs updated to match Windows restore-target-tree behavior:
+ *                  GTK GUI Step 3 now always shows the full disk/partition target tree at the top,
+ *                  loads automatically on entry, and auto-selects disk-target mode when the user
+ *                  picks a device. ncurses TUI leads with the target tree as the primary Step 3
+ *                  screen, showing boot/system disk greyed and its partitions flagged. CLI Step 3
+ *                  always prints the full target tree before presenting destination-mode options.
+ *                  Boot disk is blocked in all Linux UIs. mdail 5/7/2026
+ * Version 6.2.4.33 Restore target tree now shown for all backup types, not just disk/volume
+ *                  restores. File/folder restores display the same drive tree so the user can
+ *                  click any non-boot volume to auto-select it as the Alternate Location
+ *                  destination. Disk items remain selectable only in disk-restore mode.
+ *                  Boot/system disk stays greyed and unselectable in all modes. mdail 5/7/2026
+ * Version 6.2.4.32 radio-button single-selection) matching the backup source tree. Disks and
+ *                  volumes are loaded via WMI; boot/system disk items are shown greyed and
+ *                  unselectable. Tree auto-loads when the restore options become relevant.
+ *                  RefreshRestoreTarget_Click allows manual reload. mdail 5/7/2026
+ * Version 6.2.4.31 Restore destination redesign:
+ *                  picker that excludes the currently booted system disk (detected via
+ *                  Win32_DiskPartition.BootPartition). Volume backups show a volume picker.
+ *                  Hyper-V system restores offer replace-non-running-VM or restore-to-empty-
+ *                  directory modes. GetProtectedDiskIndexes fixed to use BootPartition WMI
+ *                  instead of incorrectly comparing drive letters against DeviceID strings.
+ *                  mdail 5/7/2026
  * Version 6.2.4.30 Fixed single-instance mutex not released before UAC elevation relaunch,
  *                  causing the elevated instance to see the mutex as already owned and exit
  *                  immediately, making the app appear to still be running after close. Mutex
