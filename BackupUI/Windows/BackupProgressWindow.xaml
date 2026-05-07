@@ -66,6 +66,7 @@
 				Click="AbortBackup_Click"
 				Content="Abort Backup" />
 			<Button
+				x:Name="btnHideClose"
 				Width="120"
 				Height="30"
 				Click="Close_Click"

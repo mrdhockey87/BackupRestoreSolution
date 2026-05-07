@@ -39,6 +39,8 @@ void printUsage() {
     std::cout << "Options:\n";
     std::cout << "  --list-dates <path>           List available backup dates\n";
     std::cout << "  --show-contents <backup>      Show contents of specific backup\n";
+    std::cout << "  --list-volumes <backup>       List volumes in a disk/volume backup\n";
+    std::cout << "    --show-hidden               Include hidden partitions (EFI, MSR, Recovery)\n";
     std::cout << "  --restore <backup>            Start restore from backup\n";
     std::cout << "    --items <paths>             Comma-separated list of items\n";
     std::cout << "    --dest <path>               Destination (omit for original)\n";
@@ -47,32 +49,43 @@ void printUsage() {
     std::cout << "  --list-disks                  List available disks\n";
     std::cout << "  --mount <device> <path>       Mount NTFS partition\n";
     std::cout << "  --restore-disk <backup> <device>  Metadata-driven disk reconstruction restore\n";
+    std::cout << "    --show-hidden               Include hidden partitions in the restore\n";
     std::cout << "  --unmount <path>              Unmount partition\n";
     std::cout << "  --help                        Show this help message\n";
     std::cout << "\nExamples:\n";
     std::cout << "  restore_cli --list-dates /media/backup\n";
+    std::cout << "  restore_cli --list-volumes /media/backup/Full.ssb\n";
+    std::cout << "  restore_cli --list-volumes /media/backup/Full.ssb --show-hidden\n";
     std::cout << "  restore_cli --show-contents /media/backup/Full_20260130\n";
     std::cout << "  restore_cli --restore /media/backup/Full_20260130 --items \"/dev/sda1,/home\" --dest /mnt/restore\n";
+    std::cout << "  restore_cli --restore-disk /media/backup/Full.ssb /dev/sdb\n";
+    std::cout << "  restore_cli --restore-disk /media/backup/Full.ssb /dev/sdb --show-hidden\n";
     std::cout << "  restore_cli --interactive\n\n";
 }
 
-void performDiskRestore(RestoreEngine& engine, const std::string& backupPath, const std::string& targetDisk) {
+void performDiskRestore(RestoreEngine& engine, const std::string& backupPath, const std::string& targetDisk, bool showHidden) {
     std::cout << "\nStarting metadata-driven disk restore...\n";
     std::cout << "Backup:      " << backupPath << "\n";
-    std::cout << "Target disk: " << targetDisk << "\n\n";
+    std::cout << "Target disk: " << targetDisk << "\n";
+    if (showHidden) {
+        std::cout << "(including hidden partitions: EFI, MSR, Recovery)\n";
+    } else {
+        std::cout << "(hidden partitions excluded; use --show-hidden to include EFI/MSR/Recovery)\n";
+    }
+    std::cout << "\n";
 
     auto callback = [](int percent, const std::string& msg) {
         printf("\r[%3d%%] %-70s", percent, msg.c_str());
         fflush(stdout);
     };
 
-    int result = engine.RestoreDisk(backupPath, targetDisk, callback);
+    int result = engine.RestoreDisk(backupPath, targetDisk, callback, showHidden);
 
     std::cout << "\n\n";
     if (result == 0) {
-        std::cout << "? Disk restore completed successfully!\n";
+        std::cout << "Disk restore completed successfully!\n";
     } else {
-        std::cerr << "? Disk restore failed: " << engine.GetLastError() << "\n";
+        std::cerr << "Disk restore failed: " << engine.GetLastError() << "\n";
     }
 }
 
@@ -156,6 +169,48 @@ void performRestore(RestoreEngine& engine, const std::string& backupPath,
     } else {
         std::cerr << "? Restore failed: " << engine.GetLastError() << "\n";
     }
+}
+
+void listVolumesInBackup(RestoreEngine& engine, const std::string& backupPath, bool showHidden) {
+    std::cout << "\nVolumes in backup: " << backupPath << "\n";
+    if (showHidden) {
+        std::cout << "(including hidden partitions)\n";
+    }
+    std::cout << "\n";
+
+    auto volumes = engine.ListVolumesInBackup(backupPath, showHidden);
+
+    if (volumes.empty()) {
+        std::cout << "No volume metadata found in backup (or no visible volumes).\n";
+        if (!showHidden) {
+            std::cout << "Tip: use --show-hidden to include EFI, MSR, and Recovery partitions.\n";
+        }
+        return;
+    }
+
+    printf("%-4s  %-6s  %-10s  %-26s  %-8s  %s\n",
+           "Idx", "Part#", "FileSystem", "Mount/Label", "Flags", "PartitionType");
+    std::cout << std::string(80, '-') << "\n";
+
+    for (const auto& v : volumes) {
+        std::string flags;
+        if (v.isBootVolume)       flags += "Boot ";
+        if (v.isSystemVolume)     flags += "Sys ";
+        if (v.isHiddenPartition)  flags += "Hidden";
+        if (flags.empty())        flags = "-";
+
+        std::string label = v.volumeLabel.empty() ? v.mountPath : v.volumeLabel;
+        if (label.empty()) label = "(no label)";
+
+        printf("%-4d  %-6lu  %-10s  %-26s  %-8s  %s\n",
+               v.imageIndex,
+               v.partitionNumber,
+               v.fileSystem.empty() ? "?" : v.fileSystem.c_str(),
+               label.c_str(),
+               flags.c_str(),
+               v.partitionType.empty() ? "-" : v.partitionType.c_str());
+    }
+    std::cout << "\n";
 }
 
 void listDisks(RestoreEngine& engine) {
@@ -398,13 +453,34 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    // List volumes in a disk/volume backup
+    if (command == "--list-volumes" && argc >= 3) {
+        printHeader();
+        std::string backupPath = argv[2];
+        bool showHidden = false;
+        for (int i = 3; i < argc; i++) {
+            if (std::string(argv[i]) == "--show-hidden") {
+                showHidden = true;
+            }
+        }
+        ensureBackupPassword(engine, backupPath);
+        listVolumesInBackup(engine, backupPath, showHidden);
+        return 0;
+    }
+
     // Restore disk using metadata-driven layout reconstruction
     if (command == "--restore-disk" && argc >= 4) {
         printHeader();
         std::string backupPath = argv[2];
         std::string targetDisk = argv[3];
+        bool showHidden = false;
+        for (int i = 4; i < argc; i++) {
+            if (std::string(argv[i]) == "--show-hidden") {
+                showHidden = true;
+            }
+        }
         ensureBackupPassword(engine, backupPath);
-        performDiskRestore(engine, backupPath, targetDisk);
+        performDiskRestore(engine, backupPath, targetDisk, showHidden);
         return 0;
     }
 

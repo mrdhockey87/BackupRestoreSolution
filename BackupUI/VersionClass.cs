@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.23";
+        private static readonly string version_fallback_number = "6.2.4.29";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,31 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.29 Added hidden-partition support to LinuxRestore for disk & volume restores.
+ *                  BackupEngine now emits IS_HIDDEN_PARTITION in disk backup metadata, detecting
+ *                  EFI System, MSR, and Windows Recovery GPT partition types as well as volumes
+ *                  with no drive-letter mount path. LinuxRestore parses the new field and exposes
+ *                  --list-volumes [--show-hidden] to enumerate backup volumes and
+ *                  --restore-disk [--show-hidden] to optionally include hidden partitions in
+ *                  disk reconstruction. Hidden partitions are excluded by default. mdail 5/7/2026
+ * Version 6.2.4.28 After backup completes and the user closes the completion alert,
+ *                  the progress window's Hide Window button now reads Close so the
+ *                  action matches the final state of the window. mdail 5/7/2026
+ * Version 6.2.4.27 Added single-instance enforcement:
+ *                  window from opening. If the app is already running, the new launch activates
+ *                  the existing window (restoring it if minimized) and exits immediately.
+ *                  Backup operations can still run in parallel via the service. mdail 5/7/2026
+ * Version 6.2.4.26 Fixed Hyper-V locked-AVHDX tree error still appearing by walking the full exception
+ *                  chain (including AggregateException) in IsHyperVVirtualDiskSharingViolation so Task.
+ *                  Run-wrapped sharing violations are caught correctly. Caller catch now skips the raw 
+ *                  error node for sharing violations. Preserved checked tree selections across LoadDrives() 
+ *                  rebuilds so enabling hidden partitions no longer clears existing checks. mdail 5/7/2026
+ * Version 6.2.4.25 Changed locked-AVHDX handling in Hyper-V virtual disk tree expansion to show
+ *                  a warning alert instead of an error node, then collapse and reset the disk node
+ *                  so it reverts to its pre-expansion state. mdail 5/7/2026
+ * Version 6.2.4.24 Fixed raw "being used by another process" error shown in the Hyper-V virtual
+ *                  disk tree node when a running VM's AVHDX is locked. Now shows a friendly message
+ *                  directing the user to select the VM node to back up the entire virtual machine. mdail 5/7/2026
  * Version 6.2.4.23 Replaced completion MessageBox with timed BackupCompletionDialog; auto-closes
  *                  both alert and progress window after 15 minutes, user-dismiss only closes alert.
  *                  Progress bar now explicitly set to 100% on success, fixing perceived 50% hang

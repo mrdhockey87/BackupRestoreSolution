@@ -108,6 +108,10 @@ namespace SecureServerBackup.Windows
 
                         completionDialog.ShowDialog();
 
+                        // Always switch the button to "Close" once the backup is done —
+                        // hiding is only meaningful while the backup is still running.
+                        btnHideClose.Content = "Close";
+
                         // If the timer auto-closed the alert, also close the progress window.
                         // If the user dismissed the alert themselves, leave the progress window
                         // open so they can close it at their own pace.

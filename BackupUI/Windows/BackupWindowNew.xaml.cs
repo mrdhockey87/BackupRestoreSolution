@@ -692,8 +692,29 @@ namespace SecureServerBackup.Windows
         }
 
         private static bool IsHyperVVirtualDiskSharingViolation(Exception ex)
-            => ex.Message.Contains("being used by another process", StringComparison.OrdinalIgnoreCase) ||
-               ex.Message.Contains("0x80070020", StringComparison.OrdinalIgnoreCase);
+        {
+            // Walk the full exception chain so exceptions wrapped in AggregateException
+            // or re-thrown with an inner cause are still caught correctly.
+            for (Exception? e = ex; e != null; e = e.InnerException)
+            {
+                if (e.Message.Contains("being used by another process", StringComparison.OrdinalIgnoreCase) ||
+                    e.Message.Contains("0x80070020", StringComparison.OrdinalIgnoreCase) ||
+                    (e is System.IO.IOException ioEx && (uint)System.Runtime.InteropServices.Marshal.GetHRForException(ioEx) == 0x80070020))
+                    return true;
+            }
+
+            // AggregateException may flatten multiple inner exceptions
+            if (ex is AggregateException agg)
+            {
+                foreach (var inner in agg.Flatten().InnerExceptions)
+                {
+                    if (IsHyperVVirtualDiskSharingViolation(inner))
+                        return true;
+                }
+            }
+
+            return false;
+        }
 
         private static string ResolveMountableHyperVVirtualDiskPath(string virtualDiskPath)
         {
@@ -908,12 +929,28 @@ namespace SecureServerBackup.Windows
             }
             catch (Exception ex)
             {
-                virtualDiskItem.Children.Add(new DriveTreeItem
+                if (IsHyperVVirtualDiskSharingViolation(ex))
                 {
-                    Name = $"(Error mounting virtual disk: {ex.Message})",
-                    ItemType = DriveTreeItemType.Folder,
-                    Parent = virtualDiskItem
-                });
+                    // Show alert and revert the node — leave no error placeholder in the tree.
+                    virtualDiskItem.Children.Clear();
+                    virtualDiskItem.ChildrenLoaded = false;
+                    virtualDiskItem.IsExpanded = false;
+
+                    CustomDialogService.ShowWarning(
+                        "The virtual disk is locked because the VM is currently running.\n\n" +
+                        "To back up individual guest partitions the VM must be stopped first.\n\n" +
+                        "To back up the running VM, select the VM node in the tree instead.",
+                        "Virtual Disk Locked");
+                }
+                else
+                {
+                    virtualDiskItem.Children.Add(new DriveTreeItem
+                    {
+                        Name = $"(Error mounting virtual disk: {ex.Message})",
+                        ItemType = DriveTreeItemType.Folder,
+                        Parent = virtualDiskItem
+                    });
+                }
             }
         }
 
@@ -1123,6 +1160,10 @@ namespace SecureServerBackup.Windows
 
         private async Task LoadDrives()
         {
+            // Snapshot checked paths so selections survive the tree rebuild.
+            HashSet<string> checkedPaths = new(StringComparer.OrdinalIgnoreCase);
+            GetCheckedItemsRecursive_FullPaths(driveItems, checkedPaths);
+
             try
             {
                 // Show loading overlay
@@ -1141,6 +1182,10 @@ namespace SecureServerBackup.Windows
                 // Load network locations
                 await LoadNetworkDrives();
 
+                // Restore previously checked state
+                if (checkedPaths.Count > 0)
+                    RestoreCheckedPaths(driveItems, checkedPaths);
+
                 // Manually create TreeViewItems for proper hierarchical display
                 foreach (var drive in driveItems)
                 {
@@ -1158,6 +1203,26 @@ namespace SecureServerBackup.Windows
                 // Hide loading overlay
                 if (loadingOverlay != null)
                     loadingOverlay.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private static void GetCheckedItemsRecursive_FullPaths(IEnumerable<DriveTreeItem> items, HashSet<string> paths)
+        {
+            foreach (var item in items)
+            {
+                if (item.IsChecked == true && !string.IsNullOrWhiteSpace(item.FullPath))
+                    paths.Add(item.FullPath);
+                GetCheckedItemsRecursive_FullPaths(item.Children, paths);
+            }
+        }
+
+        private static void RestoreCheckedPaths(IEnumerable<DriveTreeItem> items, HashSet<string> paths)
+        {
+            foreach (var item in items)
+            {
+                if (!string.IsNullOrWhiteSpace(item.FullPath) && paths.Contains(item.FullPath))
+                    item.IsChecked = true;
+                RestoreCheckedPaths(item.Children, paths);
             }
         }
 
@@ -1298,19 +1363,38 @@ namespace SecureServerBackup.Windows
                         catch (Exception ex)
                         {
                             item.Children.Clear();
-                            item.Children.Add(new DriveTreeItem
+                            item.ChildrenLoaded = false;
+
+                            if (IsHyperVVirtualDiskSharingViolation(ex))
                             {
-                                Name = $"(Error mounting virtual disk: {ex.Message})",
-                                ItemType = DriveTreeItemType.Folder,
-                                Parent = item
-                            });
+                                // Alert already shown inside LoadHyperVVirtualDiskChildrenAsync; just revert.
+                            }
+                            else
+                            {
+                                item.Children.Add(new DriveTreeItem
+                                {
+                                    Name = $"(Error mounting virtual disk: {ex.Message})",
+                                    ItemType = DriveTreeItemType.Folder,
+                                    Parent = item
+                                });
+                            }
                         }
 
-                        item.ChildrenLoaded = true;
+                        item.ChildrenLoaded = item.Children.Count > 0;
                         treeViewItem.Items.Clear();
-                        foreach (var child in item.Children)
+
+                        if (item.Children.Count == 0)
                         {
-                            treeViewItem.Items.Add(CreateTreeViewItem(child));
+                            // Sharing-violation path: revert to collapsed/unloaded state so the
+                            // disk node looks exactly as it did before the user expanded it.
+                            treeViewItem.IsExpanded = false;
+                        }
+                        else
+                        {
+                            foreach (var child in item.Children)
+                            {
+                                treeViewItem.Items.Add(CreateTreeViewItem(child));
+                            }
                         }
                     }
                     // Load folders for volumes when expanded

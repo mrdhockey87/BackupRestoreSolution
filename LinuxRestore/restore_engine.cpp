@@ -38,6 +38,7 @@ private:
         std::string partitionType;
         bool isBootVolume = false;
         bool isSystemVolume = false;
+        bool isHiddenPartition = false;
     };
 
     ProgressCallback progressCallback;
@@ -126,6 +127,8 @@ private:
             std::string isSystem = readTag("IS_SYSTEM_VOLUME");
             plan.isBootVolume = (isBoot == "true" || isBoot == "1");
             plan.isSystemVolume = (isSystem == "true" || isSystem == "1");
+            std::string isHidden = readTag("IS_HIDDEN_PARTITION");
+            plan.isHiddenPartition = (isHidden == "true" || isHidden == "1");
             std::string imageIndex = readTag("VOLUME_INDEX");
             plan.imageIndex = imageIndex.empty() ? 0 : std::stoi(imageIndex);
             return true;
@@ -235,7 +238,8 @@ private:
 
     int RestoreDisk(const std::string& backupPath,
                     const std::string& targetDisk,
-                    ProgressCallback callback) {
+                    ProgressCallback callback,
+                    bool showHidden = true) {
         try {
             return WithPreparedBackup(backupPath, [&](const std::string& workingPath) {
                 if (!fs::exists(workingPath)) {
@@ -244,7 +248,7 @@ private:
                 }
 
                 if (fs::is_regular_file(workingPath) && IsMetadataAwareSsbBackup(workingPath)) {
-                    return RestoreDiskFromMetadata(workingPath, targetDisk, callback);
+                    return RestoreDiskFromMetadata(workingPath, targetDisk, callback, showHidden);
                 }
 
                 if (fs::is_regular_file(workingPath) && IsSsbBackup(workingPath)) {
@@ -334,9 +338,20 @@ private:
 
     int RestoreDiskFromMetadata(const std::string& ssbPath,
                                 const std::string& targetDisk,
-                                ProgressCallback callback) {
-        auto plans = GetSsbRestorePlan(ssbPath);
+                                ProgressCallback callback,
+                                bool showHidden = true) {
+        auto allPlans = GetSsbRestorePlan(ssbPath);
+        std::vector<RestoreVolumePlan> plans;
+        for (const auto& p : allPlans) {
+            if (!p.isHiddenPartition || showHidden) {
+                plans.push_back(p);
+            }
+        }
         if (plans.empty()) {
+            if (!allPlans.empty() && !showHidden) {
+                SetError("All partitions in this backup are hidden (EFI/MSR/Recovery). Use --show-hidden to restore them.");
+                return -6;
+            }
             SetError("No reconstruction metadata found in SSB backup.");
             return -1;
         }
@@ -988,6 +1003,43 @@ public:
 
         pclose(pipe);
         return disks;
+    }
+
+    // Volume summary returned by ListVolumesInBackup
+    struct VolumeSummary {
+        int imageIndex = 0;
+        unsigned long partitionNumber = 0;
+        std::string volumeLabel;
+        std::string mountPath;
+        std::string fileSystem;
+        std::string partitionType;
+        bool isBootVolume = false;
+        bool isSystemVolume = false;
+        bool isHiddenPartition = false;
+    };
+
+    // List volumes captured in an SSB backup.
+    // When showHidden is false, EFI/MSR/Recovery and no-drive-letter partitions are omitted.
+    std::vector<VolumeSummary> ListVolumesInBackup(const std::string& backupPath, bool showHidden = false) {
+        std::vector<VolumeSummary> result;
+        auto plans = GetSsbRestorePlan(backupPath);
+        for (const auto& p : plans) {
+            if (p.isHiddenPartition && !showHidden) {
+                continue;
+            }
+            VolumeSummary vs;
+            vs.imageIndex = p.imageIndex;
+            vs.partitionNumber = p.partitionNumber;
+            vs.volumeLabel = p.sourceVolumeLabel;
+            vs.mountPath = p.sourceVolumeMountPath;
+            vs.fileSystem = p.sourceFileSystem;
+            vs.partitionType = p.partitionType;
+            vs.isBootVolume = p.isBootVolume;
+            vs.isSystemVolume = p.isSystemVolume;
+            vs.isHiddenPartition = p.isHiddenPartition;
+            result.push_back(vs);
+        }
+        return result;
     }
 
     // Scan for backup files

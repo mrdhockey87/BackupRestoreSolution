@@ -70,6 +70,7 @@ namespace {
         std::wstring partitionType;
         bool isBootVolume = false;
         bool isSystemVolume = false;
+        bool isHiddenPartition = false;
         int volumeIndex = 0;
     };
 
@@ -387,6 +388,7 @@ namespace {
         fragment += L"<PARTITION_TYPE>" + SanitizeXmlName(metadata.partitionType) + L"</PARTITION_TYPE>";
         fragment += L"<IS_BOOT_VOLUME>" + std::wstring(boolText(metadata.isBootVolume)) + L"</IS_BOOT_VOLUME>";
         fragment += L"<IS_SYSTEM_VOLUME>" + std::wstring(boolText(metadata.isSystemVolume)) + L"</IS_SYSTEM_VOLUME>";
+        fragment += L"<IS_HIDDEN_PARTITION>" + std::wstring(boolText(metadata.isHiddenPartition)) + L"</IS_HIDDEN_PARTITION>";
         fragment += L"<VOLUME_INDEX>" + std::to_wstring(metadata.volumeIndex) + L"</VOLUME_INDEX>";
         fragment += L"</BACKUPRESTOREMETADATA>";
         return fragment;
@@ -1719,6 +1721,26 @@ extern "C" {
                                 metadata.isBootVolume = metadata.isSystemVolume ||
                                     GetFileAttributesW((metadata.sourceVolumeMountPath + L"bootmgr").c_str()) != INVALID_FILE_ATTRIBUTES ||
                                     GetFileAttributesW((metadata.sourceVolumeMountPath + L"Boot\\BCD").c_str()) != INVALID_FILE_ATTRIBUTES;
+
+                                // Detect hidden partitions: no drive-letter mount path, or well-known
+                                // GPT types (EFI System, MSR, Windows Recovery Environment).
+                                bool noMountPath = metadata.sourceVolumeMountPath == metadata.sourceVolumeGuidPath;
+                                bool hiddenGptType = false;
+                                if (!metadata.partitionType.empty()) {
+                                    const wchar_t* hiddenGuids[] = {
+                                        L"GPT:C12A7328-F81F-11D2-BA4B-00A0C93EC93B", // EFI System
+                                        L"GPT:E3C9E316-0B5C-4DB8-817D-F92DF00215AE", // MSR
+                                        L"GPT:DE94BBA4-06D1-4D40-A16A-BFD50179D6AC", // Windows Recovery
+                                    };
+                                    std::wstring ptUpper = metadata.partitionType;
+                                    std::transform(ptUpper.begin(), ptUpper.end(), ptUpper.begin(), ::towupper);
+                                    for (const auto* g : hiddenGuids) {
+                                        std::wstring gUpper = g;
+                                        std::transform(gUpper.begin(), gUpper.end(), gUpper.begin(), ::towupper);
+                                        if (ptUpper == gUpper) { hiddenGptType = true; break; }
+                                    }
+                                }
+                                metadata.isHiddenPartition = noMountPath || hiddenGptType;
 
                                 diskVolumeMetadata.push_back(metadata);
                                 std::wstring volMsg = L"Found volume on Disk " + std::to_wstring(diskNumber);

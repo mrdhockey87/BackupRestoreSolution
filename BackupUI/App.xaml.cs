@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -9,8 +11,35 @@ namespace SecureServerBackup
 {
     public partial class App : Application
     {
+        // Held for the lifetime of the process; released automatically on exit.
+        private static Mutex? _singleInstanceMutex;
+
+        private const string MutexName = "SecureServerBackup_SingleInstance_Mutex";
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+
+        private const int SW_RESTORE = 9;
+
         protected override async void OnStartup(StartupEventArgs e)
         {
+            // Single-instance guard: allow only one main window at a time.
+            _singleInstanceMutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
+            if (!createdNew)
+            {
+                // Another instance is already running — activate its window and exit.
+                ActivateExistingInstance();
+                _singleInstanceMutex.Dispose();
+                Shutdown();
+                return;
+            }
+
             // Set Normal process priority to prevent Efficiency mode for UI operations
             // Only backup operations should run at lower priority
             try
@@ -56,6 +85,42 @@ namespace SecureServerBackup
             await ShowSplashScreenAndInitialize(e);
 
             base.OnStartup(e);
+        }
+
+        /// <summary>
+        /// Finds the already-running instance by executable name and brings its
+        /// main window to the foreground, restoring it if minimized.
+        /// </summary>
+        private static void ActivateExistingInstance()
+        {
+            try
+            {
+                string? exeName = Path.GetFileNameWithoutExtension(
+                    Process.GetCurrentProcess().MainModule?.FileName);
+
+                if (string.IsNullOrEmpty(exeName))
+                    return;
+
+                foreach (Process proc in Process.GetProcessesByName(exeName))
+                {
+                    if (proc.Id == Environment.ProcessId)
+                        continue;
+
+                    IntPtr hWnd = proc.MainWindowHandle;
+                    if (hWnd == IntPtr.Zero)
+                        continue;
+
+                    if (IsIconic(hWnd))
+                        ShowWindow(hWnd, SW_RESTORE);
+
+                    SetForegroundWindow(hWnd);
+                    break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[App.ActivateExistingInstance] {ex.Message}");
+            }
         }
 
         /// <summary>
