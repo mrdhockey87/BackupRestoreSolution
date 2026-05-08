@@ -813,6 +813,9 @@ public:
             std::string fsType;
             std::string mountPoint;
             bool isBootDisk = false;
+            // Partitions with no mount point and no common fs (EFI, swap, etc.)
+            // are treated as hidden by default, matching Windows behavior.
+            bool isHiddenPartition = false;
         };
         std::vector<PartitionInfo> partitions;
     };
@@ -862,6 +865,16 @@ public:
                 p.fsType = fstype;
                 p.mountPoint = mount;
                 p.isBootDisk = current->isBootDisk;
+                // Flag partitions that have no mount point and no user-visible filesystem
+                // (EFI System Partition, Microsoft Reserved, swap without mount, etc.)
+                // so the UI can hide them by default, mirroring Windows behavior.
+                bool hasMount = !p.mountPoint.empty();
+                bool isCommonFs = (!p.fsType.empty() &&
+                    p.fsType != "swap" &&
+                    p.fsType != "vfat" &&
+                    p.fsType.find("fat") == std::string::npos &&
+                    p.fsType != "unknown");
+                p.isHiddenPartition = (!hasMount && !isCommonFs);
                 current->partitions.push_back(p);
             }
         }

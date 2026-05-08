@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.34";
+        private static readonly string version_fallback_number = "6.2.4.43";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,62 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.43 Fixed Show Hidden Partitions on the restore target tree: TargetAddHiddenPartition
+ *                  was filtering by type name keywords (EFI/Recovery/Reserved) that don't match real
+ *                  WMI Type strings like "GPT: System" or "GPT: Basic Data", so no hidden partitions
+ *                  were ever shown. Removed the filter — every partition with no drive letter is hidden
+ *                  by definition and should appear when the toggle is on. Added readable type labels
+ *                  ("EFI System", "MSR", "Recovery", "Data (no letter)"). mdail 5/8/2026
+ * Version 6.2.4.42 LinuxRestore GTK and ncurses TUI updated to match Windows RestoreWindowNew
+ *                  restore-target behavior: target tree always shows all disks including boot disk
+ *                  (greyed/insensitive); boot disk cannot be selected; disk and partition selectability
+ *                  mirrors Windows (both Disk and Volume restore kinds can select whole disks);
+ *                  GTK Step 3 redesigned as two-panel layout (options left, full-height target tree
+ *                  right) with toolbar: Refresh, Expand All, Collapse All, Show Hidden Partitions.
+ *                  ncurses TUI Step 3A shows inline tree with boot disks dimmed, H toggles hidden
+ *                  partitions, R refreshes list; Step 3B presents radio-style restore mode options.
+ *                  restore_engine.cpp PartitionInfo gains isHiddenPartition flag detected from
+ *                  lsblk output (no mount point and no common filesystem). mdail 5/8/2026
+ * Version 6.2.4.41 RestoreWindowNew: disk nodes in the restore target tree are now selectable for
+ *                  both Disk and Volume restore kinds, allowing the user to pick an entire disk as the
+ *                  restore destination (the engine repartitions it to match the backup layout). Disks
+ *                  were previously always greyed because diskMode was only set for Disk kind and because
+ *                  the tree was built before UpdateSelectedRestoreTargetKind ran. Added
+ *                  _lastBuiltTargetKind tracking so the tree rebuilds whenever selectability changes
+ *                  between disk-enabled and non-disk-enabled modes. mdail 5/8/2026
+ * Version 6.2.4.40
+ *                  fixed false [Boot] label on data volumes sharing the boot disk; fixed boot-disk
+ *                  detection to walk SystemRoot drive letter -> LogicalDisk -> DiskPartition ->
+ *                  DiskDrive instead of unreliable BootPartition=TRUE flag. mdail 5/8/2026
+ * Version 6.2.4.39 RestoreWindowNew target tree now uses 3-layer WMI/DriveInfo fallback enumeration
+ *                  matching the New Backup window — Layer 1: ASSOCIATORS query, Layer 2: DiskIndex query,
+ *                  Layer 3: DriveInfo fixed-drive scan. Resolves blank tree when WMI ASSOCIATORS escape
+ *                  was broken. Hyper-V VMs still enumerated via PowerShell. mdail 5/8/2026
+ * Version 6.2.4.38 RestoreWindowNew restore target tree now uses CheckBox controls identical to the
+ *                  backup source tree in New/Edit Backup. Disks expand to show volumes; single-select
+ *                  enforced. Tree is always visible and enabled for all restore types (disk, volume,
+ *                  file/folder, HyperV virtual disk); only Hyper-V VM clone restores hide it.
+ *                  Help text updates to guide selection by restore type. mdail 5/8/2026
+ * Version 6.2.4.37
+ *                  the restore target tree now fills the full right-side height. Disk/volume backup
+ *                  classification fixed: detection now checks _diskRestorePlan metadata first, then
+ *                  scans all backup items, then checks the file path for disk/volume keywords so
+ *                  disk and volume backups are never misclassified as file/folder restores. mdail 5/8/2026
+ * Version 6.2.4.36
+ *                  right side now fills the column with disks, volumes, and Hyper-V VMs loaded
+ *                  automatically on open. Bottom toolbar gains Refresh, Expand All, Collapse All,
+ *                  and Show Hidden Partitions controls. Boot/system disk stays greyed and
+ *                  unselectable. Selecting a running Hyper-V VM prompts for confirmation and
+ *                  forces a Stop-VM shutdown before restore; cancelling unchecks the VM.
+ *                  The target tree is disabled for file/folder backups (Original/Alternate
+ *                  Location controls remain active). Hyper-V clone restores hide the tree and
+ *                  show a new Restore Destination panel: Use Hyper-V default storage location or
+ *                  Alternate location with separate browse fields for VM config folder and disk
+ *                  data folder. mdail 5/8/2026
+ * Version 6.2.4.35 RestoreWindowNew redesigned with two-column layout: restore options on the
+ *                  left and a dedicated restore target tree on the right, always visible, mirroring
+ *                  the New/Edit Backup source tree layout. The target tree auto-loads drives on window
+ *                  open and shows all disks/volumes with boot disk greyed and unselectable. mdail 5/8/2026
  * Version 6.2.4.34 Linux restore UIs updated to match Windows restore-target-tree behavior:
  *                  GTK GUI Step 3 now always shows the full disk/partition target tree at the top,
  *                  loads automatically on entry, and auto-selects disk-target mode when the user

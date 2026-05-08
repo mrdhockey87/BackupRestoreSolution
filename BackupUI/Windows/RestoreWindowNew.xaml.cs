@@ -42,6 +42,9 @@ namespace SecureServerBackup.Windows
 
         // Restore target drive tree items
         private readonly ObservableCollection<DriveTreeItem> _restoreTargetItems = new();
+        private bool _showHiddenPartitionsTarget;
+        private bool _isLoadingTargets;
+        private RestoreTargetKind _lastBuiltTargetKind = RestoreTargetKind.FileOrFolder;
 
         // Selected volumes/disk-group from the restore-volume selection dialog
         private VolumeInfo? _selectedRestoreVolume;
@@ -304,6 +307,9 @@ namespace SecureServerBackup.Windows
 
         private async void RestoreWindowNew_Loaded(object sender, RoutedEventArgs e)
         {
+            // Always pre-load the restore target tree so it is ready when the user selects a backup
+            _ = LoadRestoreTargetDrivesAsync();
+
             if (_preloadedBackup == null)
             {
                 return;
@@ -768,35 +774,45 @@ namespace SecureServerBackup.Windows
             bool isHyperVVm = _restoreTargetKind == RestoreTargetKind.HyperVVm;
             bool isHyperVVirtualDisk = _restoreTargetKind == RestoreTargetKind.HyperVVirtualDisk;
 
-            // The drive tree is shown for every restore kind except Hyper-V VM and Hyper-V virtual disk
-            // (those have their own dedicated destination panels).
-            bool showTree = !isHyperVVm && !isHyperVVirtualDisk;
-
-            // File/folder restores also keep the original/alternate location choice visible
-            // so the user can still restore to the original path or type a custom folder path.
+            // File/folder restores show the original/alternate location choice.
             pnlLocationChoice.Visibility = isFileFolder ? Visibility.Visible : Visibility.Collapsed;
-            pnlDriveTargetTree.Visibility = showTree ? Visibility.Visible : Visibility.Collapsed;
 
-            // For Hyper-V VM restores the sub-options panel handles destination; hide generic pickers
-            if (isHyperVVm)
+            if (pnlHyperVCloneDestination != null)
+                pnlHyperVCloneDestination.Visibility = isHyperVVm ? Visibility.Visible : Visibility.Collapsed;
+
+            // The right-side target tree:
+            //   - Always visible and enabled (disk, volume, file/folder, and HyperV virtual disk restores all use it)
+            //   - Hidden only for Hyper-V VM clone restores where the tree is irrelevant
+            bool showTree = !isHyperVVm;
+            if (grpRestoreTarget != null)
             {
-                pnlLocationChoice.Visibility = Visibility.Collapsed;
-                pnlDriveTargetTree.Visibility = Visibility.Collapsed;
+                grpRestoreTarget.Visibility = showTree ? Visibility.Visible : Visibility.Collapsed;
+                grpRestoreTarget.IsEnabled  = showTree;
             }
 
-            // Update the tree help text and trigger a load when first shown
-            if (showTree && pnlDriveTargetTree.Visibility == Visibility.Visible)
+            // Update help text in the right-side panel
+            if (showTree && txtDriveTreeHelp != null)
             {
-                txtDriveTreeHelp.Text = isDisk
-                    ? "Choose the target disk to restore onto. The boot/system disk is shown but cannot be selected."
-                    : isFileFolder
-                        ? "Select a target drive or volume to restore files to. Clicking a drive sets it as the Alternate Location above. The boot disk is shown but cannot be selected."
-                        : "Choose the target volume to restore onto. Boot/system volumes cannot be selected.";
-
-                // Only reload when items are not already present
-                if (treeViewRestoreTarget.Items.Count == 0)
-                    _ = LoadRestoreTargetDrivesAsync();
+                txtDriveTreeHelp.Text = isFileFolder
+                    ? "Choose the target drive or volume where files will be restored. Selecting a volume will auto-fill the Alternate Location path."
+                    : isDisk
+                        ? "Choose the target disk to restore onto. You may select a disk (full repartition) or an individual volume. The boot/system disk cannot be selected."
+                        : isHyperVVirtualDisk
+                            ? "Choose the target volume for the Hyper-V virtual disk restore."
+                            : "Choose the target disk or volume to restore onto. Selecting a disk will repartition it to accept the restored volume. The boot/system disk cannot be selected.";
             }
+
+            // Auto-load drives on first show; also rebuild when the restore kind changes in a way
+            // that affects which nodes are selectable (disk mode on vs off).
+            bool needsDiskSelectability  = _restoreTargetKind == RestoreTargetKind.Disk ||
+                                           _restoreTargetKind == RestoreTargetKind.Volume;
+            bool hadDiskSelectability    = _lastBuiltTargetKind == RestoreTargetKind.Disk ||
+                                           _lastBuiltTargetKind == RestoreTargetKind.Volume;
+            bool selectabilityChanged    = needsDiskSelectability != hadDiskSelectability;
+
+            if (showTree && treeViewRestoreTarget != null &&
+                (treeViewRestoreTarget.Items.Count == 0 || selectabilityChanged))
+                _ = LoadRestoreTargetDrivesAsync();
         }
 
         private void RegularHyperVRestoreOption_Changed(object sender, RoutedEventArgs e)
@@ -1495,7 +1511,7 @@ namespace SecureServerBackup.Windows
 
             if (_restoreTargetKind == RestoreTargetKind.Volume && string.IsNullOrWhiteSpace(_selectedTargetPath))
             {
-                MessageBox.Show("Please select the target volume to restore to.", "Validation Error",
+                MessageBox.Show("Please select the target disk or volume to restore to.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
@@ -1548,14 +1564,59 @@ namespace SecureServerBackup.Windows
                 return;
             }
 
-            var selectedItemText = lstBackupItems.SelectedItem?.ToString() ?? string.Empty;
-            if (selectedItemText.Contains("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase))
+            // Use disk restore plan metadata as the strongest classification signal
+            if (_diskRestorePlan?.HasMetadata == true)
+            {
+                _restoreTargetKind = _diskRestorePlan.Volumes.Count > 1
+                    ? RestoreTargetKind.Disk
+                    : RestoreTargetKind.Volume;
+                UpdateDestinationHelpText();
+                UpdateLocationPanelVisibility();
+                return;
+            }
+
+            // Scan all backup items (not just the selected one) for disk/volume path patterns
+            bool hasDisk = false;
+            bool hasVolume = false;
+            foreach (var rawItem in lstBackupItems.Items)
+            {
+                string itemText = rawItem?.ToString() ?? string.Empty;
+                if (itemText.Contains("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasDisk = true;
+                    break;
+                }
+
+                if (itemText.StartsWith("\\?\\", StringComparison.OrdinalIgnoreCase) ||
+                    itemText.EndsWith(":\\", StringComparison.OrdinalIgnoreCase) ||
+                    itemText.EndsWith(":", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasVolume = true;
+                }
+            }
+
+            // Also check the restore-point file path for naming conventions
+            if (!hasDisk && !hasVolume)
+            {
+                string filePath = selectedPoint.FilePath ?? string.Empty;
+                if (filePath.Contains("disk", StringComparison.OrdinalIgnoreCase) ||
+                    filePath.Contains("drive", StringComparison.OrdinalIgnoreCase) ||
+                    filePath.Contains("physical", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasDisk = true;
+                }
+                else if (filePath.Contains("volume", StringComparison.OrdinalIgnoreCase) ||
+                         filePath.Contains("partition", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasVolume = true;
+                }
+            }
+
+            if (hasDisk)
             {
                 _restoreTargetKind = RestoreTargetKind.Disk;
             }
-            else if (selectedItemText.StartsWith("\\?\\", StringComparison.OrdinalIgnoreCase) ||
-                     selectedItemText.EndsWith(":\\", StringComparison.OrdinalIgnoreCase) ||
-                     selectedItemText.EndsWith(":", StringComparison.OrdinalIgnoreCase))
+            else if (hasVolume)
             {
                 _restoreTargetKind = RestoreTargetKind.Volume;
             }
@@ -1625,7 +1686,25 @@ namespace SecureServerBackup.Windows
             }
             else
             {
-                string restoreDir = txtHyperVRestoreDirectory.Text.Trim();
+                // Directory-mode: prefer the new clone destination panel fields, then fall back
+                // to the existing txtHyperVRestoreDirectory field (from the HyperV VM options pane).
+                string restoreDir;
+                if (rbHyperVCloneAlternate?.IsChecked == true
+                    && !string.IsNullOrWhiteSpace(txtHyperVCloneVmFolder?.Text))
+                {
+                    restoreDir = txtHyperVCloneVmFolder.Text.Trim();
+                }
+                else if (rbHyperVCloneDefault?.IsChecked == true || string.IsNullOrWhiteSpace(txtHyperVRestoreDirectory?.Text))
+                {
+                    restoreDir = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments),
+                        "Hyper-V", "Virtual Machines");
+                }
+                else
+                {
+                    restoreDir = txtHyperVRestoreDirectory.Text.Trim();
+                }
+
                 if (string.IsNullOrWhiteSpace(restoreDir))
                     throw new InvalidOperationException("No restore directory was specified.");
 
@@ -1892,160 +1971,547 @@ namespace SecureServerBackup.Windows
             await LoadRestoreTargetDrivesAsync();
         }
 
+        private void ExpandAllTarget_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (TreeViewItem tvi in treeViewRestoreTarget.Items)
+                SetTreeViewItemExpanded(tvi, true);
+        }
+
+        private void CollapseAllTarget_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (TreeViewItem tvi in treeViewRestoreTarget.Items)
+                SetTreeViewItemExpanded(tvi, false);
+        }
+
+        private static void SetTreeViewItemExpanded(TreeViewItem tvi, bool expanded)
+        {
+            tvi.IsExpanded = expanded;
+            foreach (TreeViewItem child in tvi.Items.OfType<TreeViewItem>())
+                SetTreeViewItemExpanded(child, expanded);
+        }
+
+        private async void ShowHiddenPartitionsTarget_Click(object sender, RoutedEventArgs e)
+        {
+            _showHiddenPartitionsTarget = chkShowHiddenPartitionsTarget.IsChecked == true;
+            await LoadRestoreTargetDrivesAsync();
+        }
+
+        private void HyperVCloneDestination_Changed(object sender, RoutedEventArgs e)
+        {
+            if (pnlHyperVCloneAlternate == null)
+                return;
+            pnlHyperVCloneAlternate.Visibility = rbHyperVCloneAlternate?.IsChecked == true
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        private void BrowseHyperVCloneVmFolder_Click(object sender, RoutedEventArgs e)
+        {
+            using var dlg = new FolderBrowserDialog { Description = "Select virtual machine config folder", ShowNewFolderButton = true };
+            if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                txtHyperVCloneVmFolder.Text = dlg.SelectedPath;
+        }
+
+        private void BrowseHyperVCloneDiskFolder_Click(object sender, RoutedEventArgs e)
+        {
+            using var dlg = new FolderBrowserDialog { Description = "Select virtual disk data folder", ShowNewFolderButton = true };
+            if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                txtHyperVCloneDiskFolder.Text = dlg.SelectedPath;
+        }
+
         /// <summary>
-        /// Populates the restore-target tree with physical disks and their volumes.
+        /// Populates the restore-target tree with physical disks, their volumes, and Hyper-V VMs.
         /// Boot/system disk items are shown greyed-out and unselectable.
         /// </summary>
         private async Task LoadRestoreTargetDrivesAsync()
         {
+            if (_isLoadingTargets)
+                return;
+
+            _isLoadingTargets = true;
             loadingTargetOverlay.Visibility = Visibility.Visible;
             treeViewRestoreTarget.Items.Clear();
             _restoreTargetItems.Clear();
             _selectedTargetPath = null;
             _selectedTargetDiskNumber = null;
             txtSelectedTargetLabel.Text = "No target selected";
+            btnRestore.IsEnabled = false;
 
             try
             {
                 var protectedIndexes = GetProtectedDiskIndexes();
-                bool diskMode = _restoreTargetKind == RestoreTargetKind.Disk;
+                // Disk nodes are selectable for both Disk and Volume restore kinds (volume restore
+                // to an entire disk repartitions the target disk to accept the restored volume).
+                bool diskMode = _restoreTargetKind == RestoreTargetKind.Disk ||
+                                _restoreTargetKind == RestoreTargetKind.Volume;
+                bool showHidden = _showHiddenPartitionsTarget;
 
                 await Task.Run(() =>
                 {
                     try
                     {
-                        using var diskSearcher = new ManagementObjectSearcher(
-                            "SELECT Index, Model, Size FROM Win32_DiskDrive ORDER BY Index");
-
-                        foreach (ManagementObject disk in diskSearcher.Get())
+                        // ── Physical disks ──────────────────────────────────────────────────
+                        ManagementObjectSearcher diskSearcher;
+                        try
                         {
-                            if (!int.TryParse(disk["Index"]?.ToString(), out int diskIdx))
-                                continue;
+                            diskSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_DiskDrive ORDER BY Index");
+                            _ = diskSearcher.Get().Count; // test
+                        }
+                        catch
+                        {
+                            diskSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_DiskDrive");
+                        }
 
-                            bool isProtected = protectedIndexes.Contains(diskIdx);
-                            long diskBytes = long.TryParse(disk["Size"]?.ToString(), out long db) ? db : 0;
-                            double diskGb = diskBytes / (1024.0 * 1024.0 * 1024.0);
-                            string model = disk["Model"]?.ToString()?.Trim() ?? $"Disk {diskIdx}";
-                            string diskLabel = $"Disk {diskIdx}:  {model}  ({diskGb:F1} GB){(isProtected ? "  [Boot — cannot restore]" : string.Empty)}";
-
-                            var diskItem = new DriveTreeItem
+                        using (diskSearcher)
+                        {
+                            foreach (ManagementObject disk in diskSearcher.Get())
                             {
-                                Name = diskLabel,
-                                FullPath = $"\\\\.\\PHYSICALDRIVE{diskIdx}",
-                                ItemType = DriveTreeItemType.Disk,
-                                PartitionNumber = diskIdx,
-                                Size = diskBytes,
-                                IsBootVolume = isProtected
-                            };
-
-                            // Load child volumes via WMI association
-                            using var partSearcher = new ManagementObjectSearcher(
-                                $"ASSOCIATORS OF {{Win32_DiskDrive.DeviceID='\\\\\\\\.\\\\PHYSICALDRIVE{diskIdx}'}} " +
-                                "WHERE AssocClass=Win32_DiskDriveToDiskPartition");
-
-                            foreach (ManagementObject partition in partSearcher.Get())
-                            {
-                                using var logicalSearcher = new ManagementObjectSearcher(
-                                    $"ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{partition["DeviceID"]}'}} " +
-                                    "WHERE AssocClass=Win32_LogicalDiskToPartition");
-
-                                foreach (ManagementObject logical in logicalSearcher.Get())
+                                try
                                 {
-                                    string? driveLetter = logical["DeviceID"]?.ToString();
-                                    if (string.IsNullOrWhiteSpace(driveLetter))
+                                    if (!int.TryParse(disk["Index"]?.ToString(), out int diskIdx))
                                         continue;
 
-                                    long volBytes = long.TryParse(logical["Size"]?.ToString(), out long vb) ? vb : 0;
-                                    double volGb = volBytes / (1024.0 * 1024.0 * 1024.0);
-                                    string volLabel = logical["VolumeName"]?.ToString()?.Trim() ?? "Local Disk";
-                                    string volDisplay = $"{driveLetter}\\  ({volLabel})  {volGb:F1} GB{(isProtected ? "  [Boot]" : string.Empty)}";
+                                    bool isProtected = protectedIndexes.Contains(diskIdx);
+                                    string model = disk["Model"]?.ToString()?.Trim() ?? $"Disk {diskIdx}";
+                                    long diskBytes = 0;
+                                    try { diskBytes = Convert.ToInt64(disk["Size"] ?? 0); } catch { }
+                                    double diskGb = diskBytes / (1024.0 * 1024.0 * 1024.0);
 
-                                    diskItem.Children.Add(new DriveTreeItem
+                                    string diskLabel = $"Disk {diskIdx} — {model}  ({diskGb:F1} GB)" +
+                                        (isProtected ? "  [Boot — cannot restore]" : string.Empty);
+
+                                    var diskItem = new DriveTreeItem
                                     {
-                                        Name = volDisplay,
-                                        FullPath = driveLetter + "\\",
-                                        ItemType = DriveTreeItemType.Volume,
-                                        Size = volBytes,
+                                        Name = diskLabel,
+                                        FullPath = $"\\\\.\\PHYSICALDRIVE{diskIdx}",
+                                        ItemType = DriveTreeItemType.Disk,
+                                        PartitionNumber = diskIdx,
+                                        Size = diskBytes,
                                         IsBootVolume = isProtected,
-                                        Parent = diskItem,
-                                        PartitionNumber = diskIdx
+                                        IsExpanded = true
+                                    };
+
+                                    // Layer 1: ASSOCIATORS via DeviceID
+                                    bool volumesFound = TargetTryLoadVolumesViaWMI(diskItem, diskIdx, isProtected, showHidden);
+
+                                    // Layer 2: DiskIndex query fallback
+                                    if (!volumesFound)
+                                        volumesFound = TargetTryLoadVolumesViaAltWMI(diskItem, diskIdx, isProtected, showHidden);
+
+                                    // Layer 3: DriveInfo fallback — attach all fixed drives to disk 0
+                                    if (!volumesFound)
+                                        TargetLoadVolumesFallback(diskItem, diskIdx);
+
+                                    if (diskItem.Children.Count == 0)
+                                        diskItem.Children.Add(new DriveTreeItem
+                                        {
+                                            Name = "(No accessible volumes)",
+                                            ItemType = DriveTreeItemType.Volume,
+                                            Parent = diskItem
+                                        });
+
+                                    Dispatcher.Invoke(() =>
+                                    {
+                                        _restoreTargetItems.Add(diskItem);
+                                        treeViewRestoreTarget.Items.Add(
+                                            CreateRestoreTargetTreeItem(diskItem, diskMode, isProtected));
                                     });
                                 }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine($"Target tree — error processing disk: {ex.Message}");
+                                }
+                            }
+                        }
+
+                        // ── Hyper-V VMs (PowerShell CSV) ───────────────────────────────────
+                        string hvOutput = string.Empty;
+                        try
+                        {
+                            var ps = Process.Start(new ProcessStartInfo
+                            {
+                                FileName = "powershell.exe",
+                                Arguments = "-NoProfile -ExecutionPolicy Bypass -Command " +
+                                    "\"Get-VM | Select-Object -Property Name,State | ConvertTo-Csv -NoTypeInformation\"",
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                CreateNoWindow = true
+                            });
+                            hvOutput = ps?.StandardOutput.ReadToEnd() ?? string.Empty;
+                            ps?.WaitForExit();
+                        }
+                        catch { }
+
+                        if (!string.IsNullOrWhiteSpace(hvOutput))
+                        {
+                            var hvRoot = new DriveTreeItem
+                            {
+                                Name = "Hyper-V Virtual Machines",
+                                FullPath = string.Empty,
+                                ItemType = DriveTreeItemType.HyperVSystem,
+                                IsExpanded = true
+                            };
+
+                            foreach (string csvLine in hvOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries).Skip(1))
+                            {
+                                var parts = csvLine.Trim().Trim('"').Split(new[] { "\",\"" }, StringSplitOptions.None);
+                                if (parts.Length < 2) continue;
+
+                                string vmName  = parts[0].Trim().Trim('"');
+                                string vmState = parts[1].Trim().Trim('"');
+                                if (string.IsNullOrWhiteSpace(vmName)) continue;
+
+                                bool isRunning = string.Equals(vmState, "Running", StringComparison.OrdinalIgnoreCase);
+
+                                hvRoot.Children.Add(new DriveTreeItem
+                                {
+                                    Name = isRunning ? $"{vmName}  (Running)" : vmName,
+                                    FullPath = vmName,
+                                    ItemType = DriveTreeItemType.HyperVSystem,
+                                    Parent = hvRoot
+                                });
                             }
 
-                            Dispatcher.Invoke(() =>
+                            if (hvRoot.Children.Count > 0)
                             {
-                                _restoreTargetItems.Add(diskItem);
-                                var tvi = CreateRestoreTargetTreeItem(diskItem, diskMode, isProtected);
-                                treeViewRestoreTarget.Items.Add(tvi);
-                            });
+                                Dispatcher.Invoke(() =>
+                                {
+                                    _restoreTargetItems.Add(hvRoot);
+                                    treeViewRestoreTarget.Items.Add(
+                                        CreateRestoreTargetTreeItem(hvRoot, diskMode, false));
+                                });
+                            }
                         }
                     }
                     catch (Exception ex)
                     {
                         Dispatcher.Invoke(() =>
-                            Debug.WriteLine($"LoadRestoreTargetDrivesAsync inner: {ex.Message}"));
+                            CustomDialogService.ShowError(
+                                $"Error loading restore targets: {ex.Message}", "Error"));
                     }
                 });
             }
             finally
             {
+                _isLoadingTargets = false;
+                _lastBuiltTargetKind = _restoreTargetKind;
                 loadingTargetOverlay.Visibility = Visibility.Collapsed;
             }
         }
 
+        // ── Volume-loading helpers for the restore target tree
+
+        /// <summary>Layer 1: ASSOCIATORS query via DeviceID.</summary>
+        private bool TargetTryLoadVolumesViaWMI(DriveTreeItem diskItem, int diskIdx, bool isProtected, bool showHidden)
+        {
+            bool found = false;
+            try
+            {
+                string deviceId = diskItem.FullPath.Replace("\\", "\\\\");
+                using var partSearcher = new ManagementObjectSearcher(
+                    $"ASSOCIATORS OF {{Win32_DiskDrive.DeviceID='{deviceId}'}} WHERE AssocClass=Win32_DiskDriveToDiskPartition");
+
+                foreach (ManagementObject partition in partSearcher.Get())
+                {
+                    string? partId = partition["DeviceID"]?.ToString();
+                    if (string.IsNullOrWhiteSpace(partId)) continue;
+
+                    using var logSearcher = new ManagementObjectSearcher(
+                        $"ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{partId}'}} WHERE AssocClass=Win32_LogicalDiskToPartition");
+
+                    bool hasLogical = false;
+                    foreach (ManagementObject logical in logSearcher.Get())
+                    {
+                        hasLogical = true;
+                        string? dl = logical["DeviceID"]?.ToString();
+                        if (string.IsNullOrWhiteSpace(dl)) continue;
+                        if (TargetAddVolume(diskItem, dl, diskIdx)) found = true;
+                    }
+
+                    if (!hasLogical && showHidden)
+                        found |= TargetAddHiddenPartition(diskItem, partition, diskIdx, isProtected);
+                }
+            }
+            catch (Exception ex) { Debug.WriteLine($"TargetTryLoadVolumesViaWMI: {ex.Message}"); }
+            return found;
+        }
+
+        /// <summary>Layer 2: DiskIndex partition query.</summary>
+        private bool TargetTryLoadVolumesViaAltWMI(DriveTreeItem diskItem, int diskIdx, bool isProtected, bool showHidden)
+        {
+            bool found = false;
+            try
+            {
+                using var partSearcher = new ManagementObjectSearcher(
+                    $"SELECT * FROM Win32_DiskPartition WHERE DiskIndex = {diskIdx}");
+
+                foreach (ManagementObject partition in partSearcher.Get())
+                {
+                    string? partId = partition["DeviceID"]?.ToString();
+                    using var logSearcher = new ManagementObjectSearcher(
+                        $"ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{partId}'}} WHERE AssocClass=Win32_LogicalDiskToPartition");
+
+                    bool hasLogical = false;
+                    foreach (ManagementObject logical in logSearcher.Get())
+                    {
+                        hasLogical = true;
+                        string? dl = logical["DeviceID"]?.ToString();
+                        if (string.IsNullOrWhiteSpace(dl)) continue;
+                        if (TargetAddVolume(diskItem, dl, diskIdx)) found = true;
+                    }
+
+                    if (!hasLogical && showHidden)
+                        found |= TargetAddHiddenPartition(diskItem, partition, diskIdx, isProtected);
+                }
+            }
+            catch (Exception ex) { Debug.WriteLine($"TargetTryLoadVolumesViaAltWMI: {ex.Message}"); }
+            return found;
+        }
+
+        /// <summary>Layer 3: DriveInfo fallback — attaches all fixed drives to disk 0.</summary>
+        private static void TargetLoadVolumesFallback(DriveTreeItem diskItem, int diskIdx)
+        {
+            if (diskIdx != 0) return;
+            foreach (var drive in DriveInfo.GetDrives())
+            {
+                try
+                {
+                    if (!drive.IsReady || drive.DriveType != DriveType.Fixed) continue;
+                    TargetAddVolumeFromDriveInfo(diskItem, drive, diskIdx);
+                }
+                catch { }
+            }
+        }
+
+        private static bool TargetAddVolume(DriveTreeItem diskItem, string driveLetter, int diskIdx)
+        {
+            try
+            {
+                var di = new DriveInfo(driveLetter);
+                if (!di.IsReady) return false;
+                return TargetAddVolumeFromDriveInfo(diskItem, di, diskIdx);
+            }
+            catch { return false; }
+        }
+
+        private static bool TargetAddVolumeFromDriveInfo(DriveTreeItem diskItem, DriveInfo di, int diskIdx)
+        {
+            string systemRoot = Path.GetPathRoot(
+                Environment.GetFolderPath(Environment.SpecialFolder.System)) ?? string.Empty;
+            // Only the volume that actually contains the running OS is the boot volume.
+            // isProtected (disk-level) is used to grey the disk node; it must NOT propagate the
+            // [Boot] label to every data volume that happens to share the same physical disk.
+            bool isBootVol = di.Name.TrimEnd('\\').Equals(
+                systemRoot.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+
+            string label = string.IsNullOrEmpty(di.VolumeLabel) ? "Local Disk" : di.VolumeLabel;
+            double gb = di.TotalSize / (1024.0 * 1024.0 * 1024.0);
+            string name = $"{di.Name.TrimEnd('\\')}  ({label})  {gb:F1} GB" +
+                (isBootVol ? "  [Boot]" : string.Empty);
+
+            diskItem.Children.Add(new DriveTreeItem
+            {
+                Name = name,
+                FullPath = di.Name.TrimEnd('\\') + "\\",
+                ItemType = DriveTreeItemType.Volume,
+                Size = di.TotalSize,
+                IsBootVolume = isBootVol,
+                IsHiddenPartition = false,
+                Parent = diskItem,
+                PartitionNumber = diskIdx
+            });
+            return true;
+        }
+
+        private static bool TargetAddHiddenPartition(DriveTreeItem diskItem, ManagementObject partition, int diskIdx, bool isProtected)
+        {
+            try
+            {
+                // This method is only called when showHidden == true and the partition has no
+                // associated logical disk (no drive letter). Show all such partitions; derive a
+                // friendly type label from the WMI Type string.
+                string partType = partition["Type"]?.ToString() ?? string.Empty;
+
+                // Produce a short, readable label: "GPT: System" -> "EFI System",
+                // "GPT: Microsoft Reserved" -> "MSR", etc.
+                string label = partType switch
+                {
+                    var t when t.Contains("System", StringComparison.OrdinalIgnoreCase)     => "EFI System",
+                    var t when t.Contains("Reserved", StringComparison.OrdinalIgnoreCase)   => "MSR",
+                    var t when t.Contains("Recovery", StringComparison.OrdinalIgnoreCase)   => "Recovery",
+                    var t when t.Contains("Basic Data", StringComparison.OrdinalIgnoreCase) => "Data (no letter)",
+                    var t when !string.IsNullOrWhiteSpace(t)                                 => t,
+                    _                                                                         => "Hidden Partition"
+                };
+
+                long ps = 0;
+                try { ps = Convert.ToInt64(partition["Size"] ?? 0); } catch { }
+                double gb = ps / (1024.0 * 1024.0 * 1024.0);
+
+                diskItem.Children.Add(new DriveTreeItem
+                {
+                    Name = $"{label}  (Hidden)  {gb:F1} GB",
+                    FullPath = string.Empty,
+                    ItemType = DriveTreeItemType.Volume,
+                    IsBootVolume = isProtected,
+                    IsHiddenPartition = true,
+                    Parent = diskItem,
+                    PartitionNumber = diskIdx
+                });
+                return true;
+            }
+            catch { return false; }
+        }
+
         /// <summary>
-        /// Creates a tree view item for the restore-target tree.
-        /// Both disk and volume items are selectable unless boot-protected.
+        /// Creates a tree view item for the restore-target tree mirroring the backup source tree style.
+        /// Disk and volume items use CheckBox controls for selection (single-select enforced on click).
         /// Boot/protected items are greyed and not selectable.
+        /// HyperVSystem root nodes are bold group headers; their children are selectable.
+        /// Stops at the volume level — no folder expansion.
         /// </summary>
         private TreeViewItem CreateRestoreTargetTreeItem(DriveTreeItem item, bool diskMode, bool isProtected)
         {
-            var tvi = new TreeViewItem { IsExpanded = true };
+            var tvi = new TreeViewItem { IsExpanded = item.IsExpanded };
 
             var panel = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
 
-            // Disks are selectable in disk-restore mode; volumes are always selectable
-            // (they cover both volume-restore and file/folder "pick a drive" modes).
-            bool isSelectable = !isProtected &&
-                (item.ItemType == DriveTreeItemType.Volume ||
-                 (diskMode && item.ItemType == DriveTreeItemType.Disk));
+            bool isHvRoot = item.ItemType == DriveTreeItemType.HyperVSystem && item.Parent == null;
+            bool isHvVm  = item.ItemType == DriveTreeItemType.HyperVSystem && item.Parent != null;
+            bool isHidden = item.IsHiddenPartition;
 
-            var rb = new System.Windows.Controls.RadioButton
+            // Disks are selectable for disk or volume restores (volume restore to a whole disk
+            // repartitions the target to accept the restored volume). Protected/hidden never selectable.
+            bool diskSelectMode = _restoreTargetKind == RestoreTargetKind.Disk ||
+                                  _restoreTargetKind == RestoreTargetKind.Volume;
+            bool isSelectable = !isProtected && !isHvRoot && !isHidden &&
+                (isHvVm ||
+                 item.ItemType == DriveTreeItemType.Volume ||
+                 (diskSelectMode && item.ItemType == DriveTreeItemType.Disk));
+
+            if (!isHvRoot)
             {
-                GroupName = "RestoreTarget",
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 6, 0),
-                IsEnabled = isSelectable,
-                Visibility = (item.ItemType == DriveTreeItemType.Disk || item.ItemType == DriveTreeItemType.Volume)
-                    ? Visibility.Visible : Visibility.Collapsed
-            };
+                var cb = new System.Windows.Controls.CheckBox
+                {
+                    IsChecked  = item.IsChecked,
+                    IsEnabled  = isSelectable,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 8, 0)
+                };
 
-            rb.Checked += (s, e) => OnRestoreTargetSelected(item);
+                cb.Click += (s, e) =>
+                {
+                    // Single-select: uncheck every other node first
+                    if (cb.IsChecked == true)
+                    {
+                        UncheckAllRestoreTargetItems(treeViewRestoreTarget, cb);
+                        cb.IsChecked = true;
+                        item.IsChecked = true;
+                        OnRestoreTargetSelected(item);
+                    }
+                    else
+                    {
+                        item.IsChecked = false;
+                        _selectedTargetPath = null;
+                        _selectedTargetDiskNumber = null;
+                        txtSelectedTargetLabel.Text = "No target selected";
+                        btnRestore.IsEnabled = false;
+                    }
+                    e.Handled = true;
+                };
+
+                item.PropertyChanged += (s, e) =>
+                {
+                    if (e.PropertyName == nameof(item.IsChecked))
+                        cb.IsChecked = item.IsChecked;
+                };
+
+                panel.Children.Add(cb);
+            }
 
             var txt = new TextBlock
             {
                 Text = item.Name,
                 VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (!isSelectable && (item.ItemType == DriveTreeItemType.Disk || item.ItemType == DriveTreeItemType.Volume))
+                FontWeight = isHvRoot ? FontWeights.SemiBold : FontWeights.Normal,
+                Foreground = (!isSelectable && !isHvRoot)
                     ? System.Windows.SystemColors.GrayTextBrush
                     : System.Windows.SystemColors.ControlTextBrush
             };
 
-            panel.Children.Add(rb);
             panel.Children.Add(txt);
             tvi.Header = panel;
 
             foreach (var child in item.Children)
-            {
                 tvi.Items.Add(CreateRestoreTargetTreeItem(child, diskMode, child.IsBootVolume));
-            }
+
+            tvi.IsExpanded = item.IsExpanded;
+            tvi.Expanded  += (s, e) => { if (e.Source == tvi) item.IsExpanded = true; };
+            tvi.Collapsed += (s, e) => { if (e.Source == tvi) item.IsExpanded = false; };
 
             return tvi;
         }
 
         private void OnRestoreTargetSelected(DriveTreeItem item)
         {
+            if (item.ItemType == DriveTreeItemType.HyperVSystem)
+            {
+                // item.Name contains "VmName (Running)" or just "VmName"
+                bool isRunning = item.Name.EndsWith(" (Running)", StringComparison.OrdinalIgnoreCase);
+                string vmName = item.FullPath; // stored as the normalized VM name
+
+                if (isRunning)
+                {
+                    var result = MessageBox.Show(
+                        $"The virtual machine '{vmName}' is currently running.\n\n" +
+                        "It must be shut down before the restore can proceed. " +
+                        "All unsaved data inside the VM will be lost.\n\n" +
+                        "Do you want to shut it down now and continue?",
+                        "Virtual Machine Running",
+                        MessageBoxButton.OKCancel,
+                        MessageBoxImage.Warning);
+
+                    if (result != MessageBoxResult.OK)
+                    {
+                        UncheckAllRestoreTargetItems(treeViewRestoreTarget);
+                        _selectedTargetPath = null;
+                        txtSelectedTargetLabel.Text = "No target selected";
+                        return;
+                    }
+
+                    // Shut down the VM synchronously (short timeout)
+                    try
+                    {
+                        var ps = Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "powershell.exe",
+                            Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"Stop-VM -Name '{vmName.Replace("'", "''")}' -Force -ErrorAction Stop\"",
+                            UseShellExecute = false,
+                            RedirectStandardError = true,
+                            CreateNoWindow = true
+                        });
+                        ps?.WaitForExit(30000);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(
+                            $"Failed to shut down '{vmName}': {ex.Message}\n\nPlease stop the VM manually and try again.",
+                            "Shutdown Failed",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error);
+                        UncheckAllRestoreTargetItems(treeViewRestoreTarget);
+                        _selectedTargetPath = null;
+                        txtSelectedTargetLabel.Text = "No target selected";
+                        return;
+                    }
+                }
+
+                _selectedTargetPath = vmName;
+                _selectedTargetDiskNumber = null;
+                txtSelectedTargetLabel.Text = $"Selected: {vmName}";
+                return;
+            }
+
             _selectedTargetPath = item.FullPath;
             _selectedTargetDiskNumber = item.ItemType == DriveTreeItemType.Disk
                 ? item.PartitionNumber
@@ -2065,23 +2531,68 @@ namespace SecureServerBackup.Windows
             }
         }
 
+        /// <summary>Walks every tree item and unchecks any RestoreTarget radio button.</summary>
+        /// <summary>
+        /// Unchecks all CheckBox controls in the restore target tree, optionally skipping one.
+        /// </summary>
+        private static void UncheckAllRestoreTargetItems(ItemsControl parent, System.Windows.Controls.CheckBox? except = null)
+        {
+            foreach (var obj in parent.Items)
+            {
+                if (obj is not TreeViewItem tvi)
+                    continue;
+
+                if (tvi.Header is StackPanel sp)
+                {
+                    foreach (var cb in sp.Children.OfType<System.Windows.Controls.CheckBox>())
+                    {
+                        if (!ReferenceEquals(cb, except))
+                            cb.IsChecked = false;
+                    }
+                }
+
+                UncheckAllRestoreTargetItems(tvi, except);
+            }
+        }
+
         private List<int> GetProtectedDiskIndexes()
         {
             var indexes = new List<int>();
             try
             {
-                // Find which disk number backs the currently booted OS partition via WMI.
-                // Win32_DiskPartition.BootPartition identifies the active boot partition; from there
-                // we walk the association to Win32_DiskDrive to get the physical disk Index.
-                using var partSearcher = new ManagementObjectSearcher(
-                    "SELECT DiskIndex FROM Win32_DiskPartition WHERE BootPartition = TRUE");
+                // Resolve the drive letter that contains the running OS (%SystemRoot%).
+                // Then walk: LogicalDisk -> DiskPartition -> DiskDrive to get the physical disk Index.
+                // This is more reliable than BootPartition = TRUE which fires on EFI partitions on
+                // any disk and can misidentify non-boot disks as protected.
+                string systemRoot = Path.GetPathRoot(
+                    Environment.GetFolderPath(Environment.SpecialFolder.System)) ?? string.Empty;
+                string osDriveLetter = systemRoot.TrimEnd('\\').TrimEnd(':');
 
-                foreach (ManagementObject part in partSearcher.Get())
+                if (string.IsNullOrWhiteSpace(osDriveLetter))
+                    return indexes;
+
+                // Win32_LogicalDisk -> Win32_DiskPartition
+                using var ldSearcher = new ManagementObjectSearcher(
+                    $"ASSOCIATORS OF {{Win32_LogicalDisk.DeviceID='{osDriveLetter}:'}} " +
+                    "WHERE AssocClass=Win32_LogicalDiskToPartition");
+
+                foreach (ManagementObject partition in ldSearcher.Get())
                 {
-                    if (int.TryParse(part["DiskIndex"]?.ToString(), out int diskIdx))
+                    string? partId = partition["DeviceID"]?.ToString();
+                    if (string.IsNullOrWhiteSpace(partId)) continue;
+
+                    // Win32_DiskPartition -> Win32_DiskDrive
+                    using var ddSearcher = new ManagementObjectSearcher(
+                        $"ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{partId}'}} " +
+                        "WHERE AssocClass=Win32_DiskDriveToDiskPartition");
+
+                    foreach (ManagementObject drive in ddSearcher.Get())
                     {
-                        if (!indexes.Contains(diskIdx))
+                        if (int.TryParse(drive["Index"]?.ToString(), out int diskIdx) &&
+                            !indexes.Contains(diskIdx))
+                        {
                             indexes.Add(diskIdx);
+                        }
                     }
                 }
             }
