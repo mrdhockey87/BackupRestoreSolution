@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.43";
+        private static readonly string version_fallback_number = "6.2.4.61";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,74 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.61 Fixed RestoreWindowNew disk restore metadata gating. The disk sizing and reconstruction
+ *                  flow now treats metadata as present only when planned restore volumes were actually parsed
+ *                  from the backup, preventing false-positive metadata detection and keeping the sizing/partition 
+ *                  restore path aligned with real reconstruction data. mdail 5/11/2026
+ * Version 6.2.4.60 RestoreWindowNew disk restores now require reconstruction metadata before execution, reopen the 
+ *                  sizing flow when needed, partition and format the selected target disk from the chosen layout, and restore
+ *                  each selected volume image to the created target volumes before reporting completion. mdail 5/11/2026
+ * Version 6.2.4.59 Fixed RestoreWindowNew disk restore sizing flow. Disk restore metadata is now parsed from raw image 
+ *                  descriptions so the partition selection/sizing UI opens before execution, and the sizing window now 
+ *                  defaults resizable volumes to expand and fill the target disk. mdail 5/11/2026
+ * Version 6.2.4.58 RestoreWindowNew no longer shows the disk format warning twice. Disk restore confirmation remains 
+ *                  in StartRestore_Click, while PrepareDiskTarget now only validates that a target disk is selected 
+ *                  before execution. mdail 5/11/2026
+ * Version 6.2.4.57 RestoreWindowNew now queues a restore-target tree reload when initial FileOrFolder-mode loading 
+ *                  overlaps the later disk/volume mode update, preventing disks from staying greyed out until a restore 
+ *                  point is selected. mdail 5/11/2026
+ * Version 6.2.4.56 RestoreWindowNew now recalculates restore target kind immediately after scan/load, so disk targets 
+ *                  become selectable right away for disk/volume backups even before a restore point is selected. mdail 5/11/2026
+ * Version 6.2.4.55 RestoreWindowNew keeps disk targets selectable for disk/volume backups before a restore point is selected, preventing
+ *                  pre-selection greying and avoiding manual target-tree refresh after choosing a restore point. mdail 5/11/2026
+ * Version 6.2.4.54 Standardized RestoreWindowNew alerts to be owner-bound and modal. All restore,
+ *                  validation, warning, and error dialogs in RestoreWindowNew now route through a
+ *                  centralized helper that uses MessageBox.Show(this, ...) and UI-thread dispatch,
+ *                  ensuring alerts stay on top of the active restore window.
+ *                  mdail 5/11/2026
+ * Version 6.2.4.53 Fixed RestoreWindowNew execution order so disk/volume restores now show the existing
+ *                  volume selection and resize workflow before restore starts. After format confirmation,
+ *                  metadata-backed restores proceed to the resize bar UI (including single-volume layouts),
+ *                  then execute partition setup/format/restore with progress updates.
+ *                  mdail 5/11/2026
+ * Version 6.2.4.52 Fixed RestoreWindowNew disk/volume format confirmation z-order and modality.
+ *                  Destructive format prompts now execute on the UI thread with RestoreWindowNew as
+ *                  owner, so they appear in front of the restore window instead of behind it.
+ *                  mdail 5/11/2026
+ * Version 6.2.4.51 RestoreWindowNew now shows the generic "may overwrite existing files" confirmation
+ *                  only for file/folder restores. Disk and volume restores no longer show that extra
+ *                  prompt and continue to show only the destructive format confirmation.
+ *                  mdail 5/11/2026
+ * Version 6.2.4.50 Fixed RestoreWindowNew protected-disk detection that could over-mark target disks
+ *                  as boot-protected and leave disk checkboxes greyed out. Protection now resolves only
+ *                  from the active OS logical drive to its backing physical disk index, so non-boot disks
+ *                  remain selectable for disk and volume restores.
+ *                  mdail 5/11/2026
+ * Version 6.2.4.49 Fixed a follow-up RestoreWindowNew target-tree state sync issue where disk checkboxes
+ *                  could remain greyed out after restore-kind transitions. LoadRestoreTargetDrivesAsync now
+ *                  captures a buildTargetKind snapshot and uses that same snapshot for disk selectability and
+ *                  _lastBuiltTargetKind tracking, ensuring disk and volume backups keep disk targets enabled.
+ *                  mdail 5/11/2026
+ * Version 6.2.4.48 Fixed RestoreWindowNew restore-target disk checkbox enablement regression.
+ *                  Disk nodes were incorrectly evaluated against live restore-kind state during async
+ *                  tree generation, which could leave disk checkboxes greyed out for disk/volume restores.
+ *                  Tree selectability now consistently uses the build-time diskMode snapshot so disk
+ *                  targets are selectable again for both disk and volume backup restores. mdail 5/11/2026
+ * Version 6.2.4.47 RestoreWindowNew restore-point selection now starts unselected on initial load.
+ *                  Clicking a restore point selects/highlights it and checks its checkbox; clicking the
+ *                  same selected restore point again now unselects/unhighlights and unchecks it. Single-
+ *                  selection behavior is preserved so clicking a different restore point switches selection.
+ *                  mdail 5/11/2026
+ * Version 6.2.4.46 RestoreWindowNew restore-point list now shows a checkbox in front of each restore point.
+ *                  Selecting a restore point keeps the existing highlight behavior and now also checks the
+ *                  checkbox for the selected row so visual selection state is consistent. mdail 5/11/2026
+ * Version 6.2.4.45 Fixed full-disk restore crash for .ssb archive paths. RestoreWindowNew now routes
+ *                  disk restores for archive files to RestoreDiskFromImage instead of legacy RestoreDisk,
+ *                  which expects a folder of .img files and threw "Exception in RestoreDisk". mdail 5/11/2026
+ * Version 6.2.4.44 Fixed RestoreWindowNew target reselection lock where Start Restore stayed disabled
+ *                  after changing tree selections; button state now re-evaluates on every restore-point,
+ *                  restore-kind, and target-selection change. Renamed action button text to Next because
+ *                  the next step opens partition sizing/selection before confirmation and execution. mdail 5/11/2026
  * Version 6.2.4.43 Fixed Show Hidden Partitions on the restore target tree: TargetAddHiddenPartition
  *                  was filtering by type name keywords (EFI/Recovery/Reserved) that don't match real
  *                  WMI Type strings like "GPT: System" or "GPT: Basic Data", so no hidden partitions
@@ -92,9 +160,8 @@ namespace SecureServerBackup
  *                  the tree was built before UpdateSelectedRestoreTargetKind ran. Added
  *                  _lastBuiltTargetKind tracking so the tree rebuilds whenever selectability changes
  *                  between disk-enabled and non-disk-enabled modes. mdail 5/8/2026
- * Version 6.2.4.40
- *                  fixed false [Boot] label on data volumes sharing the boot disk; fixed boot-disk
- *                  detection to walk SystemRoot drive letter -> LogicalDisk -> DiskPartition ->
+ * Version 6.2.4.40 fixed false [Boot] label on data volumes sharing the boot disk; fixed boot-disk
+ *                  detection to walk SystemRoot drive letter -> LogicalDisk -> DiskPartition ->>
  *                  DiskDrive instead of unreliable BootPartition=TRUE flag. mdail 5/8/2026
  * Version 6.2.4.39 RestoreWindowNew target tree now uses 3-layer WMI/DriveInfo fallback enumeration
  *                  matching the New Backup window — Layer 1: ASSOCIATORS query, Layer 2: DiskIndex query,
@@ -105,13 +172,11 @@ namespace SecureServerBackup
  *                  enforced. Tree is always visible and enabled for all restore types (disk, volume,
  *                  file/folder, HyperV virtual disk); only Hyper-V VM clone restores hide it.
  *                  Help text updates to guide selection by restore type. mdail 5/8/2026
- * Version 6.2.4.37
- *                  the restore target tree now fills the full right-side height. Disk/volume backup
+ * Version 6.2.4.37 the restore target tree now fills the full right-side height. Disk/volume backup
  *                  classification fixed: detection now checks _diskRestorePlan metadata first, then
  *                  scans all backup items, then checks the file path for disk/volume keywords so
  *                  disk and volume backups are never misclassified as file/folder restores. mdail 5/8/2026
- * Version 6.2.4.36
- *                  right side now fills the column with disks, volumes, and Hyper-V VMs loaded
+ * Version 6.2.4.36 right side now fills the column with disks, volumes, and Hyper-V VMs loaded
  *                  automatically on open. Bottom toolbar gains Refresh, Expand All, Collapse All,
  *                  and Show Hidden Partitions controls. Boot/system disk stays greyed and
  *                  unselectable. Selecting a running Hyper-V VM prompts for confirmation and
@@ -381,13 +446,13 @@ namespace SecureServerBackup
  * Version 6.2.3.70 Added tests for Hyper-V backup mode selection and Hyper-V restore-point helper path resolution.
  *                  mdail 4/29/2026
  * Version 6.2.3.69 Added Hyper-V restore target selection so Hyper-V backup points can restore as Hyper-V VMs,
- *                  guest files, guest volumes, or prepared physical disks, and updated LinuxRestore to detect and
+ *                  guest files, guest volumes, or prepared physical discs, and updated LinuxRestore to detect and
  *                  restore Hyper-V backup-point export folders. mdail 4/29/2026
  * Version 6.2.3.68 Added true Hyper-V full, incremental, and differential backup routing with directory-based
  *                  backup points, restore/verify discovery for Hyper-V .ssb folders, and restore path resolution
  *                  for the new Hyper-V export layout. mdail 4/29/2026
  * Version 6.2.3.67 Added managed and native automated test coverage, a repeatable Run-Tests.ps1 workflow,
- *                  optional WSL LinuxRestore test execution, and fixed the LinuxRestore restore_engine compile issues found by the new tests. mdail 4/28/2026
+ *                  optional WSL LinuxRestore test_execution, and fixed the LinuxRestore restore_engine compile issues found by the new tests. mdail 4/28/2026
  * Version 6.2.3.66 Hardened decrypted temp backup cleanup and changed activity log writes to atomic shared-file
  *                  updates so plaintext temp files and concurrent log writes are less likely to be left behind or corrupted.
  *                  mdail 4/28/2026
@@ -576,7 +641,7 @@ namespace SecureServerBackup
 *                  function declarations. 6) Fixed BackupEngine_Common.cpp implementation (lines 118, 138) to use correct member names:
 *                  context.userCallback instead of context.callback (matches struct definition). BUILD VERIFICATION: Executed run_build
 *                  command - solution compiles successfully with 0 errors, 0 warnings! All 43+ cascading errors resolved by fixing the
-*                  three root causes. TECHNICAL DETAILS: Windows.h is ESSENTIAL for any C++ code using Windows APIs - provides type
+*                  three root causes. TECHNICAL DETAILS: Windows.h is ESSENTIAL for any C++ code using Windows API - provides type
 *                  definitions, function declarations, and constants. Typedef must be declared BEFORE use in struct definitions - C++
 *                  requires forward declaration of custom types. Struct members must match between header declaration and implementation
 *                  usage - member name mismatches cause undeclared identifier errors. Cascading errors often have simple root causes - fix
@@ -624,213 +689,5 @@ namespace SecureServerBackup
 *                  find window files), consistent with WPF best practices (organize by component type), IDE navigation improved 
 *                  (Solution Explorer shows Windows\ folder clearly). No code changes required - only file locations updated. 
 *                  Production-ready project organization following enterprise standards! mdail 4/6/2026
-* Version 6.1.3.0 CUSTOM THEMED DIALOG SYSTEM - UI CONSISTENCY ENHANCEMENT:
-*                  Replaced all standard MessageBox dialogs with custom themed dialogs that match the
-*                  application's turquoise color scheme. Created complete dialog system with three components:
-*                  1) CUSTOMDIALOG.XAML: Borderless WPF window (WindowStyle="None", AllowsTransparency="True")
-*                  with turquoise theme (#F5FFFF background, #B0E0E6 headers, #20B2AA borders, #008B8B buttons,
-*                  #20B2AA hover). Three-row grid layout: header (40px) with title and close button, content
-*                  area with scrollable message and emoji icon, button panel (60px) with styled buttons.
-*                  Supports OK, OKCancel, YesNo, YesNoCancel button configurations. 2) CUSTOMDIALOG.XAML.CS:
-*                  Code-behind with Configure() method for message/title/buttons/icon setup. ConfigureIcon()
-*                  sets emoji icons (ℹ️ info, ⚠️ warning, ❌ error, ❓ question, ✅ success) with appropriate
-*                  colors. ConfigureButtons() manages button visibility/content. CustomDialogResult enum
-*                  (OK/Cancel/Yes/No/None) renamed from DialogResult to avoid conflict with WPF Window.DialogResult
-*                  property. Click handlers set both Result property and base.DialogResult for proper modal
-*                  behavior. 3) CUSTOMDIALOGSERVICE.CS: Static service class with helper methods (ShowInfo,
-*                  ShowSuccess, ShowWarning, ShowError, ShowQuestion, ShowConfirmation, ShowOKCancel) that
-*                  automatically detect owner window from Application.Current.MainWindow. MessageBox fallback
-*                  if custom dialog fails. Conversion utilities (FromMessageBoxResult, ToMessageBoxResult)
-*                  for compatibility. CONVERSIONS COMPLETED: Replaced 9 MessageBox calls - MainWindow.xaml.cs
-*                  (7 calls: unmount confirmation/success/errors, no mounted backups info, unmount all
-*                  confirmation/success), ImportBackupWindow.xaml.cs (1 call: import error). BENEFITS:
-*                  Consistent visual theme throughout application, modern borderless design, better UX with
-*                  emoji icons, automatic owner detection for proper modal behavior, easy-to-use service
-*                  class pattern. All alert dialogs now match app's turquoise color scheme. mdail 4/6/2026
-* Version 6.1.2.0 METADATA VERIFICATION FIX - PREVENT INVALID BACKUP FILES:
-*                  Fixed critical bug where backups completed successfully but failed verification with error -7
-*                  "No metadata found in image. Archive may be corrupted." Previously, WIMSetImageInformation() calls
-*                  in CaptureToWimImage() could fail silently - logging warnings but returning success markers (HANDLE)1.
-*                  This allowed invalid backup files (without metadata) to be created, which would only fail during
-*                  verification - wasting hours of backup time. THREE-PART FIX: 1) TWO-PATH METADATA SETTING: Try setting
-*                  metadata via image handle first (fast), then fallback to WIM file handle with proper <WIM><IMAGE
-*                  INDEX="N">...</IMAGE></WIM> XML format (more reliable). 2) VERIFICATION STEP: After setting metadata,
-*                  load image and call WIMGetImageInformation() to verify xmlSize > 0. This is the EXACT check that
-*                  VerifyBackup performs, ensuring we catch metadata failures immediately. 3) FAIL FAST: If metadata
-*                  verification fails, return INVALID_HANDLE_VALUE with clear error message "Failed to set metadata
-*                  for image. Archive will fail verification." This makes backup fail cleanly DURING CREATION instead
-*                  of during verification. IMPACT: Eliminates "backup succeeded but verification failed" scenarios.
-*                  Prevents wasting hours creating 150GB+ backups that will be deleted as corrupted. User-reported
-*                  issue where WDrive backup completed (35 minutes) but failed verification immediately - now caught
-*                  during backup creation with actionable error message. Metadata setting now has same reliability
-*                  as file capture. mdail 4/6/2026
-* Version 6.1.1.39 Fixed the textbox's background on the backup windows new getting overriden by the internal scrollviewer
-*                  which would set the background to MediumTurquoise which was too dark. Apartently windows applies a scrollerviewer
-*                  to textbox's in the background to handle wrapping and things like that. mdail 4/4/2026
-* Version 6.1.1.38 COMPREHENSIVE WIMLOADIMAGE FIX - WIMSETTEMPORARYPATH FOR ALL CODE PATHS:
-*                  Fixed critical bug affecting verification, restore, and metadata operations where WIMLoadImage() was
-*                  failing with error 1632 ("Image data is corrupted") on perfectly valid backup files. The issue occurred
-*                  because multiple functions were calling WIMLoadImage() without first setting a temporary path via
-*                  WIMSetTemporaryPath(). The WIM API requires a temp directory to decompress and load image data.
-*                  Without it, WIMLoadImage returns error 1632 (ERROR_INSTALL_SERVICE_FAILURE) even when WIM files are
-*                  completely valid. This was a FALSE FAILURE - backups that failed verification were actually mountable
-*                  and contained all expected data. COMPREHENSIVE FIX APPLIED TO 6 LOCATIONS ACROSS 4 FILES:
-*                  1) BackupVerification.cpp - VerifyWimArchive() line 234: Prevents false verification failures after
-*                     backup completion. Valid backups no longer deleted due to verification errors.
-*                  2) RestoreEngine_Advanced.cpp - RestoreDisk() line 629: Prevents restore failures when loading valid
-*                     backup images. Restores now succeed on first attempt without error 1632.
-*                  3) WimMountManager.cpp - GetWimImageInfo() line 788: Prevents failures when reading image metadata
-*                     (name, description). Image information displays correctly in UI.
-*                  4-6) BackupManager_Advanced.cpp - CaptureToWimImage() lines 997, 1103, 1121: Prevents failures when
-*                     reloading image handles after filtered captures. Metadata setting works correctly for folder backups
-*                     with exclusions. FIX PATTERN: 1) Get system temp directory using GetTempPathW(), 2) Call
-*                     WIMSetTemporaryPath() on WIM handle after WIMCreateFile but before WIMLoadImage. This mirrors the
-*                     proven fix from WimMountManager.cpp MountWimImage() function added in v5.13.9.8 for mounting operations.
-*                  IMPACT: Eliminates ALL error 1632 false failures in Windows backup/restore/verification code. User's
-*                  150GB backup that previously failed verification now passes successfully. Automated scheduled backups
-*                  no longer report false failures. NOTE: Linux restore unaffected - uses wimlib which handles temp paths
-*                  automatically. mdail 4/4/2026
-* Version 5.11.3.6 UX POLISH - HYPER-V BACKUP STATUS DISPLAY: Changed "VM Name" column to show "Hyper-V VM" for clarity. Modified
-*					hyper-v backup status messages to be more descriptive: shows VM name and current state (Running, Stopped, Error).
-*					Improved overall layout and spacing in BackupWindowNew for better readability. Shrunk height of action buttons to
-*					28px for consistency. Used static Resource keys for common colors/styles instead of hardcoding values. Cleaned
-*					up XAML indenting and formatting for readability. Improved performance of notification checking by raising
-*					Timer interval from 500ms to 2000ms. This reduces CPU usage and flicker while still providing timely updates.
-*					Renamed NotificationService methods for clarity: CheckForNotifications → GetLatestNotifications, DisplayNotification
-*					→ ShowToastNotification. Complete polish of Hyper-V backup UI and notifications. Enterprise-grade user
-*					experience! mdail 2/23/2026
-* Version 5.11.3.5 CRITICAL FIX - RETRY LOGIC STABILITY: Fixed intermittent backup failure due to race condition in retry logic.
-*					User reported: "when a job fails and the service tries to run it again the second time it causes a error ... then it stops
-*					the service from running". Root cause: When backup fails, NextRunTime is set to now + 15 minutes, but if user clicks
-*					"Stop Service" in middle of retry, the next scheduled task can still start before service fully stops, causing
-*					ERROR_ACCESS_DENIED or hanging tasks. Also, if service stops while task is running, the task can be left in
-*					 limbo, blocking next start. FIXED by enhancing retry logic in UpdateJobAfterExecution(): 1) On failure, logs
-*					"Backup failed with code ..." with result code, job name, and current time, to aid debugging. 2) Increments
-*					ConsecutiveFailures and checks if > 3 (previously was <= 3 which allowed 4 attempts), logs "Reached max retry
-*					attempts, stopping job" and sets NextRunTime to normal scheduled time (not retry time), preventing endless retry
-*					loop. 3) On success, resets ConsecutiveFailures to 0 and calculates next run time normally. This prevents tasks
-*					from rapidly restarting if service fails mid-retry. Also fixed spelling of "successful" in log messages. Now
-*					works correctly: Task fails → Incremental backup → Next scheduled time = tomorrow 2 AM → Service restarts at
-*					2:01 AM → Sees tomorrow's time → Waits → Runs at 2 AM → Success! Complete fix for retry logic - no more race
-*					conditions or hanging tasks! Production-ready reliable backup retries! mdail 2/23/2026
-* Version 5.11.3.4 UX POLISH - SERVICE MANAGEMENT: Improved visual design and organization of Service Management window. Separate
-*					sections for service status and job actions. Aligned buttons for stopping/starting service. Enhanced logging for service
-*					status changes. Buttons now show "Installing service..." or "Starting service..." during operations. Compact layout style
-*					for modern appearance. Removed redundant labels and instructions. Clear separation between service controls and job list.
-*					Enhanced perfMon monitoring for backup-related counters. Resolved counter insertion order issue. Added counter for
-*					system uptime. Better resource tracking for backup operations. Improved reliability of elapsed time reporting.
-*					Protection against division by zero errors. UX improvements to keep users informed about long-running operations.
-*					Informative messages like "Copying files..." during long copy operations. Clearer success messages with details.
-*					Enterprise-grade service management and monitoring! mdail 2/23/2026
-* Version 5.11.3.3 UX POLISH - BACKUP WINDOW: Improved spacing and alignment in BackupWindowNew for better usability. Aligned
-*					action buttons and improved label positioning. Enhanced volume info display with better spacing. Compact design
-*					for action buttons (Export, Delete, View Details). Streamlined layout for job information and statistics. Professional
-*					appearance matching enterprise applications. Centered and vertically aligned content in statistics panel. Increased
-*					action button widths for better clickability. Consistent margin and padding adjustments for all controls. Enhanced
-*					interactivity with larger clickable areas. Readable and visually appealing layout for summary views. Intuitive user
-*					experience that guides users through backup configuration and monitoring. Stable and polished interface ready for
-*					deployment. mdail 2/23/2026
-* Version 5.11.3.2 SERVICE NAME CHANGE - BACKUP SERVICE: Renamed service from "BackupRestoreService" to "Backup Service" for
-*					simplicity and consistency. ALL references updated: 1) Service definition: Changed service name and description in BackupService project
-*					Program.cs to "Backup Service". 2) Service installation scripts: Renamed from Install-Service.ps1 to BackupService-Install.ps1, updated
-*					all references. 3) Service management commands in UI: Changed "BackupRestoreService" to "Backup Service" in ServiceManagementWindow.
-*					Service now appears as "Backup Service" in services.msc and Task Manager. Benefits: Simpler service name, easier to understand
-*					and remember, consistent with other Windows services, no more confusion with restore operations (separate application). Technical
-*					implementation: Changed all instances of "BackupRestoreService" to "Backup Service" in service code and UI, updated service install
-*					scripts to match new name, tested installation, uninstallation, and reinstallation workflows. mdail 2/23/2026
-* Version 5.11.3.1 PROGRESS BAR FIX: Fixed progress bar remaining indeterminate in some cases! User reported: "even when it is at 99% 
-*					it still has the spinning animation instead of a solid bar". Issue was progress bar getting stuck in indeterminate mode 
-*					when it shouldn't. Likely caused by error in calculation or event not firing correctly. Added comprehensive debug logging 
-*					to track progress values and events. Also increased fadeout animation duration to 500ms for smoother transitions.
-*					Couldn't reproduce stuck progress on any system, but the extra logging will help diagnose if it happens again. 
-*					Temporarily added DEBUG code to validate paint messages are processed: delays in taskbar progress completion.
-*					Regression caused by recent threading and progress changes - need to review all progress-related code for consistency.
-*					Shutdown taskbar progress on exit to prevent hanging taskbar iconindeterminate. Complete end-to-end testing and verification.
-*					Attention to detail: made sure progress bar colors match the new turquoise theme (light sea green and dark cyan). 
-*					Smoother animations and transitions throughout the UI. Production-ready polish with professional visuals! mdail 2/23/2026
-* Version 5.11.3.0 COMPLETE VISUAL STUDIO DEBUGGING: Fixed "install .NET Desktop Runtime" error when launching from Visual Studio!
-*					Ensure all projects build with correct configurations and output paths. Applied centralized build configuration in
-*					Directory.Build.props. Fixed BackupEngine path references in BackupUI and BackupService projects. Ensured
-*					every project outputs to artifacts\bin\$(Configuration)\. Cleaned up intermediate files in obj folders.
-*					Diagnose-RuntimeConfig.ps1 script verifies runtime config generation. Build with dotnet build --no-incremental
-*					to force full rebuild. Production-ready build system with proper output organization and reliable runtime config
-*					generation! mdail 2/12/2026
-* Version 5.11.2.9 DOCDUMP INTEGRATION: Fixed integration with DocFX for automatic documentation generation! Backup.Common.xml
-*					sets DocFX output folder to empty (configuration only). BackupEngine and BackupService projects now include
-*					<DocXmlFile>..\Backup.Common\bin\$(Configuration)\netstandard2.0\Backup.Common.xml</DocXmlFile> in their
-*					.csproj files to consume the shared documentation. This ensures all shared code is properly documented
-*					in generated API docs. Verified docs build with no errors. Complete enterprise-grade documentation integration!
-*					mdail 2/12/2026
-* Version 5.11.2.8 Docuemented the api and shared code xmldoc locations and how to build the docuemntation in the .mdocfx.
-*				 relocate the default docfx_project. to docfx_project.old and create a new docfx_project. fo
-*				 the output. mdail 2/12/2026
-* Version 5.11.2.7 XMLDOCS INTEGRATION: Fixed XML documentation generation for shared code! Backup.Common.xml sets DocFX output
-*					folder to empty, ensuring API documentation files are placed in artifacts\bin\$(Configuration)\. BackupEngine
-*					and BackupService projects now include <DocXmlFile>..\Backup.Common\bin\$(Configuration)\netstandard2.0\Backup.Common.xml</DocXmlFile>
-*					in their .csproj files to consume the shared documentation. This ensures all shared code is properly documented
-*					in generated API docs. Verified docs build with no errors. Complete enterprise-grade documentation integration!
-*					mdail 2/12/2026
-* Version 5.11.2.6 FIXED disk checking logic - GetPhysicalDiskNumbers now correctly detects all physical disks! Previously,
-*					automatic detection of physical disks was broken. query = "ASSOCIATORS OF {Win32_DiskDrive.DeviceID='" + deviceId + "'} WHERE 
-*					Assocation = Win32_DiskDriveToDiskPartition" was not returning correct results. Fixed by using DiskIndex property instead of
-*					DeviceID - DISK NUMBER is what matters, not device ID string. Changed query to: "SELECT DiskIndex FROM Win32_DiskDrive WHERE DeviceID='" + deviceId + "'"."
-*					Now correctly detects physical disks even if volume names or GUIDs change. Example scenarios: USB drive reinserted - now
-*					shows correct Disk number, Disk 0 and Disk 1 on different controllers - both show correct numbers, Removed deprecated
-*					"Backup using BackupDisk" message - no longer needed with automatic detection. Benefits: Accurate physical disk detection,
-*					reliable disk numbering, better support for USB and removable drives. Production-ready physical disk management! mdail 2/12/2026
-* Version 5.11.2.5 CI SYSTEM - Unified configuration for all builds! Centralized build properties in Directory.Build.props for
-*					solution-wide settings. Individual project files reduced to minimum required settings. Consistent output paths for all
-*					projects: artifacts\bin\<Configuration>\. Intermediate files in artifacts\obj\<Configuration>\<ProjectName>\.
-*					All projects build with correct configurations and dependencies. BackupEngine.dll copied to OutputPath of
-*					BackupService and BackupUI projects. Fully automated build and configuration system - just build and run!
-*					No more manual intervention or post-build steps needed. Complete enterprise-grade continuous integration solution!
-*					mdail 2/11/2026
-* Version 5.11.2.4 MULTI-IMAGE CUSTOM BACKUP COMPLETE: Implemented custom backup solution for multi-image WIM files!
-*					Windows regular backup (VSS) BACKS UP AS BEFORE to a single WIM file. Linux backup now uses wimlib-imagex:
-*					Detects existing WIM file → Asks user if they want to (1) Reuse existing WIM (2) Create new WIM. If reuse:
-*					wimlib-imagex capture --reference option creates incremental/differential WIM that references existing base images.
-*					If new: creates full WIM as before. COMPLEXITY: Multi-image WIMs have ONE full base image, followed by ZERO or more
-*					incremental/differential images that reference the base. Each image added to WIM gets its own index/slot (1-based).
-*					VSS-based backups always create image 1. Incremental/differential add images 2-N as needed. Restoration will require
-*					Select-Object -Property @{Name="ImageIndex"; Expression={[int]$_.ImageIndex - 1}} to convert back to 0-based indexing.
-*					Backup workflow now: User selects Disk/Volume/Files → Chooses backup type (Full/Incremental/Differential) → Runs backup.
-*					If Full → creates image 1. If Inc or Diff → finds base (image 1), creates new image 2-N that references image 1 and stores only changes.
-*					Future incrementals/differentials add more images as needed. Complete architecture for multi-image WIM backups -
-*					powerful and flexible. RESTORE: Windows restore uses image 1 (latest full) automatically. Linux restore requires user
-*					to specify image index (1-based): restore-image --index 2 --wimfile backup.wim. Multi-image restore testing successful.
-*					Implements enterprise-grade backup solution with WIM incremental/differential support! Production-ready powerful backup
-*					capabilities with space-efficient WIM file usage! mdail 2/11/2026
-* Version 5.11.2.3 MULTI-IMAGE BACKUP PROGRESS TRACKING: Fixed missing progress tracking for multi-image backups! User reported:
-*					"it doesn't show the progress when doing an incremental or differential". Progress was never implemented for the new
-*					multi-image workflows. Added comprehensive progress tracking for ALL backup types: Full, Incremental, Differential, Disk,
-*					Volume, Files. Uses existing IProgress<T> reporting infrastructure in BackupExecutor with percentage and status messages.
-*					Progress flows from C++ to C# via P/Invoke callbacks. Example progress messages: "Validating backup file..." → "Opening
-*					WIM file..." → "Loading image from WIM..." → "Mounting image to folder..." → "Creating incremental backup..." → "Backup
-*					completed successfully!" Includes precise percentage values based on actual work done, not just time elapsed. Accurate
-*					visual feedback for long-running backups. Complete progress tracking implementation - users see detailed progress for
-*					every backup type! mdail 2/11/2026
-* Version 5.10.0.0 MAJOR UPDATE - MULTI-IMAGE WIM BACKUP: Implemented revolutionary multi-image WIM backup system! User requested:
-*					"Implement WIM incremental disk backup using WIM_FLAG_REFERENCE (WIM format DOES support this) and differential as well".
-*					COMPLETED: Backup jobs now support incremental and differential backups for ALL types: Disk, Volume, Files, Hyper-V. SINGLE
-*					BACKUP JOB CAN NOW CREATE MULTIPLE IMAGES IN A SINGLE WIM FILE! Architecture: Incremental backups create new images that
-*					REFERENCE the base image (day 1 full backup) - only changes are stored. Differential backups create new images that
-*					REFERENCE the original full backup - all changes since full backup are stored in a single image. Works by passing
-*					WIM_FLAG_REFERENCE flag to WIMCreateFile when opening existing WIM files for appending new images. Backend (C++)
-*					implemented in BackupManager_Advanced.cpp: 1) Added BackupDiskIncremental and BackupDiskDifferential functions,
-*					2) Both detect if base backup exists, if not, call BackupDisk() to create one full backup first, 3) If base exists,
-*					opens with WIM_CREATE_NEW or WIM_OPEN_EXISTING depending on first run or subsequent run, 4) Sets appropriate flags:
-*					WIM_FLAG_REFERENCE, WIM_FLAG_COMPRESS (LZMS), 5) Calls VSS functions to create snapshot, 6) Calls CaptureToWimImage
-*					to capture volumes with new images referencing base image. Complete implementation - now incremental and differential
-*					DO work for disk and volume backups as well as files and folders. User can now chain backups: Full (baseline) → Inc1
-*					(only changes) → Diff1 (all changes since full) → Inc2 (next set of changes) → etc. Complete flexible backup
-*					chain management - eliminates redundant full backups, saves space, tracks changes intelligently. Seamless integration
-*					with existing job/volume management - no changes to how users interact with jobs. History tracking - old backups
-*					aren't deleted, just marked with .OLD extension. Complete user story: User wants daily backups: First run
-*					creates full backup (WDrive_Full.ssb), second run (next day) runs Incremental backup → creates new images that
-*					reference the base image, only new/changed files are added to the WIM. Third run (Diff backup) creates a single
-*					image that contains all changes since the last full backup. Manual testing shows significant space savings with
-*					incremental and differential backups. Example: Full backup 100GB, first incremental 5GB (only changed files),
-*					second incremental 2GB, first differential 10GB (all changes since full). Works flawlessly! Production-ready
-*					incremental and differential backups with multi-image WIM support! Enterprise-grade efficient backup solutions! mdail 2/6/2026
 */
 

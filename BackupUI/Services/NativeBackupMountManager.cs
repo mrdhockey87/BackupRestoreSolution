@@ -50,7 +50,7 @@ namespace SecureServerBackup.Services
             public string ImageName { get; set; } = string.Empty;
             public string ImageDescription { get; set; } = string.Empty;
             public List<RestoreVolumePlan> Volumes { get; set; } = new();
-            public bool HasMetadata => Volumes.Count > 0 || SourceDiskNumber >= 0;
+            public bool HasMetadata => Volumes.Count > 0;
         }
 
         public sealed class RestoreVolumePlan
@@ -868,27 +868,38 @@ namespace SecureServerBackup.Services
 
         public static (bool Success, List<SsbImageInfoResult> Images, string Error) GetImageInfoWithRestoreMetadata(string ssbPath)
         {
-            var (success, images, error) = GetImageInfo(ssbPath);
-            if (!success)
+            var (countSuccess, imageCount, countError) = GetImageCount(ssbPath);
+            if (!countSuccess)
             {
-                return (false, new List<SsbImageInfoResult>(), error);
+                return (false, new List<SsbImageInfoResult>(), countError);
             }
 
             var results = new List<SsbImageInfoResult>();
-            foreach (var image in images)
+            for (int i = 1; i <= imageCount; i++)
             {
+                var name = new StringBuilder(256);
+                var description = new StringBuilder(1024);
+                var errorMsg = new StringBuilder(512);
+
+                if (!SsbMount_GetImageInfo(ssbPath, i, name, 256, description, 1024, errorMsg, 512))
+                {
+                    continue;
+                }
+
+                string rawDescription = description.ToString();
+                string displayDescription = rawDescription;
+                if (displayDescription.Contains("|BACKUPRESTOREMETADATA|", StringComparison.Ordinal))
+                {
+                    displayDescription = displayDescription.Split(new[] { "|BACKUPRESTOREMETADATA|" }, StringSplitOptions.None)[0];
+                }
+
                 var result = new SsbImageInfoResult
                 {
-                    ImageIndex = image.ImageIndex,
-                    Name = image.Name,
-                    Description = image.Description,
-                    RestoreMetadata = ParseRestoreMetadata(image.Description)
+                    ImageIndex = i,
+                    Name = name.ToString(),
+                    Description = displayDescription,
+                    RestoreMetadata = ParseRestoreMetadata(rawDescription)
                 };
-
-                if (result.RestoreMetadata != null && result.Description.Contains("|BACKUPRESTOREMETADATA|", StringComparison.Ordinal))
-                {
-                    result.Description = result.Description.Split(new[] { "|BACKUPRESTOREMETADATA|" }, StringSplitOptions.None)[0];
-                }
 
                 results.Add(result);
             }

@@ -90,15 +90,30 @@
 								Name="lstRestorePoints"
 								Height="90"
 								SelectionChanged="RestorePoints_SelectionChanged">
+								<ListBox.ItemContainerStyle>
+									<Style TargetType="ListBoxItem">
+										<EventSetter Event="PreviewMouseLeftButtonDown" Handler="RestorePointItem_PreviewMouseLeftButtonDown" />
+									</Style>
+								</ListBox.ItemContainerStyle>
 								<ListBox.ItemTemplate>
 									<DataTemplate>
-										<StackPanel>
-											<TextBlock FontWeight="Bold" Text="{Binding DisplayName}" />
-											<TextBlock
-												FontSize="10"
-												Foreground="{StaticResource SecondaryText}"
-												Text="{Binding Description}" />
-										</StackPanel>
+										<Grid Background="Transparent">
+											<StackPanel Orientation="Horizontal">
+												<CheckBox
+													Margin="0,0,8,0"
+													VerticalAlignment="Top"
+													Focusable="False"
+													IsHitTestVisible="False"
+													IsChecked="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=IsSelected, Mode=OneWay}" />
+												<StackPanel>
+													<TextBlock FontWeight="Bold" Text="{Binding DisplayName}" />
+													<TextBlock
+														FontSize="10"
+														Foreground="{StaticResource SecondaryText}"
+														Text="{Binding Description}" />
+												</StackPanel>
+											</StackPanel>
+										</Grid>
 									</DataTemplate>
 								</ListBox.ItemTemplate>
 							</ListBox>
@@ -560,7 +575,7 @@
 				Width="100"
 				Margin="0,0,5,0"
 				Click="StartRestore_Click"
-				Content="Start Restore"
+				Content="Next"
 				IsEnabled="False" />
 			<Button
 				Width="100"

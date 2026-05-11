@@ -187,6 +187,11 @@ namespace SecureServerBackup.Windows
                             vol.MaxSize = vol.CurrentSize; // Fixed size
                         }
                     }
+
+                    foreach (var vol in volumes.Where(v => v.IsResizable))
+                    {
+                        vol.CurrentSize = vol.MaxSize;
+                    }
                 }
 
                 txtCalculatingStatus.Text = "Rendering interactive display...";

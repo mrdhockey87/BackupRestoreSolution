@@ -27,3 +27,4 @@
   - Volume restores should format the target volume.
   - Both must warn that the target will be formatted and all data lost.
   - Restore progress should show a progress bar plus the current file/folder name being restored.
+- When reporting a restore-flow fix, verify it actually reaches the expected UI step and execution sequence instead of assuming a metadata-path change solved the issue.

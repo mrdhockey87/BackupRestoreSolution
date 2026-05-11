@@ -39,11 +39,13 @@ namespace SecureServerBackup.Windows
         private int? _selectedTargetDiskNumber;
         private NativeBackupMountManager.RestoreDiskPlan? _diskRestorePlan;
         private bool _isHyperVBackupPoint;
+        private bool _suppressRestorePointSelectionChanged;
 
         // Restore target drive tree items
         private readonly ObservableCollection<DriveTreeItem> _restoreTargetItems = new();
         private bool _showHiddenPartitionsTarget;
         private bool _isLoadingTargets;
+        private bool _reloadRestoreTargetsAfterLoad;
         private RestoreTargetKind _lastBuiltTargetKind = RestoreTargetKind.FileOrFolder;
 
         // Selected volumes/disk-group from the restore-volume selection dialog
@@ -346,7 +348,8 @@ namespace SecureServerBackup.Windows
 
                 pnlBackupInfo.Visibility = Visibility.Visible;
                 grpRestoreOptions.IsEnabled = true;
-                btnRestore.IsEnabled = true;
+                UpdateSelectedRestoreTargetKind();
+                UpdateRestoreActionState();
             }
             finally
             {
@@ -398,7 +401,7 @@ namespace SecureServerBackup.Windows
         {
             if (string.IsNullOrWhiteSpace(txtBackupSource.Text))
             {
-                MessageBox.Show("Please select a backup source.", "Validation Error",
+                ShowOwnedMessage("Please select a backup source.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -412,7 +415,7 @@ namespace SecureServerBackup.Windows
                 progressBar.IsIndeterminate = false;
                 pnlProgress.Visibility = Visibility.Collapsed;
                 
-                MessageBox.Show($"Error scanning backup: {ex.Message}", "Error",
+                ShowOwnedMessage($"Error scanning backup: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -463,16 +466,13 @@ namespace SecureServerBackup.Windows
                     {
                         UpdateBackupInfo();
                         lstRestorePoints.ItemsSource = restorePoints;
-                        if (restorePoints.Count > 0)
-                        {
-                            lstRestorePoints.SelectedIndex = restorePoints.Count - 1; // Select latest
-                        }
+                        lstRestorePoints.SelectedItem = null;
                     });
                 }
                 catch (Exception ex)
                 {
                     Dispatcher.Invoke(() =>
-                        MessageBox.Show($"Error scanning backup: {ex.Message}", "Error",
+                        ShowOwnedMessage($"Error scanning backup: {ex.Message}", "Error",
                             MessageBoxButton.OK, MessageBoxImage.Error));
                 }
             });
@@ -610,12 +610,35 @@ namespace SecureServerBackup.Windows
 
         private async void RestorePoints_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
+            if (_suppressRestorePointSelectionChanged)
+            {
+                UpdateSelectedRestoreTargetKind();
+                return;
+            }
+
             if (lstRestorePoints.SelectedItem is RestorePoint point)
             {
                 await LoadBackupContents(point.FilePath);
             }
 
             UpdateSelectedRestoreTargetKind();
+        }
+
+        private void RestorePointItem_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is not ListBoxItem item)
+            {
+                return;
+            }
+
+            if (ReferenceEquals(lstRestorePoints.SelectedItem, item.DataContext))
+            {
+                _suppressRestorePointSelectionChanged = true;
+                item.IsSelected = false;
+                lstRestorePoints.SelectedItem = null;
+                _suppressRestorePointSelectionChanged = false;
+                e.Handled = true;
+            }
         }
 
         private async Task LoadBackupContents(string backupFile)
@@ -812,7 +835,16 @@ namespace SecureServerBackup.Windows
 
             if (showTree && treeViewRestoreTarget != null &&
                 (treeViewRestoreTarget.Items.Count == 0 || selectabilityChanged))
-                _ = LoadRestoreTargetDrivesAsync();
+            {
+                if (_isLoadingTargets)
+                {
+                    _reloadRestoreTargetsAfterLoad = true;
+                }
+                else
+                {
+                    _ = LoadRestoreTargetDrivesAsync();
+                }
+            }
         }
 
         private void RegularHyperVRestoreOption_Changed(object sender, RoutedEventArgs e)
@@ -1042,18 +1074,45 @@ namespace SecureServerBackup.Windows
             if (!ValidateRestore())
                 return;
 
+            if (_restoreTargetKind == RestoreTargetKind.FileOrFolder)
+            {
+                var result = ShowOwnedMessage(
+                    "Are you sure you want to restore? This may overwrite existing files.",
+                    "Confirm Restore",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result != MessageBoxResult.Yes)
+                    return;
+            }
+            else if (_restoreTargetKind == RestoreTargetKind.Disk)
+            {
+                var result = ShowOwnedMessage(
+                    "WARNING: The selected target disk will be formatted and repartitioned. ALL DATA ON THE TARGET DISK WILL BE LOST.\n\nDo you want to continue?",
+                    "Confirm Disk Format",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.No);
+
+                if (result != MessageBoxResult.Yes)
+                    return;
+            }
+            else if (_restoreTargetKind == RestoreTargetKind.Volume)
+            {
+                var result = ShowOwnedMessage(
+                    "WARNING: The selected target volume will be formatted. ALL DATA ON THE TARGET VOLUME WILL BE LOST.\n\nDo you want to continue?",
+                    "Confirm Volume Format",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.No);
+
+                if (result != MessageBoxResult.Yes)
+                    return;
+            }
+
             // For disk and Hyper-V backups with metadata, prompt for volume/group selection
-            // and let the user size each partition before confirming the restore.
+            // and let the user size each partition before confirming execution.
             if (!await PromptVolumeSelectionAndSizingAsync())
-                return;
-
-            var result = MessageBox.Show(
-                "Are you sure you want to restore? This may overwrite existing files.",
-                "Confirm Restore",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            if (result != MessageBoxResult.Yes)
                 return;
 
             try
@@ -1064,7 +1123,7 @@ namespace SecureServerBackup.Windows
 
                 await PerformRestore();
 
-                MessageBox.Show("Restore completed successfully!", "Success",
+                ShowOwnedMessage("Restore completed successfully!", "Success",
                     MessageBoxButton.OK, MessageBoxImage.Information);
 
                 DialogResult = true;
@@ -1072,7 +1131,7 @@ namespace SecureServerBackup.Windows
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Restore failed: {ex.Message}", "Error",
+                ShowOwnedMessage($"Restore failed: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
@@ -1087,17 +1146,24 @@ namespace SecureServerBackup.Windows
         /// </summary>
         private async Task<bool> PromptVolumeSelectionAndSizingAsync()
         {
-            // Only needed for disk and Hyper-V restore kinds with restore metadata.
+            // Only needed for disk and volume restore kinds with restore metadata.
             if (_restoreTargetKind != RestoreTargetKind.Disk &&
                 _restoreTargetKind != RestoreTargetKind.Volume)
             {
                 return true;
             }
 
-            if (_diskRestorePlan == null || !_diskRestorePlan.HasMetadata)
-                return true;
+            if (_restoreTargetKind == RestoreTargetKind.Disk && !EnsureDiskRestorePlanLoaded())
+            {
+                ShowOwnedMessage(
+                    "This disk backup does not contain the reconstruction metadata required to size partitions and rebuild the target disk. Disk restore cannot continue.",
+                    "Restore Metadata Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
+            }
 
-            if (_diskRestorePlan.Volumes.Count <= 1 && !_isHyperVBackupPoint)
+            if (_diskRestorePlan == null || !_diskRestorePlan.HasMetadata)
                 return true;
 
             // Build VolumeInfo list from the restore plan, ordered by partition offset
@@ -1128,32 +1194,53 @@ namespace SecureServerBackup.Windows
 
             bool isDiskOrHyperV = _restoreTargetKind == RestoreTargetKind.Disk || _isHyperVBackupPoint;
 
-            // Step 1 – volume selection dialog
-            var selectionDialog = new RestoreVolumeSelectionDialog(
-                volumes,
-                isDiskOrHyperV,
-                isDiskOrHyperV
-                    ? "This backup contains multiple volumes. Select a single volume or the entire disk group to restore."
-                    : "Select the volume to restore from this backup.") { Owner = this };
-
-            if (selectionDialog.ShowDialog() != true || !selectionDialog.Confirmed)
-                return false;
-
+            // Step 1 – volume selection dialog (skip only when not needed)
             IReadOnlyList<VolumeInfo> volumesToResize;
-            bool isGroupRestore = selectionDialog.SelectedDiskGroup != null;
+            bool isGroupRestore;
 
-            if (isGroupRestore)
-                volumesToResize = selectionDialog.SelectedDiskGroup!;
+            if (_restoreTargetKind == RestoreTargetKind.Volume && volumes.Count == 1)
+            {
+                // Single-volume restore: no selection prompt needed, go straight to sizing.
+                volumesToResize = volumes;
+                isGroupRestore = false;
+                _selectedRestoreVolume = volumes[0];
+                _selectedRestoreDiskGroup = null;
+            }
             else
-                volumesToResize = new[] { selectionDialog.SelectedVolume! };
+            {
+                var selectionDialog = new RestoreVolumeSelectionDialog(
+                    volumes,
+                    isDiskOrHyperV,
+                    isDiskOrHyperV
+                        ? "This backup contains multiple volumes. Select a single volume or the entire disk group to restore."
+                        : "Select the volume to restore from this backup.") { Owner = this };
+
+                if (selectionDialog.ShowDialog() != true || !selectionDialog.Confirmed)
+                    return false;
+
+                isGroupRestore = selectionDialog.SelectedDiskGroup != null;
+                if (isGroupRestore)
+                    volumesToResize = selectionDialog.SelectedDiskGroup!;
+                else
+                    volumesToResize = new[] { selectionDialog.SelectedVolume! };
+            }
 
             // Step 2 – partition sizing (requires a target disk to know capacity)
             long targetDiskSizeBytes = await GetTargetDiskSizeBytesAsync();
             if (targetDiskSizeBytes <= 0)
             {
                 // Can't determine target size; skip resize and proceed with original sizes
-                _selectedRestoreVolume  = isGroupRestore ? null : (VolumeInfo?)selectionDialog.SelectedVolume;
-                _selectedRestoreDiskGroup = isGroupRestore ? selectionDialog.SelectedDiskGroup : null;
+                if (isGroupRestore)
+                {
+                    _selectedRestoreDiskGroup = volumesToResize.ToList();
+                    _selectedRestoreVolume = null;
+                }
+                else
+                {
+                    _selectedRestoreVolume = volumesToResize.FirstOrDefault();
+                    _selectedRestoreDiskGroup = null;
+                }
+
                 return true;
             }
 
@@ -1176,15 +1263,40 @@ namespace SecureServerBackup.Windows
             if (isGroupRestore)
             {
                 _selectedRestoreDiskGroup = resized;
-                _selectedRestoreVolume    = null;
+                _selectedRestoreVolume = null;
             }
             else
             {
-                _selectedRestoreVolume    = resized.FirstOrDefault();
+                _selectedRestoreVolume = resized.FirstOrDefault();
                 _selectedRestoreDiskGroup = null;
             }
 
             return true;
+        }
+
+        private bool EnsureDiskRestorePlanLoaded()
+        {
+            if (_diskRestorePlan?.HasMetadata == true)
+            {
+                return true;
+            }
+
+            if (lstRestorePoints.SelectedItem is not RestorePoint selectedPoint)
+            {
+                return false;
+            }
+
+            try
+            {
+                using var preparedBackup = EncryptedBackupFileService.PrepareForRead(this, selectedPoint.FilePath, Path.GetFileNameWithoutExtension(selectedPoint.FilePath));
+                LoadDiskRestorePlan(preparedBackup.WorkingPath);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"EnsureDiskRestorePlanLoaded exception: {ex.Message}");
+            }
+
+            return _diskRestorePlan?.HasMetadata == true;
         }
 
         /// <summary>Returns the size of the target disk in bytes, or -1 when it cannot be determined.</summary>
@@ -1297,12 +1409,14 @@ namespace SecureServerBackup.Windows
                         break;
 
                     default:
+                    {
                         result = BackupEngineInterop.RestoreFiles(
                             preparedBackup.WorkingPath,
                             destination,
                             chkOverwrite.IsChecked == true,
                             callback);
                         break;
+                    }
                 }
 
                 if (result != 0)
@@ -1318,23 +1432,54 @@ namespace SecureServerBackup.Windows
         {
             PrepareDiskTarget();
 
-            // When a disk-group was resized, restore volumes in partition-offset order
-            if (_selectedRestoreDiskGroup != null && _selectedRestoreDiskGroup.Count > 0)
+            if (_diskRestorePlan?.HasMetadata == true)
             {
-                int lastResult = 0;
                 int targetDisk = _selectedTargetDiskNumber ?? -1;
-                var ordered = _selectedRestoreDiskGroup
+                var ordered = (_selectedRestoreDiskGroup?.Count > 0
+                        ? _selectedRestoreDiskGroup
+                        : _selectedRestoreVolume is not null
+                            ? new[] { _selectedRestoreVolume }
+                            : _diskRestorePlan.Volumes.Select((v, idx) => new VolumeInfo
+                            {
+                                ImageIndex = idx + 1,
+                                Label = !string.IsNullOrWhiteSpace(v.SourceVolumeLabel) ? v.SourceVolumeLabel : $"Volume {v.PartitionNumber}",
+                                Size = (long)v.PartitionLengthBytes,
+                                UsedSpace = 0,
+                                PartitionNumber = v.PartitionNumber,
+                                PartitionOffsetBytes = v.PartitionOffsetBytes,
+                                PartitionLengthBytes = v.PartitionLengthBytes,
+                                PartitionStyle = v.PartitionStyle,
+                                PartitionType = v.PartitionType,
+                                SourceVolumeGuidPath = v.SourceVolumeGuidPath,
+                                SourceVolumeMountPath = v.SourceVolumeMountPath,
+                                IsBootVolume = v.IsBootVolume,
+                                IsSystemVolume = v.IsSystemVolume,
+                                FileSystem = v.SourceFileSystem,
+                                IsResizable = true,
+                                TargetSize = (long)v.PartitionLengthBytes
+                            }))
                     .OrderBy(v => v.PartitionOffsetBytes)
                     .ThenBy(v => v.PartitionNumber)
                     .ToList();
 
+                if (ordered.Count == 0)
+                {
+                    throw new InvalidOperationException("No restore volumes are available for the selected disk backup.");
+                }
+
+                var targetVolumePaths = PrepareDiskTargetVolumes(targetDisk, ordered);
+                int lastResult = 0;
                 for (int i = 0; i < ordered.Count; i++)
                 {
                     var vol = ordered[i];
                     int pct = (int)((i / (double)ordered.Count) * 90);
                     callback(pct, $"Restoring partition {i + 1} of {ordered.Count}: {vol.Label}…");
-                    lastResult = BackupEngineInterop.RestoreDiskFromImage(
-                        preparedBackupPath, vol.ImageIndex, targetDisk, vol.IsBootVolume || vol.IsSystemVolume, callback);
+                    lastResult = BackupEngineInterop.RestoreVolumeFromImage(
+                        preparedBackupPath,
+                        vol.ImageIndex,
+                        targetVolumePaths[i],
+                        false,
+                        callback);
                     if (lastResult != 0)
                         return lastResult;
                 }
@@ -1351,11 +1496,137 @@ namespace SecureServerBackup.Windows
             }
 
             {
-                int imageIndex = _selectedRestoreVolume?.ImageIndex ?? _diskRestorePlan?.ImageIndex ?? -1;
+                int imageIndex = _selectedRestoreVolume?.ImageIndex ?? _diskRestorePlan?.ImageIndex ?? 1;
+
+                bool isArchiveFile = !string.IsNullOrWhiteSpace(preparedBackupPath) &&
+                                     string.Equals(Path.GetExtension(preparedBackupPath), ".ssb", StringComparison.OrdinalIgnoreCase);
+
+                if (isArchiveFile)
+                {
+                    return BackupEngineInterop.RestoreDiskFromImage(
+                        preparedBackupPath,
+                        imageIndex,
+                        _selectedTargetDiskNumber ?? -1,
+                        false,
+                        callback);
+                }
+
                 return _diskRestorePlan?.HasMetadata == true
                     ? BackupEngineInterop.RestoreDiskFromImage(preparedBackupPath, imageIndex, _selectedTargetDiskNumber ?? -1, false, callback)
                     : BackupEngineInterop.RestoreDisk(preparedBackupPath, _selectedTargetDiskNumber ?? -1, false, callback);
             }
+        }
+
+        private List<string> PrepareDiskTargetVolumes(int targetDiskNumber, IReadOnlyList<VolumeInfo> orderedVolumes)
+        {
+            ArgumentNullException.ThrowIfNull(orderedVolumes);
+
+            if (orderedVolumes.Count == 0)
+            {
+                throw new InvalidOperationException("No restore volumes were selected for the target disk.");
+            }
+
+            string partitionStyle = orderedVolumes
+                .Select(volume => volume.PartitionStyle)
+                .FirstOrDefault(style => !string.IsNullOrWhiteSpace(style)) ?? "GPT";
+
+            long[] targetSizes = orderedVolumes
+                .Select(volume => volume.TargetSize > 0 ? volume.TargetSize : volume.Size)
+                .ToArray();
+
+            string[] fileSystems = orderedVolumes
+                .Select(GetSupportedRestoreFileSystem)
+                .ToArray();
+
+            string[] labels = orderedVolumes
+                .Select(volume => string.IsNullOrWhiteSpace(volume.Label) ? $"Restore{volume.PartitionNumber}" : volume.Label)
+                .ToArray();
+
+            string[] partitionTypes = orderedVolumes
+                .Select(volume => volume.PartitionType ?? string.Empty)
+                .ToArray();
+
+            string sizeArray = string.Join(",", targetSizes.Select(size => $"{size}L"));
+            string fileSystemArray = string.Join(",", fileSystems.Select(value => $"'{EscapePowerShellSingleQuotedString(value)}'"));
+            string labelArray = string.Join(",", labels.Select(value => $"'{EscapePowerShellSingleQuotedString(value)}'"));
+            string partitionTypeArray = string.Join(",", partitionTypes.Select(value => $"'{EscapePowerShellSingleQuotedString(value)}'"));
+
+            string script =
+                $"$diskNumber={targetDiskNumber}; " +
+                $"$partitionStyle='{EscapePowerShellSingleQuotedString(partitionStyle)}'; " +
+                $"$sizes=@({sizeArray}); " +
+                $"$fileSystems=@({fileSystemArray}); " +
+                $"$labels=@({labelArray}); " +
+                $"$partitionTypes=@({partitionTypeArray}); " +
+                "$created=@(); " +
+                "Clear-Disk -Number $diskNumber -RemoveData -RemoveOEM -Confirm:$false -ErrorAction Stop; " +
+                "Initialize-Disk -Number $diskNumber -PartitionStyle $partitionStyle -ErrorAction Stop; " +
+                "for ($i = 0; $i -lt $sizes.Count; $i++) { " +
+                "$partitionType = $partitionTypes[$i]; " +
+                "$newPartitionParams = @{ DiskNumber = $diskNumber; AssignDriveLetter = $true; ErrorAction = 'Stop' }; " +
+                "if ($i -eq $sizes.Count - 1) { $newPartitionParams['UseMaximumSize'] = $true; } else { $newPartitionParams['Size'] = [Int64]$sizes[$i]; } " +
+                "if ($partitionStyle -eq 'GPT' -and -not [string]::IsNullOrWhiteSpace($partitionType)) { $newPartitionParams['GptType'] = $partitionType; } " +
+                "$partition = New-Partition @newPartitionParams; " +
+                "$fileSystem = $fileSystems[$i]; " +
+                "if ([string]::IsNullOrWhiteSpace($fileSystem)) { $fileSystem = 'NTFS'; } " +
+                "$label = $labels[$i]; " +
+                "if ([string]::IsNullOrWhiteSpace($label)) { $label = 'SSBRestore'; } " +
+                "Format-Volume -Partition $partition -FileSystem $fileSystem -NewFileSystemLabel $label -Confirm:$false -Force -ErrorAction Stop | Out-Null; " +
+                "$driveLetter = ($partition | Get-Volume).DriveLetter; " +
+                "if ([string]::IsNullOrWhiteSpace($driveLetter)) { throw 'Failed to assign a drive letter to a restored partition.'; } " +
+                "$created += ($driveLetter + ':\\'); " +
+                "}; " +
+                "$created -join '|'";
+
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string output = process?.StandardOutput.ReadToEnd() ?? string.Empty;
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Failed to partition and format the target disk. {errors}".Trim());
+            }
+
+            var createdVolumes = output
+                .Split('|', StringSplitOptions.RemoveEmptyEntries)
+                .Select(path => path.Trim())
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .ToList();
+
+            if (createdVolumes.Count != orderedVolumes.Count)
+            {
+                throw new InvalidOperationException("The target disk layout was created, but the number of formatted restore volumes did not match the selected layout.");
+            }
+
+            return createdVolumes;
+        }
+
+        private static string GetSupportedRestoreFileSystem(VolumeInfo volume)
+        {
+            string fileSystem = volume.FileSystem?.Trim() ?? string.Empty;
+            return fileSystem.ToUpperInvariant() switch
+            {
+                "NTFS" => "NTFS",
+                "FAT32" => "FAT32",
+                "EXFAT" => "exFAT",
+                "REFS" => "ReFS",
+                _ => "NTFS"
+            };
+        }
+
+        private static string EscapePowerShellSingleQuotedString(string value)
+        {
+            return (value ?? string.Empty).Replace("'", "''", StringComparison.Ordinal);
         }
 
         private int RestoreVolumeTarget(string preparedBackupPath, string selectedBackupPath, BackupEngineInterop.ProgressCallback callback)
@@ -1384,7 +1655,7 @@ namespace SecureServerBackup.Windows
         {
             if (lstRestorePoints.SelectedItem == null)
             {
-                MessageBox.Show("Please select a restore point.", "Validation Error",
+                ShowOwnedMessage("Please select a restore point.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
@@ -1393,14 +1664,14 @@ namespace SecureServerBackup.Windows
             {
                 if (rbAlternateLocation.IsChecked == true && string.IsNullOrWhiteSpace(txtFolderRestoreDestination.Text))
                 {
-                    MessageBox.Show("Please select a restore destination folder.", "Validation Error",
+                    ShowOwnedMessage("Please select a restore destination folder.", "Validation Error",
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
 
                 if (_requireAlternateDestination && rbOriginalLocation.IsChecked == true)
                 {
-                    MessageBox.Show("This backup includes the currently booted system/boot drive. Restore it to a non-boot destination from Windows, or boot from the recovery disk for an in-place restore.",
+                    ShowOwnedMessage("This backup includes the currently booted system/boot drive. Restore it to a non-boot destination from Windows, or boot from the recovery disk for an in-place restore.",
                         "Recovery Environment Required",
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
@@ -1415,7 +1686,7 @@ namespace SecureServerBackup.Windows
                     if (!string.IsNullOrWhiteSpace(destinationRoot) &&
                         string.Equals(destinationRoot, systemRoot, StringComparison.OrdinalIgnoreCase))
                     {
-                        MessageBox.Show("Please select a restore destination that is not on the currently booted drive.",
+                        ShowOwnedMessage("Please select a restore destination that is not on the currently booted drive.",
                             "Validation Error",
                             MessageBoxButton.OK,
                             MessageBoxImage.Warning);
@@ -1428,7 +1699,7 @@ namespace SecureServerBackup.Windows
 
             if (_restoreTargetKind == RestoreTargetKind.Disk && !_selectedTargetDiskNumber.HasValue)
             {
-                MessageBox.Show("Please select the target disk to restore to.", "Validation Error",
+                ShowOwnedMessage("Please select the target disk to restore to.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
@@ -1440,7 +1711,7 @@ namespace SecureServerBackup.Windows
                 {
                     if (cmbHyperVVmToReplace.SelectedItem == null || string.IsNullOrWhiteSpace(cmbHyperVVmToReplace.SelectedItem.ToString()))
                     {
-                        MessageBox.Show("Please select a non-running Hyper-V virtual machine to replace.", "Validation Error",
+                        ShowOwnedMessage("Please select a non-running Hyper-V virtual machine to replace.", "Validation Error",
                             MessageBoxButton.OK, MessageBoxImage.Warning);
                         return false;
                     }
@@ -1449,7 +1720,7 @@ namespace SecureServerBackup.Windows
                 {
                     if (string.IsNullOrWhiteSpace(txtHyperVRestoreDirectory?.Text))
                     {
-                        MessageBox.Show("Please select an empty directory to restore the Hyper-V virtual machine into.", "Validation Error",
+                        ShowOwnedMessage("Please select an empty directory to restore the Hyper-V virtual machine into.", "Validation Error",
                             MessageBoxButton.OK, MessageBoxImage.Warning);
                         return false;
                     }
@@ -1457,7 +1728,7 @@ namespace SecureServerBackup.Windows
                     string restoreDir = txtHyperVRestoreDirectory.Text.Trim();
                     if (Directory.Exists(restoreDir) && Directory.EnumerateFileSystemEntries(restoreDir).Any())
                     {
-                        MessageBox.Show("The selected restore directory is not empty. Please choose an empty directory.", "Validation Error",
+                        ShowOwnedMessage("The selected restore directory is not empty. Please choose an empty directory.", "Validation Error",
                             MessageBoxButton.OK, MessageBoxImage.Warning);
                         return false;
                     }
@@ -1465,7 +1736,7 @@ namespace SecureServerBackup.Windows
 
                 if (string.IsNullOrWhiteSpace(txtHyperVVmName.Text))
                 {
-                    MessageBox.Show("Please enter a virtual machine name for the restored VM.", "Validation Error",
+                    ShowOwnedMessage("Please enter a virtual machine name for the restored VM.", "Validation Error",
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
@@ -1475,7 +1746,7 @@ namespace SecureServerBackup.Windows
             {
                 if (string.IsNullOrWhiteSpace(txtHyperVVirtualDiskPath.Text))
                 {
-                    MessageBox.Show("Please select the Hyper-V virtual disk file to create or update.", "Validation Error",
+                    ShowOwnedMessage("Please select the Hyper-V virtual disk file to create or update.", "Validation Error",
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
@@ -1485,7 +1756,7 @@ namespace SecureServerBackup.Windows
                     string selectedVm = cmbExistingHyperVVm.SelectedItem?.ToString() ?? string.Empty;
                     if (string.IsNullOrWhiteSpace(selectedVm))
                     {
-                        MessageBox.Show("Please select the existing Hyper-V virtual machine that should receive the restored virtual disk.", "Validation Error",
+                        ShowOwnedMessage("Please select the existing Hyper-V virtual machine that should receive the restored virtual disk.", "Validation Error",
                             MessageBoxButton.OK, MessageBoxImage.Warning);
                         return false;
                     }
@@ -1495,14 +1766,14 @@ namespace SecureServerBackup.Windows
                 {
                     if (string.IsNullOrWhiteSpace(txtNewHyperVVmName.Text))
                     {
-                        MessageBox.Show("Please enter the name for the new Hyper-V virtual machine.", "Validation Error",
+                        ShowOwnedMessage("Please enter the name for the new Hyper-V virtual machine.", "Validation Error",
                             MessageBoxButton.OK, MessageBoxImage.Warning);
                         return false;
                     }
 
                     if (string.IsNullOrWhiteSpace(txtNewHyperVVmPath.Text))
                     {
-                        MessageBox.Show("Please select the storage folder for the new Hyper-V virtual machine.", "Validation Error",
+                        ShowOwnedMessage("Please select the storage folder for the new Hyper-V virtual machine.", "Validation Error",
                             MessageBoxButton.OK, MessageBoxImage.Warning);
                         return false;
                     }
@@ -1511,14 +1782,14 @@ namespace SecureServerBackup.Windows
 
             if (_restoreTargetKind == RestoreTargetKind.Volume && string.IsNullOrWhiteSpace(_selectedTargetPath))
             {
-                MessageBox.Show("Please select the target disk or volume to restore to.", "Validation Error",
+                ShowOwnedMessage("Please select the target disk or volume to restore to.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
 
             if (_isHyperVBackupPoint && (_restoreTargetKind == RestoreTargetKind.Disk || _restoreTargetKind == RestoreTargetKind.Volume) && HyperVRestorePointHelper.FindPrimaryVirtualDisk(((RestorePoint)lstRestorePoints.SelectedItem!).FilePath) == null)
             {
-                MessageBox.Show("The selected Hyper-V backup point does not contain a guest VHD or VHDX file that can be restored to a disk or volume target.", "Validation Error",
+                ShowOwnedMessage("The selected Hyper-V backup point does not contain a guest VHD or VHDX file that can be restored to a disk or volume target.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
@@ -1536,8 +1807,13 @@ namespace SecureServerBackup.Windows
             var selectedPoint = lstRestorePoints.SelectedItem as RestorePoint;
             if (selectedPoint == null)
             {
-                _restoreTargetKind = RestoreTargetKind.FileOrFolder;
+                _restoreTargetKind = restorePoints.Count > 0
+                    ? RestoreTargetKind.Disk
+                    : RestoreTargetKind.FileOrFolder;
+
                 UpdateDestinationHelpText();
+                UpdateLocationPanelVisibility();
+                UpdateRestoreActionState();
                 return;
             }
 
@@ -1554,6 +1830,7 @@ namespace SecureServerBackup.Windows
 
                 UpdateHyperVRestoreMode();
                 UpdateDestinationHelpText();
+                UpdateRestoreActionState();
                 return;
             }
 
@@ -1561,6 +1838,7 @@ namespace SecureServerBackup.Windows
             {
                 _restoreTargetKind = RestoreTargetKind.HyperVVirtualDisk;
                 UpdateDestinationHelpText();
+                UpdateRestoreActionState();
                 return;
             }
 
@@ -1572,6 +1850,7 @@ namespace SecureServerBackup.Windows
                     : RestoreTargetKind.Volume;
                 UpdateDestinationHelpText();
                 UpdateLocationPanelVisibility();
+                UpdateRestoreActionState();
                 return;
             }
 
@@ -1627,6 +1906,7 @@ namespace SecureServerBackup.Windows
 
             UpdateDestinationHelpText();
             UpdateLocationPanelVisibility();
+            UpdateRestoreActionState();
         }
 
         private void UpdateDestinationHelpText()
@@ -2029,6 +2309,7 @@ namespace SecureServerBackup.Windows
                 return;
 
             _isLoadingTargets = true;
+            _reloadRestoreTargetsAfterLoad = false;
             loadingTargetOverlay.Visibility = Visibility.Visible;
             treeViewRestoreTarget.Items.Clear();
             _restoreTargetItems.Clear();
@@ -2037,13 +2318,15 @@ namespace SecureServerBackup.Windows
             txtSelectedTargetLabel.Text = "No target selected";
             btnRestore.IsEnabled = false;
 
+            RestoreTargetKind buildTargetKind = _restoreTargetKind;
+
             try
             {
                 var protectedIndexes = GetProtectedDiskIndexes();
-                // Disk nodes are selectable for both Disk and Volume restore kinds (volume restore
-                // to an entire disk repartitions the target disk to accept the restored volume).
-                bool diskMode = _restoreTargetKind == RestoreTargetKind.Disk ||
-                                _restoreTargetKind == RestoreTargetKind.Volume;
+                // Disk nodes are selectable for both Disk and Volume restore kinds (volume restore to an entire disk
+                // repartitions the target disk to accept the restored volume). Protected/hidden never selectable.
+                bool diskMode = buildTargetKind == RestoreTargetKind.Disk ||
+                                buildTargetKind == RestoreTargetKind.Volume;
                 bool showHidden = _showHiddenPartitionsTarget;
 
                 await Task.Run(() =>
@@ -2186,16 +2469,26 @@ namespace SecureServerBackup.Windows
                     catch (Exception ex)
                     {
                         Dispatcher.Invoke(() =>
-                            CustomDialogService.ShowError(
-                                $"Error loading restore targets: {ex.Message}", "Error"));
+                            ShowOwnedMessage(
+                                $"Error loading restore targets: {ex.Message}",
+                                "Error",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error));
                     }
                 });
             }
             finally
             {
+                bool reloadAfterLoad = _reloadRestoreTargetsAfterLoad || buildTargetKind != _restoreTargetKind;
                 _isLoadingTargets = false;
-                _lastBuiltTargetKind = _restoreTargetKind;
+                _reloadRestoreTargetsAfterLoad = false;
+                _lastBuiltTargetKind = buildTargetKind;
                 loadingTargetOverlay.Visibility = Visibility.Collapsed;
+
+                if (reloadAfterLoad)
+                {
+                    _ = LoadRestoreTargetDrivesAsync();
+                }
             }
         }
 
@@ -2268,7 +2561,7 @@ namespace SecureServerBackup.Windows
             return found;
         }
 
-        /// <summary>Layer 3: DriveInfo fallback — attaches all fixed drives to disk 0.</summary>
+        /// <summary>Layer 3: DriveInfo fallback — attach all fixed drives to disk 0.</summary>
         private static void TargetLoadVolumesFallback(DriveTreeItem diskItem, int diskIdx)
         {
             if (diskIdx != 0) return;
@@ -2382,12 +2675,10 @@ namespace SecureServerBackup.Windows
 
             // Disks are selectable for disk or volume restores (volume restore to a whole disk
             // repartitions the target to accept the restored volume). Protected/hidden never selectable.
-            bool diskSelectMode = _restoreTargetKind == RestoreTargetKind.Disk ||
-                                  _restoreTargetKind == RestoreTargetKind.Volume;
             bool isSelectable = !isProtected && !isHvRoot && !isHidden &&
                 (isHvVm ||
                  item.ItemType == DriveTreeItemType.Volume ||
-                 (diskSelectMode && item.ItemType == DriveTreeItemType.Disk));
+                 (diskMode && item.ItemType == DriveTreeItemType.Disk));
 
             if (!isHvRoot)
             {
@@ -2415,7 +2706,7 @@ namespace SecureServerBackup.Windows
                         _selectedTargetPath = null;
                         _selectedTargetDiskNumber = null;
                         txtSelectedTargetLabel.Text = "No target selected";
-                        btnRestore.IsEnabled = false;
+                        UpdateRestoreActionState();
                     }
                     e.Handled = true;
                 };
@@ -2462,7 +2753,7 @@ namespace SecureServerBackup.Windows
 
                 if (isRunning)
                 {
-                    var result = MessageBox.Show(
+                    var result = ShowOwnedMessage(
                         $"The virtual machine '{vmName}' is currently running.\n\n" +
                         "It must be shut down before the restore can proceed. " +
                         "All unsaved data inside the VM will be lost.\n\n" +
@@ -2475,7 +2766,9 @@ namespace SecureServerBackup.Windows
                     {
                         UncheckAllRestoreTargetItems(treeViewRestoreTarget);
                         _selectedTargetPath = null;
+                        _selectedTargetDiskNumber = null;
                         txtSelectedTargetLabel.Text = "No target selected";
+                        UpdateRestoreActionState();
                         return;
                     }
 
@@ -2494,14 +2787,16 @@ namespace SecureServerBackup.Windows
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show(
+                        ShowOwnedMessage(
                             $"Failed to shut down '{vmName}': {ex.Message}\n\nPlease stop the VM manually and try again.",
                             "Shutdown Failed",
                             MessageBoxButton.OK,
                             MessageBoxImage.Error);
                         UncheckAllRestoreTargetItems(treeViewRestoreTarget);
                         _selectedTargetPath = null;
+                        _selectedTargetDiskNumber = null;
                         txtSelectedTargetLabel.Text = "No target selected";
+                        UpdateRestoreActionState();
                         return;
                     }
                 }
@@ -2509,6 +2804,7 @@ namespace SecureServerBackup.Windows
                 _selectedTargetPath = vmName;
                 _selectedTargetDiskNumber = null;
                 txtSelectedTargetLabel.Text = $"Selected: {vmName}";
+                UpdateRestoreActionState();
                 return;
             }
 
@@ -2518,7 +2814,7 @@ namespace SecureServerBackup.Windows
                 : item.Parent?.PartitionNumber;
 
             txtSelectedTargetLabel.Text = $"Selected: {item.Name.Split(new[] { "  [" }, StringSplitOptions.None)[0].Trim()}";
-
+            
             // For file/folder restores the tree acts as a drive picker for the alternate-location
             // path: auto-check Alternate Location and pre-fill the destination text box so the
             // existing validation and restore code picks it up without any extra changes.
@@ -2529,6 +2825,8 @@ namespace SecureServerBackup.Windows
                 rbAlternateLocation.IsChecked = true;
                 txtFolderRestoreDestination.Text = item.FullPath;
             }
+
+            UpdateRestoreActionState();
         }
 
         /// <summary>Walks every tree item and unchecks any RestoreTarget radio button.</summary>
@@ -2560,10 +2858,6 @@ namespace SecureServerBackup.Windows
             var indexes = new List<int>();
             try
             {
-                // Resolve the drive letter that contains the running OS (%SystemRoot%).
-                // Then walk: LogicalDisk -> DiskPartition -> DiskDrive to get the physical disk Index.
-                // This is more reliable than BootPartition = TRUE which fires on EFI partitions on
-                // any disk and can misidentify non-boot disks as protected.
                 string systemRoot = Path.GetPathRoot(
                     Environment.GetFolderPath(Environment.SpecialFolder.System)) ?? string.Empty;
                 string osDriveLetter = systemRoot.TrimEnd('\\').TrimEnd(':');
@@ -2571,7 +2865,7 @@ namespace SecureServerBackup.Windows
                 if (string.IsNullOrWhiteSpace(osDriveLetter))
                     return indexes;
 
-                // Win32_LogicalDisk -> Win32_DiskPartition
+                // Map only the active OS logical drive (for example C:) to its backing physical disk.
                 using var ldSearcher = new ManagementObjectSearcher(
                     $"ASSOCIATORS OF {{Win32_LogicalDisk.DeviceID='{osDriveLetter}:'}} " +
                     "WHERE AssocClass=Win32_LogicalDiskToPartition");
@@ -2579,9 +2873,9 @@ namespace SecureServerBackup.Windows
                 foreach (ManagementObject partition in ldSearcher.Get())
                 {
                     string? partId = partition["DeviceID"]?.ToString();
-                    if (string.IsNullOrWhiteSpace(partId)) continue;
+                    if (string.IsNullOrWhiteSpace(partId))
+                        continue;
 
-                    // Win32_DiskPartition -> Win32_DiskDrive
                     using var ddSearcher = new ManagementObjectSearcher(
                         $"ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{partId}'}} " +
                         "WHERE AssocClass=Win32_DiskDriveToDiskPartition");
@@ -2589,6 +2883,22 @@ namespace SecureServerBackup.Windows
                     foreach (ManagementObject drive in ddSearcher.Get())
                     {
                         if (int.TryParse(drive["Index"]?.ToString(), out int diskIdx) &&
+                            !indexes.Contains(diskIdx))
+                        {
+                            indexes.Add(diskIdx);
+                        }
+                    }
+                }
+
+                // Fallback if WMI association fails: resolve from the Win32_LogicalDiskToPartition mapping string.
+                if (indexes.Count == 0)
+                {
+                    using var relSearcher = new ManagementObjectSearcher(
+                        $"ASSOCIATORS OF {{Win32_LogicalDisk.DeviceID='{osDriveLetter}:'}} WHERE AssocClass=Win32_LogicalDiskToPartition");
+
+                    foreach (ManagementObject partition in relSearcher.Get())
+                    {
+                        if (int.TryParse(partition["DiskIndex"]?.ToString(), out int diskIdx) &&
                             !indexes.Contains(diskIdx))
                         {
                             indexes.Add(diskIdx);
@@ -2606,33 +2916,14 @@ namespace SecureServerBackup.Windows
 
         private void PrepareDiskTarget()
         {
-            var confirmation = MessageBox.Show(
-                "WARNING: The selected target disk will be formatted and repartitioned. ALL DATA ON THE TARGET DISK WILL BE LOST.\n\nDo you want to continue?",
-                "Confirm Disk Format",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
-
-            if (confirmation != MessageBoxResult.Yes)
+            if (!_selectedTargetDiskNumber.HasValue)
             {
-                throw new OperationCanceledException("Disk restore cancelled by user.");
+                throw new InvalidOperationException("No target disk selected.");
             }
         }
 
         private void PrepareVolumeTarget()
         {
-            var confirmation = MessageBox.Show(
-                "WARNING: The selected target volume will be formatted. ALL DATA ON THE TARGET VOLUME WILL BE LOST.\n\nDo you want to continue?",
-                "Confirm Volume Format",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
-
-            if (confirmation != MessageBoxResult.Yes)
-            {
-                throw new OperationCanceledException("Volume restore cancelled by user.");
-            }
-
             string volumePath = _selectedTargetPath ?? string.Empty;
             if (string.IsNullOrWhiteSpace(volumePath))
             {
@@ -2662,6 +2953,40 @@ namespace SecureServerBackup.Windows
             DialogResult = false;
             Close();
         }
+
+        private void UpdateRestoreActionState()
+        {
+            if (btnRestore == null)
+                return;
+
+            bool hasRestorePoint = lstRestorePoints?.SelectedItem is RestorePoint;
+            bool requiresExplicitTarget = _restoreTargetKind == RestoreTargetKind.Disk ||
+                                          _restoreTargetKind == RestoreTargetKind.Volume;
+            bool hasTargetSelection = !string.IsNullOrWhiteSpace(_selectedTargetPath);
+
+            btnRestore.IsEnabled = hasRestorePoint && (!requiresExplicitTarget || hasTargetSelection);
+        }
+
+        private MessageBoxResult ShowOwnedMessage(
+            string messageBoxText,
+            string caption,
+            MessageBoxButton button,
+            MessageBoxImage icon,
+            MessageBoxResult defaultResult = MessageBoxResult.None)
+        {
+            if (Dispatcher.CheckAccess())
+            {
+                return defaultResult == MessageBoxResult.None
+                    ? MessageBox.Show(this, messageBoxText, caption, button, icon)
+                    : MessageBox.Show(this, messageBoxText, caption, button, icon, defaultResult);
+            }
+
+            return Dispatcher.Invoke(() =>
+                defaultResult == MessageBoxResult.None
+                    ? MessageBox.Show(this, messageBoxText, caption, button, icon)
+                    : MessageBox.Show(this, messageBoxText, caption, button, icon, defaultResult));
+        }
+        
     }
 
     public class RestorePoint
