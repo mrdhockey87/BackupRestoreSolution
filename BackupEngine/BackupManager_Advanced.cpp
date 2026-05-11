@@ -141,6 +141,47 @@ namespace {
         return fallback;
     }
 
+    void LogToJsonFile(const std::wstring& level, const std::wstring& message, const std::wstring& details);
+
+    HANDLE OpenExistingWimWithRetry(const std::wstring& destFile, const wchar_t* operationName) {
+        const wchar_t* safeOperationName = operationName != nullptr ? operationName : L"backup";
+        constexpr int MaxAttempts = 6;
+        constexpr DWORD RetryDelayMilliseconds = 500;
+
+        HANDLE hWim = INVALID_HANDLE_VALUE;
+        DWORD lastError = ERROR_SUCCESS;
+
+        for (int attempt = 1; attempt <= MaxAttempts; ++attempt) {
+            hWim = WIMCreateFile(
+                destFile.c_str(),
+                WIM_GENERIC_READ | WIM_GENERIC_WRITE,
+                WIM_OPEN_EXISTING,
+                0,
+                0,
+                nullptr);
+
+            if (hWim && hWim != INVALID_HANDLE_VALUE) {
+                if (attempt > 1) {
+                    LogToJsonFile(L"Info", std::wstring(safeOperationName) + L": Opened existing WIM after retry " + std::to_wstring(attempt) + L".", L"");
+                }
+
+                return hWim;
+            }
+
+            lastError = GetLastError();
+            if (lastError != ERROR_SHARING_VIOLATION || attempt == MaxAttempts) {
+                break;
+            }
+
+            LogToJsonFile(L"Warning", std::wstring(safeOperationName) + L": Existing WIM is temporarily locked. Retrying open attempt " +
+                std::to_wstring(attempt) + L" of " + std::to_wstring(MaxAttempts) + L" for " + destFile + L".", L"");
+            Sleep(RetryDelayMilliseconds);
+        }
+
+        SetLastError(lastError);
+        return INVALID_HANDLE_VALUE;
+    }
+
     std::wstring GetBackupEngineLogDir() {
         wchar_t programData[MAX_PATH];
         if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_COMMON_APPDATA, NULL, 0, programData))) {
@@ -2098,20 +2139,14 @@ extern "C" {
             // NOTE: WIM_FLAG_VERIFY removed - can cause ERROR_INVALID_PARAMETER (87) on valid files
             // CRITICAL: Must use WIM_GENERIC_READ | WIM_GENERIC_WRITE when opening existing WIM to append images!
             //           WIM_GENERIC_WRITE alone causes ERROR_INVALID_PARAMETER (87)
-            HANDLE hWim = WIMCreateFile(
-                destFile.c_str(),
-                WIM_GENERIC_READ | WIM_GENERIC_WRITE,  // Need READ+WRITE to append images
-                WIM_OPEN_EXISTING,
-                0,  // No special flags needed for append operation
-                0,  // MUST be 0 when opening existing WIM! Compression read from file.
-                NULL
-            );
+            HANDLE hWim = OpenExistingWimWithRetry(destFile, L"BackupDiskIncremental");
 
             if (!hWim || hWim == INVALID_HANDLE_VALUE) {
                 DWORD wimError = GetLastError();
                 std::wstring err = L"Failed to open existing backup for incremental. WIM Error: " + 
                                   std::to_wstring(wimError) + 
                                   L". File: " + destFile +
+                                  L". System message: " + FormatSystemErrorMessage(wimError) +
                                   L". Ensure full backup exists and is not corrupted.";
                 LogError(L"BackupDiskIncremental: " + err);
                 SetLastErrorMessage(err);
@@ -2445,14 +2480,7 @@ extern "C" {
             // NOTE: WIM_FLAG_VERIFY removed - can cause ERROR_INVALID_PARAMETER (87) on valid files
             // CRITICAL: Must use WIM_GENERIC_READ | WIM_GENERIC_WRITE when opening existing WIM to append images!
             //           WIM_GENERIC_WRITE alone causes ERROR_INVALID_PARAMETER (87)
-            HANDLE hWim = WIMCreateFile(
-                destFile.c_str(),
-                WIM_GENERIC_READ | WIM_GENERIC_WRITE,  // Need READ+WRITE to append images
-                WIM_OPEN_EXISTING,
-                0,  // No special flags needed for append operation
-                0,  // MUST be 0 when opening existing WIM! Compression read from file.
-                NULL
-            );
+            HANDLE hWim = OpenExistingWimWithRetry(destFile, L"BackupDiskDifferential");
 
             if (!hWim || hWim == INVALID_HANDLE_VALUE) {
                 DWORD wimError = GetLastError();
