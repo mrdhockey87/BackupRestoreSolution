@@ -49,7 +49,7 @@ namespace SecureServerBackupCommon
                 return false;
             }
 
-            using var stream = File.OpenRead(filePath);
+            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             if (stream.Length < MagicHeader.Length + 32)
             {
                 return false;

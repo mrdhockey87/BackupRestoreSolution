@@ -755,7 +755,7 @@ extern "C" {
             wimPath,
             WIM_GENERIC_READ,
             WIM_OPEN_EXISTING,
-            0,
+            WIM_FLAG_SHARE_WRITE,
             WIM_COMPRESS_NONE,
             NULL
         );
@@ -792,7 +792,7 @@ extern "C" {
             wimPath,
             WIM_GENERIC_READ,
             WIM_OPEN_EXISTING,
-            0,
+            WIM_FLAG_SHARE_WRITE,
             WIM_COMPRESS_NONE,
             NULL
         );
