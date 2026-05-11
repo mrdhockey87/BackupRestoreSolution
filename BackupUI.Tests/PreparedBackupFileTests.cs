@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using SecureServerBackup.Services;
+using SecureServerBackup.Windows;
 using Xunit;
 
 namespace SecureServerBackup.Tests;
@@ -31,6 +32,29 @@ public sealed class PreparedBackupFileTests : IDisposable
         prepared.Dispose();
 
         Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public void HasBackupArchive_WhenArchiveExists_ReturnsTrue()
+    {
+        string path = Path.Combine(_tempDirectory, "existing.ssb");
+        File.WriteAllText(path, "content");
+
+        bool result = typeof(BackupWindowNew)
+            .GetMethod("HasBackupArchive", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .Invoke(null, [ _tempDirectory, "existing" ]) as bool? ?? false;
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void HasBackupArchive_WhenArchiveIsMissing_ReturnsFalse()
+    {
+        bool result = typeof(BackupWindowNew)
+            .GetMethod("HasBackupArchive", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .Invoke(null, [ _tempDirectory, "missing" ]) as bool? ?? false;
+
+        Assert.False(result);
     }
 
     [Fact]

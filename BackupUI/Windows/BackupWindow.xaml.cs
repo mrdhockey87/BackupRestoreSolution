@@ -387,8 +387,7 @@ namespace SecureServerBackup.Windows
 
                     foreach (var sourcePath in job.SourcePaths)
                     {
-                        var destPath = Path.Combine(job.DestinationPath,
-                            $"{job.Name}_{DateTime.Now:yyyyMMdd_HHmmss}");
+                        string destPath = GetBackupArchivePath(job.DestinationPath, job.Name);
 
                         switch (job.Type)
                         {
@@ -407,15 +406,41 @@ namespace SecureServerBackup.Windows
                                 break;
 
                             case BackupType.Incremental:
-                                var lastBackup = FindLastBackup(job.DestinationPath, job.Name);
-                                result = BackupEngineInterop.CreateIncrementalBackup(
-                                    sourcePath, destPath, lastBackup ?? "", callback);
+                                if (HasBackupArchive(job.DestinationPath, job.Name))
+                                {
+                                    result = BackupEngineInterop.CreateIncrementalBackup(
+                                        sourcePath, destPath, destPath, callback);
+                                }
+                                else if (job.Target == BackupTarget.Volume)
+                                {
+                                    result = BackupEngineInterop.BackupVolume(
+                                        sourcePath, destPath, job.IncludeSystemState,
+                                        job.CompressData, null, 0, callback, null);
+                                }
+                                else
+                                {
+                                    result = BackupEngineInterop.BackupFiles(
+                                        sourcePath, destPath, null, 0, callback, null);
+                                }
                                 break;
 
                             case BackupType.Differential:
-                                var fullBackup = FindFullBackup(job.DestinationPath, job.Name);
-                                result = BackupEngineInterop.CreateDifferentialBackup(
-                                    sourcePath, destPath, fullBackup ?? "", callback);
+                                if (HasBackupArchive(job.DestinationPath, job.Name))
+                                {
+                                    result = BackupEngineInterop.CreateDifferentialBackup(
+                                        sourcePath, destPath, destPath, callback);
+                                }
+                                else if (job.Target == BackupTarget.Volume)
+                                {
+                                    result = BackupEngineInterop.BackupVolume(
+                                        sourcePath, destPath, job.IncludeSystemState,
+                                        job.CompressData, null, 0, callback, null);
+                                }
+                                else
+                                {
+                                    result = BackupEngineInterop.BackupFiles(
+                                        sourcePath, destPath, null, 0, callback, null);
+                                }
                                 break;
                         }
 
@@ -470,28 +495,21 @@ namespace SecureServerBackup.Windows
             }
         }
 
-        private string? FindLastBackup(string destPath, string jobName)
+        private static bool HasBackupArchive(string destPath, string jobName)
         {
             try
             {
-                if (!Directory.Exists(destPath))
-                    return null;
-
-                var backups = Directory.GetDirectories(destPath, $"{jobName}_*")
-                    .OrderByDescending(d => d)
-                    .FirstOrDefault();
-
-                return backups;
+                return File.Exists(GetBackupArchivePath(destPath, jobName));
             }
             catch
             {
-                return null;
+                return false;
             }
         }
 
-        private string? FindFullBackup(string destPath, string jobName)
+        private static string GetBackupArchivePath(string destPath, string jobName)
         {
-            return FindLastBackup(destPath, jobName);
+            return Path.Combine(destPath, $"{jobName}.ssb");
         }
 
         private void Cancel_Click(object sender, RoutedEventArgs e)

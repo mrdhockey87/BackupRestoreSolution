@@ -3038,6 +3038,7 @@ namespace SecureServerBackup.Windows
                     };
 
                     int result = -1;
+                    string backupArchivePath = GetBackupArchivePath(job.DestinationPath, job.Name);
 
                     // Execute based on job type
                     if (job.IsHyperVBackup && job.HyperVMachines.Count > 0)
@@ -3078,7 +3079,7 @@ namespace SecureServerBackup.Windows
                     else if (job.Target == BackupTarget.Disk)
                     {
                         // Disk backup - use job name for .ssb file (matches service behavior)
-                        var diskDestPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+                        var diskDestPath = backupArchivePath;
 
                         // Extract disk number for logging
                         foreach (var diskPath in job.SourcePaths)
@@ -3113,7 +3114,7 @@ namespace SecureServerBackup.Windows
                     else if (job.Target == BackupTarget.Volume)
                     {
                         // Volume backup - use job name for .ssb file (matches service behavior)
-                        var volumeDestPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+                        var volumeDestPath = backupArchivePath;
 
                         foreach (var volumePath in job.SourcePaths)
                         {
@@ -3154,7 +3155,7 @@ namespace SecureServerBackup.Windows
                                 case BackupType.Full:
                                     result = BackupEngineInterop.BackupFiles(
                                         resolvedSourcePath,
-                                        job.DestinationPath,
+                                        backupArchivePath,
                                         null,
                                         0,
                                         progressCallback,
@@ -3169,12 +3170,30 @@ namespace SecureServerBackup.Windows
                                     break;
 
                                 case BackupType.Incremental:
-                                    var lastBackup = FindLastBackup(job.DestinationPath);
+                                    if (!HasBackupArchive(job.DestinationPath, job.Name))
+                                    {
+                                        result = BackupEngineInterop.BackupFiles(
+                                            resolvedSourcePath,
+                                            backupArchivePath,
+                                            null,
+                                            0,
+                                            progressCallback,
+                                            null);
+
+                                        if (result != 0)
+                                        {
+                                            var errorBuffer = new StringBuilder(4096);
+                                            BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                                            throw new Exception($"Initial full backup failed: {errorBuffer}");
+                                        }
+
+                                        break;
+                                    }
 
                                     result = BackupEngineInterop.CreateIncrementalBackup(
                                         resolvedSourcePath,
-                                        job.DestinationPath,
-                                        lastBackup ?? job.DestinationPath,
+                                        backupArchivePath,
+                                        backupArchivePath,
                                         progressCallback);
 
                                     if (result != 0)
@@ -3186,12 +3205,30 @@ namespace SecureServerBackup.Windows
                                     break;
 
                                 case BackupType.Differential:
-                                    var fullBackup = FindFullBackup(job.DestinationPath);
+                                    if (!HasBackupArchive(job.DestinationPath, job.Name))
+                                    {
+                                        result = BackupEngineInterop.BackupFiles(
+                                            resolvedSourcePath,
+                                            backupArchivePath,
+                                            null,
+                                            0,
+                                            progressCallback,
+                                            null);
+
+                                        if (result != 0)
+                                        {
+                                            var errorBuffer = new StringBuilder(4096);
+                                            BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                                            throw new Exception($"Initial full backup failed: {errorBuffer}");
+                                        }
+
+                                        break;
+                                    }
 
                                     result = BackupEngineInterop.CreateDifferentialBackup(
                                         resolvedSourcePath,
-                                        job.DestinationPath,
-                                        fullBackup ?? job.DestinationPath,
+                                        backupArchivePath,
+                                        backupArchivePath,
                                         progressCallback);
 
                                     if (result != 0)
@@ -3240,9 +3277,8 @@ namespace SecureServerBackup.Windows
 
                     if (job.EncryptBackup && job.Target != BackupTarget.HyperV)
                     {
-                        string backupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
                         string password = BackupEncryptionService.UnprotectPassword(job.ProtectedEncryptionPassword);
-                        BackupEncryptionService.EncryptFile(backupPath, backupPath, password);
+                        BackupEncryptionService.EncryptFile(backupArchivePath, backupArchivePath, password);
                     }
                 }
                 catch (Exception ex)
@@ -3252,99 +3288,23 @@ namespace SecureServerBackup.Windows
             });
         }
 
-        private string? FindLastBackup(string destPath)
+        private static string GetBackupArchivePath(string destPath, string jobName)
         {
-            try
-            {
-                if (!Directory.Exists(destPath))
-                    return null;
-
-                // Look for backup folders with date pattern: Full_YYYYMMDD_HHMMSS, Incremental_YYYYMMDD_HHMMSS, etc.
-                var backupFolders = Directory.GetDirectories(destPath)
-                    .Where(dir =>
-                    {
-                        var folderName = Path.GetFileName(dir);
-                        return folderName.StartsWith("Full_") ||
-                               folderName.StartsWith("Incremental_") ||
-                               folderName.StartsWith("Differential_");
-                    })
-                    .OrderByDescending(dir => Directory.GetCreationTime(dir))
-                    .ToList();
-
-                if (backupFolders.Count > 0)
-                {
-                    var lastBackupPath = backupFolders[0];
-                    System.Diagnostics.Debug.WriteLine($"Found last backup: {lastBackupPath}");
-                    return lastBackupPath;
-                }
-
-                // If no dated folders found, check for any subdirectories
-                var allFolders = Directory.GetDirectories(destPath)
-                    .OrderByDescending(dir => Directory.GetCreationTime(dir))
-                    .ToList();
-
-                if (allFolders.Count > 0)
-                {
-                    return allFolders[0];
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error finding last backup: {ex.Message}");
-            }
-
-            return null;
+            return Path.Combine(destPath, $"{jobName}.ssb");
         }
 
-        private string? FindFullBackup(string destPath)
+        private static bool HasBackupArchive(string destPath, string jobName)
         {
             try
             {
-                if (!Directory.Exists(destPath))
-                    return null;
-
-                // Look specifically for Full backup folders
-                var fullBackupFolders = Directory.GetDirectories(destPath)
-                    .Where(dir =>
-                    {
-                        var folderName = Path.GetFileName(dir);
-                        return folderName.StartsWith("Full_", StringComparison.OrdinalIgnoreCase);
-                    })
-                    .OrderByDescending(dir => Directory.GetCreationTime(dir))
-                    .ToList();
-
-                if (fullBackupFolders.Count > 0)
-                {
-                    var fullBackupPath = fullBackupFolders[0];
-                    System.Diagnostics.Debug.WriteLine($"Found full backup: {fullBackupPath}");
-                    return fullBackupPath;
-                }
-
-                // Fallback: If no "Full_" folders, look for oldest backup (likely the base)
-                var allFolders = Directory.GetDirectories(destPath)
-                    .Where(dir =>
-                    {
-                        var folderName = Path.GetFileName(dir);
-                        return folderName.StartsWith("Full_") ||
-                               folderName.StartsWith("Incremental_") ||
-                               folderName.StartsWith("Differential_");
-                    })
-                    .OrderBy(dir => Directory.GetCreationTime(dir))  // Oldest first
-                    .ToList();
-
-                if (allFolders.Count > 0)
-                {
-                    var oldestBackup = allFolders[0];
-                    System.Diagnostics.Debug.WriteLine($"Using oldest backup as full backup: {oldestBackup}");
-                    return oldestBackup;
-                }
+                return File.Exists(GetBackupArchivePath(destPath, jobName));
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error finding full backup: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error checking backup archive: {ex.Message}");
             }
 
-            return null;
+            return false;
         }
 
         private void SaveJob_Click(object sender, RoutedEventArgs e)

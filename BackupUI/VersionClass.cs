@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.61";
+        private static readonly string version_fallback_number = "6.2.4.62";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,9 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.62 Fixed manual backup fallback when the previous incremental or differential archive was deleted.
+ *                  The backup windows now check for the current JobName.ssb file and run a full backup instead of 
+ *                  calling the native incremental engine with a missing base file. mdail 5/11/2026
  * Version 6.2.4.61 Fixed RestoreWindowNew disk restore metadata gating. The disk sizing and reconstruction
  *                  flow now treats metadata as present only when planned restore volumes were actually parsed
  *                  from the backup, preventing false-positive metadata detection and keeping the sizing/partition 
