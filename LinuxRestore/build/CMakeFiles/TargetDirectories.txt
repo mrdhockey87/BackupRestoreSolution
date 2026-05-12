@@ -1,0 +1,6 @@
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build/CMakeFiles/restore_engine.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build/CMakeFiles/SecureServerBackupLinuxRestoreCli.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build/CMakeFiles/restore_engine_tests.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build/CMakeFiles/INSTALL.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build/CMakeFiles/ALL_BUILD.dir
+E:/VisualStudioProjects/BackupRestoreSolution/BackupRestoreSolution/LinuxRestore/build/CMakeFiles/ZERO_CHECK.dir

@@ -1155,6 +1155,11 @@ namespace SecureServerBackup.Windows
 
             if (_restoreTargetKind == RestoreTargetKind.Disk && !EnsureDiskRestorePlanLoaded())
             {
+                if (await TryPromptSingleVolumeFallbackSizingAsync())
+                {
+                    return true;
+                }
+
                 ShowOwnedMessage(
                     "This disk backup does not contain the reconstruction metadata required to size partitions and rebuild the target disk. Disk restore cannot continue.",
                     "Restore Metadata Required",
@@ -1164,7 +1169,14 @@ namespace SecureServerBackup.Windows
             }
 
             if (_diskRestorePlan == null || !_diskRestorePlan.HasMetadata)
+            {
+                if (_restoreTargetKind == RestoreTargetKind.Volume)
+                {
+                    await TryPromptSingleVolumeFallbackSizingAsync();
+                }
+
                 return true;
+            }
 
             // Build VolumeInfo list from the restore plan, ordered by partition offset
             var planVolumes = _diskRestorePlan.Volumes
@@ -1174,7 +1186,7 @@ namespace SecureServerBackup.Windows
 
             var volumes = planVolumes.Select((v, idx) => new VolumeInfo
             {
-                ImageIndex            = idx + 1, // 1-based image index into the SSB archive
+                ImageIndex            = v.ImageIndex > 0 ? v.ImageIndex : idx + 1,
                 Label                 = !string.IsNullOrWhiteSpace(v.SourceVolumeLabel) ? v.SourceVolumeLabel : $"Volume {v.PartitionNumber}",
                 Size                  = (long)v.PartitionLengthBytes,
                 UsedSpace             = 0,  // Unknown until mounted; resize window guards on Size
@@ -1272,6 +1284,78 @@ namespace SecureServerBackup.Windows
             }
 
             return true;
+        }
+
+        private async Task<bool> TryPromptSingleVolumeFallbackSizingAsync()
+        {
+            if (_restoreTargetKind != RestoreTargetKind.Disk &&
+                _restoreTargetKind != RestoreTargetKind.Volume)
+            {
+                return false;
+            }
+
+            if (lstRestorePoints.SelectedItem is not RestorePoint selectedPoint)
+            {
+                return false;
+            }
+
+            try
+            {
+                using var preparedBackup = EncryptedBackupFileService.PrepareForRead(this, selectedPoint.FilePath, Path.GetFileNameWithoutExtension(selectedPoint.FilePath));
+                var imageInfoResult = NativeBackupMountManager.GetImageInfoWithRestoreMetadata(preparedBackup.WorkingPath);
+                if (!imageInfoResult.Success || imageInfoResult.Images.Count != 1)
+                {
+                    return false;
+                }
+
+                long targetCapacityBytes = await GetTargetDiskSizeBytesAsync();
+                if (targetCapacityBytes <= 0)
+                {
+                    return false;
+                }
+
+                var fallbackVolume = CreateSingleVolumeFallbackVolumeInfo(imageInfoResult.Images[0], targetCapacityBytes);
+                var sizingWindow = new VolumeConfigurationWindow(
+                    new List<VolumeInfo> { fallbackVolume },
+                    targetCapacityBytes,
+                    sourceAUS: 4096,
+                    targetAUS: 4096)
+                { Owner = this };
+
+                if (sizingWindow.ShowDialog() != true || sizingWindow.FinalConfiguration == null)
+                {
+                    return false;
+                }
+
+                _selectedRestoreVolume = sizingWindow.FinalConfiguration.FirstOrDefault() ?? fallbackVolume;
+                _selectedRestoreDiskGroup = null;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"TryPromptSingleVolumeFallbackSizingAsync exception: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static VolumeInfo CreateSingleVolumeFallbackVolumeInfo(NativeBackupMountManager.SsbImageInfoResult imageInfo, long targetCapacityBytes)
+        {
+            ArgumentNullException.ThrowIfNull(imageInfo);
+
+            long capacityBytes = Math.Max(targetCapacityBytes, 1);
+            string label = !string.IsNullOrWhiteSpace(imageInfo.Name) ? imageInfo.Name : "Volume 1";
+
+            return new VolumeInfo
+            {
+                ImageIndex = imageInfo.ImageIndex > 0 ? imageInfo.ImageIndex : 1,
+                Label = label,
+                Size = capacityBytes,
+                UsedSpace = 0,
+                IsResizable = true,
+                FileSystem = "NTFS",
+                PartitionNumber = 1,
+                TargetSize = capacityBytes
+            };
         }
 
         private bool EnsureDiskRestorePlanLoaded()
@@ -1372,7 +1456,9 @@ namespace SecureServerBackup.Windows
                     Dispatcher.Invoke(() =>
                     {
                         progressBar.Value = percent;
-                        if (!string.IsNullOrWhiteSpace(message) && message.StartsWith("Restoring:", StringComparison.OrdinalIgnoreCase))
+                        if (!string.IsNullOrWhiteSpace(message) &&
+                            (message.StartsWith("Restoring:", StringComparison.OrdinalIgnoreCase) ||
+                             message.StartsWith("Processing:", StringComparison.OrdinalIgnoreCase)))
                         {
                             txtCurrentRestoreItem.Text = message;
                         }
@@ -1432,16 +1518,17 @@ namespace SecureServerBackup.Windows
         {
             PrepareDiskTarget();
 
+            int targetDisk = _selectedTargetDiskNumber ?? -1;
+
             if (_diskRestorePlan?.HasMetadata == true)
             {
-                int targetDisk = _selectedTargetDiskNumber ?? -1;
                 var ordered = (_selectedRestoreDiskGroup?.Count > 0
                         ? _selectedRestoreDiskGroup
                         : _selectedRestoreVolume is not null
                             ? new[] { _selectedRestoreVolume }
                             : _diskRestorePlan.Volumes.Select((v, idx) => new VolumeInfo
                             {
-                                ImageIndex = idx + 1,
+                                ImageIndex = v.ImageIndex > 0 ? v.ImageIndex : idx + 1,
                                 Label = !string.IsNullOrWhiteSpace(v.SourceVolumeLabel) ? v.SourceVolumeLabel : $"Volume {v.PartitionNumber}",
                                 Size = (long)v.PartitionLengthBytes,
                                 UsedSpace = 0,
@@ -1467,7 +1554,8 @@ namespace SecureServerBackup.Windows
                     throw new InvalidOperationException("No restore volumes are available for the selected disk backup.");
                 }
 
-                var targetVolumePaths = PrepareDiskTargetVolumes(targetDisk, ordered);
+                var targetVolumePaths = TryReuseExistingTargetVolumes(targetDisk, ordered)
+                    ?? PrepareDiskTargetVolumes(targetDisk, ordered);
                 int lastResult = 0;
                 for (int i = 0; i < ordered.Count; i++)
                 {
@@ -1485,6 +1573,22 @@ namespace SecureServerBackup.Windows
                 }
                 callback(100, "All partitions restored.");
                 return 0;
+            }
+
+            if (_selectedRestoreVolume is not null)
+            {
+                var singleVolumeLayout = new[] { _selectedRestoreVolume };
+                var targetVolumePaths = TryReuseExistingTargetVolumes(targetDisk, singleVolumeLayout)
+                    ?? PrepareDiskTargetVolumes(targetDisk, singleVolumeLayout);
+
+                int imageIndex = _selectedRestoreVolume.ImageIndex > 0 ? _selectedRestoreVolume.ImageIndex : 1;
+                callback(5, $"Restoring single volume to {targetVolumePaths[0]}...");
+                return BackupEngineInterop.RestoreVolumeFromImage(
+                    preparedBackupPath,
+                    imageIndex,
+                    targetVolumePaths[0],
+                    false,
+                    callback);
             }
 
             if (_isHyperVBackupPoint)
@@ -1546,6 +1650,10 @@ namespace SecureServerBackup.Windows
                 .Select(volume => volume.PartitionType ?? string.Empty)
                 .ToArray();
 
+            long targetDiskCapacityBytes = GetTargetDiskCapacityBytes(targetDiskNumber);
+            long requestedTotalBytes = targetSizes.Sum();
+            bool expandLastPartition = targetDiskCapacityBytes <= 0 || AreSizesEquivalent(requestedTotalBytes, targetDiskCapacityBytes);
+
             string sizeArray = string.Join(",", targetSizes.Select(size => $"{size}L"));
             string fileSystemArray = string.Join(",", fileSystems.Select(value => $"'{EscapePowerShellSingleQuotedString(value)}'"));
             string labelArray = string.Join(",", labels.Select(value => $"'{EscapePowerShellSingleQuotedString(value)}'"));
@@ -1558,13 +1666,14 @@ namespace SecureServerBackup.Windows
                 $"$fileSystems=@({fileSystemArray}); " +
                 $"$labels=@({labelArray}); " +
                 $"$partitionTypes=@({partitionTypeArray}); " +
+                $"$expandLast={(expandLastPartition ? "$true" : "$false")}; " +
                 "$created=@(); " +
                 "Clear-Disk -Number $diskNumber -RemoveData -RemoveOEM -Confirm:$false -ErrorAction Stop; " +
                 "Initialize-Disk -Number $diskNumber -PartitionStyle $partitionStyle -ErrorAction Stop; " +
                 "for ($i = 0; $i -lt $sizes.Count; $i++) { " +
                 "$partitionType = $partitionTypes[$i]; " +
                 "$newPartitionParams = @{ DiskNumber = $diskNumber; AssignDriveLetter = $true; ErrorAction = 'Stop' }; " +
-                "if ($i -eq $sizes.Count - 1) { $newPartitionParams['UseMaximumSize'] = $true; } else { $newPartitionParams['Size'] = [Int64]$sizes[$i]; } " +
+                "if ($i -eq $sizes.Count - 1 -and $expandLast) { $newPartitionParams['UseMaximumSize'] = $true; } else { $newPartitionParams['Size'] = [Int64]$sizes[$i]; } " +
                 "if ($partitionStyle -eq 'GPT' -and -not [string]::IsNullOrWhiteSpace($partitionType)) { $newPartitionParams['GptType'] = $partitionType; } " +
                 "$partition = New-Partition @newPartitionParams; " +
                 "$fileSystem = $fileSystems[$i]; " +
@@ -1645,9 +1754,12 @@ namespace SecureServerBackup.Windows
 
             {
                 int imageIndex = _selectedRestoreVolume?.ImageIndex ?? _diskRestorePlan?.ImageIndex ?? -1;
-                return _diskRestorePlan?.HasMetadata == true
-                    ? BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, imageIndex, targetPath, false, callback)
-                    : BackupEngineInterop.RestoreVolume(preparedBackupPath, targetPath, false, callback);
+                if (imageIndex > 0)
+                {
+                    return BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, imageIndex, targetPath, false, callback);
+                }
+
+                return BackupEngineInterop.RestoreVolume(preparedBackupPath, targetPath, false, callback);
             }
         }
 
@@ -2930,21 +3042,223 @@ namespace SecureServerBackup.Windows
                 throw new InvalidOperationException("No target volume selected.");
             }
 
+            if (_selectedRestoreVolume?.TargetSize > 0)
+            {
+                ResizeTargetVolumeIfNeeded(volumePath, _selectedRestoreVolume.TargetSize);
+            }
+
+            FormatTargetVolume(volumePath, GetSelectedRestoreFileSystem(), _selectedRestoreVolume?.Label);
+        }
+
+        private List<string>? TryReuseExistingTargetVolumes(int targetDiskNumber, IReadOnlyList<VolumeInfo> orderedVolumes)
+        {
+            if (orderedVolumes.Count == 0)
+            {
+                return null;
+            }
+
+            var diskItem = _restoreTargetItems.FirstOrDefault(item =>
+                item.ItemType == DriveTreeItemType.Disk &&
+                item.PartitionNumber == targetDiskNumber);
+            if (diskItem == null)
+            {
+                return null;
+            }
+
+            var targetVolumes = diskItem.Children
+                .Where(child => child.ItemType == DriveTreeItemType.Volume && !string.IsNullOrWhiteSpace(child.FullPath))
+                .ToList();
+
+            if (targetVolumes.Count == 0)
+            {
+                return null;
+            }
+
+            if (orderedVolumes.Count == 1 && targetVolumes.Count == 1)
+            {
+                long requestedSize = GetRequestedRestoreSize(orderedVolumes[0]);
+                if (ShouldReuseExistingTargetVolumeLayout(requestedSize, targetVolumes[0].Size, diskItem.Size))
+                {
+                    string targetPath = EnsureTrailingSlash(targetVolumes[0].FullPath);
+                    FormatTargetVolume(targetPath, GetSupportedRestoreFileSystem(orderedVolumes[0]), orderedVolumes[0].Label);
+                    return new List<string> { targetPath };
+                }
+
+                return null;
+            }
+
+            if (targetVolumes.Count != orderedVolumes.Count)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < orderedVolumes.Count; i++)
+            {
+                if (!AreSizesEquivalent(GetRequestedRestoreSize(orderedVolumes[i]), targetVolumes[i].Size))
+                {
+                    return null;
+                }
+            }
+
+            var matchedPaths = new List<string>(orderedVolumes.Count);
+            for (int i = 0; i < orderedVolumes.Count; i++)
+            {
+                string targetPath = EnsureTrailingSlash(targetVolumes[i].FullPath);
+                FormatTargetVolume(targetPath, GetSupportedRestoreFileSystem(orderedVolumes[i]), orderedVolumes[i].Label);
+                matchedPaths.Add(targetPath);
+            }
+
+            return matchedPaths;
+        }
+
+        private long GetTargetDiskCapacityBytes(int targetDiskNumber)
+        {
+            var diskItem = _restoreTargetItems.FirstOrDefault(item =>
+                item.ItemType == DriveTreeItemType.Disk &&
+                item.PartitionNumber == targetDiskNumber);
+            if (diskItem != null && diskItem.Size > 0)
+            {
+                return diskItem.Size;
+            }
+
+            try
+            {
+                using var searcher = new ManagementObjectSearcher(
+                    $"SELECT Size FROM Win32_DiskDrive WHERE Index = {targetDiskNumber}");
+                foreach (ManagementObject disk in searcher.Get())
+                {
+                    if (long.TryParse(disk["Size"]?.ToString(), out long size))
+                    {
+                        return size;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetTargetDiskCapacityBytes: {ex.Message}");
+            }
+
+            return -1;
+        }
+
+        private static long GetRequestedRestoreSize(VolumeInfo volume)
+        {
+            ArgumentNullException.ThrowIfNull(volume);
+            return volume.TargetSize > 0 ? volume.TargetSize : volume.Size;
+        }
+
+        private static bool AreSizesEquivalent(long expectedBytes, long actualBytes)
+        {
+            if (expectedBytes <= 0 || actualBytes <= 0)
+            {
+                return false;
+            }
+
+            long toleranceBytes = Math.Max(256L * 1024 * 1024, (long)(Math.Max(expectedBytes, actualBytes) * 0.02));
+            return Math.Abs(expectedBytes - actualBytes) <= toleranceBytes;
+        }
+
+        private static string EnsureTrailingSlash(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return string.Empty;
+            }
+
+            return path.EndsWith("\\", StringComparison.Ordinal) ? path : path + "\\";
+        }
+
+        internal static bool ShouldReuseExistingTargetVolumeLayout(long requestedSizeBytes, long targetVolumeSizeBytes, long targetDiskSizeBytes)
+        {
+            return AreSizesEquivalent(requestedSizeBytes, targetVolumeSizeBytes) ||
+                   AreSizesEquivalent(requestedSizeBytes, targetDiskSizeBytes);
+        }
+
+        internal static bool ShouldExpandLastPartition(long requestedTotalBytes, long targetDiskCapacityBytes)
+        {
+            return targetDiskCapacityBytes <= 0 || AreSizesEquivalent(requestedTotalBytes, targetDiskCapacityBytes);
+        }
+
+        private string GetSelectedRestoreFileSystem()
+        {
+            if (_selectedRestoreVolume != null)
+            {
+                return GetSupportedRestoreFileSystem(_selectedRestoreVolume);
+            }
+
+            if (_selectedRestoreDiskGroup?.Count > 0)
+            {
+                return GetSupportedRestoreFileSystem(_selectedRestoreDiskGroup[0]);
+            }
+
+            return "NTFS";
+        }
+
+        private static void ResizeTargetVolumeIfNeeded(string volumePath, long desiredSizeBytes)
+        {
             string driveLetter = volumePath.TrimEnd('\\');
+            if (string.IsNullOrWhiteSpace(driveLetter) || driveLetter.Length < 2 || driveLetter[1] != ':')
+            {
+                return;
+            }
+
+            var driveInfo = new DriveInfo(driveLetter);
+            if (!driveInfo.IsReady || desiredSizeBytes <= 0 || desiredSizeBytes >= driveInfo.TotalSize || AreSizesEquivalent(desiredSizeBytes, driveInfo.TotalSize))
+            {
+                return;
+            }
+
+            string script =
+                $"$partition = Get-Partition -DriveLetter '{driveLetter[0]}' -ErrorAction Stop; " +
+                $"Resize-Partition -InputObject $partition -Size {desiredSizeBytes} -ErrorAction Stop | Out-Null";
+
             var process = Process.Start(new ProcessStartInfo
             {
-                FileName = "cmd.exe",
-                Arguments = $"/c format {driveLetter} /FS:NTFS /Q /Y",
-                UseShellExecute = true,
-                Verb = "runas",
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
             });
 
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
             process?.WaitForExit();
             if (process == null || process.ExitCode != 0)
             {
-                throw new InvalidOperationException("Failed to format the selected target volume.");
+                throw new InvalidOperationException($"Failed to resize the selected target volume. {errors}".Trim());
+            }
+        }
+
+        private static void FormatTargetVolume(string volumePath, string fileSystem, string? label)
+        {
+            string driveLetter = volumePath.TrimEnd('\\');
+            if (string.IsNullOrWhiteSpace(driveLetter) || driveLetter.Length < 2 || driveLetter[1] != ':')
+            {
+                throw new InvalidOperationException("The selected target volume does not have a valid drive letter.");
+            }
+
+            string supportedFileSystem = string.IsNullOrWhiteSpace(fileSystem) ? "NTFS" : fileSystem;
+            string volumeLabel = string.IsNullOrWhiteSpace(label) ? "SSBRestore" : label.Trim();
+            string script =
+                $"Get-Volume -DriveLetter '{driveLetter[0]}' -ErrorAction Stop | " +
+                $"Format-Volume -FileSystem '{EscapePowerShellSingleQuotedString(supportedFileSystem)}' -NewFileSystemLabel '{EscapePowerShellSingleQuotedString(volumeLabel)}' -Confirm:$false -Force -ErrorAction Stop | Out-Null";
+
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+            if (process == null || process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Failed to format the selected target volume. {errors}".Trim());
             }
         }
 

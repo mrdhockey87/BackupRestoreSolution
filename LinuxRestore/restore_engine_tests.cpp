@@ -91,6 +91,8 @@ int main()
 
     allPassed &= Expect(engine.IsEncryptedBackup(encryptedPath.string()), "IsEncryptedBackup should detect the encrypted header.");
     allPassed &= Expect(engine.IsSsbBackup(encryptedPath.string()), "IsSsbBackup should treat .ssb files as backup archives.");
+    allPassed &= Expect(engine.ShouldTreatLegacySingleImageAsVolumeRestore(encryptedPath.string(), 1), "Legacy single-image SSB backups should fall back to a single-volume disk restore.");
+    allPassed &= Expect(!engine.ShouldTreatLegacySingleImageAsVolumeRestore(encryptedPath.string(), 2), "Legacy multi-image SSB backups should not use the single-volume disk fallback.");
 
     fs::path plainPath = fs::path(tempDirectory) / "plain.txt";
     {

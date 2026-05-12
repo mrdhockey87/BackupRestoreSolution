@@ -33,6 +33,11 @@
     <ProjectReference Include="..\BackupCommon\BackupCommon.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>BackupUI.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+  <ItemGroup>
     <Resource Include="Assets\logo_large.png" />
     <Resource Include="Assets\logo_small.png" />
     <Resource Include="Images\error_icon.svg" />

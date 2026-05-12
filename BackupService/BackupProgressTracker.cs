@@ -79,6 +79,12 @@ namespace SecureServerBackupService
                 state.EndTime = DateTime.Now;
                 state.Percentage = success ? 100 : state.Percentage;
 
+                if (success)
+                {
+                    state.Message = "Backup completed successfully!";
+                    state.CurrentFile = string.Empty;
+                }
+
                 // Keep completed jobs in memory for 10 minutes for UI to query
                 _ = Task.Delay(TimeSpan.FromMinutes(10))
                     .ContinueWith(_ =>

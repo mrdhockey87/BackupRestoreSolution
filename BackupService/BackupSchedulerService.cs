@@ -206,6 +206,7 @@ namespace SecureServerBackupService
                     {
                         _logger.LogInformation("Verification completed successfully for job: {jobName}", job.Name);
                         LogToFile($"Verification completed successfully for: {job.Name}");
+                        _progressTracker.UpdateProgress(job.Id, 100, "Backup completed successfully!");
                         BackupLogger.LogSuccess(job.Name, "Backup verification completed successfully");
                     }
                     else

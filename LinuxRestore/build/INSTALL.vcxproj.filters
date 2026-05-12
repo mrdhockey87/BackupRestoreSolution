@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="E:\VisualStudioProjects\BackupRestoreSolution\BackupRestoreSolution\LinuxRestore\build\CMakeFiles\5fc9c9f7c57d3d9069b2bc0e9b9de847\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{A0DAF7F4-76C5-3978-8D07-A8F9F58C59E7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

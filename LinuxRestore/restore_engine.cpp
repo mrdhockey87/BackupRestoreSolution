@@ -253,7 +253,43 @@ private:
                 }
 
                 if (fs::is_regular_file(workingPath) && IsSsbBackup(workingPath)) {
-                    SetError("Legacy SSB backups without reconstruction metadata are not supported for disk restore.");
+                    int imageCount = GetSsbImageCount(workingPath);
+                    if (ShouldTreatLegacySingleImageAsVolumeRestore(workingPath, imageCount)) {
+                        if (!LooksLikeBlockDevice(targetDisk)) {
+                            SetError("Target disk must be a block device path like /dev/sdX");
+                            return -2;
+                        }
+
+                        std::vector<RestoreVolumePlan> singlePlan;
+                        RestoreVolumePlan fallbackPlan;
+                        fallbackPlan.imageIndex = 1;
+                        fallbackPlan.partitionNumber = 1;
+                        fallbackPlan.partitionLengthBytes = GetDeviceSizeBytes(targetDisk);
+                        fallbackPlan.sourceFileSystem = "NTFS";
+                        singlePlan.push_back(fallbackPlan);
+
+                        if (callback) {
+                            callback(5, "Single-volume SSB backup detected without reconstruction metadata. Reusing the target disk as a single restored volume.");
+                        }
+
+                        std::vector<std::string> partitions;
+                        if (!FormatTargetDisk(targetDisk, singlePlan, partitions) || partitions.size() != 1) {
+                            SetError("Failed to prepare a single target partition for legacy disk restore.");
+                            return -3;
+                        }
+
+                        if (!MountAndRestorePartition(partitions[0], "/mnt/backup_restore_partition_1", singlePlan[0], workingPath)) {
+                            return -5;
+                        }
+
+                        if (callback) {
+                            callback(100, "Single-volume disk restore completed successfully");
+                        }
+
+                        return 0;
+                    }
+
+                    SetError("Legacy SSB backups without reconstruction metadata are not supported for multi-volume disk restore.");
                     return -2;
                 }
 
@@ -264,6 +300,10 @@ private:
             SetError(std::string("Exception during disk restore: ") + e.what());
             return -99;
         }
+    }
+
+    bool ShouldTreatLegacySingleImageAsVolumeRestore(const std::string& backupPath, int imageCount) {
+        return imageCount == 1 && IsSsbBackup(backupPath) && !IsMetadataAwareSsbBackup(backupPath);
     }
 
     std::vector<RestoreVolumePlan> GetSsbRestorePlan(const std::string& ssbPath) {

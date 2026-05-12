@@ -55,6 +55,7 @@ namespace SecureServerBackup.Services
 
         public sealed class RestoreVolumePlan
         {
+            public int ImageIndex { get; set; }
             public int VolumeIndex { get; set; }
             public string SourceVolumeGuidPath { get; set; } = string.Empty;
             public string SourceVolumeMountPath { get; set; } = string.Empty;
@@ -982,6 +983,7 @@ namespace SecureServerBackup.Services
 
                 plan.Volumes.Add(new RestoreVolumePlan
                 {
+                    ImageIndex = image.ImageIndex,
                     VolumeIndex = image.RestoreMetadata.VolumeIndex,
                     SourceVolumeGuidPath = image.RestoreMetadata.SourceVolumeGuidPath,
                     SourceVolumeMountPath = image.RestoreMetadata.SourceVolumeMountPath,

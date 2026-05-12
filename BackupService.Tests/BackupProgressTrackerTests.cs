@@ -84,6 +84,27 @@ public sealed class BackupProgressTrackerTests
     }
 
     [Fact]
+    public void CompleteJob_AfterVerificationSuccess_NormalizesCompletedState()
+    {
+        BackupProgressTracker tracker = new();
+        Guid jobId = Guid.NewGuid();
+        tracker.StartJob(jobId);
+        tracker.StartVerification(jobId);
+        tracker.UpdateProgress(jobId, 50, "Processing: WDrive");
+
+        tracker.CompleteJob(jobId, true);
+        var progress = tracker.GetProgress(jobId);
+
+        Assert.NotNull(progress);
+        Assert.False(progress.IsRunning);
+        Assert.False(progress.IsVerifying);
+        Assert.True(progress.Success);
+        Assert.Equal(100, progress.Percentage);
+        Assert.Equal("Backup completed successfully!", progress.Message);
+        Assert.Equal(string.Empty, progress.CurrentFile);
+    }
+
+    [Fact]
     public void RequestCancellation_CancelsJobToken()
     {
         BackupProgressTracker tracker = new();

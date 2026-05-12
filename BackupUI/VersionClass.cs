@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.64";
+        private static readonly string version_fallback_number = "6.2.4.69";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,20 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.69 Fixed image-based restore progress so WIM apply now reports advancing percentages and current
+ *                  file or folder names while RestoreWindowNew is restoring, instead of staying stuck on the static
+ *                  applying-image message. mdail 5/12/2026
+ * Version 6.2.4.68 Fixed RestoreWindowNew restore execution after layout confirmation by preserving each partition's
+ *                  actual backup image index through the sizing flow, so the accepted layout now restores the intended
+ *                  image instead of only preparing the target layout. mdail 5/12/2026
+ * Version 6.2.4.67 Added test coverage for the single-volume restore fallback decisions and aligned LinuxRestore so
+ *                  legacy one-image SSB disk restores fall back to a single-volume target layout instead of hard-failing.
+ *                  mdail 5/12/2026
+ * Version 6.2.4.66 Fixed single-volume restores without reconstruction metadata. RestoreWindowNew now defaults
+ *                  one-volume restores to the selected target capacity, allows optional downsizing, and reuses matching
+ *                  target volumes instead of repartitioning when the existing layout already fits. mdail 5/12/2026
+ * Version 6.2.4.65 Fixed post-verification progress completion so verified backups force 100%, switch Hide to Close,
+ *                  show the completion alert, and keep the 15-minute auto-close behavior. mdail 5/12/2026
  * Version 6.2.4.64 Changed passive archive reads to allow write sharing while a backup is running. Encryption detection
  *                  and WIM image-count/info opens no longer deny write access to the active .ssb file, preventing UI 
  *                  refreshes from blocking incremental reruns. mdail 5/11/2026

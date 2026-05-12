@@ -1,5 +1,6 @@
 // RestoreEngine_Advanced.cpp - Advanced restore functions
 #include "BackupEngine.h"
+#include "BackupEngine_Common.h"
 #include <Windows.h>
 #include <string>
 #include <filesystem>
@@ -13,6 +14,118 @@ namespace fs = std::filesystem;
 extern void SetLastErrorMessage(const std::wstring& error);
 
 namespace {
+    struct RestoreApplyCallbackContext {
+        ProgressCallback callback;
+        int phaseStartPercentage;
+        int phaseEndPercentage;
+        int currentOperationPercentage;
+
+        explicit RestoreApplyCallbackContext(
+            ProgressCallback progressCallback,
+            int phaseStart,
+            int phaseEnd)
+            : callback(progressCallback),
+              phaseStartPercentage(phaseStart),
+              phaseEndPercentage(phaseEnd),
+              currentOperationPercentage(0) {
+        }
+    };
+
+    int ScaleRestoreApplyPercentage(const RestoreApplyCallbackContext& context, int operationPercentage) {
+        if (operationPercentage < 0) {
+            operationPercentage = 0;
+        }
+
+        if (operationPercentage > 100) {
+            operationPercentage = 100;
+        }
+
+        int phaseWidth = context.phaseEndPercentage - context.phaseStartPercentage;
+        if (phaseWidth <= 0) {
+            return context.phaseStartPercentage;
+        }
+
+        return context.phaseStartPercentage + ((operationPercentage * phaseWidth) / 100);
+    }
+
+    DWORD WINAPI RestoreApplyProgressCallback(DWORD msgId, WPARAM wParam, LPARAM lParam, PVOID pvContext) {
+        auto* context = reinterpret_cast<RestoreApplyCallbackContext*>(pvContext);
+        if (context == nullptr || context->callback == nullptr) {
+            return WIM_MSG_SUCCESS;
+        }
+
+        switch (msgId) {
+            case WIM_MSG_PROCESS:
+            {
+                const wchar_t* filePath = reinterpret_cast<const wchar_t*>(wParam);
+                if (filePath != nullptr && *filePath != L'\0') {
+                    std::wstring message = L"Restoring: ";
+                    message += filePath;
+                    context->callback(
+                        ScaleRestoreApplyPercentage(*context, context->currentOperationPercentage),
+                        message.c_str());
+                }
+
+                return WIM_MSG_SUCCESS;
+            }
+
+            case WIM_MSG_PROGRESS:
+            {
+                context->currentOperationPercentage = static_cast<int>(wParam);
+                int scaledPercentage = ScaleRestoreApplyPercentage(*context, context->currentOperationPercentage);
+                context->callback(scaledPercentage, L"Applying image to target...");
+                return WIM_MSG_SUCCESS;
+            }
+
+            case WIM_MSG_SETRANGE:
+            {
+                std::wstring message = L"Preparing to restore ";
+                message += std::to_wstring(static_cast<DWORD>(wParam));
+                message += L" items...";
+                context->callback(context->phaseStartPercentage, message.c_str());
+                return WIM_MSG_SUCCESS;
+            }
+
+            case WIM_MSG_WARNING:
+            {
+                const wchar_t* warningPath = reinterpret_cast<const wchar_t*>(wParam);
+                if (warningPath != nullptr && *warningPath != L'\0') {
+                    std::wstring message = L"Restore warning: ";
+                    message += warningPath;
+                    context->callback(
+                        ScaleRestoreApplyPercentage(*context, context->currentOperationPercentage),
+                        message.c_str());
+                }
+
+                return WIM_MSG_SUCCESS;
+            }
+
+            case WIM_MSG_ERROR:
+            {
+                const wchar_t* errorPath = reinterpret_cast<const wchar_t*>(wParam);
+                DWORD errorCode = static_cast<DWORD>(lParam);
+                std::wstring message = L"Restore error: ";
+                if (errorPath != nullptr && *errorPath != L'\0') {
+                    message += errorPath;
+                    message += L" (";
+                    message += std::to_wstring(errorCode);
+                    message += L")";
+                }
+                else {
+                    message += std::to_wstring(errorCode);
+                }
+
+                context->callback(
+                    ScaleRestoreApplyPercentage(*context, context->currentOperationPercentage),
+                    message.c_str());
+                return WIM_MSG_SUCCESS;
+            }
+
+            default:
+                return WIM_MSG_SUCCESS;
+        }
+    }
+
     std::wstring ExtractXmlElementValue(const std::wstring& xml, const std::wstring& elementName) {
         const std::wstring openTag = L"<" + elementName + L">";
         const std::wstring closeTag = L"</" + elementName + L">";
@@ -667,8 +780,16 @@ extern "C" {
                 return -4;
             }
 
+            RestoreApplyCallbackContext restoreProgressContext(callback, 20, 90);
             if (callback) {
-                callback(20, L"Applying image to volume...");
+                callback(20, L"Applying image to target...");
+            }
+
+            if (callback) {
+                WIMRegisterMessageCallback(
+                    hImage,
+                    reinterpret_cast<FARPROC>(RestoreApplyProgressCallback),
+                    &restoreProgressContext);
             }
 
             // Apply image to target volume
@@ -678,7 +799,13 @@ extern "C" {
                 applyPath.pop_back();
             }
 
-            if (!WIMApplyImage(hImage, applyPath.c_str(), WIM_FLAG_VERIFY)) {
+            BOOL applyResult = WIMApplyImage(hImage, applyPath.c_str(), WIM_FLAG_VERIFY);
+
+            if (callback) {
+                WIMUnregisterMessageCallback(hImage, reinterpret_cast<FARPROC>(RestoreApplyProgressCallback));
+            }
+
+            if (!applyResult) {
                 WIMCloseHandle(hImage);
                 WIMCloseHandle(hWim);
                 SetLastErrorMessage(L"Failed to apply WIM image to volume");
