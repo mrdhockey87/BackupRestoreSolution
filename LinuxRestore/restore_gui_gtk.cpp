@@ -50,6 +50,7 @@ private:
     GtkWidget *progressDialog;
     GtkWidget *progressBar;
     GtkWidget *lblProgress;
+    GtkWidget *lblCurrentItem;
 
     RestoreEngine engine;
 
@@ -1383,7 +1384,14 @@ private:
         auto callback = [this](int percent, const std::string& msg) {
             gtk_progress_bar_set_fraction(
                 GTK_PROGRESS_BAR(progressBar), percent / 100.0);
-            gtk_label_set_text(GTK_LABEL(lblProgress), msg.c_str());
+            if (msg.rfind("Restoring:", 0) == 0 || msg.rfind("Processing:", 0) == 0) {
+                gtk_label_set_text(GTK_LABEL(lblCurrentItem), msg.c_str());
+            } else {
+                gtk_label_set_text(GTK_LABEL(lblProgress), msg.c_str());
+                if (msg.rfind("Restore", 0) != 0) {
+                    gtk_label_set_text(GTK_LABEL(lblCurrentItem), "");
+                }
+            }
             
             // Process GTK events
             while (gtk_events_pending()) {
@@ -1408,14 +1416,20 @@ private:
         gtk_window_set_title(GTK_WINDOW(progressDialog), "Restoring...");
         gtk_window_set_modal(GTK_WINDOW(progressDialog), TRUE);
         gtk_window_set_transient_for(GTK_WINDOW(progressDialog), GTK_WINDOW(window));
-        gtk_window_set_default_size(GTK_WINDOW(progressDialog), 400, 100);
+        gtk_window_set_default_size(GTK_WINDOW(progressDialog), 520, 140);
 
         GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
         gtk_container_set_border_width(GTK_CONTAINER(vbox), 20);
         gtk_container_add(GTK_CONTAINER(progressDialog), vbox);
 
         lblProgress = gtk_label_new("Starting restore...");
+        gtk_label_set_xalign(GTK_LABEL(lblProgress), 0.0f);
         gtk_box_pack_start(GTK_BOX(vbox), lblProgress, FALSE, FALSE, 0);
+
+        lblCurrentItem = gtk_label_new("");
+        gtk_label_set_xalign(GTK_LABEL(lblCurrentItem), 0.0f);
+        gtk_label_set_line_wrap(GTK_LABEL(lblCurrentItem), TRUE);
+        gtk_box_pack_start(GTK_BOX(vbox), lblCurrentItem, FALSE, FALSE, 0);
 
         progressBar = gtk_progress_bar_new();
         gtk_box_pack_start(GTK_BOX(vbox), progressBar, FALSE, FALSE, 0);

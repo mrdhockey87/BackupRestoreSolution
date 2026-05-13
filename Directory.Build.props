@@ -5,8 +5,8 @@
         ================================================================
                ALL PROJECTS (BackupUI, BackupService, BackupEngine) use this single version.
               Change version HERE and it updates everywhere automatically.
-       Current Version: 6.2.4.69
-                  Last Updated: 5/12/2026
+       Current Version: 6.2.4.71
+                  Last Updated: 5/13/2026
 
              UPDATE VERSION IN ONE PLACE: Change ProductVersion property below.
              All version properties (Version, AssemblyVersion, FileVersion, 
@@ -14,7 +14,7 @@
              ================================================================ -->
        <PropertyGroup>
           <!-- SINGLE VERSION DEFINITION - Update this value only -->
-                                     <ProductVersion>6.2.4.69</ProductVersion>
+                                      <ProductVersion>6.2.4.71</ProductVersion>
     
     <!-- All version properties use the ProductVersion variable -->
     <Version>$(ProductVersion)</Version>

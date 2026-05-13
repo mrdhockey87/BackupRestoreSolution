@@ -553,7 +553,37 @@ private:
         }
 
         std::string dest = restoreToOriginal ? "" : restoreDestination;
-        auto cb = [this](int pct, const std::string& msg) { ShowProgress(pct, msg); };
+        std::string latestPhaseMessage = "Starting restore...";
+        std::string latestItemMessage;
+
+        wclear(mainWin);
+        box(mainWin, 0, 0);
+        ShowTitle("Restore Progress");
+        mvwprintw(mainWin, 4, 2, "Restore in progress...");
+        mvwprintw(mainWin, 6, 2, "Phase: %s", latestPhaseMessage.c_str());
+        mvwprintw(mainWin, 7, 2, "Item: ");
+        wrefresh(mainWin);
+
+        auto cb = [this, &latestPhaseMessage, &latestItemMessage](int pct, const std::string& msg) {
+            if (msg.rfind("Restoring:", 0) == 0 || msg.rfind("Processing:", 0) == 0) {
+                latestItemMessage = msg;
+            } else {
+                latestPhaseMessage = msg;
+            }
+
+            ShowProgress(pct, latestPhaseMessage);
+
+            const int itemRow = 8;
+            const int width = std::max(1, getmaxx(mainWin) - 10);
+            std::string displayedItem = latestItemMessage;
+            if ((int)displayedItem.size() > width) {
+                displayedItem = displayedItem.substr(0, width - 3) + "...";
+            }
+
+            mvwprintw(mainWin, itemRow, 2, "%*s", getmaxx(mainWin) - 4, "");
+            mvwprintw(mainWin, itemRow, 2, "Item: %s", displayedItem.c_str());
+            wrefresh(mainWin);
+        };
         bool success = engine->RestoreWithManifest(
             selectedBackupPath, dest, selectedPaths, true, cb);
 
@@ -1282,9 +1312,44 @@ private:
 
         // Execute restore
         std::string dest = restoreToOriginal ? "" : restoreDestination;
+        std::string latestPhaseMessage = "Starting restore...";
+        std::string latestItemMessage;
+
+        wclear(mainWin);
+        box(mainWin, 0, 0);
+        ShowTitle();
+        mvwprintw(mainWin, 4, 2, "Restore in progress...");
+        mvwprintw(mainWin, 6, 2, "Phase: %s", latestPhaseMessage.c_str());
+        mvwprintw(mainWin, 7, 2, "Item: %s", "");
+        wrefresh(mainWin);
         
         auto progressCallback = [this](int percent, const std::string& msg) {
-            ShowProgress(percent, msg);
+            static_cast<void>(this);
+        };
+
+        auto updateProgress = [this, &latestPhaseMessage, &latestItemMessage](int percent, const std::string& msg) {
+            if (msg.rfind("Restoring:", 0) == 0 || msg.rfind("Processing:", 0) == 0) {
+                latestItemMessage = msg;
+            } else {
+                latestPhaseMessage = msg;
+            }
+
+            ShowProgress(percent, latestPhaseMessage);
+
+            int itemRow = 8;
+            int width = getmaxx(mainWin) - 5;
+            std::string displayedItem = latestItemMessage;
+            if ((int)displayedItem.size() > width) {
+                displayedItem = displayedItem.substr(0, width - 3) + "...";
+            }
+
+            mvwprintw(mainWin, itemRow, 2, "%-*s", width, "");
+            mvwprintw(mainWin, itemRow, 2, "Item: %s", displayedItem.c_str());
+            wrefresh(mainWin);
+        };
+
+        auto progressCallback = [&updateProgress](int percent, const std::string& msg) {
+            updateProgress(percent, msg);
         };
 
         bool success = engine->RestoreWithManifest(

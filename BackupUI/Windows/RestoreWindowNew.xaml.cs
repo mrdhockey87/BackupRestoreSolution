@@ -29,6 +29,7 @@ namespace SecureServerBackup.Windows
 
     public partial class RestoreWindowNew : Window
     {
+        private const string RestoreLogJobName = "[Restore]";
         private ObservableCollection<RestorePoint> restorePoints = new();
         private List<string> backupFiles = new();
         private readonly AvailableBackupInfo? _preloadedBackup;
@@ -1450,9 +1451,29 @@ namespace SecureServerBackup.Windows
             {
                 using var preparedBackup = EncryptedBackupFileService.PrepareForRead(this, selectedPoint.FilePath, Path.GetFileNameWithoutExtension(selectedPoint.FilePath));
                 int result;
+                int lastLoggedPercent = -1;
+
+                BackupLogger.LogInfo(
+                    RestoreLogJobName,
+                    "Restore started",
+                    $"Restore point: {selectedPoint.DisplayName}; Type: {_restoreTargetKind}; Source: {selectedPoint.FilePath}; Destination: {destination}");
 
                 BackupEngineInterop.ProgressCallback callback = (percent, message) =>
                 {
+                    if (percent >= 0 && percent != lastLoggedPercent)
+                    {
+                        lastLoggedPercent = percent;
+                        BackupLogger.LogInfo(RestoreLogJobName, $"Restore progress {percent}%", message ?? string.Empty);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(message) &&
+                             (message.StartsWith("Restore warning:", StringComparison.OrdinalIgnoreCase) ||
+                              message.StartsWith("Restore error:", StringComparison.OrdinalIgnoreCase) ||
+                              message.StartsWith("Restoring:", StringComparison.OrdinalIgnoreCase) ||
+                              message.StartsWith("Processing:", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        BackupLogger.LogInfo(RestoreLogJobName, message, $"Progress: {percent}%");
+                    }
+
                     Dispatcher.Invoke(() =>
                     {
                         progressBar.Value = percent;
@@ -1509,8 +1530,15 @@ namespace SecureServerBackup.Windows
                 {
                     var error = new StringBuilder(1024);
                     BackupEngineInterop.GetLastErrorMessage(error, error.Capacity);
+                    BackupLogger.LogError(RestoreLogJobName, "Restore failed", error.ToString());
                     throw new Exception($"Restore failed: {error}");
                 }
+
+                BackupLogger.LogSuccess(
+                    RestoreLogJobName,
+                    "Restore completed successfully",
+                    selectedPoint.FilePath,
+                    $"Type: {_restoreTargetKind}; Destination: {destination}");
             });
         }
 

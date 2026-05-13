@@ -61,6 +61,14 @@ private:
         std::cout << "[" << percentage << "%] " << message << std::endl;
     }
 
+    void ReportRestoreItem(int percentage, const std::string& itemPath) {
+        if (itemPath.empty()) {
+            return;
+        }
+
+        ReportProgress(percentage, "Restoring: " + itemPath);
+    }
+
     static std::string Trim(const std::string& value) {
         size_t start = value.find_first_not_of(" \t\r\n");
         size_t end = value.find_last_not_of(" \t\r\n");
@@ -533,12 +541,58 @@ private:
             return false;
         }
 
+        std::string listCmd = "wimlib-imagex dir '" + ssbPath + "' " + std::to_string(plan.imageIndex) + " 2>/dev/null";
+        std::string listing = CaptureCommandOutput(listCmd);
+        std::vector<std::string> restoreItems;
+        std::istringstream listingStream(listing);
+        std::string listingLine;
+        while (std::getline(listingStream, listingLine)) {
+            std::string trimmed = Trim(listingLine);
+            if (trimmed.empty() ||
+                trimmed.find("Directory listing of image") != std::string::npos ||
+                trimmed.find("---") != std::string::npos)
+            {
+                continue;
+            }
+
+            restoreItems.push_back(trimmed);
+        }
+
         std::string extractCmd = "wimlib-imagex extract '" + ssbPath + "' " + std::to_string(plan.imageIndex) + " '" + mountPoint + "' --preserve-modes --preserve-timestamps";
-        if (system(extractCmd.c_str()) != 0) {
+        FILE* pipe = popen((extractCmd + " 2>&1").c_str(), "r");
+        if (!pipe) {
             std::string umountCmd = "umount '" + mountPoint + "'";
             system(umountCmd.c_str());
-            SetError("Failed to extract SSB image to partition: " + mountPoint);
+            SetError("Failed to launch SSB extract command for partition restore: " + mountPoint);
             return false;
+        }
+
+        std::array<char, 1024> buffer{};
+        std::string commandOutput;
+        size_t currentItemIndex = 0;
+        while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+            commandOutput += buffer.data();
+
+            if (currentItemIndex < restoreItems.size()) {
+                int itemPercent = 15;
+                if (!restoreItems.empty()) {
+                    itemPercent = 15 + static_cast<int>((currentItemIndex * 75) / restoreItems.size());
+                }
+
+                ReportRestoreItem(itemPercent, restoreItems[currentItemIndex]);
+                currentItemIndex++;
+            }
+        }
+
+        if (pclose(pipe) != 0) {
+            std::string umountCmd = "umount '" + mountPoint + "'";
+            system(umountCmd.c_str());
+            SetError("Failed to extract SSB image to partition: " + mountPoint + " Output: " + Trim(commandOutput));
+            return false;
+        }
+
+        if (!restoreItems.empty()) {
+            ReportRestoreItem(90, restoreItems.back());
         }
 
         system(("sync '" + mountPoint + "'").c_str());
@@ -1064,11 +1118,7 @@ public:
                         copiedSize += fs::file_size(sourceFile);
 
                         int progress = 20 + (int)((copiedSize * 70) / totalSize);
-                        if (filesRestored % 10 == 0) {
-                            std::string msg = "Restored " + std::to_string(filesRestored) +
-                                            " of " + std::to_string(filesToRestore.size()) + " files";
-                            ReportProgress(progress, msg);
-                        }
+                        ReportRestoreItem(progress, relativePath.string());
 
                     } catch (const std::exception& e) {
                         std::cerr << "Warning: Failed to restore " << sourceFile << ": " << e.what() << std::endl;

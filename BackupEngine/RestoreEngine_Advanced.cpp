@@ -783,11 +783,8 @@ extern "C" {
             RestoreApplyCallbackContext restoreProgressContext(callback, 20, 90);
             if (callback) {
                 callback(20, L"Applying image to target...");
-            }
-
-            if (callback) {
                 WIMRegisterMessageCallback(
-                    hImage,
+                    hWim,
                     reinterpret_cast<FARPROC>(RestoreApplyProgressCallback),
                     &restoreProgressContext);
             }
@@ -802,7 +799,7 @@ extern "C" {
             BOOL applyResult = WIMApplyImage(hImage, applyPath.c_str(), WIM_FLAG_VERIFY);
 
             if (callback) {
-                WIMUnregisterMessageCallback(hImage, reinterpret_cast<FARPROC>(RestoreApplyProgressCallback));
+                WIMUnregisterMessageCallback(hWim, reinterpret_cast<FARPROC>(RestoreApplyProgressCallback));
             }
 
             if (!applyResult) {

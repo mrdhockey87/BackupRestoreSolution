@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.69";
+        private static readonly string version_fallback_number = "6.2.4.71";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,15 +69,19 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.71 Updated the Linux restore GTK and ncurses UIs to show active restore progress with current file or 
+ *                  folder tracking during restore, matching the Windows restore progress behavior more closely. mdail 5/13/2026
+ * Version 6.2.4.70 Fixed image-based restore progress again by registering the WIM apply callback on the archive handle,
+ *                  and added restore activity logging so users can review restore start, progress, success, and failure
+ *                  entries in the Activity page just like backup operations. mdail 5/13/2026
  * Version 6.2.4.69 Fixed image-based restore progress so WIM apply now reports advancing percentages and current
  *                  file or folder names while RestoreWindowNew is restoring, instead of staying stuck on the static
  *                  applying-image message. mdail 5/12/2026
  * Version 6.2.4.68 Fixed RestoreWindowNew restore execution after layout confirmation by preserving each partition's
  *                  actual backup image index through the sizing flow, so the accepted layout now restores the intended
  *                  image instead of only preparing the target layout. mdail 5/12/2026
- * Version 6.2.4.67 Added test coverage for the single-volume restore fallback decisions and aligned LinuxRestore so
- *                  legacy one-image SSB disk restores fall back to a single-volume target layout instead of hard-failing.
- *                  mdail 5/12/2026
+ * Version 6.2.4.67 Added test coverage for the single-volume restore fallback decisions and aligned LinuxRestore so legacy 
+ *                  one-image SSB disk restores fall back to a single-volume target layout instead of hard-failing. mdail 5/12/2026
  * Version 6.2.4.66 Fixed single-volume restores without reconstruction metadata. RestoreWindowNew now defaults
  *                  one-volume restores to the selected target capacity, allows optional downsizing, and reuses matching
  *                  target volumes instead of repartitioning when the existing layout already fits. mdail 5/12/2026
