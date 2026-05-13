@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <functional>
 #include <array>
+#include <iomanip>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -46,12 +47,79 @@ private:
     std::string lastError;
     std::string backupPassword;
     bool backupPasswordVerified = false;
+    std::string logFilePath;
+    std::string logOperationName = "Restore";
 
     static constexpr const char* EncryptedHeader = "SSBAES1";
+
+    static std::string EscapeLogField(const std::string& value) {
+        std::string escaped = value;
+        std::replace(escaped.begin(), escaped.end(), '\r', ' ');
+        std::replace(escaped.begin(), escaped.end(), '\n', ' ');
+        return escaped;
+    }
+
+    static std::string CurrentTimestamp() {
+        std::time_t now = std::time(nullptr);
+        std::tm timeInfo{};
+        localtime_r(&now, &timeInfo);
+
+        std::ostringstream stream;
+        stream << std::put_time(&timeInfo, "%Y-%m-%d %H:%M:%S");
+        return stream.str();
+    }
+
+    void WriteLogEntry(const std::string& level, const std::string& message, const std::string& details = std::string()) {
+        if (logFilePath.empty()) {
+            return;
+        }
+
+        try {
+            fs::path targetPath(logFilePath);
+            if (targetPath.has_parent_path()) {
+                fs::create_directories(targetPath.parent_path());
+            }
+
+            std::ofstream logFile(logFilePath, std::ios::app);
+            if (!logFile.is_open()) {
+                return;
+            }
+
+            logFile << CurrentTimestamp()
+                    << " | " << EscapeLogField(level)
+                    << " | " << EscapeLogField(logOperationName)
+                    << " | " << EscapeLogField(message);
+
+            if (!details.empty()) {
+                logFile << " | " << EscapeLogField(details);
+            }
+
+            logFile << std::endl;
+        }
+        catch (...) {
+        }
+    }
+
+    void LogInfo(const std::string& message, const std::string& details = std::string()) {
+        WriteLogEntry("Info", message, details);
+    }
+
+    void LogWarning(const std::string& message, const std::string& details = std::string()) {
+        WriteLogEntry("Warning", message, details);
+    }
+
+    void LogSuccess(const std::string& message, const std::string& details = std::string()) {
+        WriteLogEntry("Success", message, details);
+    }
+
+    void LogErrorEntry(const std::string& message, const std::string& details = std::string()) {
+        WriteLogEntry("Error", message, details);
+    }
 
     void SetError(const std::string& error) {
         lastError = error;
         std::cerr << "ERROR: " << error << std::endl;
+        LogErrorEntry(error);
     }
 
     void ReportProgress(int percentage, const std::string& message) {
@@ -59,6 +127,7 @@ private:
             progressCallback(percentage, message.c_str());
         }
         std::cout << "[" << percentage << "%] " << message << std::endl;
+        LogInfo(message, "Progress=" + std::to_string(percentage));
     }
 
     void ReportRestoreItem(int percentage, const std::string& itemPath) {
@@ -867,6 +936,15 @@ public:
         backupPasswordVerified = !password.empty();
     }
 
+    void SetLogFilePath(const std::string& path) {
+        logFilePath = Trim(path);
+    }
+
+    void SetLogOperationName(const std::string& operationName) {
+        std::string trimmed = Trim(operationName);
+        logOperationName = trimmed.empty() ? "Restore" : trimmed;
+    }
+
     // Returns the root block device that backs the currently mounted '/' filesystem.
     // e.g. "sda" (without /dev/ prefix). Returns empty string if it cannot be determined.
     std::string GetBootDiskDevice() {
@@ -982,6 +1060,7 @@ public:
                      bool overwriteExisting) {
         try {
             return WithPreparedBackup(backupPath, [&](const std::string& workingPath) {
+                LogInfo("Restore started", "BackupPath=" + backupPath + " | Destination=" + destPath + " | Overwrite=" + std::string(overwriteExisting ? "true" : "false"));
                 ReportProgress(0, "Starting file restore...");
 
                 if (!fs::exists(workingPath)) {
@@ -1139,6 +1218,7 @@ public:
                 }
 
                 ReportProgress(100, "Restore completed! Restored " + std::to_string(filesRestored) + " files");
+                LogSuccess("Restore completed", "FilesRestored=" + std::to_string(filesRestored) + " | Destination=" + destPath);
                 return 0;
             });
 
@@ -1550,6 +1630,7 @@ public:
         std::function<void(int, const std::string&)> callback) {
         
         try {
+            LogInfo("Restore started", "BackupPath=" + backupPath + " | Destination=" + (destPath.empty() ? std::string("Original locations") : destPath) + " | ItemCount=" + std::to_string(items.size()) + " | Overwrite=" + std::string(overwrite ? "true" : "false"));
             int totalItems = items.size();
             int currentItem = 0;
 
@@ -1614,6 +1695,7 @@ public:
                                     callback(percentage, "WARNING: Legacy disk backups without reconstruction metadata cannot be restored automatically");
                                     callback(percentage, "Skipping automatic disk restore - create a new backup with reconstruction metadata");
                                 }
+                                LogWarning("Skipped legacy disk restore", "Item=" + item + " | Reason=Missing reconstruction metadata");
                             }
                         }
                         else if (hasSystemState) {
@@ -1646,6 +1728,7 @@ public:
                             if (callback) {
                                 callback(percentage, "Warning: Failed to restore file: " + std::string(e.what()));
                             }
+                            LogWarning("Failed to restore file", "Item=" + item + " | Error=" + e.what());
                         }
                     }
                 }
@@ -1654,6 +1737,7 @@ public:
                     if (callback) {
                         callback(percentage, "Warning: Source not found: " + item);
                     }
+                    LogWarning("Source not found", "Item=" + item);
                 }
 
                 currentItem++;
@@ -1662,6 +1746,8 @@ public:
             if (callback) {
                 callback(100, "Restore completed");
             }
+
+            LogSuccess("Restore completed", "BackupPath=" + backupPath + " | Destination=" + (destPath.empty() ? std::string("Original locations") : destPath) + " | ItemCount=" + std::to_string(items.size()));
 
             return true;
 

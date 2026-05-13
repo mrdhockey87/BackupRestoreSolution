@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.71";
+        private static readonly string version_fallback_number = "6.2.4.72";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,8 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.72 Added LinuxRestore plain-text log saving across the GTK UI, ncurses UI, and command line,
+ *                  including user-selected log-file paths and one-line restore activity entries. mdail 5/13/2026
  * Version 6.2.4.71 Updated the Linux restore GTK and ncurses UIs to show active restore progress with current file or 
  *                  folder tracking during restore, matching the Windows restore progress behavior more closely. mdail 5/13/2026
  * Version 6.2.4.70 Fixed image-based restore progress again by registering the WIM apply callback on the archive handle,

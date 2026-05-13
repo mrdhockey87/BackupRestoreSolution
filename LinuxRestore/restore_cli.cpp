@@ -45,6 +45,7 @@ void printUsage() {
     std::cout << "  --restore <backup>            Start restore from backup\n";
     std::cout << "    --items <paths>             Comma-separated list of items\n";
     std::cout << "    --dest <path>               Destination (omit for original)\n";
+    std::cout << "    --log-file <path>           Save restore activity to a plain-text log file\n";
     std::cout << "    --overwrite                 Overwrite existing files\n";
     std::cout << "  --interactive                 Interactive mode with menus\n";
     std::cout << "  --list-disks                  List available disks\n";
@@ -65,7 +66,7 @@ void printUsage() {
     std::cout << "  restore_cli --interactive\n\n";
 }
 
-void performDiskRestore(RestoreEngine& engine, const std::string& backupPath, const std::string& targetDisk, bool showHidden) {
+void performDiskRestore(RestoreEngine& engine, const std::string& backupPath, const std::string& targetDisk, bool showHidden, const std::string& logFilePath) {
     std::cout << "\nStarting metadata-driven disk restore...\n";
     std::cout << "Backup:      " << backupPath << "\n";
     std::cout << "Target disk: " << targetDisk << "\n";
@@ -75,6 +76,9 @@ void performDiskRestore(RestoreEngine& engine, const std::string& backupPath, co
         std::cout << "(hidden partitions excluded; use --show-hidden to include EFI/MSR/Recovery)\n";
     }
     std::cout << "\n";
+
+    engine.SetLogOperationName("Linux Restore CLI");
+    engine.SetLogFilePath(logFilePath);
 
     auto callback = [](int percent, const std::string& msg) {
         printf("\r[%3d%%] %-70s", percent, msg.c_str());
@@ -149,13 +153,16 @@ std::vector<std::string> split(const std::string& str, char delimiter) {
 
 void performRestore(RestoreEngine& engine, const std::string& backupPath, 
                     const std::vector<std::string>& items,
-                    const std::string& dest, bool overwrite) {
+                    const std::string& dest, bool overwrite, const std::string& logFilePath) {
     
     std::cout << "\nStarting restore...\n";
     std::cout << "Backup:      " << backupPath << "\n";
     std::cout << "Destination: " << (dest.empty() ? "Original locations" : dest) << "\n";
     std::cout << "Items:       " << items.size() << " item(s)\n";
     std::cout << "Overwrite:   " << (overwrite ? "Yes" : "No") << "\n\n";
+
+    engine.SetLogOperationName("Linux Restore CLI");
+    engine.SetLogFilePath(logFilePath);
 
     auto callback = [](int percent, const std::string& msg) {
         printf("\r[%3d%%] %-60s", percent, msg.c_str());
@@ -535,6 +542,7 @@ int main(int argc, char* argv[]) {
         std::string backupPath = argv[2];
         std::vector<std::string> items;
         std::string dest;
+        std::string logFilePath;
         bool overwrite = false;
 
         // Parse additional arguments
@@ -545,6 +553,8 @@ int main(int argc, char* argv[]) {
                 items = split(argv[++i], ',');
             } else if (arg == "--dest" && i + 1 < argc) {
                 dest = argv[++i];
+            } else if (arg == "--log-file" && i + 1 < argc) {
+                logFilePath = argv[++i];
             } else if (arg == "--overwrite") {
                 overwrite = true;
             }
@@ -555,7 +565,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        performRestore(engine, backupPath, items, dest, overwrite);
+        performRestore(engine, backupPath, items, dest, overwrite, logFilePath);
         return 0;
     }
 
@@ -580,13 +590,16 @@ int main(int argc, char* argv[]) {
         std::string backupPath = argv[2];
         std::string targetDisk = argv[3];
         bool showHidden = false;
+        std::string logFilePath;
         for (int i = 4; i < argc; i++) {
             if (std::string(argv[i]) == "--show-hidden") {
                 showHidden = true;
+            } else if (std::string(argv[i]) == "--log-file" && i + 1 < argc) {
+                logFilePath = argv[++i];
             }
         }
         ensureBackupPassword(engine, backupPath);
-        performDiskRestore(engine, backupPath, targetDisk, showHidden);
+        performDiskRestore(engine, backupPath, targetDisk, showHidden, logFilePath);
         return 0;
     }
 

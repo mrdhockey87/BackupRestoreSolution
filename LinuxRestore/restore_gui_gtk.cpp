@@ -36,6 +36,9 @@ private:
     GtkWidget *radioDiskTarget;
     GtkWidget *txtDestPath;
     GtkWidget *btnBrowseDest;
+    GtkWidget *chkSaveLog;
+    GtkWidget *txtLogPath;
+    GtkWidget *btnBrowseLog;
     GtkWidget *chkOverwrite;
     GtkWidget *chkPreservePerms;
     GtkWidget *lblDiskMappingNote;
@@ -1359,6 +1362,15 @@ private:
             return;
         }
 
+        std::string logPath;
+        if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(chkSaveLog))) {
+            logPath = gtk_entry_get_text(GTK_ENTRY(txtLogPath));
+            if (logPath.empty()) {
+                showError("Please choose a log file path or clear Save restore log");
+                return;
+            }
+        }
+
         // Confirm
         GtkWidget *dialog = gtk_message_dialog_new(
             GTK_WINDOW(window),
@@ -1377,6 +1389,9 @@ private:
 
         // Show progress dialog
         showProgressDialog();
+
+        engine.SetLogOperationName("Linux Restore");
+        engine.SetLogFilePath(logPath);
 
         // Perform restore
         bool overwrite = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(chkOverwrite));
@@ -1689,6 +1704,23 @@ private:
         gtk_box_pack_start(GTK_BOX(hbox), btnBrowseDest, FALSE, FALSE, 0);
 
         gtk_box_pack_start(GTK_BOX(box), hbox, FALSE, FALSE, 5);
+
+        chkSaveLog = gtk_check_button_new_with_label("Save restore log to a text file");
+        gtk_box_pack_start(GTK_BOX(box), chkSaveLog, FALSE, FALSE, 0);
+
+        GtkWidget *logBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+        GtkWidget *lblLog = gtk_label_new("Log file:");
+        gtk_box_pack_start(GTK_BOX(logBox), lblLog, FALSE, FALSE, 0);
+
+        txtLogPath = gtk_entry_new();
+        gtk_entry_set_placeholder_text(GTK_ENTRY(txtLogPath), "/path/to/restore-log.txt");
+        gtk_box_pack_start(GTK_BOX(logBox), txtLogPath, TRUE, TRUE, 0);
+
+        btnBrowseLog = gtk_button_new_with_label("Browse Log...");
+        g_signal_connect(btnBrowseLog, "clicked", G_CALLBACK(onBrowseLog), this);
+        gtk_box_pack_start(GTK_BOX(logBox), btnBrowseLog, FALSE, FALSE, 0);
+
+        gtk_box_pack_start(GTK_BOX(box), logBox, FALSE, FALSE, 5);
 
         // Disk reconstruction guidance
         lblDiskMapping = gtk_label_new(
