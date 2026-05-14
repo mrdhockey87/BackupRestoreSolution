@@ -1,4 +1,5 @@
 using SecureServerBackup.Windows;
+using SecureServerBackup.Models;
 using Xunit;
 
 namespace SecureServerBackup.Tests;
@@ -64,6 +65,58 @@ public sealed class RestoreWindowNewTests
         bool result = RestoreWindowNew.ShouldExpandLastPartition(
             requestedTotalBytes: 1_000_000_000,
             targetDiskCapacityBytes: 3_000_000_000);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void ShouldKeepRestoreCompletionWindowOpen_WhenFileRestoreIncludesBootedSource_ReturnsTrue()
+    {
+        bool result = RestoreWindowNew.ShouldKeepRestoreCompletionWindowOpen(
+            RestoreTargetKind.FileOrFolder,
+            requireAlternateDestination: true,
+            selectedRestoreVolume: null,
+            selectedRestoreDiskGroup: null);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldKeepRestoreCompletionWindowOpen_WhenSelectedVolumeIsBootVolume_ReturnsTrue()
+    {
+        bool result = RestoreWindowNew.ShouldKeepRestoreCompletionWindowOpen(
+            RestoreTargetKind.Volume,
+            requireAlternateDestination: false,
+            selectedRestoreVolume: new VolumeInfo { IsBootVolume = true },
+            selectedRestoreDiskGroup: null);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldKeepRestoreCompletionWindowOpen_WhenDiskGroupContainsBootVolume_ReturnsTrue()
+    {
+        bool result = RestoreWindowNew.ShouldKeepRestoreCompletionWindowOpen(
+            RestoreTargetKind.Disk,
+            requireAlternateDestination: false,
+            selectedRestoreVolume: null,
+            selectedRestoreDiskGroup:
+            [
+                new VolumeInfo { IsBootVolume = false },
+                new VolumeInfo { IsBootVolume = true }
+            ]);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldKeepRestoreCompletionWindowOpen_WhenRestoreDoesNotIncludeBootVolume_ReturnsFalse()
+    {
+        bool result = RestoreWindowNew.ShouldKeepRestoreCompletionWindowOpen(
+            RestoreTargetKind.Volume,
+            requireAlternateDestination: false,
+            selectedRestoreVolume: new VolumeInfo { IsBootVolume = false },
+            selectedRestoreDiskGroup: null);
 
         Assert.False(result);
     }

@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <chrono>
 #include "restore_engine.cpp"
 
 class RestoreGUI {
@@ -1395,16 +1396,35 @@ private:
 
         // Perform restore
         bool overwrite = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(chkOverwrite));
+        auto lastUiUpdate = std::chrono::steady_clock::time_point{};
+        int lastUiPercent = -1;
+        std::string lastUiItemMessage;
         
-        auto callback = [this](int percent, const std::string& msg) {
+        auto callback = [this, &lastUiUpdate, &lastUiPercent, &lastUiItemMessage](int percent, const std::string& msg) {
+            auto now = std::chrono::steady_clock::now();
+            bool isItemMessage = msg.rfind("Restoring:", 0) == 0 || msg.rfind("Processing:", 0) == 0;
+            bool percentChanged = percent != lastUiPercent;
+            bool itemChanged = isItemMessage && msg != lastUiItemMessage;
+            bool shouldRefresh = lastUiUpdate == std::chrono::steady_clock::time_point{} ||
+                                 percentChanged ||
+                                 (!isItemMessage) ||
+                                 (itemChanged && now - lastUiUpdate >= std::chrono::milliseconds(150));
+            if (!shouldRefresh) {
+                return;
+            }
+
+            lastUiUpdate = now;
+            lastUiPercent = percent;
             gtk_progress_bar_set_fraction(
                 GTK_PROGRESS_BAR(progressBar), percent / 100.0);
-            if (msg.rfind("Restoring:", 0) == 0 || msg.rfind("Processing:", 0) == 0) {
+            if (isItemMessage) {
+                lastUiItemMessage = msg;
                 gtk_label_set_text(GTK_LABEL(lblCurrentItem), msg.c_str());
             } else {
                 gtk_label_set_text(GTK_LABEL(lblProgress), msg.c_str());
                 if (msg.rfind("Restore", 0) != 0) {
                     gtk_label_set_text(GTK_LABEL(lblCurrentItem), "");
+                    lastUiItemMessage.clear();
                 }
             }
             

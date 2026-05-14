@@ -49,6 +49,8 @@ private:
     bool backupPasswordVerified = false;
     std::string logFilePath;
     std::string logOperationName = "Restore";
+    int lastLoggedProgressBucket = -1;
+    std::string lastLoggedProgressMessage;
 
     static constexpr const char* EncryptedHeader = "SSBAES1";
 
@@ -116,6 +118,16 @@ private:
         WriteLogEntry("Error", message, details);
     }
 
+    static bool IsDetailedUiProgressMessage(const std::string& message) {
+        return message.rfind("Restoring:", 0) == 0 ||
+               message.rfind("Processing:", 0) == 0;
+    }
+
+    void ResetProgressLoggingState() {
+        lastLoggedProgressBucket = -1;
+        lastLoggedProgressMessage.clear();
+    }
+
     void SetError(const std::string& error) {
         lastError = error;
         std::cerr << "ERROR: " << error << std::endl;
@@ -127,7 +139,19 @@ private:
             progressCallback(percentage, message.c_str());
         }
         std::cout << "[" << percentage << "%] " << message << std::endl;
-        LogInfo(message, "Progress=" + std::to_string(percentage));
+
+        if (logFilePath.empty() || IsDetailedUiProgressMessage(message)) {
+            return;
+        }
+
+        int progressBucket = percentage < 0 ? -1 : (percentage / 10);
+        bool bucketChanged = progressBucket != lastLoggedProgressBucket;
+        bool messageChanged = message != lastLoggedProgressMessage;
+        if (bucketChanged || messageChanged) {
+            lastLoggedProgressBucket = progressBucket;
+            lastLoggedProgressMessage = message;
+            LogInfo(message, percentage >= 0 ? "Progress=" + std::to_string(percentage) : std::string());
+        }
     }
 
     void ReportRestoreItem(int percentage, const std::string& itemPath) {
@@ -135,7 +159,11 @@ private:
             return;
         }
 
-        ReportProgress(percentage, "Restoring: " + itemPath);
+        std::string message = "Restoring: " + itemPath;
+        if (progressCallback) {
+            progressCallback(percentage, message.c_str());
+        }
+        std::cout << "[" << percentage << "%] " << message << std::endl;
     }
 
     static std::string Trim(const std::string& value) {
@@ -938,6 +966,7 @@ public:
 
     void SetLogFilePath(const std::string& path) {
         logFilePath = Trim(path);
+        ResetProgressLoggingState();
     }
 
     void SetLogOperationName(const std::string& operationName) {
@@ -1057,10 +1086,14 @@ public:
     // Now supports both folder-based backups and SSB (.ssb) backups
     int RestoreFiles(const std::string& backupPath, 
                      const std::string& destPath, 
-                     bool overwriteExisting) {
+                     bool overwriteExisting,
+                     bool logLifecycle = true) {
         try {
             return WithPreparedBackup(backupPath, [&](const std::string& workingPath) {
-                LogInfo("Restore started", "BackupPath=" + backupPath + " | Destination=" + destPath + " | Overwrite=" + std::string(overwriteExisting ? "true" : "false"));
+                if (logLifecycle) {
+                    ResetProgressLoggingState();
+                    LogInfo("Restore started", "BackupPath=" + backupPath + " | Destination=" + destPath + " | Overwrite=" + std::string(overwriteExisting ? "true" : "false"));
+                }
                 ReportProgress(0, "Starting file restore...");
 
                 if (!fs::exists(workingPath)) {
@@ -1218,7 +1251,9 @@ public:
                 }
 
                 ReportProgress(100, "Restore completed! Restored " + std::to_string(filesRestored) + " files");
-                LogSuccess("Restore completed", "FilesRestored=" + std::to_string(filesRestored) + " | Destination=" + destPath);
+                if (logLifecycle) {
+                    LogSuccess("Restore completed", "FilesRestored=" + std::to_string(filesRestored) + " | Destination=" + destPath);
+                }
                 return 0;
             });
 
@@ -1630,6 +1665,7 @@ public:
         std::function<void(int, const std::string&)> callback) {
         
         try {
+            ResetProgressLoggingState();
             LogInfo("Restore started", "BackupPath=" + backupPath + " | Destination=" + (destPath.empty() ? std::string("Original locations") : destPath) + " | ItemCount=" + std::to_string(items.size()) + " | Overwrite=" + std::string(overwrite ? "true" : "false"));
             int totalItems = items.size();
             int currentItem = 0;
@@ -1707,11 +1743,11 @@ public:
                             }
                             
                             // Restore files excluding SystemState directory
-                            RestoreFiles(sourcePath, targetPath, overwrite);
+                            RestoreFiles(sourcePath, targetPath, overwrite, false);
                         }
                         else {
                             // Regular directory - restore files
-                            RestoreFiles(sourcePath, targetPath, overwrite);
+                            RestoreFiles(sourcePath, targetPath, overwrite, false);
                         }
                     }
                     else {

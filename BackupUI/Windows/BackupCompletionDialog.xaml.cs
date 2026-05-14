@@ -16,6 +16,7 @@ namespace SecureServerBackup.Windows
 
         private readonly DispatcherTimer _countdownTimer;
         private TimeSpan _remaining;
+        private bool _autoCloseEnabled = true;
 
         /// <summary>
         /// True when the dialog was closed automatically by the timer (not by the user).
@@ -45,6 +46,7 @@ namespace SecureServerBackup.Windows
         /// </summary>
         public void ConfigureSuccess(string jobName)
         {
+            ConfigureAutoClose(true);
             txtTitle.Text = "Backup Complete";
             txtIcon.Text = "✅";
             txtIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 100, 0));
@@ -52,10 +54,23 @@ namespace SecureServerBackup.Windows
         }
 
         /// <summary>
+        /// Configure the dialog for a successful restore completion.
+        /// </summary>
+        public void ConfigureRestoreSuccess(bool enableAutoClose)
+        {
+            ConfigureAutoClose(enableAutoClose);
+            txtTitle.Text = "Restore Complete";
+            txtIcon.Text = "✅";
+            txtIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 100, 0));
+            txtMessage.Text = "Restore completed successfully!";
+        }
+
+        /// <summary>
         /// Configure the dialog for a failed backup.
         /// </summary>
         public void ConfigureFailure(string jobName, string? errorMessage)
         {
+            ConfigureAutoClose(true);
             txtTitle.Text = "Backup Failed";
             txtIcon.Text = "❌";
             txtIcon.Foreground = new SolidColorBrush(Color.FromRgb(139, 0, 0));
@@ -63,8 +78,22 @@ namespace SecureServerBackup.Windows
             btnOk.Background = new SolidColorBrush(Color.FromRgb(139, 0, 0));
         }
 
+        private void ConfigureAutoClose(bool enableAutoClose)
+        {
+            _autoCloseEnabled = enableAutoClose;
+            _remaining = TimeSpan.FromMinutes(AutoCloseMinutes);
+            txtCountdown.Text = enableAutoClose
+                ? $"This dialog will close automatically in {_remaining:m\\:ss}"
+                : "This dialog will remain open until you close it.";
+        }
+
         private void CountdownTimer_Tick(object? sender, EventArgs e)
         {
+            if (!_autoCloseEnabled)
+            {
+                return;
+            }
+
             _remaining = _remaining.Subtract(TimeSpan.FromSeconds(1));
 
             if (_remaining <= TimeSpan.Zero)

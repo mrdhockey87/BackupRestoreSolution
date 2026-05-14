@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.72";
+        private static readonly string version_fallback_number = "6.2.4.74";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,11 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.74 RestoreWindowNew now uses the same 15-minute completion dialog timeout as backup success,
+ *                  and auto-closes the restore window only for non-boot restores so booted-partition restores
+ *                  stay open until the user closes them. mdail 5/14/2026
+ * Version 6.2.4.73 Refined LinuxRestore logging to keep concise activity-style restore entries and
+ *                  added GTK/ncurses restore-progress UI throttling follow-up to reduce redraw churn. mdail 5/14/2026
  * Version 6.2.4.72 Added LinuxRestore plain-text log saving across the GTK UI, ncurses UI, and command line,
  *                  including user-selected log-file paths and one-line restore activity entries. mdail 5/13/2026
  * Version 6.2.4.71 Updated the Linux restore GTK and ncurses UIs to show active restore progress with current file or 

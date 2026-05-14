@@ -13,6 +13,7 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <chrono>
 #include "restore_engine.cpp"
 
 using BackupDate  = RestoreEngine::BackupDate;
@@ -566,6 +567,8 @@ private:
         std::string dest = restoreToOriginal ? "" : restoreDestination;
         std::string latestPhaseMessage = "Starting restore...";
         std::string latestItemMessage;
+        auto lastUiUpdate = std::chrono::steady_clock::time_point{};
+        int lastUiPercent = -1;
 
         engine->SetLogOperationName("Linux Restore");
         engine->SetLogFilePath(restoreLogPath);
@@ -578,8 +581,23 @@ private:
         mvwprintw(mainWin, 7, 2, "Item: ");
         wrefresh(mainWin);
 
-        auto cb = [this, &latestPhaseMessage, &latestItemMessage](int pct, const std::string& msg) {
-            if (msg.rfind("Restoring:", 0) == 0 || msg.rfind("Processing:", 0) == 0) {
+        auto cb = [this, &latestPhaseMessage, &latestItemMessage, &lastUiUpdate, &lastUiPercent](int pct, const std::string& msg) {
+            auto now = std::chrono::steady_clock::now();
+            bool isItemMessage = msg.rfind("Restoring:", 0) == 0 || msg.rfind("Processing:", 0) == 0;
+            bool percentChanged = pct != lastUiPercent;
+            bool itemChanged = isItemMessage && msg != latestItemMessage;
+            bool shouldRefresh = lastUiUpdate == std::chrono::steady_clock::time_point{} ||
+                                 percentChanged ||
+                                 (!isItemMessage) ||
+                                 (itemChanged && now - lastUiUpdate >= std::chrono::milliseconds(150));
+            if (!shouldRefresh) {
+                return;
+            }
+
+            lastUiUpdate = now;
+            lastUiPercent = pct;
+
+            if (isItemMessage) {
                 latestItemMessage = msg;
             } else {
                 latestPhaseMessage = msg;

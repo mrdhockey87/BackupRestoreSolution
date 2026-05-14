@@ -1124,11 +1124,23 @@ namespace SecureServerBackup.Windows
 
                 await PerformRestore();
 
-                ShowOwnedMessage("Restore completed successfully!", "Success",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                bool keepWindowOpen = ShouldKeepRestoreCompletionWindowOpen(
+                    _restoreTargetKind,
+                    _requireAlternateDestination,
+                    _selectedRestoreVolume,
+                    _selectedRestoreDiskGroup);
+
+                btnRestore.Content = "Close";
+
+                var completionDialog = new BackupCompletionDialog { Owner = this };
+                completionDialog.ConfigureRestoreSuccess(!keepWindowOpen);
+                completionDialog.ShowDialog();
 
                 DialogResult = true;
-                Close();
+                if (!keepWindowOpen && completionDialog.WasAutoClose)
+                {
+                    Close();
+                }
             }
             catch (Exception ex)
             {
@@ -3327,6 +3339,25 @@ namespace SecureServerBackup.Windows
                 defaultResult == MessageBoxResult.None
                     ? MessageBox.Show(this, messageBoxText, caption, button, icon)
                     : MessageBox.Show(this, messageBoxText, caption, button, icon, defaultResult));
+        }
+
+        internal static bool ShouldKeepRestoreCompletionWindowOpen(
+            RestoreTargetKind restoreTargetKind,
+            bool requireAlternateDestination,
+            VolumeInfo? selectedRestoreVolume,
+            IReadOnlyList<VolumeInfo>? selectedRestoreDiskGroup)
+        {
+            if (restoreTargetKind == RestoreTargetKind.FileOrFolder)
+            {
+                return requireAlternateDestination;
+            }
+
+            if (selectedRestoreVolume?.IsBootVolume == true)
+            {
+                return true;
+            }
+
+            return selectedRestoreDiskGroup?.Any(volume => volume.IsBootVolume) == true;
         }
         
     }
