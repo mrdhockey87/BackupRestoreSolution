@@ -13,7 +13,6 @@
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 			<RowDefinition Height="Auto" />
-			<RowDefinition Height="Auto" />
 		</Grid.RowDefinitions>
 
 		<TextBlock
@@ -344,38 +343,29 @@
 								</StackPanel>
 							</StackPanel>
 
-							<!--  File / folder restore location choice  -->
-							<StackPanel Name="pnlLocationChoice" Margin="0,0,0,0">
-								<RadioButton
-									Name="rbOriginalLocation"
+							<!--  File / folder restore target path  -->
+							<StackPanel
+								Name="pnlLocationChoice"
+								Margin="0,0,0,12"
+								Visibility="Collapsed">
+								<TextBlock
 									Margin="0,0,0,5"
-									Checked="RestoreLocation_Changed"
-									Content="Original location"
-									IsChecked="True" />
-								<RadioButton
-									Name="rbAlternateLocation"
-									Margin="0,0,0,5"
-									Checked="RestoreLocation_Changed"
-									Content="Alternate location" />
-								<Grid
-									Name="pnlAlternateLocation"
-									Margin="0,5,0,12"
-									Visibility="Collapsed">
-									<Grid.ColumnDefinitions>
-										<ColumnDefinition Width="*" />
-										<ColumnDefinition Width="Auto" />
-									</Grid.ColumnDefinitions>
-									<TextBox
-										Name="txtFolderRestoreDestination"
-										Grid.Column="0"
-										Height="25"
-										Margin="0,0,5,0" />
-									<Button
-										Grid.Column="1"
-										Width="70"
-										Click="BrowseRestoreDestination_Click"
-										Content="Browse..." />
-								</Grid>
+									FontWeight="Bold"
+									Text="File/Folder Restore Target" />
+								<Button
+									Name="btnBrowseRestoreDestination"
+									Width="120"
+									Margin="0,0,0,8"
+									HorizontalAlignment="Left"
+									Click="BrowseRestoreDestination_Click"
+									Content="Browse..." />
+								<TextBlock
+									Margin="0,0,0,4"
+									Text="Target Location" />
+								<TextBox
+									Name="txtFolderRestoreDestination"
+									Height="25"
+									TextChanged="TargetLocation_TextChanged" />
 							</StackPanel>
 
 							<!--  Hyper-V clone/system restore destination  -->
@@ -542,32 +532,9 @@
 			</GroupBox>
 		</Grid>
 
-		<!--  Progress  -->
-		<StackPanel
-			Name="pnlProgress"
-			Grid.Row="2"
-			Margin="0,8,0,8"
-			Visibility="Collapsed">
-			<ProgressBar
-				Name="progressBar"
-				Height="20"
-				Margin="0,0,0,5" />
-			<TextBlock
-				Name="txtProgress"
-				HorizontalAlignment="Center"
-				FontSize="11" />
-			<TextBlock
-				Name="txtCurrentRestoreItem"
-				Margin="0,8,0,0"
-				HorizontalAlignment="Left"
-				FontSize="11"
-				Foreground="{StaticResource SecondaryText}"
-				TextWrapping="Wrap" />
-		</StackPanel>
-
 		<!--  Buttons  -->
 		<StackPanel
-			Grid.Row="3"
+			Grid.Row="2"
 			HorizontalAlignment="Right"
 			Orientation="Horizontal">
 			<Button

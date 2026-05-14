@@ -18,6 +18,18 @@ public sealed class RestoreWindowNewTests
     }
 
     [Fact]
+    public void ShouldKeepRestoreCompletionWindowOpen_WhenFileRestoreDoesNotIncludeBootedSource_ReturnsFalse()
+    {
+        bool result = RestoreWindowNew.ShouldKeepRestoreCompletionWindowOpen(
+            RestoreTargetKind.FileOrFolder,
+            requireAlternateDestination: false,
+            selectedRestoreVolume: null,
+            selectedRestoreDiskGroup: null);
+
+        Assert.False(result);
+    }
+
+    [Fact]
     public void ShouldReuseExistingTargetVolumeLayout_WhenRequestedMatchesDisk_ReturnsTrue()
     {
         bool result = RestoreWindowNew.ShouldReuseExistingTargetVolumeLayout(
@@ -117,6 +129,22 @@ public sealed class RestoreWindowNewTests
             requireAlternateDestination: false,
             selectedRestoreVolume: new VolumeInfo { IsBootVolume = false },
             selectedRestoreDiskGroup: null);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void ShouldKeepRestoreCompletionWindowOpen_WhenDiskGroupDoesNotIncludeBootVolume_ReturnsFalse()
+    {
+        bool result = RestoreWindowNew.ShouldKeepRestoreCompletionWindowOpen(
+            RestoreTargetKind.Disk,
+            requireAlternateDestination: false,
+            selectedRestoreVolume: null,
+            selectedRestoreDiskGroup:
+            [
+                new VolumeInfo { IsBootVolume = false },
+                new VolumeInfo { IsBootVolume = false }
+            ]);
 
         Assert.False(result);
     }

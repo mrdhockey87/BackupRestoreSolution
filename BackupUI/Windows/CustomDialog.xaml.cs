@@ -84,7 +84,7 @@ namespace SecureServerBackup
         /// <summary>
         /// Configure the dialog with message, title, buttons, and icon
         /// </summary>
-        public void Configure(string message, string title, DialogButtons buttons, DialogIcon icon)
+        public void Configure(string message, string title, DialogButtons buttons, DialogIcon icon, string? primaryButtonText = null, string? secondaryButtonText = null, string? tertiaryButtonText = null)
         {
             txtMessage.Text = message;
             txtTitle.Text = title;
@@ -93,7 +93,7 @@ namespace SecureServerBackup
             ConfigureIcon(icon);
 
             // Configure buttons
-            ConfigureButtons(buttons);
+            ConfigureButtons(buttons, primaryButtonText, secondaryButtonText, tertiaryButtonText);
         }
 
         private void ConfigureIcon(DialogIcon icon)
@@ -131,39 +131,39 @@ namespace SecureServerBackup
             }
         }
 
-        private void ConfigureButtons(DialogButtons buttons)
+        private void ConfigureButtons(DialogButtons buttons, string? primaryButtonText, string? secondaryButtonText, string? tertiaryButtonText)
         {
             switch (buttons)
             {
                 case DialogButtons.OK:
-                    btnPrimary.Content = "OK";
+                    btnPrimary.Content = primaryButtonText ?? "OK";
                     btnPrimary.Visibility = Visibility.Visible;
                     btnSecondary.Visibility = Visibility.Collapsed;
                     btnTertiary.Visibility = Visibility.Collapsed;
                     break;
 
                 case DialogButtons.OKCancel:
-                    btnPrimary.Content = "OK";
+                    btnPrimary.Content = primaryButtonText ?? "OK";
                     btnPrimary.Visibility = Visibility.Visible;
-                    btnSecondary.Content = "Cancel";
+                    btnSecondary.Content = secondaryButtonText ?? "Cancel";
                     btnSecondary.Visibility = Visibility.Visible;
                     btnTertiary.Visibility = Visibility.Collapsed;
                     break;
 
                 case DialogButtons.YesNo:
-                    btnPrimary.Content = "Yes";
+                    btnPrimary.Content = primaryButtonText ?? "Yes";
                     btnPrimary.Visibility = Visibility.Visible;
-                    btnSecondary.Content = "No";
+                    btnSecondary.Content = secondaryButtonText ?? "No";
                     btnSecondary.Visibility = Visibility.Visible;
                     btnTertiary.Visibility = Visibility.Collapsed;
                     break;
 
                 case DialogButtons.YesNoCancel:
-                    btnPrimary.Content = "Yes";
+                    btnPrimary.Content = primaryButtonText ?? "Yes";
                     btnPrimary.Visibility = Visibility.Visible;
-                    btnSecondary.Content = "Cancel";
+                    btnSecondary.Content = secondaryButtonText ?? "Cancel";
                     btnSecondary.Visibility = Visibility.Visible;
-                    btnTertiary.Content = "No";
+                    btnTertiary.Content = tertiaryButtonText ?? "No";
                     btnTertiary.Visibility = Visibility.Visible;
                     break;
             }

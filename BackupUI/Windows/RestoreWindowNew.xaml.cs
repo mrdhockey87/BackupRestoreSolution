@@ -320,13 +320,6 @@ namespace SecureServerBackup.Windows
 
             txtBackupSource.Text = _preloadedBackup.BackupPath;
 
-            if (_requireAlternateDestination)
-            {
-                rbOriginalLocation.IsEnabled = false;
-                rbAlternateLocation.IsChecked = true;
-                rbAlternateLocation.Content = "Alternate location (required for current boot/system backup)";
-            }
-
             UpdateSelectedRestoreTargetKind();
 
             await ScanBackupAsync();
@@ -339,9 +332,9 @@ namespace SecureServerBackup.Windows
                 return;
             }
 
-            pnlProgress.Visibility = Visibility.Visible;
-            txtProgress.Text = "Scanning backup files...";
-            progressBar.IsIndeterminate = true;
+            string originalTitle = Title;
+            Title = "Restore Backup - Scanning...";
+            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
 
             try
             {
@@ -354,8 +347,8 @@ namespace SecureServerBackup.Windows
             }
             finally
             {
-                progressBar.IsIndeterminate = false;
-                pnlProgress.Visibility = Visibility.Collapsed;
+                Title = originalTitle;
+                System.Windows.Input.Mouse.OverrideCursor = null;
             }
         }
 
@@ -413,9 +406,6 @@ namespace SecureServerBackup.Windows
             }
             catch (Exception ex)
             {
-                progressBar.IsIndeterminate = false;
-                pnlProgress.Visibility = Visibility.Collapsed;
-                
                 ShowOwnedMessage($"Error scanning backup: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -717,14 +707,8 @@ namespace SecureServerBackup.Windows
 
         private void RestoreLocation_Changed(object sender, RoutedEventArgs e)
         {
-            if (pnlAlternateLocation == null || rbAlternateLocation == null)
-                return;
-
-            pnlAlternateLocation.Visibility = rbAlternateLocation.IsChecked == true
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
             UpdateDestinationHelpText();
+            UpdateRestoreActionState();
         }
 
         private void HyperVVmRestoreMode_Changed(object sender, RoutedEventArgs e)
@@ -798,27 +782,28 @@ namespace SecureServerBackup.Windows
             bool isHyperVVm = _restoreTargetKind == RestoreTargetKind.HyperVVm;
             bool isHyperVVirtualDisk = _restoreTargetKind == RestoreTargetKind.HyperVVirtualDisk;
 
-            // File/folder restores show the original/alternate location choice.
+            // File/folder restores show the direct target-path entry.
             pnlLocationChoice.Visibility = isFileFolder ? Visibility.Visible : Visibility.Collapsed;
 
             if (pnlHyperVCloneDestination != null)
                 pnlHyperVCloneDestination.Visibility = isHyperVVm ? Visibility.Visible : Visibility.Collapsed;
 
             // The right-side target tree:
-            //   - Always visible and enabled (disk, volume, file/folder, and HyperV virtual disk restores all use it)
+            //   - Visible for all non-Hyper-V VM restores so the workflow remains consistent
+            //   - Disabled for file/folder restores because those now use the direct target-path entry
             //   - Hidden only for Hyper-V VM clone restores where the tree is irrelevant
             bool showTree = !isHyperVVm;
             if (grpRestoreTarget != null)
             {
                 grpRestoreTarget.Visibility = showTree ? Visibility.Visible : Visibility.Collapsed;
-                grpRestoreTarget.IsEnabled  = showTree;
+                grpRestoreTarget.IsEnabled  = showTree && !isFileFolder;
             }
 
             // Update help text in the right-side panel
             if (showTree && txtDriveTreeHelp != null)
             {
                 txtDriveTreeHelp.Text = isFileFolder
-                    ? "Choose the target drive or volume where files will be restored. Selecting a volume will auto-fill the Alternate Location path."
+                    ? "Files/folders restore to the Target Location path on the left. Restore-target selection is disabled for this restore type."
                     : isDisk
                         ? "Choose the target disk to restore onto. You may select a disk (full repartition) or an individual volume. The boot/system disk cannot be selected."
                         : isHyperVVirtualDisk
@@ -846,6 +831,8 @@ namespace SecureServerBackup.Windows
                     _ = LoadRestoreTargetDrivesAsync();
                 }
             }
+
+            UpdateRestoreActionButtonText();
         }
 
         private void RegularHyperVRestoreOption_Changed(object sender, RoutedEventArgs e)
@@ -1005,19 +992,24 @@ namespace SecureServerBackup.Windows
             UpdateSelectedRestoreTargetKind();
         }
 
+        private void TargetLocation_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            _selectedTargetPath = txtFolderRestoreDestination?.Text?.Trim();
+            UpdateRestoreActionState();
+        }
+
         private void BrowseRestoreDestination_Click(object sender, RoutedEventArgs e)
         {
-            // File / folder restore: browse for alternate folder
-            using var dialog = new FolderBrowserDialog
+            var dialog = new Microsoft.Win32.OpenFolderDialog
             {
-                Description = "Select Restore Destination",
-                ShowNewFolderButton = true
+                Multiselect = false,
+                Title = "Select a Drive or Folder Path"
             };
 
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            if (dialog.ShowDialog() == true)
             {
-                _selectedTargetPath = dialog.SelectedPath;
-                txtFolderRestoreDestination.Text = dialog.SelectedPath;
+                _selectedTargetPath = dialog.FolderName;
+                txtFolderRestoreDestination.Text = dialog.FolderName;
             }
         }
 
@@ -1075,82 +1067,47 @@ namespace SecureServerBackup.Windows
             if (!ValidateRestore())
                 return;
 
-            if (_restoreTargetKind == RestoreTargetKind.FileOrFolder)
+            if ((_restoreTargetKind == RestoreTargetKind.Disk || _restoreTargetKind == RestoreTargetKind.Volume) &&
+                !await PromptVolumeSelectionAndSizingAsync())
             {
-                var result = ShowOwnedMessage(
-                    "Are you sure you want to restore? This may overwrite existing files.",
-                    "Confirm Restore",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
+                return;
+            }
 
-                if (result != MessageBoxResult.Yes)
+            if (_restoreTargetKind == RestoreTargetKind.FileOrFolder && chkOverwrite.IsChecked == true)
+            {
+                bool confirmed = ShowStartRestoreConfirmation(
+                    "WARNING: Existing files in the target location may be overwritten when the restore starts.\n\nDo you want to continue?",
+                    "Confirm File Restore");
+
+                if (!confirmed)
                     return;
             }
             else if (_restoreTargetKind == RestoreTargetKind.Disk)
             {
-                var result = ShowOwnedMessage(
+                bool confirmed = ShowStartRestoreConfirmation(
                     "WARNING: The selected target disk will be formatted and repartitioned. ALL DATA ON THE TARGET DISK WILL BE LOST.\n\nDo you want to continue?",
-                    "Confirm Disk Format",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning,
-                    MessageBoxResult.No);
+                    "Confirm Disk Format");
 
-                if (result != MessageBoxResult.Yes)
+                if (!confirmed)
                     return;
             }
             else if (_restoreTargetKind == RestoreTargetKind.Volume)
             {
-                var result = ShowOwnedMessage(
+                bool confirmed = ShowStartRestoreConfirmation(
                     "WARNING: The selected target volume will be formatted. ALL DATA ON THE TARGET VOLUME WILL BE LOST.\n\nDo you want to continue?",
-                    "Confirm Volume Format",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning,
-                    MessageBoxResult.No);
+                    "Confirm Volume Format");
 
-                if (result != MessageBoxResult.Yes)
+                if (!confirmed)
                     return;
             }
 
-            // For disk and Hyper-V backups with metadata, prompt for volume/group selection
-            // and let the user size each partition before confirming execution.
-            if (!await PromptVolumeSelectionAndSizingAsync())
-                return;
+            bool keepWindowOpen = ShouldKeepRestoreCompletionWindowOpen(
+                _restoreTargetKind,
+                _requireAlternateDestination,
+                _selectedRestoreVolume,
+                _selectedRestoreDiskGroup);
 
-            try
-            {
-                pnlProgress.Visibility = Visibility.Visible;
-                progressBar.IsIndeterminate = false;
-                progressBar.Value = 0;
-
-                await PerformRestore();
-
-                bool keepWindowOpen = ShouldKeepRestoreCompletionWindowOpen(
-                    _restoreTargetKind,
-                    _requireAlternateDestination,
-                    _selectedRestoreVolume,
-                    _selectedRestoreDiskGroup);
-
-                btnRestore.Content = "Close";
-
-                var completionDialog = new BackupCompletionDialog { Owner = this };
-                completionDialog.ConfigureRestoreSuccess(!keepWindowOpen);
-                completionDialog.ShowDialog();
-
-                DialogResult = true;
-                if (!keepWindowOpen && completionDialog.WasAutoClose)
-                {
-                    Close();
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowOwnedMessage($"Restore failed: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            finally
-            {
-                pnlProgress.Visibility = Visibility.Collapsed;
-            }
+            ShowRestoreProgressWindow(keepWindowOpen);
         }
 
         /// <summary>
@@ -1450,18 +1407,20 @@ namespace SecureServerBackup.Windows
         }
 
 
-        private async Task PerformRestore()
+        private async Task PerformRestoreAsync(Window owner, BackupEngineInterop.ProgressCallback? progressCallback = null)
         {
+            ArgumentNullException.ThrowIfNull(owner);
+
             var selectedPoint = lstRestorePoints.SelectedItem as RestorePoint;
             if (selectedPoint == null) return;
 
             var destination = _restoreTargetKind == RestoreTargetKind.FileOrFolder
-                ? (rbAlternateLocation.IsChecked == true ? txtFolderRestoreDestination.Text : string.Empty)
+                ? txtFolderRestoreDestination.Text.Trim()
                 : (_selectedTargetPath ?? string.Empty);
 
             await Task.Run(() =>
             {
-                using var preparedBackup = EncryptedBackupFileService.PrepareForRead(this, selectedPoint.FilePath, Path.GetFileNameWithoutExtension(selectedPoint.FilePath));
+                using var preparedBackup = EncryptedBackupFileService.PrepareForRead(owner, selectedPoint.FilePath, Path.GetFileNameWithoutExtension(selectedPoint.FilePath));
                 int result;
                 int lastLoggedPercent = -1;
 
@@ -1472,6 +1431,8 @@ namespace SecureServerBackup.Windows
 
                 BackupEngineInterop.ProgressCallback callback = (percent, message) =>
                 {
+                    progressCallback?.Invoke(percent, message);
+
                     if (percent >= 0 && percent != lastLoggedPercent)
                     {
                         lastLoggedPercent = percent;
@@ -1485,27 +1446,6 @@ namespace SecureServerBackup.Windows
                     {
                         BackupLogger.LogInfo(RestoreLogJobName, message, $"Progress: {percent}%");
                     }
-
-                    Dispatcher.Invoke(() =>
-                    {
-                        progressBar.Value = percent;
-                        if (!string.IsNullOrWhiteSpace(message) &&
-                            (message.StartsWith("Restoring:", StringComparison.OrdinalIgnoreCase) ||
-                             message.StartsWith("Processing:", StringComparison.OrdinalIgnoreCase)))
-                        {
-                            txtCurrentRestoreItem.Text = message;
-                        }
-                        else
-                        {
-                            txtProgress.Text = message;
-                            if (!string.IsNullOrWhiteSpace(message) &&
-                                !message.Contains("Restoring", StringComparison.OrdinalIgnoreCase) &&
-                                !message.Contains("Processing", StringComparison.OrdinalIgnoreCase))
-                            {
-                                txtCurrentRestoreItem.Text = string.Empty;
-                            }
-                        }
-                    });
                 };
 
                 switch (_restoreTargetKind)
@@ -1552,6 +1492,34 @@ namespace SecureServerBackup.Windows
                     selectedPoint.FilePath,
                     $"Type: {_restoreTargetKind}; Destination: {destination}");
             });
+        }
+
+        private void ShowRestoreProgressWindow(bool keepWindowOpen)
+        {
+            if (lstRestorePoints.SelectedItem is not RestorePoint selectedPoint)
+            {
+                throw new InvalidOperationException("A restore point must be selected before starting the restore.");
+            }
+
+            Window parentWindow = Owner ?? this;
+            var progressWindow = new RestoreProgressWindow(
+                selectedPoint.DisplayName,
+                keepWindowOpen,
+                callback => PerformRestoreAsync(parentWindow, callback));
+
+            WindowPositionManager.SetChildWindowPosition(progressWindow, parentWindow);
+
+            Hide();
+
+            try
+            {
+                progressWindow.ShowDialog();
+            }
+            finally
+            {
+                DialogResult = progressWindow.RestoreSucceeded;
+                Close();
+            }
         }
 
         private int RestoreDiskTarget(string preparedBackupPath, string selectedBackupPath, BackupEngineInterop.ProgressCallback callback)
@@ -1814,25 +1782,25 @@ namespace SecureServerBackup.Windows
 
             if (_restoreTargetKind == RestoreTargetKind.FileOrFolder)
             {
-                if (rbAlternateLocation.IsChecked == true && string.IsNullOrWhiteSpace(txtFolderRestoreDestination.Text))
+                string destinationPath = txtFolderRestoreDestination.Text.Trim();
+                if (string.IsNullOrWhiteSpace(destinationPath))
                 {
-                    ShowOwnedMessage("Please select a restore destination folder.", "Validation Error",
+                    ShowOwnedMessage("Please enter a target location for the file or folder restore.", "Validation Error",
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
 
-                if (_requireAlternateDestination && rbOriginalLocation.IsChecked == true)
+                if (!IsValidRestoreTargetPath(destinationPath))
                 {
-                    ShowOwnedMessage("This backup includes the currently booted system/boot drive. Restore it to a non-boot destination from Windows, or boot from the recovery disk for an in-place restore.",
-                        "Recovery Environment Required",
+                    ShowOwnedMessage("Please enter a valid target path. Local and network paths are supported.", "Validation Error",
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                     return false;
                 }
 
-                if (_requireAlternateDestination && rbAlternateLocation.IsChecked == true)
+                if (_requireAlternateDestination)
                 {
-                    string destinationRoot = (_selectedTargetPath ?? txtFolderRestoreDestination.Text);
+                    string destinationRoot = destinationPath;
                     destinationRoot = Path.GetPathRoot(destinationRoot)?.TrimEnd('\\') ?? destinationRoot.TrimEnd('\\');
                     string systemRoot = Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? string.Empty;
                     if (!string.IsNullOrWhiteSpace(destinationRoot) &&
@@ -2082,8 +2050,57 @@ namespace SecureServerBackup.Windows
                 RestoreTargetKind.Volume => "Volume restore: choose a target volume. It will be formatted before restore. Boot/system volumes are excluded.",
                 RestoreTargetKind.HyperVVm => $"Hyper-V VM restore: import the selected Hyper-V backup as a virtual machine.{hyperVVmSubText}",
                 RestoreTargetKind.HyperVVirtualDisk => "Hyper-V virtual disk restore: write the restored backup into a .vhdx file, then optionally attach that disk to an existing Hyper-V VM.",
-                _ => "File/folder restore: choose a destination folder, or restore to the original location if allowed."
+                _ => "File/folder restore: enter the target location on the left. Local and network paths are supported."
             };
+        }
+
+        private static bool IsValidRestoreTargetPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                _ = Path.GetFullPath(path);
+                return true;
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
+            {
+                return false;
+            }
+        }
+
+        private void UpdateRestoreActionButtonText()
+        {
+            if (btnRestore == null)
+            {
+                return;
+            }
+
+            btnRestore.Content = _restoreTargetKind is RestoreTargetKind.Disk or RestoreTargetKind.Volume
+                ? "Next"
+                : "Start Restore";
+        }
+
+        private bool ShowStartRestoreConfirmation(string message, string title)
+        {
+            var dialog = new CustomDialog
+            {
+                Owner = this
+            };
+
+            dialog.Configure(
+                message,
+                title,
+                DialogButtons.OKCancel,
+                DialogIcon.Warning,
+                primaryButtonText: "Start Restore",
+                secondaryButtonText: "Cancel");
+
+            dialog.ShowDialog();
+            return dialog.Result == CustomDialogResult.OK;
         }
 
         /// <summary>
@@ -2967,17 +2984,6 @@ namespace SecureServerBackup.Windows
 
             txtSelectedTargetLabel.Text = $"Selected: {item.Name.Split(new[] { "  [" }, StringSplitOptions.None)[0].Trim()}";
             
-            // For file/folder restores the tree acts as a drive picker for the alternate-location
-            // path: auto-check Alternate Location and pre-fill the destination text box so the
-            // existing validation and restore code picks it up without any extra changes.
-            if (_restoreTargetKind == RestoreTargetKind.FileOrFolder
-                && rbAlternateLocation != null
-                && txtFolderRestoreDestination != null)
-            {
-                rbAlternateLocation.IsChecked = true;
-                txtFolderRestoreDestination.Text = item.FullPath;
-            }
-
             UpdateRestoreActionState();
         }
 
@@ -3314,11 +3320,15 @@ namespace SecureServerBackup.Windows
                 return;
 
             bool hasRestorePoint = lstRestorePoints?.SelectedItem is RestorePoint;
-            bool requiresExplicitTarget = _restoreTargetKind == RestoreTargetKind.Disk ||
-                                          _restoreTargetKind == RestoreTargetKind.Volume;
-            bool hasTargetSelection = !string.IsNullOrWhiteSpace(_selectedTargetPath);
+            bool hasTargetSelection = _restoreTargetKind switch
+            {
+                RestoreTargetKind.FileOrFolder => IsValidRestoreTargetPath(txtFolderRestoreDestination?.Text?.Trim() ?? string.Empty),
+                RestoreTargetKind.Disk or RestoreTargetKind.Volume => !string.IsNullOrWhiteSpace(_selectedTargetPath),
+                _ => true
+            };
 
-            btnRestore.IsEnabled = hasRestorePoint && (!requiresExplicitTarget || hasTargetSelection);
+            UpdateRestoreActionButtonText();
+            btnRestore.IsEnabled = hasRestorePoint && hasTargetSelection;
         }
 
         private MessageBoxResult ShowOwnedMessage(

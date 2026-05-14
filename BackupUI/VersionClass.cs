@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.74";
+        private static readonly string version_fallback_number = "6.2.4.75";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,9 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.75 RestoreWindowNew now routes file/folder restores through a direct target-path picker,
+ *                  defers disk and volume format confirmation until after sizing, and launches the new
+ *                  restore progress window so the timed completion dialog stays on top of restore progress. mdail 5/14/2026
  * Version 6.2.4.74 RestoreWindowNew now uses the same 15-minute completion dialog timeout as backup success,
  *                  and auto-closes the restore window only for non-boot restores so booted-partition restores
  *                  stay open until the user closes them. mdail 5/14/2026
