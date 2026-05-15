@@ -99,6 +99,7 @@ namespace SecureServerBackup.Windows
                         }
                     }
                 }
+
             }
 
             public static string BuildVmDisplayName(string vmName, object? enabledState)
@@ -289,6 +290,9 @@ namespace SecureServerBackup.Windows
                 case BackupType.Differential:
                     rbDifferential.IsChecked = true;
                     break;
+                case BackupType.SelectedFilesAndFolders:
+                    rbSelectedFilesAndFolders.IsChecked = true;
+                    break;
                 case BackupType.CloneToDisk:
                     rbCloneDisk.IsChecked = true;
                     break;
@@ -304,6 +308,7 @@ namespace SecureServerBackup.Windows
             chkCompress.IsChecked = job.CompressData;
             chkVerify.IsChecked = job.VerifyAfterBackup;
             txtRetainCount.Text = job.RetainFullBackupCount.ToString();
+            cmbSelectedFilesRetentionDays.Text = Math.Clamp(job.SelectedFilesRetentionDays, 1, 30).ToString();
             chkEncryptBackup.IsChecked = job.EncryptBackup;
 
             _hasSavedEncryptionPassword = job.EncryptBackup && !string.IsNullOrWhiteSpace(job.ProtectedEncryptionPassword);
@@ -320,6 +325,11 @@ namespace SecureServerBackup.Windows
             if (pnlRetentionSettings != null)
             {
                 pnlRetentionSettings.Visibility = job.Type == BackupType.Full ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (pnlSelectedFilesRetention != null)
+            {
+                pnlSelectedFilesRetention.Visibility = job.Type == BackupType.SelectedFilesAndFolders ? Visibility.Visible : Visibility.Collapsed;
             }
 
             // Store job data for pre-selection after tree loads
@@ -991,106 +1001,16 @@ namespace SecureServerBackup.Windows
                     return;
                 }
 
-                System.Diagnostics.Debug.WriteLine($"Directory exists, enumerating folders...");
+                System.Diagnostics.Debug.WriteLine($"Directory exists, enumerating folders and files...");
 
-                // Add top-level folders
-                var foldersAdded = 0;
+                var entriesAdded = 0;
                 try
                 {
-                    var directories = Directory.GetDirectories(rootPath);
-                    System.Diagnostics.Debug.WriteLine($"Found {directories.Length} directories");
-                    
-                    foreach (var directory in directories)
+                    foreach (DriveTreeItem childItem in BuildDirectoryChildItems(volumeItem, rootPath))
                     {
-                        try
-                        {
-                            var dirInfo = new DirectoryInfo(directory);
-                            
-                            // Show ALL folders including hidden and system
-                            // Mark them differently but don't skip them
-                            var isHidden = (dirInfo.Attributes & FileAttributes.Hidden) == FileAttributes.Hidden;
-                            var isSystem = (dirInfo.Attributes & FileAttributes.System) == FileAttributes.System;
-                            
-                            var folderName = dirInfo.Name;
-                            if (isSystem)
-                                folderName += " [System]";
-                            else if (isHidden)
-                                folderName += " [Hidden]";
-
-                            var folderItem = new DriveTreeItem
-                            {
-                                Name = folderName,
-                                FullPath = HyperVGuestSelectionPath.IsEncodedPath(volumeItem.FullPath)
-                                    ? HyperVGuestSelectionPath.Encode(
-                                        HyperVGuestSelectionKind.Folder,
-                                        volumeItem.VirtualMachineName,
-                                        volumeItem.VirtualDiskPath,
-                                        volumeItem.PartitionNumber,
-                                        BuildHyperVGuestRelativePath(volumeItem, dirInfo.FullName))
-                                    : dirInfo.FullName,
-                                ResolvedPath = dirInfo.FullName,
-                                VirtualMachineName = volumeItem.VirtualMachineName,
-                                VirtualDiskPath = volumeItem.VirtualDiskPath,
-                                PartitionNumber = volumeItem.PartitionNumber,
-                                ItemType = DriveTreeItemType.Folder,
-                                Parent = volumeItem
-                            };
-
-                            // Add a dummy child if this folder has subfolders (for expand arrow)
-                            try
-                            {
-                                if (Directory.GetDirectories(directory).Length > 0 || 
-                                    Directory.GetFiles(directory).Length > 0)
-                                {
-                                    folderItem.Children.Add(new DriveTreeItem 
-                                    { 
-                                        Name = "Loading...", 
-                                        ItemType = DriveTreeItemType.Folder,
-                                        Parent = folderItem
-                                    });
-                                }
-                            }
-                            catch
-                            {
-                                // Can't access subfolder info
-                            }
-
-                            volumeItem.Children.Add(folderItem);
-                            foldersAdded++;
-                            
-                            System.Diagnostics.Debug.WriteLine($"  Added: {folderName}");
-                        }
-                        catch (UnauthorizedAccessException)
-                        {
-                            // Add a marker for inaccessible folders
-                            var folderName = $"{Path.GetFileName(directory)} [Access Denied]";
-                            string folderFullPath = HyperVGuestSelectionPath.IsEncodedPath(volumeItem.FullPath)
-                                ? HyperVGuestSelectionPath.Encode(
-                                    HyperVGuestSelectionKind.Folder,
-                                    volumeItem.VirtualMachineName,
-                                    volumeItem.VirtualDiskPath,
-                                    volumeItem.PartitionNumber,
-                                    BuildHyperVGuestRelativePath(volumeItem, directory))
-                                : directory;
-
-                            volumeItem.Children.Add(new DriveTreeItem
-                            {
-                                Name = folderName,
-                                FullPath = folderFullPath,
-                                ResolvedPath = directory,
-                                VirtualMachineName = volumeItem.VirtualMachineName,
-                                VirtualDiskPath = volumeItem.VirtualDiskPath,
-                                PartitionNumber = volumeItem.PartitionNumber,
-                                ItemType = DriveTreeItemType.Folder,
-                                Parent = volumeItem
-                            });
-                            foldersAdded++;
-                            System.Diagnostics.Debug.WriteLine($"  Access denied: {Path.GetFileName(directory)}");
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"  Error processing folder {directory}: {ex.Message}");
-                        }
+                        volumeItem.Children.Add(childItem);
+                        entriesAdded++;
+                        System.Diagnostics.Debug.WriteLine($"  Added: {childItem.Name}");
                     }
                 }
                 catch (UnauthorizedAccessException)
@@ -1105,14 +1025,14 @@ namespace SecureServerBackup.Windows
                     return;
                 }
                 
-                System.Diagnostics.Debug.WriteLine($"Total folders added: {foldersAdded}");
+                System.Diagnostics.Debug.WriteLine($"Total entries added: {entriesAdded}");
                 
-                // If no folders were accessible, show a message
-                if (foldersAdded == 0)
+                // If no folders or files were accessible, show a message
+                if (entriesAdded == 0)
                 {
                     volumeItem.Children.Add(new DriveTreeItem
                     {
-                        Name = "(Empty or no accessible folders)",
+                        Name = "(Empty or no accessible files/folders)",
                         ItemType = DriveTreeItemType.Folder,
                         Parent = volumeItem
                     });
@@ -1129,6 +1049,176 @@ namespace SecureServerBackup.Windows
                     Parent = volumeItem
                 });
             }
+        }
+
+        internal static List<DriveTreeItem> BuildDirectoryChildItems(DriveTreeItem parentItem, string rootPath)
+        {
+            ArgumentNullException.ThrowIfNull(parentItem);
+            ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
+
+            List<DriveTreeItem> childItems = new();
+
+            foreach (string directory in Directory.GetDirectories(rootPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    DirectoryInfo dirInfo = new(directory);
+                    childItems.Add(CreateDirectoryTreeItem(parentItem, dirInfo));
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    childItems.Add(CreateAccessDeniedDirectoryTreeItem(parentItem, directory));
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"  Error processing folder {directory}: {ex.Message}");
+                }
+            }
+
+            foreach (string file in Directory.GetFiles(rootPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    FileInfo fileInfo = new(file);
+                    childItems.Add(CreateFileTreeItem(parentItem, fileInfo));
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    Debug.WriteLine($"  Access denied file: {Path.GetFileName(file)}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"  Error processing file {file}: {ex.Message}");
+                }
+            }
+
+            return childItems;
+        }
+
+        private static TreeViewItem CreateLoadingTreeViewItem(string message)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+            return new TreeViewItem
+            {
+                Header = new StackPanel
+                {
+                    Orientation = System.Windows.Controls.Orientation.Horizontal,
+                    Children =
+                    {
+                        new System.Windows.Controls.ProgressBar
+                        {
+                            IsIndeterminate = true,
+                            Width = 16,
+                            Height = 16,
+                            Margin = new Thickness(0, 0, 6, 0),
+                            VerticalAlignment = VerticalAlignment.Center
+                        },
+                        new TextBlock
+                        {
+                            Text = message,
+                            VerticalAlignment = VerticalAlignment.Center
+                        }
+                    }
+                },
+                IsEnabled = false
+            };
+        }
+
+        private static DriveTreeItem CreateDirectoryTreeItem(DriveTreeItem parentItem, DirectoryInfo dirInfo)
+        {
+            string folderName = AppendAttributesSuffix(dirInfo.Name, dirInfo.Attributes);
+
+            DriveTreeItem folderItem = new()
+            {
+                Name = folderName,
+                FullPath = BuildChildFullPath(parentItem, dirInfo.FullName, HyperVGuestSelectionKind.Folder),
+                ResolvedPath = dirInfo.FullName,
+                VirtualMachineName = parentItem.VirtualMachineName,
+                VirtualDiskPath = parentItem.VirtualDiskPath,
+                PartitionNumber = parentItem.PartitionNumber,
+                ItemType = DriveTreeItemType.Folder,
+                Parent = parentItem
+            };
+
+            try
+            {
+                if (Directory.GetDirectories(dirInfo.FullName).Length > 0 || Directory.GetFiles(dirInfo.FullName).Length > 0)
+                {
+                    folderItem.Children.Add(new DriveTreeItem
+                    {
+                        Name = "Loading...",
+                        ItemType = DriveTreeItemType.Folder,
+                        Parent = folderItem
+                    });
+                }
+            }
+            catch
+            {
+            }
+
+            return folderItem;
+        }
+
+        private static DriveTreeItem CreateAccessDeniedDirectoryTreeItem(DriveTreeItem parentItem, string directoryPath)
+        {
+            return new DriveTreeItem
+            {
+                Name = $"{Path.GetFileName(directoryPath)} [Access Denied]",
+                FullPath = BuildChildFullPath(parentItem, directoryPath, HyperVGuestSelectionKind.Folder),
+                ResolvedPath = directoryPath,
+                VirtualMachineName = parentItem.VirtualMachineName,
+                VirtualDiskPath = parentItem.VirtualDiskPath,
+                PartitionNumber = parentItem.PartitionNumber,
+                ItemType = DriveTreeItemType.Folder,
+                Parent = parentItem
+            };
+        }
+
+        private static DriveTreeItem CreateFileTreeItem(DriveTreeItem parentItem, FileInfo fileInfo)
+        {
+            return new DriveTreeItem
+            {
+                Name = AppendAttributesSuffix(fileInfo.Name, fileInfo.Attributes),
+                FullPath = BuildChildFullPath(parentItem, fileInfo.FullName, HyperVGuestSelectionKind.File),
+                ResolvedPath = fileInfo.FullName,
+                VirtualMachineName = parentItem.VirtualMachineName,
+                VirtualDiskPath = parentItem.VirtualDiskPath,
+                PartitionNumber = parentItem.PartitionNumber,
+                ItemType = DriveTreeItemType.File,
+                Size = fileInfo.Length,
+                Parent = parentItem
+            };
+        }
+
+        private static string AppendAttributesSuffix(string name, FileAttributes attributes)
+        {
+            if ((attributes & FileAttributes.System) == FileAttributes.System)
+            {
+                return name + " [System]";
+            }
+
+            if ((attributes & FileAttributes.Hidden) == FileAttributes.Hidden)
+            {
+                return name + " [Hidden]";
+            }
+
+            return name;
+        }
+
+        private static string BuildChildFullPath(DriveTreeItem parentItem, string resolvedPath, HyperVGuestSelectionKind selectionKind)
+        {
+            if (!HyperVGuestSelectionPath.IsEncodedPath(parentItem.FullPath))
+            {
+                return resolvedPath;
+            }
+
+            return HyperVGuestSelectionPath.Encode(
+                selectionKind,
+                parentItem.VirtualMachineName,
+                parentItem.VirtualDiskPath,
+                parentItem.PartitionNumber,
+                BuildHyperVGuestRelativePath(parentItem, resolvedPath));
         }
 
         private void InitializeScheduleControls()
@@ -1330,31 +1420,7 @@ namespace SecureServerBackup.Windows
                     {
                         // Show a spinner placeholder immediately before the async mount
                         treeViewItem.Items.Clear();
-                        var mountingItem = new TreeViewItem
-                        {
-                            Header = new StackPanel
-                            {
-                                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                                Children =
-                                {
-                                    new System.Windows.Controls.ProgressBar
-                                    {
-                                        IsIndeterminate = true,
-                                        Width = 16,
-                                        Height = 16,
-                                        Margin = new Thickness(0, 0, 6, 0),
-                                        VerticalAlignment = VerticalAlignment.Center
-                                    },
-                                    new TextBlock
-                                    {
-                                        Text = "Mounting virtual disk...",
-                                        VerticalAlignment = VerticalAlignment.Center
-                                    }
-                                }
-                            },
-                            IsEnabled = false
-                        };
-                        treeViewItem.Items.Add(mountingItem);
+                        treeViewItem.Items.Add(CreateLoadingTreeViewItem("Mounting virtual disk..."));
 
                         try
                         {
@@ -1405,7 +1471,10 @@ namespace SecureServerBackup.Windows
                               (item.ItemType == DriveTreeItemType.Folder && !string.IsNullOrWhiteSpace(item.ResolvedPath))) && 
                              !item.ChildrenLoaded)
                     {
-                        LoadFoldersForVolume(item);
+                        treeViewItem.Items.Clear();
+                        treeViewItem.Items.Add(CreateLoadingTreeViewItem("Loading files..."));
+
+                        await Task.Run(() => LoadFoldersForVolume(item));
                         item.ChildrenLoaded = true;
 
                         // Rebuild children
@@ -2309,6 +2378,12 @@ namespace SecureServerBackup.Windows
             if (pnlRetentionSettings != null)
             {
                 pnlRetentionSettings.Visibility = isFullBackup ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            bool isSelectedFilesBackup = rbSelectedFilesAndFolders?.IsChecked == true;
+            if (pnlSelectedFilesRetention != null)
+            {
+                pnlSelectedFilesRetention.Visibility = isSelectedFilesBackup ? Visibility.Visible : Visibility.Collapsed;
             }
 
             // Clone to Disk: Show ONLY Clone to Physical Disk field
@@ -3354,6 +3429,7 @@ namespace SecureServerBackup.Windows
         private BackupJob CreateJobFromInput()
         {
             var backupType = GetSelectedBackupType();
+            int selectedFilesRetentionDays = GetSelectedFilesRetentionDays();
             
             var job = new BackupJob
             {
@@ -3366,7 +3442,8 @@ namespace SecureServerBackup.Windows
                 VerifyAfterBackup = chkVerify.IsChecked == true,
                 EncryptBackup = chkEncryptBackup.IsChecked == true,
                 ProtectedEncryptionPassword = chkEncryptBackup.IsChecked == true ? GetEnteredEncryptionPassword() : string.Empty,
-                RetainFullBackupCount = int.TryParse(txtRetainCount.Text, out int retainCount) ? Math.Max(1, retainCount) : 1
+                RetainFullBackupCount = int.TryParse(txtRetainCount.Text, out int retainCount) ? Math.Max(1, retainCount) : 1,
+                SelectedFilesRetentionDays = selectedFilesRetentionDays
             };
 
             // For Clone Hyper-V System, create subdirectories
@@ -3438,6 +3515,14 @@ namespace SecureServerBackup.Windows
             return job;
         }
 
+        private int GetSelectedFilesRetentionDays()
+        {
+            string retentionText = cmbSelectedFilesRetentionDays.Text?.Trim() ?? string.Empty;
+            return int.TryParse(retentionText, out int retentionDays)
+                ? Math.Clamp(retentionDays, 1, 30)
+                : 7;
+        }
+
         private void CollectSelectedHyperVMachines(BackupJob job)
         {
             job.IsHyperVBackup = true;
@@ -3470,11 +3555,44 @@ namespace SecureServerBackup.Windows
             }
         }
 
+        internal static bool IsSelectedFilesAndFoldersAllowedItem(DriveTreeItem item)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+
+            return item.ItemType switch
+            {
+                DriveTreeItemType.Folder => !IsDescendantOfHyperVItem(item) || HyperVGuestSelectionPath.IsEncodedPath(item.FullPath),
+                DriveTreeItemType.File => !IsDescendantOfHyperVItem(item) || HyperVGuestSelectionPath.IsEncodedPath(item.FullPath),
+                DriveTreeItemType.NetworkDrive => true,
+                DriveTreeItemType.NetworkShare => true,
+                _ => false
+            };
+        }
+
+        internal static bool IsSelectedFilesAndFoldersSelectionAllowed(IEnumerable<DriveTreeItem> selectedItems)
+        {
+            ArgumentNullException.ThrowIfNull(selectedItems);
+
+            bool hasAllowedSelection = false;
+            foreach (DriveTreeItem item in selectedItems)
+            {
+                if (!IsSelectedFilesAndFoldersAllowedItem(item))
+                {
+                    return false;
+                }
+
+                hasAllowedSelection = true;
+            }
+
+            return hasAllowedSelection;
+        }
+
         private BackupType GetSelectedBackupType()
         {
             if (rbFullBackup.IsChecked == true) return BackupType.Full;
             if (rbIncremental.IsChecked == true) return BackupType.Incremental;
             if (rbDifferential.IsChecked == true) return BackupType.Differential;
+            if (rbSelectedFilesAndFolders.IsChecked == true) return BackupType.SelectedFilesAndFolders;
             if (rbCloneDisk.IsChecked == true) return BackupType.CloneToDisk;
             if (rbCloneVirtual.IsChecked == true) return BackupType.CloneToVirtualDisk;
             if (rbCloneHyperV.IsChecked == true) return BackupType.CloneHyperVSystem;
@@ -3484,11 +3602,21 @@ namespace SecureServerBackup.Windows
 
         private void CollectSelectedItems(BackupJob job)
         {
+            bool selectedFilesAndFoldersOnly = job.Type == BackupType.SelectedFilesAndFolders;
+
             foreach (var drive in driveItems)
             {
                 if (drive.IsChecked == true)
                 {
-                    if (drive.ItemType == DriveTreeItemType.Disk)
+                    if (selectedFilesAndFoldersOnly)
+                    {
+                        if (IsSelectedFilesAndFoldersAllowedItem(drive))
+                        {
+                            job.Target = BackupTarget.FilesAndFolders;
+                            job.SourcePaths.Add(drive.FullPath);
+                        }
+                    }
+                    else if (drive.ItemType == DriveTreeItemType.Disk)
                     {
                         job.Target = BackupTarget.Disk;
                         job.SourcePaths.Add(drive.FullPath);
@@ -3527,30 +3655,37 @@ namespace SecureServerBackup.Windows
             // Determine target type if not already set
             if (job.Target == 0 && job.SourcePaths.Count > 0)
             {
-                // Check if all sources are drive letters (volumes), device paths (disks), or regular paths (files/folders)
-                var firstPath = job.SourcePaths[0];
-
-                // Check for PHYSICALDRIVE device paths (e.g., \\.\PHYSICALDRIVE5)
-                if (firstPath.StartsWith(@"\\.\", StringComparison.OrdinalIgnoreCase) &&
-                    firstPath.Contains("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase))
-                {
-                    job.Target = BackupTarget.Disk;
-                }
-                // Check for Volume GUID paths (e.g., \\?\\Volume{guid})
-                else if (firstPath.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase) &&
-                         firstPath.Contains("Volume{", StringComparison.OrdinalIgnoreCase))
-                {
-                    job.Target = BackupTarget.Volume;
-                }
-                // Check for simple drive letters (e.g., C:, E:, W:)
-                else if (firstPath.Length <= 3 && firstPath.EndsWith(":"))
-                {
-                    job.Target = BackupTarget.Volume;
-                }
-                // Everything else is files/folders
-                else
+                if (job.Type == BackupType.SelectedFilesAndFolders)
                 {
                     job.Target = BackupTarget.FilesAndFolders;
+                }
+                else
+                {
+                    // Check if all sources are drive letters (volumes), device paths (disks), or regular paths (files/folders)
+                    var firstPath = job.SourcePaths[0];
+
+                    // Check for PHYSICALDRIVE device paths (e.g., \\.\PHYSICALDRIVE5)
+                    if (firstPath.StartsWith(@"\\.\", StringComparison.OrdinalIgnoreCase) &&
+                        firstPath.Contains("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase))
+                    {
+                        job.Target = BackupTarget.Disk;
+                    }
+                    // Check for Volume GUID paths (e.g., \\?\\Volume{guid})
+                    else if (firstPath.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase) &&
+                             firstPath.Contains("Volume{", StringComparison.OrdinalIgnoreCase))
+                    {
+                        job.Target = BackupTarget.Volume;
+                    }
+                    // Check for simple drive letters (e.g., C:, E:, W:)
+                    else if (firstPath.Length <= 3 && firstPath.EndsWith(":"))
+                    {
+                        job.Target = BackupTarget.Volume;
+                    }
+                    // Everything else is files/folders
+                    else
+                    {
+                        job.Target = BackupTarget.FilesAndFolders;
+                    }
                 }
             }
 
@@ -3563,11 +3698,21 @@ namespace SecureServerBackup.Windows
 
         private void CollectSelectedChildren(DriveTreeItem parent, BackupJob job)
         {
+            bool selectedFilesAndFoldersOnly = job.Type == BackupType.SelectedFilesAndFolders;
+
             foreach (var child in parent.Children)
             {
                 if (child.IsChecked == true)
                 {
-                    if (child.ItemType == DriveTreeItemType.Volume)
+                    if (selectedFilesAndFoldersOnly)
+                    {
+                        if (IsSelectedFilesAndFoldersAllowedItem(child))
+                        {
+                            job.Target = BackupTarget.FilesAndFolders;
+                            job.SourcePaths.Add(child.FullPath);
+                        }
+                    }
+                    else if (child.ItemType == DriveTreeItemType.Volume)
                     {
                         if (job.Target == 0) job.Target = BackupTarget.Volume;
                         job.SourcePaths.Add(child.FullPath);
@@ -3595,7 +3740,7 @@ namespace SecureServerBackup.Windows
                              child.ItemType == DriveTreeItemType.File)
                     {
                         // Skip placeholder nodes that are children of Hyper-V items
-                        if (IsDescendantOfHyperVItem(child))
+                        if (IsDescendantOfHyperVItem(child) && !HyperVGuestSelectionPath.IsEncodedPath(child.FullPath))
                             continue;
                         job.Target = BackupTarget.FilesAndFolders;
                         job.SourcePaths.Add(child.FullPath);
@@ -3685,6 +3830,12 @@ namespace SecureServerBackup.Windows
             }
             else
             {
+                if (rbSelectedFilesAndFolders?.IsChecked == true && !IsSelectedFilesAndFoldersSelectionAllowed(selectedItems))
+                {
+                    CustomDialogService.ShowWarning("Selected Files & Folder backups can only include checked files, folders, or network share roots from the tree.", "Validation Error");
+                    return false;
+                }
+
                 if (selectedHyperV.Count > 0 && selectedNonHyperV.Count > 0)
                 {
                     var backupTypeName = GetBackupTypeName();
@@ -3703,6 +3854,16 @@ namespace SecureServerBackup.Windows
             {
                 CustomDialogService.ShowWarning("Please enter a valid scheduled time. Minutes must be between 00 and 59.", "Validation Error");
                 return false;
+            }
+
+            if (rbSelectedFilesAndFolders?.IsChecked == true)
+            {
+                string retentionText = cmbSelectedFilesRetentionDays.Text?.Trim() ?? string.Empty;
+                if (!int.TryParse(retentionText, out int retentionDays) || retentionDays < 1 || retentionDays > 30)
+                {
+                    CustomDialogService.ShowWarning("Please enter a Selected Files retention value between 1 and 30 days.", "Validation Error");
+                    return false;
+                }
             }
 
             if (chkEncryptBackup.IsChecked == true && !_hasSavedEncryptionPassword)
@@ -3764,6 +3925,7 @@ namespace SecureServerBackup.Windows
             if (rbFullBackup.IsChecked == true) return "Full Backup";
             if (rbIncremental.IsChecked == true) return "Incremental Backup";
             if (rbDifferential.IsChecked == true) return "Differential Backup";
+            if (rbSelectedFilesAndFolders.IsChecked == true) return "Selected Files & Folder";
             if (rbCloneDisk.IsChecked == true) return "Clone to Disk";
             if (rbCloneVirtual.IsChecked == true) return "Clone to Virtual Disk";
             return "This backup type";

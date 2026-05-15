@@ -472,9 +472,18 @@ namespace SecureServerBackup.Windows
         private void AnalyzeBackupFiles()
         {
             // Group files by backup type
-            var fullBackups = backupFiles.Where(f => f.Contains("full", StringComparison.OrdinalIgnoreCase)).ToList();
-            var incrementalBackups = backupFiles.Where(f => f.Contains("incremental", StringComparison.OrdinalIgnoreCase)).ToList();
-            var differentialBackups = backupFiles.Where(f => f.Contains("differential", StringComparison.OrdinalIgnoreCase)).ToList();
+            var selectedFilesHistoryBackups = backupFiles
+                .Where(f => Path.GetFileName(f).Contains("_SelectedFiles_", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var fullBackups = backupFiles.Where(f =>
+                !Path.GetFileName(f).Contains("_SelectedFiles_", StringComparison.OrdinalIgnoreCase) &&
+                f.Contains("full", StringComparison.OrdinalIgnoreCase)).ToList();
+            var incrementalBackups = backupFiles.Where(f =>
+                !Path.GetFileName(f).Contains("_SelectedFiles_", StringComparison.OrdinalIgnoreCase) &&
+                f.Contains("incremental", StringComparison.OrdinalIgnoreCase)).ToList();
+            var differentialBackups = backupFiles.Where(f =>
+                !Path.GetFileName(f).Contains("_SelectedFiles_", StringComparison.OrdinalIgnoreCase) &&
+                f.Contains("differential", StringComparison.OrdinalIgnoreCase)).ToList();
 
             // Create restore points
             int pointNumber = 1;
@@ -489,6 +498,21 @@ namespace SecureServerBackup.Windows
                     Description = $"Created: {timestamp:yyyy-MM-dd HH:mm:ss}",
                     BackupType = "Full",
                     FilePath = fullBackup,
+                    Timestamp = timestamp
+                });
+                pointNumber++;
+            }
+
+            // Selected Files history backups
+            foreach (var selectedFilesBackup in selectedFilesHistoryBackups.OrderBy(GetEntryTimestamp))
+            {
+                DateTime timestamp = GetEntryTimestamp(selectedFilesBackup);
+                restorePoints.Add(new RestorePoint
+                {
+                    DisplayName = $"Point {pointNumber}: Selected Files History",
+                    Description = $"Created: {timestamp:yyyy-MM-dd HH:mm:ss}",
+                    BackupType = "Selected Files",
+                    FilePath = selectedFilesBackup,
                     Timestamp = timestamp
                 });
                 pointNumber++;
@@ -785,6 +809,11 @@ namespace SecureServerBackup.Windows
             // File/folder restores show the direct target-path entry.
             pnlLocationChoice.Visibility = isFileFolder ? Visibility.Visible : Visibility.Collapsed;
 
+            if (grpRestoreOptions != null)
+            {
+                grpRestoreOptions.IsEnabled = ShouldEnableRestoreOptions(_restoreTargetKind);
+            }
+
             if (pnlHyperVCloneDestination != null)
                 pnlHyperVCloneDestination.Visibility = isHyperVVm ? Visibility.Visible : Visibility.Collapsed;
 
@@ -792,11 +821,11 @@ namespace SecureServerBackup.Windows
             //   - Visible for all non-Hyper-V VM restores so the workflow remains consistent
             //   - Disabled for file/folder restores because those now use the direct target-path entry
             //   - Hidden only for Hyper-V VM clone restores where the tree is irrelevant
-            bool showTree = !isHyperVVm;
+            bool showTree = ShouldShowRestoreTargetGroup(_restoreTargetKind);
             if (grpRestoreTarget != null)
             {
                 grpRestoreTarget.Visibility = showTree ? Visibility.Visible : Visibility.Collapsed;
-                grpRestoreTarget.IsEnabled  = showTree && !isFileFolder;
+                grpRestoreTarget.IsEnabled = showTree && ShouldEnableRestoreTargetSelection(_restoreTargetKind);
             }
 
             // Update help text in the right-side panel
@@ -1423,6 +1452,9 @@ namespace SecureServerBackup.Windows
                 using var preparedBackup = EncryptedBackupFileService.PrepareForRead(owner, selectedPoint.FilePath, Path.GetFileNameWithoutExtension(selectedPoint.FilePath));
                 int result;
                 int lastLoggedPercent = -1;
+                bool detailedFileProgressLogging = _restoreTargetKind == RestoreTargetKind.FileOrFolder ||
+                                                  _restoreTargetKind == RestoreTargetKind.HyperVVirtualDisk ||
+                                                  _restoreTargetKind == RestoreTargetKind.HyperVVm;
 
                 BackupLogger.LogInfo(
                     RestoreLogJobName,
@@ -1438,7 +1470,7 @@ namespace SecureServerBackup.Windows
                         lastLoggedPercent = percent;
                         BackupLogger.LogInfo(RestoreLogJobName, $"Restore progress {percent}%", message ?? string.Empty);
                     }
-                    else if (!string.IsNullOrWhiteSpace(message) &&
+                    else if (detailedFileProgressLogging && !string.IsNullOrWhiteSpace(message) &&
                              (message.StartsWith("Restore warning:", StringComparison.OrdinalIgnoreCase) ||
                               message.StartsWith("Restore error:", StringComparison.OrdinalIgnoreCase) ||
                               message.StartsWith("Restoring:", StringComparison.OrdinalIgnoreCase) ||
@@ -1524,12 +1556,14 @@ namespace SecureServerBackup.Windows
 
         private int RestoreDiskTarget(string preparedBackupPath, string selectedBackupPath, BackupEngineInterop.ProgressCallback callback)
         {
+            BackupLogger.LogInfo(RestoreLogJobName, "Disk restore target validation started", $"Disk: {_selectedTargetDiskNumber}");
             PrepareDiskTarget();
 
             int targetDisk = _selectedTargetDiskNumber ?? -1;
 
             if (_diskRestorePlan?.HasMetadata == true)
             {
+                BackupLogger.LogInfo(RestoreLogJobName, "Disk restore layout preparation started", $"Target disk: {targetDisk}; Metadata volumes: {_diskRestorePlan.Volumes.Count}");
                 var ordered = (_selectedRestoreDiskGroup?.Count > 0
                         ? _selectedRestoreDiskGroup
                         : _selectedRestoreVolume is not null
@@ -1564,12 +1598,14 @@ namespace SecureServerBackup.Windows
 
                 var targetVolumePaths = TryReuseExistingTargetVolumes(targetDisk, ordered)
                     ?? PrepareDiskTargetVolumes(targetDisk, ordered);
+                BackupLogger.LogInfo(RestoreLogJobName, "Disk restore target volumes ready", $"Target disk: {targetDisk}; Volume targets: {string.Join(", ", targetVolumePaths)}");
                 int lastResult = 0;
                 for (int i = 0; i < ordered.Count; i++)
                 {
                     var vol = ordered[i];
                     int pct = (int)((i / (double)ordered.Count) * 90);
                     callback(pct, $"Restoring partition {i + 1} of {ordered.Count}: {vol.Label}…");
+                    BackupLogger.LogInfo(RestoreLogJobName, "Disk restore partition started", $"Partition {i + 1} of {ordered.Count}; Label: {vol.Label}; ImageIndex: {vol.ImageIndex}; Target: {targetVolumePaths[i]}");
                     lastResult = BackupEngineInterop.RestoreVolumeFromImage(
                         preparedBackupPath,
                         vol.ImageIndex,
@@ -1577,19 +1613,28 @@ namespace SecureServerBackup.Windows
                         false,
                         callback);
                     if (lastResult != 0)
+                    {
+                        BackupLogger.LogError(RestoreLogJobName, "Disk restore partition failed", $"Partition {i + 1} of {ordered.Count}; Label: {vol.Label}; Target: {targetVolumePaths[i]}; Result: {lastResult}");
                         return lastResult;
+                    }
+
+                    BackupLogger.LogInfo(RestoreLogJobName, "Disk restore partition completed", $"Partition {i + 1} of {ordered.Count}; Label: {vol.Label}; Target: {targetVolumePaths[i]}");
                 }
+
+                BackupLogger.LogInfo(RestoreLogJobName, "Disk restore completed all partitions", $"Target disk: {targetDisk}; Partition count: {ordered.Count}");
                 callback(100, "All partitions restored.");
                 return 0;
             }
 
             if (_selectedRestoreVolume is not null)
             {
+                BackupLogger.LogInfo(RestoreLogJobName, "Single-volume disk restore target preparation started", $"Target disk: {targetDisk}; Volume label: {_selectedRestoreVolume.Label}");
                 var singleVolumeLayout = new[] { _selectedRestoreVolume };
                 var targetVolumePaths = TryReuseExistingTargetVolumes(targetDisk, singleVolumeLayout)
                     ?? PrepareDiskTargetVolumes(targetDisk, singleVolumeLayout);
 
                 int imageIndex = _selectedRestoreVolume.ImageIndex > 0 ? _selectedRestoreVolume.ImageIndex : 1;
+                BackupLogger.LogInfo(RestoreLogJobName, "Single-volume disk restore started", $"ImageIndex: {imageIndex}; Target: {targetVolumePaths[0]}");
                 callback(5, $"Restoring single volume to {targetVolumePaths[0]}...");
                 return BackupEngineInterop.RestoreVolumeFromImage(
                     preparedBackupPath,
@@ -1601,9 +1646,11 @@ namespace SecureServerBackup.Windows
 
             if (_isHyperVBackupPoint)
             {
+                BackupLogger.LogInfo(RestoreLogJobName, "Hyper-V guest disk restore preparation started", $"Selected backup: {selectedBackupPath}");
                 using var mountedDisk = MountPrimaryHyperVVirtualDisk(selectedBackupPath);
                 int mountedDiskNumber = GetDiskNumberForDriveLetter(mountedDisk.DriveRoot);
                 int imageIndex = _selectedRestoreVolume?.ImageIndex ?? _diskRestorePlan?.ImageIndex ?? 1;
+                BackupLogger.LogInfo(RestoreLogJobName, "Hyper-V guest disk restore started", $"Mounted disk number: {mountedDiskNumber}; ImageIndex: {imageIndex}");
                 return BackupEngineInterop.RestoreDiskFromImage(preparedBackupPath, imageIndex, mountedDiskNumber, false, callback);
             }
 
@@ -1615,6 +1662,7 @@ namespace SecureServerBackup.Windows
 
                 if (isArchiveFile)
                 {
+                    BackupLogger.LogInfo(RestoreLogJobName, "Archive-based disk restore started", $"Target disk: {_selectedTargetDiskNumber}; ImageIndex: {imageIndex}");
                     return BackupEngineInterop.RestoreDiskFromImage(
                         preparedBackupPath,
                         imageIndex,
@@ -1622,6 +1670,8 @@ namespace SecureServerBackup.Windows
                         false,
                         callback);
                 }
+
+                BackupLogger.LogInfo(RestoreLogJobName, "Disk restore started", $"Target disk: {_selectedTargetDiskNumber}; ImageIndex: {imageIndex}; Metadata plan: {_diskRestorePlan?.HasMetadata == true}");
 
                 return _diskRestorePlan?.HasMetadata == true
                     ? BackupEngineInterop.RestoreDiskFromImage(preparedBackupPath, imageIndex, _selectedTargetDiskNumber ?? -1, false, callback)
@@ -1748,15 +1798,18 @@ namespace SecureServerBackup.Windows
 
         private int RestoreVolumeTarget(string preparedBackupPath, string selectedBackupPath, BackupEngineInterop.ProgressCallback callback)
         {
+            BackupLogger.LogInfo(RestoreLogJobName, "Volume restore target preparation started", $"Target path: {_selectedTargetPath}");
             PrepareVolumeTarget();
 
             string targetPath = _selectedTargetPath ?? string.Empty;
 
             if (_isHyperVBackupPoint)
             {
+                BackupLogger.LogInfo(RestoreLogJobName, "Hyper-V guest volume restore preparation started", $"Selected backup: {selectedBackupPath}");
                 using var mountedDisk = MountPrimaryHyperVVirtualDisk(selectedBackupPath);
                 targetPath = mountedDisk.DriveRoot;
                 int imageIndex = _selectedRestoreVolume?.ImageIndex ?? _diskRestorePlan?.ImageIndex ?? 1;
+                BackupLogger.LogInfo(RestoreLogJobName, "Hyper-V guest volume restore started", $"ImageIndex: {imageIndex}; Target: {targetPath}");
                 return BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, imageIndex, targetPath, false, callback);
             }
 
@@ -1764,9 +1817,11 @@ namespace SecureServerBackup.Windows
                 int imageIndex = _selectedRestoreVolume?.ImageIndex ?? _diskRestorePlan?.ImageIndex ?? -1;
                 if (imageIndex > 0)
                 {
+                    BackupLogger.LogInfo(RestoreLogJobName, "Volume restore from image started", $"ImageIndex: {imageIndex}; Target: {targetPath}");
                     return BackupEngineInterop.RestoreVolumeFromImage(preparedBackupPath, imageIndex, targetPath, false, callback);
                 }
 
+                BackupLogger.LogInfo(RestoreLogJobName, "Volume restore started", $"Target: {targetPath}");
                 return BackupEngineInterop.RestoreVolume(preparedBackupPath, targetPath, false, callback);
             }
         }
@@ -3078,6 +3133,8 @@ namespace SecureServerBackup.Windows
             {
                 throw new InvalidOperationException("No target disk selected.");
             }
+
+            BackupLogger.LogInfo(RestoreLogJobName, "Disk target selected", $"Disk number: {_selectedTargetDiskNumber}");
         }
 
         private void PrepareVolumeTarget()
@@ -3090,10 +3147,14 @@ namespace SecureServerBackup.Windows
 
             if (_selectedRestoreVolume?.TargetSize > 0)
             {
+                BackupLogger.LogInfo(RestoreLogJobName, "Volume resize started", $"Target: {volumePath}; Requested size: {_selectedRestoreVolume.TargetSize}");
                 ResizeTargetVolumeIfNeeded(volumePath, _selectedRestoreVolume.TargetSize);
+                BackupLogger.LogInfo(RestoreLogJobName, "Volume resize completed", $"Target: {volumePath}");
             }
 
+            BackupLogger.LogInfo(RestoreLogJobName, "Volume format started", $"Target: {volumePath}; File system: {GetSelectedRestoreFileSystem()}; Label: {_selectedRestoreVolume?.Label}");
             FormatTargetVolume(volumePath, GetSelectedRestoreFileSystem(), _selectedRestoreVolume?.Label);
+            BackupLogger.LogInfo(RestoreLogJobName, "Volume format completed", $"Target: {volumePath}");
         }
 
         private List<string>? TryReuseExistingTargetVolumes(int targetDiskNumber, IReadOnlyList<VolumeInfo> orderedVolumes)
@@ -3126,7 +3187,10 @@ namespace SecureServerBackup.Windows
                 if (ShouldReuseExistingTargetVolumeLayout(requestedSize, targetVolumes[0].Size, diskItem.Size))
                 {
                     string targetPath = EnsureTrailingSlash(targetVolumes[0].FullPath);
+                    BackupLogger.LogInfo(RestoreLogJobName, "Reusing existing target volume layout", $"Disk: {targetDiskNumber}; Target: {targetPath}");
+                    BackupLogger.LogInfo(RestoreLogJobName, "Volume format started", $"Target: {targetPath}; File system: {GetSupportedRestoreFileSystem(orderedVolumes[0])}; Label: {orderedVolumes[0].Label}");
                     FormatTargetVolume(targetPath, GetSupportedRestoreFileSystem(orderedVolumes[0]), orderedVolumes[0].Label);
+                    BackupLogger.LogInfo(RestoreLogJobName, "Volume format completed", $"Target: {targetPath}");
                     return new List<string> { targetPath };
                 }
 
@@ -3150,7 +3214,10 @@ namespace SecureServerBackup.Windows
             for (int i = 0; i < orderedVolumes.Count; i++)
             {
                 string targetPath = EnsureTrailingSlash(targetVolumes[i].FullPath);
+                BackupLogger.LogInfo(RestoreLogJobName, "Reusing existing target volume layout", $"Disk: {targetDiskNumber}; Target: {targetPath}; Volume {i + 1} of {orderedVolumes.Count}");
+                BackupLogger.LogInfo(RestoreLogJobName, "Volume format started", $"Target: {targetPath}; File system: {GetSupportedRestoreFileSystem(orderedVolumes[i])}; Label: {orderedVolumes[i].Label}");
                 FormatTargetVolume(targetPath, GetSupportedRestoreFileSystem(orderedVolumes[i]), orderedVolumes[i].Label);
+                BackupLogger.LogInfo(RestoreLogJobName, "Volume format completed", $"Target: {targetPath}");
                 matchedPaths.Add(targetPath);
             }
 
@@ -3368,6 +3435,22 @@ namespace SecureServerBackup.Windows
             }
 
             return selectedRestoreDiskGroup?.Any(volume => volume.IsBootVolume) == true;
+        }
+
+        internal static bool ShouldEnableRestoreOptions(RestoreTargetKind restoreTargetKind)
+        {
+            return restoreTargetKind == RestoreTargetKind.FileOrFolder;
+        }
+
+        internal static bool ShouldEnableRestoreTargetSelection(RestoreTargetKind restoreTargetKind)
+        {
+            return restoreTargetKind != RestoreTargetKind.FileOrFolder &&
+                   restoreTargetKind != RestoreTargetKind.HyperVVm;
+        }
+
+        internal static bool ShouldShowRestoreTargetGroup(RestoreTargetKind restoreTargetKind)
+        {
+            return restoreTargetKind != RestoreTargetKind.HyperVVm;
         }
         
     }

@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using SecureServerBackupCommon;
 using SecureServerBackup.Windows;
 using SecureServerBackup.Models;
 using Xunit;
@@ -6,6 +10,236 @@ namespace SecureServerBackup.Tests;
 
 public sealed class RestoreWindowNewTests
 {
+    [Fact]
+    public void ShouldEnableRestoreOptions_WhenFileOrFolderRestore_ReturnsTrue()
+    {
+        bool result = RestoreWindowNew.ShouldEnableRestoreOptions(RestoreTargetKind.FileOrFolder);
+
+        Assert.True(result);
+    }
+
+public sealed class BackupWindowNewTreeTests : IDisposable
+{
+    private readonly string _tempDirectory;
+
+    public BackupWindowNewTreeTests()
+    {
+        _tempDirectory = Path.Combine(Path.GetTempPath(), "SecureServerBackupTests", nameof(BackupWindowNewTreeTests), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_tempDirectory);
+    }
+
+    [Fact]
+    public void BuildDirectoryChildItems_WhenDirectoryContainsFoldersAndFiles_ReturnsBoth()
+    {
+        string childFolder = Path.Combine(_tempDirectory, "ChildFolder");
+        string childFile = Path.Combine(_tempDirectory, "ChildFile.txt");
+        Directory.CreateDirectory(childFolder);
+        File.WriteAllText(childFile, "content");
+
+        DriveTreeItem parentItem = new()
+        {
+            Name = "C: (Data)",
+            FullPath = _tempDirectory,
+            ResolvedPath = _tempDirectory,
+            ItemType = DriveTreeItemType.Volume
+        };
+
+        List<DriveTreeItem> children = BackupWindowNew.BuildDirectoryChildItems(parentItem, _tempDirectory);
+
+        Assert.Contains(children, child => child.ItemType == DriveTreeItemType.Folder && child.ResolvedPath == childFolder);
+        Assert.Contains(children, child => child.ItemType == DriveTreeItemType.File && child.ResolvedPath == childFile);
+    }
+
+    [Fact]
+    public void BuildDirectoryChildItems_WhenFolderContainsFiles_AddsFileNodes()
+    {
+        string childFile = Path.Combine(_tempDirectory, "Nested.log");
+        File.WriteAllText(childFile, "content");
+
+        DriveTreeItem parentItem = new()
+        {
+            Name = "Folder",
+            FullPath = _tempDirectory,
+            ResolvedPath = _tempDirectory,
+            ItemType = DriveTreeItemType.Folder
+        };
+
+        List<DriveTreeItem> children = BackupWindowNew.BuildDirectoryChildItems(parentItem, _tempDirectory);
+
+        DriveTreeItem fileItem = Assert.Single(children, child => child.ItemType == DriveTreeItemType.File);
+        Assert.Equal("Nested.log", fileItem.Name);
+        Assert.Equal(childFile, fileItem.FullPath);
+        Assert.Equal(_tempDirectory, fileItem.Parent?.ResolvedPath);
+    }
+
+    [Fact]
+    public void BuildDirectoryChildItems_WhenParentIsHyperVGuest_EncodesFileAndFolderPaths()
+    {
+        string childFolder = Path.Combine(_tempDirectory, "GuestFolder");
+        string childFile = Path.Combine(_tempDirectory, "GuestFile.txt");
+        Directory.CreateDirectory(childFolder);
+        File.WriteAllText(childFile, "content");
+
+        DriveTreeItem parentItem = new()
+        {
+            Name = "Partition 1",
+            FullPath = HyperVGuestSelectionPath.Encode(HyperVGuestSelectionKind.Volume, "VmOne", @"D:\Guests\VmOne.vhdx", 1, string.Empty),
+            ResolvedPath = _tempDirectory,
+            VirtualMachineName = "VmOne",
+            VirtualDiskPath = @"D:\Guests\VmOne.vhdx",
+            PartitionNumber = 1,
+            ItemType = DriveTreeItemType.HyperVVolume
+        };
+
+        List<DriveTreeItem> children = BackupWindowNew.BuildDirectoryChildItems(parentItem, _tempDirectory);
+
+        DriveTreeItem folderItem = Assert.Single(children, child => child.ItemType == DriveTreeItemType.Folder);
+        DriveTreeItem fileItem = Assert.Single(children, child => child.ItemType == DriveTreeItemType.File);
+
+        Assert.True(HyperVGuestSelectionPath.TryParse(folderItem.FullPath, out HyperVGuestSelectionInfo? folderSelection));
+        Assert.Equal(HyperVGuestSelectionKind.Folder, folderSelection!.Kind);
+        Assert.Equal("GuestFolder", folderSelection.RelativePath);
+
+        Assert.True(HyperVGuestSelectionPath.TryParse(fileItem.FullPath, out HyperVGuestSelectionInfo? fileSelection));
+        Assert.Equal(HyperVGuestSelectionKind.File, fileSelection!.Kind);
+        Assert.Equal("GuestFile.txt", fileSelection.RelativePath);
+    }
+
+    [Fact]
+    public void IsSelectedFilesAndFoldersSelectionAllowed_WhenOnlyFolderAndFileSelections_ReturnsTrue()
+    {
+        List<DriveTreeItem> selectedItems =
+        [
+            new DriveTreeItem
+            {
+                Name = "Folder",
+                FullPath = Path.Combine(_tempDirectory, "Folder"),
+                ResolvedPath = Path.Combine(_tempDirectory, "Folder"),
+                ItemType = DriveTreeItemType.Folder
+            },
+            new DriveTreeItem
+            {
+                Name = "File.txt",
+                FullPath = Path.Combine(_tempDirectory, "File.txt"),
+                ResolvedPath = Path.Combine(_tempDirectory, "File.txt"),
+                ItemType = DriveTreeItemType.File
+            }
+        ];
+
+        bool allowed = BackupWindowNew.IsSelectedFilesAndFoldersSelectionAllowed(selectedItems);
+
+        Assert.True(allowed);
+    }
+
+    [Fact]
+    public void IsSelectedFilesAndFoldersSelectionAllowed_WhenDiskSelected_ReturnsFalse()
+    {
+        List<DriveTreeItem> selectedItems =
+        [
+            new DriveTreeItem
+            {
+                Name = "Disk 0",
+                FullPath = @"\\.\PHYSICALDRIVE0",
+                ItemType = DriveTreeItemType.Disk
+            }
+        ];
+
+        bool allowed = BackupWindowNew.IsSelectedFilesAndFoldersSelectionAllowed(selectedItems);
+
+        Assert.False(allowed);
+    }
+
+    [Fact]
+    public void IsSelectedFilesAndFoldersSelectionAllowed_WhenHyperVEncodedGuestFolderSelected_ReturnsTrue()
+    {
+        DriveTreeItem hyperVVolume = new()
+        {
+            Name = "Partition 1",
+            FullPath = HyperVGuestSelectionPath.Encode(HyperVGuestSelectionKind.Volume, "VmOne", @"D:\Guests\VmOne.vhdx", 1, string.Empty),
+            ResolvedPath = _tempDirectory,
+            VirtualMachineName = "VmOne",
+            VirtualDiskPath = @"D:\Guests\VmOne.vhdx",
+            PartitionNumber = 1,
+            ItemType = DriveTreeItemType.HyperVVolume
+        };
+
+        List<DriveTreeItem> selectedItems =
+        [
+            new DriveTreeItem
+            {
+                Name = "GuestFolder",
+                FullPath = HyperVGuestSelectionPath.Encode(HyperVGuestSelectionKind.Folder, "VmOne", @"D:\Guests\VmOne.vhdx", 1, "GuestFolder"),
+                ResolvedPath = Path.Combine(_tempDirectory, "GuestFolder"),
+                VirtualMachineName = "VmOne",
+                VirtualDiskPath = @"D:\Guests\VmOne.vhdx",
+                PartitionNumber = 1,
+                ItemType = DriveTreeItemType.Folder,
+                Parent = hyperVVolume
+            }
+        ];
+
+        bool allowed = BackupWindowNew.IsSelectedFilesAndFoldersSelectionAllowed(selectedItems);
+
+        Assert.True(allowed);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_tempDirectory))
+        {
+            Directory.Delete(_tempDirectory, true);
+        }
+    }
+}
+
+    [Fact]
+    public void ShouldEnableRestoreOptions_WhenDiskRestore_ReturnsFalse()
+    {
+        bool result = RestoreWindowNew.ShouldEnableRestoreOptions(RestoreTargetKind.Disk);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void ShouldEnableRestoreOptions_WhenVolumeRestore_ReturnsFalse()
+    {
+        bool result = RestoreWindowNew.ShouldEnableRestoreOptions(RestoreTargetKind.Volume);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void ShouldEnableRestoreTargetSelection_WhenFileOrFolderRestore_ReturnsFalse()
+    {
+        bool result = RestoreWindowNew.ShouldEnableRestoreTargetSelection(RestoreTargetKind.FileOrFolder);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void ShouldEnableRestoreTargetSelection_WhenVolumeRestore_ReturnsTrue()
+    {
+        bool result = RestoreWindowNew.ShouldEnableRestoreTargetSelection(RestoreTargetKind.Volume);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldShowRestoreTargetGroup_WhenHyperVVmRestore_ReturnsFalse()
+    {
+        bool result = RestoreWindowNew.ShouldShowRestoreTargetGroup(RestoreTargetKind.HyperVVm);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void ShouldShowRestoreTargetGroup_WhenVolumeRestore_ReturnsTrue()
+    {
+        bool result = RestoreWindowNew.ShouldShowRestoreTargetGroup(RestoreTargetKind.Volume);
+
+        Assert.True(result);
+    }
+
     [Fact]
     public void ShouldReuseExistingTargetVolumeLayout_WhenRequestedMatchesVolume_ReturnsTrue()
     {

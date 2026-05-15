@@ -10,7 +10,8 @@ public enum HyperVGuestSelectionKind
 {
     VirtualDisk,
     Volume,
-    Folder
+    Folder,
+    File
 }
 
 public sealed record HyperVGuestSelectionInfo(

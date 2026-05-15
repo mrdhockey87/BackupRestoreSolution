@@ -5,6 +5,7 @@ namespace SecureServerBackupCommon
         Full,
         Incremental,
         Differential,
+        SelectedFilesAndFolders,
         CloneToDisk,
         CloneToVirtualDisk,
         CloneHyperVSystem

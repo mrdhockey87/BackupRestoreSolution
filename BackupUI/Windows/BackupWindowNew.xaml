@@ -163,8 +163,14 @@
 									GroupName="BackupType" />
 								<RadioButton
 									Name="rbDifferential"
+									Margin="0,0,20,0"
 									Checked="BackupType_Changed"
 									Content="Full then Differential"
+									GroupName="BackupType" />
+								<RadioButton
+									Name="rbSelectedFilesAndFolders"
+									Checked="BackupType_Changed"
+									Content="Selected Files &amp; Folder"
 									GroupName="BackupType" />
 							</StackPanel>
 							<!--  Second row  -->
@@ -264,6 +270,74 @@
 							Click="ManageExclusions_Click"
 							Content="Manage Exclusions..."
 							ToolTip="Configure files, folders, and patterns to exclude from backup" />
+
+						<StackPanel Name="pnlSelectedFilesRetention" Margin="0,0,0,15" Visibility="Collapsed">
+							<TextBlock
+								Margin="0,0,0,5"
+								FontWeight="SemiBold"
+								Text="Selected Files Version Retention:" />
+							<TextBlock
+								Margin="0,0,0,5"
+								FontSize="10"
+								Foreground="{StaticResource SecondaryText}"
+								Text="Keep modified-file versions and deleted-file history for the selected number of days when Selected Files &amp; Folder is used."
+								TextWrapping="Wrap" />
+							<Grid>
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="Auto" />
+									<ColumnDefinition Width="90" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+								<TextBlock
+									Grid.Column="0"
+									Margin="0,0,5,0"
+									VerticalAlignment="Center"
+									Text="Keep last" />
+								<ComboBox
+									Name="cmbSelectedFilesRetentionDays"
+									Grid.Column="1"
+									Height="25"
+									IsEditable="True"
+									IsTextSearchEnabled="False"
+									SelectedIndex="6">
+									<ComboBoxItem Content="1" />
+									<ComboBoxItem Content="2" />
+									<ComboBoxItem Content="3" />
+									<ComboBoxItem Content="4" />
+									<ComboBoxItem Content="5" />
+									<ComboBoxItem Content="6" />
+									<ComboBoxItem Content="7" />
+									<ComboBoxItem Content="8" />
+									<ComboBoxItem Content="9" />
+									<ComboBoxItem Content="10" />
+									<ComboBoxItem Content="11" />
+									<ComboBoxItem Content="12" />
+									<ComboBoxItem Content="13" />
+									<ComboBoxItem Content="14" />
+									<ComboBoxItem Content="15" />
+									<ComboBoxItem Content="16" />
+									<ComboBoxItem Content="17" />
+									<ComboBoxItem Content="18" />
+									<ComboBoxItem Content="19" />
+									<ComboBoxItem Content="20" />
+									<ComboBoxItem Content="21" />
+									<ComboBoxItem Content="22" />
+									<ComboBoxItem Content="23" />
+									<ComboBoxItem Content="24" />
+									<ComboBoxItem Content="25" />
+									<ComboBoxItem Content="26" />
+									<ComboBoxItem Content="27" />
+									<ComboBoxItem Content="28" />
+									<ComboBoxItem Content="29" />
+									<ComboBoxItem Content="30" />
+								</ComboBox>
+								<TextBlock
+									Grid.Column="2"
+									Margin="5,0,0,0"
+									VerticalAlignment="Center"
+									Text="day(s) of modified and deleted file history" />
+							</Grid>
+						</StackPanel>
 
 						<StackPanel Name="pnlRetentionSettings" Visibility="Collapsed">
 							<TextBlock

@@ -105,6 +105,67 @@ namespace SecureServerBackupService
             return (value ?? string.Empty).Replace("'", "''", StringComparison.Ordinal);
         }
 
+        private static bool IsSelectedFilesHistoryBackup(BackupJob job)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            return job.Type == BackupType.SelectedFilesAndFolders && job.Target == BackupTarget.FilesAndFolders;
+        }
+
+        private static string GetSelectedFilesHistoryArchivePath(BackupJob job, DateTime timestamp)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            return Path.Combine(job.DestinationPath, $"{job.Name}_SelectedFiles_{timestamp:yyyyMMdd_HHmmss}.ssb");
+        }
+
+        private static IReadOnlyList<string> GetSelectedFilesHistoryArchives(string destinationPath, string jobName)
+        {
+            if (string.IsNullOrWhiteSpace(destinationPath) || string.IsNullOrWhiteSpace(jobName) || !Directory.Exists(destinationPath))
+            {
+                return Array.Empty<string>();
+            }
+
+            string pattern = $"{jobName}_SelectedFiles_*.ssb";
+            return Directory.GetFiles(destinationPath, pattern, SearchOption.TopDirectoryOnly)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .ThenByDescending(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static void CleanupSelectedFilesHistoryArchives(BackupJob job, string latestArchivePath, Action<string>? logger)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            int retentionDays = Math.Clamp(job.SelectedFilesRetentionDays, 1, 30);
+            DateTime cutoffUtc = DateTime.UtcNow.AddDays(-retentionDays);
+            IReadOnlyList<string> historyArchives = GetSelectedFilesHistoryArchives(job.DestinationPath, job.Name);
+
+            foreach (string archivePath in historyArchives)
+            {
+                if (string.Equals(archivePath, latestArchivePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                DateTime archiveWriteTimeUtc = File.GetLastWriteTimeUtc(archivePath);
+                if (archiveWriteTimeUtc >= cutoffUtc)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Delete(archivePath);
+                    logger?.Invoke($"Removed Selected Files history point outside retention window: {Path.GetFileName(archivePath)}");
+                }
+                catch (Exception cleanupEx)
+                {
+                    logger?.Invoke($"Warning: Failed to remove old Selected Files history point '{Path.GetFileName(archivePath)}': {cleanupEx.Message}");
+                }
+            }
+        }
+
         private static string RunPowerShell(string script)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(script);
@@ -652,7 +713,10 @@ namespace SecureServerBackupService
                         };
 
                         bool isHyperVBackup = job.IsHyperVBackup || job.Target == BackupTarget.HyperV;
-                        string? newBackupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+                        bool isSelectedFilesHistoryBackup = IsSelectedFilesHistoryBackup(job);
+                        string? newBackupPath = isSelectedFilesHistoryBackup
+                            ? GetSelectedFilesHistoryArchivePath(job, DateTime.Now)
+                            : Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
                         if (!isHyperVBackup && (job.Type == BackupType.Incremental || job.Type == BackupType.Differential))
                         {
                             if (!File.Exists(newBackupPath))
@@ -866,6 +930,11 @@ namespace SecureServerBackupService
                         if (newBackupPath != null && job.Target != BackupTarget.HyperV)
                         {
                             EncryptBackupFileIfNeeded(job, newBackupPath, progressCallback, logger);
+                        }
+
+                        if (isSelectedFilesHistoryBackup && newBackupPath != null)
+                        {
+                            CleanupSelectedFilesHistoryArchives(job, newBackupPath, logger);
                         }
 
                         if (originalType != job.Type)
@@ -1145,6 +1214,7 @@ namespace SecureServerBackupService
             switch (job.Type)
             {
                 case BackupType.Full:
+                case BackupType.SelectedFilesAndFolders:
                     if (job.Target == BackupTarget.Disk)
                     {
                         // Extract disk number from device path (e.g., \\.\PHYSICALDRIVE5 -> 5)

@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.75";
+        private static readonly string version_fallback_number = "6.2.4.82";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,27 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.82 RestoreWindowNew now keeps disk and volume restore logs at a troubleshooting level,
+ *                  removing per-file and per-folder restore entries while adding partitioning, formatting,
+ *                  resize, and restore-stage entries that better explain restore progress and failures. mdail 5/15/2026
+ * Version 6.2.4.81 Added Selected Files version retention days with a 1-30 day picker on the New Backup page,
+ *                  so Selected Files backups now keep dated file-history restore points for modified and deleted
+ *                  files within that window and show those history points on the Restore page. mdail 5/15/2026
+ * Version 6.2.4.80 Added the Selected Files & Folder backup mode on the New Backup page, so this option now
+ *                  backs up only explicitly checked files and folders from the tree and rejects disk or volume
+ *                  selections instead of running a disk or volume backup. mdail 5/15/2026
+ * Version 6.2.4.79 BackupWindowNew now shows a loading-files progress marker while folder, volume, and network
+ *                  tree nodes enumerate their child folders and files, matching the visual feedback already used
+ *                  when Hyper-V guest virtual disks are mounted. mdail 5/15/2026
+ * Version 6.2.4.78 BackupWindowNew now lists both folders and files in the source tree for file/folder backups,
+ *                  including Hyper-V guest file nodes, so individual files can be selected instead of showing
+ *                  empty-folder placeholders when files are present. mdail 5/15/2026
+ * Version 6.2.4.77 RestoreWindowNew now keeps volume restores on the Select Restore Target flow,
+ *                  while file/folder restores enable the Target Location controls and disable the
+ *                  Select Restore Target tree consistently. mdail 5/15/2026
+ * Version 6.2.4.76 RestoreWindowNew now keeps Restore Options enabled only for file/folder restores,
+ *                  while the file/folder Target Location browse/text controls remain visible in the
+ *                  Restore Options area for that restore type. mdail 5/15/2026
  * Version 6.2.4.75 RestoreWindowNew now routes file/folder restores through a direct target-path picker,
  *                  defers disk and volume format confirmation until after sizing, and launches the new
  *                  restore progress window so the timed completion dialog stays on top of restore progress. mdail 5/14/2026
