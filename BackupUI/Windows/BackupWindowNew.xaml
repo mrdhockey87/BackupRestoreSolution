@@ -15,6 +15,35 @@
 			<Setter Property="VerticalAlignment" Value="Center" />
 			<Setter Property="Margin" Value="0,0,5,0" />
 		</Style>
+		<HierarchicalDataTemplate DataType="{x:Type local:DriveTreeItem}" ItemsSource="{Binding Children}">
+			<StackPanel Orientation="Horizontal">
+				<ProgressBar
+					x:Name="LoadingIndicator"
+					Width="16"
+					Height="16"
+					Margin="0,0,5,0"
+					VerticalAlignment="Center"
+					IsIndeterminate="True"
+					Visibility="Collapsed" />
+				<CheckBox
+					x:Name="SelectionCheckBox"
+					Click="TreeItemCheckBox_Click"
+					IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+					Style="{StaticResource TreeViewCheckBoxStyle}" />
+				<TextBlock
+					x:Name="ItemText"
+					VerticalAlignment="Center"
+					MouseLeftButtonUp="TreeItem_MouseLeftButtonUp"
+					Text="{Binding DisplayName}" />
+			</StackPanel>
+			<HierarchicalDataTemplate.Triggers>
+				<DataTrigger Binding="{Binding IsLoadingPlaceholder}" Value="True">
+					<Setter TargetName="LoadingIndicator" Property="Visibility" Value="Visible" />
+					<Setter TargetName="SelectionCheckBox" Property="Visibility" Value="Collapsed" />
+					<Setter TargetName="ItemText" Property="Text" Value="Loading..." />
+				</DataTrigger>
+			</HierarchicalDataTemplate.Triggers>
+		</HierarchicalDataTemplate>
 	</Window.Resources>
 
 	<Grid Margin="10">
@@ -66,11 +95,15 @@
 						<TreeView
 							Name="treeViewDrives"
 							BorderBrush="{StaticResource LightBorderBrush}"
-							BorderThickness="1">
+							BorderThickness="1"
+							ScrollViewer.CanContentScroll="True"
+							VirtualizingPanel.IsVirtualizing="True"
+							VirtualizingPanel.VirtualizationMode="Recycling">
 							<TreeView.ItemContainerStyle>
 								<Style TargetType="TreeViewItem">
 									<Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
 									<Setter Property="Padding" Value="2" />
+									<EventSetter Event="Expanded" Handler="TreeViewItem_Expanded" />
 								</Style>
 							</TreeView.ItemContainerStyle>
 						</TreeView>
@@ -271,7 +304,10 @@
 							Content="Manage Exclusions..."
 							ToolTip="Configure files, folders, and patterns to exclude from backup" />
 
-						<StackPanel Name="pnlSelectedFilesRetention" Margin="0,0,0,15" Visibility="Collapsed">
+						<StackPanel
+							Name="pnlSelectedFilesRetention"
+							Margin="0,0,0,15"
+							Visibility="Collapsed">
 							<TextBlock
 								Margin="0,0,0,5"
 								FontWeight="SemiBold"

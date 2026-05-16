@@ -160,6 +160,7 @@ namespace SecureServerBackup.Windows
         private bool _windowHeightWasAutoAdjusted;
         private readonly Dictionary<string, MountedHyperVGuestTreeDisk> _hyperVDiskMountDirectories = new(StringComparer.OrdinalIgnoreCase);
         private string? _hyperVGuestMountRoot;
+        private HashSet<string> _pendingSelectionPaths = new(StringComparer.OrdinalIgnoreCase);
 
         private sealed record MountedHyperVGuestExecutionPartition(int PartitionNumber, string MountPath, bool CreatedMountDirectory);
 
@@ -337,7 +338,10 @@ namespace SecureServerBackup.Windows
             {
                 // Pre-selection will happen in BackupWindowNew_Loaded after drives are loaded
                 // Store the paths to select
-                _pathsToPreselect = new List<string>(job.SourcePaths);
+                IReadOnlyList<string> pathsToPreselect = job.Type == BackupType.SelectedFilesAndFolders
+                    ? GetSelectedFilesReplayPaths(job)
+                    : job.SourcePaths;
+                _pathsToPreselect = new List<string>(pathsToPreselect);
             }
             else if (job.IsHyperVBackup)
             {
@@ -429,6 +433,12 @@ namespace SecureServerBackup.Windows
         /// </summary>
         private async Task PreSelectItemsAsync(List<string> pathsToSelect)
         {
+            _pendingSelectionPaths = pathsToSelect
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(NormalizeSelectionPath)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             foreach (var path in pathsToSelect)
             {
                 if (HyperVGuestSelectionPath.TryParse(path, out HyperVGuestSelectionInfo? guestSelection) && guestSelection != null)
@@ -441,9 +451,111 @@ namespace SecureServerBackup.Windows
                 }
                 else
                 {
-                    PreSelectItemRecursive(driveItems, path);
+                    await PreSelectStandardItemAsync(path);
                 }
             }
+
+            RefreshLoadedSelectionStates();
+        }
+
+        private async Task<bool> PreSelectStandardItemAsync(string pathToSelect)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(pathToSelect);
+
+            foreach (DriveTreeItem item in driveItems)
+            {
+                if (await PreSelectItemRecursiveAsync(item, pathToSelect))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private async Task<bool> PreSelectItemRecursiveAsync(DriveTreeItem item, string pathToSelect)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+            ArgumentException.ThrowIfNullOrWhiteSpace(pathToSelect);
+
+            string targetPath = NormalizeSelectionPath(pathToSelect);
+            string itemPath = NormalizeSelectionPath(item.FullPath);
+            string resolvedPath = NormalizeSelectionPath(item.ResolvedPath);
+
+            if ((!string.IsNullOrWhiteSpace(itemPath) && string.Equals(itemPath, targetPath, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(resolvedPath) && string.Equals(resolvedPath, targetPath, StringComparison.OrdinalIgnoreCase)))
+            {
+                item.IsChecked = true;
+                return true;
+            }
+
+            bool itemPathCanContainSelection = PathCouldContainSelection(itemPath, targetPath);
+            bool resolvedPathCanContainSelection = PathCouldContainSelection(resolvedPath, targetPath);
+            if (!itemPathCanContainSelection && !resolvedPathCanContainSelection)
+            {
+                foreach (DriveTreeItem child in item.Children)
+                {
+                    if (await PreSelectItemRecursiveAsync(child, pathToSelect))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            if (item.IsChecked != true)
+            {
+                item.IsChecked = null;
+            }
+
+            if (RequiresLazyLoad(item) && !item.ChildrenLoaded)
+            {
+                if (item.ItemType == DriveTreeItemType.HyperVVirtualDisk)
+                {
+                    await LoadHyperVVirtualDiskChildrenAsync(item);
+                }
+                else
+                {
+                    List<DriveTreeItem> childItems = await Task.Run(() => BuildVolumeChildItems(item));
+                    ReplaceChildren(item, childItems);
+                }
+
+                item.ChildrenLoaded = true;
+                ApplyPendingSelectionState(item);
+            }
+
+            foreach (DriveTreeItem child in item.Children)
+            {
+                if (await PreSelectItemRecursiveAsync(child, pathToSelect))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string NormalizeSelectionPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return string.Empty;
+            }
+
+            return path.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        private static bool PathCouldContainSelection(string containerPath, string targetPath)
+        {
+            if (string.IsNullOrWhiteSpace(containerPath) || string.IsNullOrWhiteSpace(targetPath))
+            {
+                return false;
+            }
+
+            return string.Equals(containerPath, targetPath, StringComparison.OrdinalIgnoreCase) ||
+                   targetPath.StartsWith(containerPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                   targetPath.StartsWith(containerPath + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -516,7 +628,8 @@ namespace SecureServerBackup.Windows
             {
                 if (!current.ChildrenLoaded)
                 {
-                    LoadFoldersForVolume(current);
+                    List<DriveTreeItem> childItems = await Task.Run(() => BuildVolumeChildItems(current));
+                    ReplaceChildren(current, childItems);
                     current.ChildrenLoaded = true;
                 }
 
@@ -532,6 +645,115 @@ namespace SecureServerBackup.Windows
             }
 
             current.IsChecked = true;
+        }
+
+        private static void ReplaceChildren(DriveTreeItem parentItem, IEnumerable<DriveTreeItem> childItems)
+        {
+            ArgumentNullException.ThrowIfNull(parentItem);
+            ArgumentNullException.ThrowIfNull(childItems);
+
+            parentItem.Children.Clear();
+            foreach (DriveTreeItem childItem in childItems)
+            {
+                parentItem.Children.Add(childItem);
+            }
+
+            if (parentItem.IsChecked == true)
+            {
+                foreach (DriveTreeItem childItem in parentItem.Children.Where(child => child.ParticipatesInCheckState))
+                {
+                    childItem.IsChecked = true;
+                }
+
+                parentItem.RefreshCheckStateFromChildren();
+            }
+        }
+
+        private void ApplyPendingSelectionState(DriveTreeItem item)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+
+            foreach (DriveTreeItem child in item.Children)
+            {
+                ApplyPendingSelectionStateRecursive(child);
+            }
+
+            item.RefreshCheckStateFromChildren();
+        }
+
+        private void ApplyPendingSelectionStateRecursive(DriveTreeItem item)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+
+            if (item.IsLoadingPlaceholder)
+            {
+                return;
+            }
+
+            GetPendingSelectionMatchState(item, out bool hasExactMatch, out bool hasDescendantMatch);
+
+            if (hasExactMatch)
+            {
+                item.IsChecked = true;
+                return;
+            }
+
+            if (hasDescendantMatch && item.IsChecked != true)
+            {
+                item.IsChecked = null;
+            }
+
+            foreach (DriveTreeItem child in item.Children)
+            {
+                ApplyPendingSelectionStateRecursive(child);
+            }
+
+            item.RefreshCheckStateFromChildren();
+        }
+
+        private void GetPendingSelectionMatchState(DriveTreeItem item, out bool hasExactMatch, out bool hasDescendantMatch)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+
+            hasExactMatch = false;
+            hasDescendantMatch = false;
+
+            string itemPath = NormalizeSelectionPath(item.FullPath);
+            string resolvedPath = NormalizeSelectionPath(item.ResolvedPath);
+
+            foreach (string pendingPath in _pendingSelectionPaths)
+            {
+                if ((!string.IsNullOrWhiteSpace(itemPath) && string.Equals(itemPath, pendingPath, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrWhiteSpace(resolvedPath) && string.Equals(resolvedPath, pendingPath, StringComparison.OrdinalIgnoreCase)))
+                {
+                    hasExactMatch = true;
+                    hasDescendantMatch = true;
+                    return;
+                }
+
+                if (PathCouldContainSelection(itemPath, pendingPath) || PathCouldContainSelection(resolvedPath, pendingPath))
+                {
+                    hasDescendantMatch = true;
+                }
+            }
+        }
+
+        private void RefreshLoadedSelectionStates()
+        {
+            foreach (DriveTreeItem rootItem in driveItems)
+            {
+                RefreshLoadedSelectionStateRecursive(rootItem);
+            }
+        }
+
+        private static void RefreshLoadedSelectionStateRecursive(DriveTreeItem item)
+        {
+            foreach (DriveTreeItem child in item.Children)
+            {
+                RefreshLoadedSelectionStateRecursive(child);
+            }
+
+            item.RefreshCheckStateFromChildren();
         }
 
         /// <summary>
@@ -964,14 +1186,12 @@ namespace SecureServerBackup.Windows
             }
         }
 
-        private void LoadFoldersForVolume(DriveTreeItem volumeItem)
+        private static List<DriveTreeItem> BuildVolumeChildItems(DriveTreeItem volumeItem)
         {
             try
             {
-                // Remove the placeholder "Loading..." item
-                volumeItem.Children.Clear();
-                
                 var rootPath = string.IsNullOrWhiteSpace(volumeItem.ResolvedPath) ? volumeItem.FullPath : volumeItem.ResolvedPath;
+                List<DriveTreeItem> childItems = new();
                 
                 System.Diagnostics.Debug.WriteLine($"=== LoadFoldersForVolume ===");
                 System.Diagnostics.Debug.WriteLine($"Volume: {volumeItem.Name}");
@@ -980,25 +1200,25 @@ namespace SecureServerBackup.Windows
                 // Check if this is a system partition without drive letter
                 if (rootPath.StartsWith("\\\\?\\Volume{"))
                 {
-                    volumeItem.Children.Add(new DriveTreeItem
+                    childItems.Add(new DriveTreeItem
                     {
                         Name = "(System partition - cannot browse)",
                         ItemType = DriveTreeItemType.Folder,
                         Parent = volumeItem
                     });
-                    return;
+                    return childItems;
                 }
                 
                 if (!Directory.Exists(rootPath))
                 {
                     System.Diagnostics.Debug.WriteLine($"ERROR: Directory does not exist: '{rootPath}'");
-                    volumeItem.Children.Add(new DriveTreeItem
+                    childItems.Add(new DriveTreeItem
                     {
                         Name = "(Volume not accessible)",
                         ItemType = DriveTreeItemType.Folder,
                         Parent = volumeItem
                     });
-                    return;
+                    return childItems;
                 }
 
                 System.Diagnostics.Debug.WriteLine($"Directory exists, enumerating folders and files...");
@@ -1008,7 +1228,7 @@ namespace SecureServerBackup.Windows
                 {
                     foreach (DriveTreeItem childItem in BuildDirectoryChildItems(volumeItem, rootPath))
                     {
-                        volumeItem.Children.Add(childItem);
+                        childItems.Add(childItem);
                         entriesAdded++;
                         System.Diagnostics.Debug.WriteLine($"  Added: {childItem.Name}");
                     }
@@ -1016,13 +1236,13 @@ namespace SecureServerBackup.Windows
                 catch (UnauthorizedAccessException)
                 {
                     System.Diagnostics.Debug.WriteLine("ERROR: Access denied to volume root");
-                    volumeItem.Children.Add(new DriveTreeItem
+                    childItems.Add(new DriveTreeItem
                     {
                         Name = "(Access Denied - Run as Administrator)",
                         ItemType = DriveTreeItemType.Folder,
                         Parent = volumeItem
                     });
-                    return;
+                    return childItems;
                 }
                 
                 System.Diagnostics.Debug.WriteLine($"Total entries added: {entriesAdded}");
@@ -1030,24 +1250,28 @@ namespace SecureServerBackup.Windows
                 // If no folders or files were accessible, show a message
                 if (entriesAdded == 0)
                 {
-                    volumeItem.Children.Add(new DriveTreeItem
+                    childItems.Add(new DriveTreeItem
                     {
                         Name = "(Empty or no accessible files/folders)",
                         ItemType = DriveTreeItemType.Folder,
                         Parent = volumeItem
                     });
                 }
+
+                return childItems;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"CRITICAL ERROR in LoadFoldersForVolume: {ex.Message}\nStack: {ex.StackTrace}");
-                volumeItem.Children.Clear();
-                volumeItem.Children.Add(new DriveTreeItem
+                return new List<DriveTreeItem>
                 {
-                    Name = $"(Error: {ex.Message})",
-                    ItemType = DriveTreeItemType.Folder,
-                    Parent = volumeItem
-                });
+                    new()
+                    {
+                        Name = $"(Error: {ex.Message})",
+                        ItemType = DriveTreeItemType.Folder,
+                        Parent = volumeItem
+                    }
+                };
             }
         }
 
@@ -1261,7 +1485,7 @@ namespace SecureServerBackup.Windows
                     loadingOverlay.Visibility = Visibility.Visible;
 
                 driveItems.Clear();
-                treeViewDrives.Items.Clear();
+                treeViewDrives.ItemsSource = null;
 
                 // Load physical drives and volumes
                 await LoadPhysicalDrives();
@@ -1276,12 +1500,7 @@ namespace SecureServerBackup.Windows
                 if (checkedPaths.Count > 0)
                     RestoreCheckedPaths(driveItems, checkedPaths);
 
-                // Manually create TreeViewItems for proper hierarchical display
-                foreach (var drive in driveItems)
-                {
-                    var treeItem = CreateTreeViewItem(drive);
-                    treeViewDrives.Items.Add(treeItem);
-                }
+                treeViewDrives.ItemsSource = driveItems;
             }
             catch (Exception ex)
             {
@@ -1316,192 +1535,120 @@ namespace SecureServerBackup.Windows
             }
         }
 
-        private TreeViewItem CreateTreeViewItem(DriveTreeItem item)
+        internal static bool RequiresLazyLoad(DriveTreeItem item)
         {
-            var treeViewItem = new TreeViewItem();
-            
-            // Create the header with checkbox and text
-            var panel = new System.Windows.Controls.StackPanel 
-            { 
-                Orientation = System.Windows.Controls.Orientation.Horizontal 
-            };
-            
-            
-            var checkbox = new System.Windows.Controls.CheckBox
+            ArgumentNullException.ThrowIfNull(item);
+
+            return (item.ItemType == DriveTreeItemType.Volume ||
+                    item.ItemType == DriveTreeItemType.HyperVVolume ||
+                    item.ItemType == DriveTreeItemType.NetworkDrive ||
+                    item.ItemType == DriveTreeItemType.NetworkShare ||
+                    (item.ItemType == DriveTreeItemType.Folder && !string.IsNullOrWhiteSpace(item.ResolvedPath)) ||
+                    item.ItemType == DriveTreeItemType.HyperVVirtualDisk) &&
+                   !item.ChildrenLoaded;
+        }
+
+        private void TreeItemCheckBox_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not System.Windows.Controls.CheckBox checkBox || checkBox.DataContext is not DriveTreeItem item)
             {
-                IsChecked = item.IsChecked,
-                IsThreeState = true,  // Keep for visual representation
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            
-            // Handle click to prevent three-state cycling
-            checkbox.Click += (s, e) =>
+                return;
+            }
+
+            bool isChecked = checkBox.IsChecked == true;
+
+            item.IsChecked = isChecked;
+            Debug.WriteLine($"[Checkbox] {(isChecked ? "Checked" : "Unchecked")}: {item.Name} ({item.ItemType})");
+
+            if (item.ItemType == DriveTreeItemType.Volume || item.ItemType == DriveTreeItemType.Disk)
             {
-                // On click, toggle between checked and unchecked only
-                // Skip the indeterminate state for user clicks
-                if (item.IsChecked == true)
+                if (isChecked)
                 {
-                    item.IsChecked = false;
-                    System.Diagnostics.Debug.WriteLine($"[Checkbox] Unchecked: {item.Name} ({item.ItemType})");
+                    hasSourceSelected = true;
+                    volumeConfigShown = false;
+                    Debug.WriteLine($"[Checkbox] {item.ItemType} checked, hasSourceSelected = true, hasTargetSelected = {hasTargetSelected}");
+                    CheckAndShowVolumeConfiguration();
                 }
                 else
                 {
-                    item.IsChecked = true;
-                    System.Diagnostics.Debug.WriteLine($"[Checkbox] Checked: {item.Name} ({item.ItemType})");
-                }
-                e.Handled = true;  // Prevent default three-state behavior
-
-                // Track source selection for clone operations (volumes OR disks)
-                if ((item.ItemType == DriveTreeItemType.Volume || item.ItemType == DriveTreeItemType.Disk) && item.IsChecked == true)
-                {
-                    hasSourceSelected = true;
-                    volumeConfigShown = false; // Reset to allow showing again
-                    System.Diagnostics.Debug.WriteLine($"[Checkbox] {item.ItemType} checked, hasSourceSelected = true, hasTargetSelected = {hasTargetSelected}");
-                    CheckAndShowVolumeConfiguration();
-                }
-                else if (item.ItemType == DriveTreeItemType.Volume || item.ItemType == DriveTreeItemType.Disk)
-                {
-                    // Check if any volumes/disks are still selected
                     hasSourceSelected = GetCheckedDriveItems().Any(i => i.ItemType == DriveTreeItemType.Volume || i.ItemType == DriveTreeItemType.Disk);
-                    System.Diagnostics.Debug.WriteLine($"[Checkbox] {item.ItemType} unchecked, hasSourceSelected = {hasSourceSelected}");
+                    Debug.WriteLine($"[Checkbox] {item.ItemType} unchecked, hasSourceSelected = {hasSourceSelected}");
                 }
-            };
-            
-            // Update checkbox when model changes (allows indeterminate from parent updates)
-            item.PropertyChanged += (s, e) =>
-            {
-                if (e.PropertyName == nameof(item.IsChecked))
-                {
-                    checkbox.IsChecked = item.IsChecked;
-                }
-            };
-            
-            var textBlock = new TextBlock
-            {
-                Text = item.DisplayName,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            
-            panel.Children.Add(checkbox);
-            panel.Children.Add(textBlock);
-            treeViewItem.Header = panel;
-            
-            // Debug: Log item creation
-            System.Diagnostics.Debug.WriteLine($"Creating TreeViewItem for: {item.Name}, Children: {item.Children.Count}");
-            
-            // Add children FIRST (before setting up events)
-            foreach (var child in item.Children)
-            {
-                treeViewItem.Items.Add(CreateTreeViewItem(child));
             }
-            
-            // Bind expansion state AFTER adding children
-            treeViewItem.IsExpanded = item.IsExpanded;
-            treeViewItem.Expanded += async (s, e) =>
+
+            e.Handled = true;
+        }
+
+        private void TreeItem_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is not FrameworkElement { DataContext: DriveTreeItem item } || item.ItemType != DriveTreeItemType.NetworkBrowser)
             {
-                if (e.Source == treeViewItem)
+                return;
+            }
+
+            NetworkPathDialog dialog = new();
+            if (dialog.ShowDialog() == true)
+            {
+                AddNetworkPathToTree(dialog.NetworkPath);
+            }
+
+            e.Handled = true;
+        }
+
+        private async void TreeViewItem_Expanded(object sender, RoutedEventArgs e)
+        {
+            if (sender is not TreeViewItem treeViewItem || e.Source != treeViewItem || treeViewItem.DataContext is not DriveTreeItem item || !RequiresLazyLoad(item))
+            {
+                return;
+            }
+
+            item.IsExpanded = true;
+
+            if (item.ItemType == DriveTreeItemType.HyperVVirtualDisk)
+            {
+                try
                 {
-                    item.IsExpanded = true;
+                    await LoadHyperVVirtualDiskChildrenAsync(item);
+                    ApplyPendingSelectionState(item);
+                }
+                catch (Exception ex)
+                {
+                    item.Children.Clear();
+                    item.ChildrenLoaded = false;
 
-                    // Handle "Add Network Path..." click
-                    if (item.ItemType == DriveTreeItemType.NetworkBrowser)
+                    if (!IsHyperVVirtualDiskSharingViolation(ex))
                     {
-                        var dialog = new NetworkPathDialog();
-                        if (dialog.ShowDialog() == true)
+                        item.Children.Add(new DriveTreeItem
                         {
-                            AddNetworkPathToTree(dialog.NetworkPath);
-                        }
-                        e.Handled = true;
-                        return;
-                    }
-
-                    if (item.ItemType == DriveTreeItemType.HyperVVirtualDisk && !item.ChildrenLoaded)
-                    {
-                        // Show a spinner placeholder immediately before the async mount
-                        treeViewItem.Items.Clear();
-                        treeViewItem.Items.Add(CreateLoadingTreeViewItem("Mounting virtual disk..."));
-
-                        try
-                        {
-                            await LoadHyperVVirtualDiskChildrenAsync(item);
-                        }
-                        catch (Exception ex)
-                        {
-                            item.Children.Clear();
-                            item.ChildrenLoaded = false;
-
-                            if (IsHyperVVirtualDiskSharingViolation(ex))
-                            {
-                                // Alert already shown inside LoadHyperVVirtualDiskChildrenAsync; just revert.
-                            }
-                            else
-                            {
-                                item.Children.Add(new DriveTreeItem
-                                {
-                                    Name = $"(Error mounting virtual disk: {ex.Message})",
-                                    ItemType = DriveTreeItemType.Folder,
-                                    Parent = item
-                                });
-                            }
-                        }
-
-                        item.ChildrenLoaded = item.Children.Count > 0;
-                        treeViewItem.Items.Clear();
-
-                        if (item.Children.Count == 0)
-                        {
-                            // Sharing-violation path: revert to collapsed/unloaded state so the
-                            // disk node looks exactly as it did before the user expanded it.
-                            treeViewItem.IsExpanded = false;
-                        }
-                        else
-                        {
-                            foreach (var child in item.Children)
-                            {
-                                treeViewItem.Items.Add(CreateTreeViewItem(child));
-                            }
-                        }
-                    }
-                    // Load folders for volumes when expanded
-                    else if ((item.ItemType == DriveTreeItemType.Volume || 
-                              item.ItemType == DriveTreeItemType.HyperVVolume ||
-                              item.ItemType == DriveTreeItemType.NetworkDrive || 
-                              item.ItemType == DriveTreeItemType.NetworkShare ||
-                              (item.ItemType == DriveTreeItemType.Folder && !string.IsNullOrWhiteSpace(item.ResolvedPath))) && 
-                             !item.ChildrenLoaded)
-                    {
-                        treeViewItem.Items.Clear();
-                        treeViewItem.Items.Add(CreateLoadingTreeViewItem("Loading files..."));
-
-                        await Task.Run(() => LoadFoldersForVolume(item));
-                        item.ChildrenLoaded = true;
-
-                        // Rebuild children
-                        treeViewItem.Items.Clear();
-                        foreach (var child in item.Children)
-                        {
-                            treeViewItem.Items.Add(CreateTreeViewItem(child));
-                        }
+                            Name = $"(Error mounting virtual disk: {ex.Message})",
+                            ItemType = DriveTreeItemType.Folder,
+                            Parent = item
+                        });
                     }
                 }
-            };
-            
-            treeViewItem.Collapsed += (s, e) =>
-            {
-                if (e.Source == treeViewItem)
+
+                item.ChildrenLoaded = item.Children.Count > 0;
+
+                if (item.Children.Count == 0)
                 {
-                    item.IsExpanded = false;
+                    treeViewItem.IsExpanded = false;
                 }
-            };
-            
-            return treeViewItem;
+
+                return;
+            }
+
+            List<DriveTreeItem> childItems = await Task.Run(() => BuildVolumeChildItems(item));
+            ReplaceChildren(item, childItems);
+            item.ChildrenLoaded = true;
+            ApplyPendingSelectionState(item);
         }
 
         private async Task LoadPhysicalDrives()
         {
-            await Task.Run(() =>
+            List<DriveTreeItem> disks = await Task.Run(() =>
             {
+                List<DriveTreeItem> discoveredDisks = new();
+
                 try
                 {
                     System.Diagnostics.Debug.WriteLine("=== Starting LoadPhysicalDrives ===");
@@ -1578,7 +1725,7 @@ namespace SecureServerBackup.Windows
                                     });
                                 }
 
-                                Dispatcher.Invoke(() => driveItems.Add(diskItem));
+                                discoveredDisks.Add(diskItem);
                             }
                             catch (Exception diskEx)
                             {
@@ -1590,7 +1737,7 @@ namespace SecureServerBackup.Windows
                         }
                     }
                     
-                    System.Diagnostics.Debug.WriteLine($"=== Completed LoadPhysicalDrives: {driveItems.Count} disks loaded ===");
+                    System.Diagnostics.Debug.WriteLine($"=== Completed LoadPhysicalDrives: {discoveredDisks.Count} disks loaded ===");
                 }
                 catch (Exception ex)
                 {
@@ -1599,7 +1746,14 @@ namespace SecureServerBackup.Windows
                         CustomDialogService.ShowError($"Error loading physical drives: {ex.Message}\n\nDetails: {ex.GetType().Name}\n\nPlease check Output window for details.", 
                             "Error"));
                 }
+
+                return discoveredDisks;
             });
+
+            foreach (DriveTreeItem disk in disks)
+            {
+                driveItems.Add(disk);
+            }
         }
 
         private void LoadVolumesForDisk(DriveTreeItem diskItem, int diskNum)
@@ -1961,11 +2115,13 @@ namespace SecureServerBackup.Windows
 
         private async Task LoadHyperVSystems()
         {
-            await Task.Run(() =>
+            List<DriveTreeItem> hyperVSystems = await Task.Run(() =>
             {
+                List<DriveTreeItem> discoveredSystems = new();
+
                 try
                 {
-                    Dictionary<string, DriveTreeItem> hyperVSystems = new(StringComparer.OrdinalIgnoreCase);
+                    Dictionary<string, DriveTreeItem> systemLookup = new(StringComparer.OrdinalIgnoreCase);
 
                     var vmBuffer = new StringBuilder(4096);
                     var vmResult = BackupEngineInterop.EnumerateHyperVMachines(vmBuffer, vmBuffer.Capacity);
@@ -1979,7 +2135,7 @@ namespace SecureServerBackup.Windows
                                 continue;
                             }
 
-                            hyperVSystems[normalizedVmName] = new DriveTreeItem
+                            systemLookup[normalizedVmName] = new DriveTreeItem
                             {
                                 Name = $"Hyper-V: {vm}",
                                 FullPath = vm,
@@ -1991,7 +2147,7 @@ namespace SecureServerBackup.Windows
 
                     foreach (HyperVVirtualDiskInfo diskInfo in EnumerateHyperVVirtualDiskInfos())
                     {
-                        if (!hyperVSystems.TryGetValue(diskInfo.VirtualMachineName, out DriveTreeItem? hyperVItem))
+                        if (!systemLookup.TryGetValue(diskInfo.VirtualMachineName, out DriveTreeItem? hyperVItem))
                         {
                             hyperVItem = new DriveTreeItem
                             {
@@ -2000,13 +2156,13 @@ namespace SecureServerBackup.Windows
                                 VirtualMachineName = diskInfo.VirtualMachineName,
                                 ItemType = DriveTreeItemType.HyperVSystem
                             };
-                            hyperVSystems[diskInfo.VirtualMachineName] = hyperVItem;
+                            systemLookup[diskInfo.VirtualMachineName] = hyperVItem;
                         }
 
                         AddHyperVVirtualDiskItem(hyperVItem, diskInfo);
                     }
 
-                    foreach (DriveTreeItem hyperVSystem in hyperVSystems.Values)
+                    foreach (DriveTreeItem hyperVSystem in systemLookup.Values)
                     {
                         if (hyperVSystem.Children.Count == 0)
                         {
@@ -2019,13 +2175,19 @@ namespace SecureServerBackup.Windows
                         }
                     }
 
-                    foreach (DriveTreeItem hyperVSystem in hyperVSystems.Values.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
-                    {
-                        Dispatcher.Invoke(() => driveItems.Add(hyperVSystem));
-                    }
+                    discoveredSystems.AddRange(systemLookup.Values.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase));
                 }
-                catch { }
+                catch
+                {
+                }
+
+                return discoveredSystems;
             });
+
+            foreach (DriveTreeItem hyperVSystem in hyperVSystems)
+            {
+                driveItems.Add(hyperVSystem);
+            }
         }
 
         private void AddHyperVVirtualDiskItem(DriveTreeItem hyperVItem, HyperVVirtualDiskInfo diskInfo)
@@ -2161,11 +2323,11 @@ namespace SecureServerBackup.Windows
 
         private async Task LoadNetworkDrives()
         {
-            await Task.Run(() =>
+            DriveTreeItem? networkRoot = await Task.Run(() =>
             {
                 try
                 {
-                    var networkRoot = new DriveTreeItem
+                    var discoveredNetworkRoot = new DriveTreeItem
                     {
                         Name = "Network Locations",
                         FullPath = "",
@@ -2190,7 +2352,7 @@ namespace SecureServerBackup.Windows
                                     FullPath = drive.Name,
                                     ItemType = DriveTreeItemType.NetworkDrive,
                                     Size = drive.TotalSize,
-                                    Parent = networkRoot
+                                    Parent = discoveredNetworkRoot
                                 };
 
                                 // Add placeholder for folders
@@ -2201,7 +2363,7 @@ namespace SecureServerBackup.Windows
                                     Parent = networkDrive
                                 });
 
-                                networkRoot.Children.Add(networkDrive);
+                                discoveredNetworkRoot.Children.Add(networkDrive);
                             }
                         }
                         catch
@@ -2216,22 +2378,28 @@ namespace SecureServerBackup.Windows
                         Name = "?? Add Network Path...",
                         FullPath = "",
                         ItemType = DriveTreeItemType.NetworkBrowser,
-                        Parent = networkRoot
+                        Parent = discoveredNetworkRoot
                     };
 
-                    networkRoot.Children.Add(addNetworkPath);
+                    discoveredNetworkRoot.Children.Add(addNetworkPath);
 
                     // Only add Network Locations if there are mapped drives or the add option
-                    if (networkRoot.Children.Count > 0)
-                    {
-                        Dispatcher.Invoke(() => driveItems.Add(networkRoot));
-                    }
+                    return discoveredNetworkRoot.Children.Count > 0
+                        ? discoveredNetworkRoot
+                        : null;
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"Error loading network drives: {ex.Message}");
                 }
+
+                return null;
             });
+
+            if (networkRoot != null)
+            {
+                driveItems.Add(networkRoot);
+            }
         }
 
         /// <summary>
@@ -2313,12 +2481,8 @@ namespace SecureServerBackup.Windows
         /// </summary>
         private void RefreshTreeView()
         {
-            treeViewDrives.Items.Clear();
-            foreach (var drive in driveItems)
-            {
-                var treeItem = CreateTreeViewItem(drive);
-                treeViewDrives.Items.Add(treeItem);
-            }
+            treeViewDrives.ItemsSource = null;
+            treeViewDrives.ItemsSource = driveItems;
         }
 
         private async void RefreshDrives_Click(object sender, RoutedEventArgs e)
@@ -3396,6 +3560,7 @@ namespace SecureServerBackup.Windows
                 {
                     job.Id = existingJob.Id;
                     jobManager.UpdateJob(job);
+                    PersistSelectedFileList(existingJob.Name, job);
                     _hasSavedEncryptionPassword = job.EncryptBackup && !string.IsNullOrWhiteSpace(job.ProtectedEncryptionPassword);
                     UpdateEncryptionUiState();
                     CustomDialogService.ShowSuccess($"Backup job '{job.Name}' updated successfully!\n\nJob saved to:\nC:\\ProgramData\\SecureServerBackupService\\jobs.json", 
@@ -3404,6 +3569,7 @@ namespace SecureServerBackup.Windows
                 else
                 {
                     jobManager.AddJob(job);
+                    PersistSelectedFileList(null, job);
                     _hasSavedEncryptionPassword = job.EncryptBackup && !string.IsNullOrWhiteSpace(job.ProtectedEncryptionPassword);
                     UpdateEncryptionUiState();
                     CustomDialogService.ShowSuccess($"Backup job '{job.Name}' created successfully!\n\nJob saved to:\nC:\\ProgramData\\SecureServerBackupService\\jobs.json", 
@@ -3424,6 +3590,63 @@ namespace SecureServerBackup.Windows
                 
                 System.Diagnostics.Debug.WriteLine($"SaveJob failed: {ex.Message}\n{ex.StackTrace}");
             }
+        }
+
+        private void PersistSelectedFileList(string? previousJobName, BackupJob job)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            bool isFileSelectionJob = job.Target == BackupTarget.FilesAndFolders || job.Type == BackupType.SelectedFilesAndFolders;
+            if (!isFileSelectionJob)
+            {
+                if (!string.IsNullOrWhiteSpace(previousJobName))
+                {
+                    SelectedFileListStore.Delete(previousJobName);
+                }
+
+                SelectedFileListStore.Delete(job.Name);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(previousJobName) &&
+                !string.Equals(previousJobName, job.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                SelectedFileListStore.Delete(previousJobName);
+            }
+
+            SelectedFileListStore.Save(job.Name, job.SourcePaths);
+        }
+
+        private static IReadOnlyList<string> LoadSelectedFileList(BackupJob job)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            if (job.Type != BackupType.SelectedFilesAndFolders)
+            {
+                return job.SourcePaths;
+            }
+
+            List<string> persistedPaths = SelectedFileListStore.Load(job.Name);
+            return persistedPaths.Count > 0 ? persistedPaths : job.SourcePaths;
+        }
+
+        private static IReadOnlyList<string> GetSelectedFilesReplayPaths(BackupJob job)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            if (job.Type != BackupType.SelectedFilesAndFolders)
+            {
+                return job.SourcePaths;
+            }
+
+            List<string> replayPaths = new();
+            replayPaths.AddRange(job.SelectedFilesSourceRoots.Where(path => !string.IsNullOrWhiteSpace(path)));
+            replayPaths.AddRange(LoadSelectedFileList(job));
+
+            return replayPaths
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         private BackupJob CreateJobFromInput()
@@ -3458,6 +3681,11 @@ namespace SecureServerBackup.Windows
             {
                 // Collect selected items from tree for normal backups
                 CollectSelectedItems(job);
+            }
+
+            if (backupType == BackupType.SelectedFilesAndFolders)
+            {
+                job.SelectedFilesSourceRoots = GetSelectedFilesSourceRoots();
             }
 
             // Schedule
@@ -3587,6 +3815,88 @@ namespace SecureServerBackup.Windows
             return hasAllowedSelection;
         }
 
+        private List<DriveTreeItem> GetEffectiveSelectedFilesAndFoldersItems()
+        {
+            List<DriveTreeItem> selectedItems = new();
+
+            foreach (DriveTreeItem drive in driveItems)
+            {
+                CollectEffectiveSelectedFilesAndFoldersItems(drive, selectedItems);
+            }
+
+            return selectedItems;
+        }
+
+        private List<string> GetSelectedFilesSourceRoots()
+        {
+            List<string> sourceRoots = new();
+
+            foreach (DriveTreeItem selectedItem in GetEffectiveSelectedFilesAndFoldersItems())
+            {
+                AddSelectedFilesSourceRoots(selectedItem, sourceRoots);
+            }
+
+            return sourceRoots
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static void AddSelectedFilesSourceRoots(DriveTreeItem selectedItem, List<string> sourceRoots)
+        {
+            ArgumentNullException.ThrowIfNull(selectedItem);
+            ArgumentNullException.ThrowIfNull(sourceRoots);
+
+            for (DriveTreeItem? current = selectedItem; current != null; current = current.Parent)
+            {
+                switch (current.ItemType)
+                {
+                    case DriveTreeItemType.Disk:
+                    case DriveTreeItemType.Volume:
+                    case DriveTreeItemType.NetworkDrive:
+                    case DriveTreeItemType.NetworkShare:
+                    case DriveTreeItemType.HyperVVirtualDisk:
+                    case DriveTreeItemType.HyperVVolume:
+                        if (!string.IsNullOrWhiteSpace(current.FullPath))
+                        {
+                            sourceRoots.Add(current.FullPath);
+                        }
+
+                        break;
+                }
+            }
+        }
+
+        private static void CollectEffectiveSelectedFilesAndFoldersItems(DriveTreeItem item, List<DriveTreeItem> selectedItems)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+            ArgumentNullException.ThrowIfNull(selectedItems);
+
+            if (item.IsChecked == true)
+            {
+                if (IsSelectedFilesAndFoldersAllowedItem(item))
+                {
+                    selectedItems.Add(item);
+                    return;
+                }
+
+                foreach (DriveTreeItem child in item.Children)
+                {
+                    CollectEffectiveSelectedFilesAndFoldersItems(child, selectedItems);
+                }
+
+                return;
+            }
+
+            if (item.IsChecked == null)
+            {
+                foreach (DriveTreeItem child in item.Children)
+                {
+                    CollectEffectiveSelectedFilesAndFoldersItems(child, selectedItems);
+                }
+            }
+        }
+
         private BackupType GetSelectedBackupType()
         {
             if (rbFullBackup.IsChecked == true) return BackupType.Full;
@@ -3604,19 +3914,33 @@ namespace SecureServerBackup.Windows
         {
             bool selectedFilesAndFoldersOnly = job.Type == BackupType.SelectedFilesAndFolders;
 
+            if (selectedFilesAndFoldersOnly)
+            {
+                List<DriveTreeItem> selectedFilesItems = GetEffectiveSelectedFilesAndFoldersItems();
+                foreach (DriveTreeItem selectedItem in selectedFilesItems)
+                {
+                    if (string.IsNullOrWhiteSpace(selectedItem.FullPath))
+                    {
+                        continue;
+                    }
+
+                    job.Target = BackupTarget.FilesAndFolders;
+                    job.SourcePaths.Add(selectedItem.FullPath);
+                }
+
+                job.SourcePaths = job.SourcePaths
+                    .Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                return;
+            }
+
             foreach (var drive in driveItems)
             {
                 if (drive.IsChecked == true)
                 {
-                    if (selectedFilesAndFoldersOnly)
-                    {
-                        if (IsSelectedFilesAndFoldersAllowedItem(drive))
-                        {
-                            job.Target = BackupTarget.FilesAndFolders;
-                            job.SourcePaths.Add(drive.FullPath);
-                        }
-                    }
-                    else if (drive.ItemType == DriveTreeItemType.Disk)
+                    if (drive.ItemType == DriveTreeItemType.Disk)
                     {
                         job.Target = BackupTarget.Disk;
                         job.SourcePaths.Add(drive.FullPath);
@@ -3706,11 +4030,7 @@ namespace SecureServerBackup.Windows
                 {
                     if (selectedFilesAndFoldersOnly)
                     {
-                        if (IsSelectedFilesAndFoldersAllowedItem(child))
-                        {
-                            job.Target = BackupTarget.FilesAndFolders;
-                            job.SourcePaths.Add(child.FullPath);
-                        }
+                        continue;
                     }
                     else if (child.ItemType == DriveTreeItemType.Volume)
                     {
@@ -3830,10 +4150,14 @@ namespace SecureServerBackup.Windows
             }
             else
             {
-                if (rbSelectedFilesAndFolders?.IsChecked == true && !IsSelectedFilesAndFoldersSelectionAllowed(selectedItems))
+                if (rbSelectedFilesAndFolders?.IsChecked == true)
                 {
-                    CustomDialogService.ShowWarning("Selected Files & Folder backups can only include checked files, folders, or network share roots from the tree.", "Validation Error");
-                    return false;
+                    List<DriveTreeItem> selectedFilesItems = GetEffectiveSelectedFilesAndFoldersItems();
+                    if (!IsSelectedFilesAndFoldersSelectionAllowed(selectedFilesItems))
+                    {
+                        CustomDialogService.ShowWarning("Selected Files & Folder backups can only include checked files, folders, or network share roots from the tree.", "Validation Error");
+                        return false;
+                    }
                 }
 
                 if (selectedHyperV.Count > 0 && selectedNonHyperV.Count > 0)

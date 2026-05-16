@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -90,6 +91,10 @@ namespace SecureServerBackup.Models
             }
         }
 
+        public bool IsLoadingPlaceholder => string.Equals(Name, "Loading...", StringComparison.Ordinal);
+
+        public bool ParticipatesInCheckState => !IsLoadingPlaceholder;
+
         private void UpdateChildren(bool? value)
         {
             if (value.HasValue && Children != null)
@@ -107,20 +112,66 @@ namespace SecureServerBackup.Models
         {
             if (Parent == null) return;
 
-            bool? allChecked = true;
-            bool? anyChecked = false;
-
-            foreach (var sibling in Parent.Children)
+            if (!TryGetAggregateCheckState(Parent.Children, out bool? aggregateState))
             {
-                if (sibling.IsChecked == false)
-                    allChecked = false;
-                if (sibling.IsChecked == true || sibling.IsChecked == null)
-                    anyChecked = true;
+                return;
             }
 
-            Parent._isChecked = allChecked == true ? true : (anyChecked == true ? null : false);
+            Parent._isChecked = aggregateState;
             Parent.OnPropertyChanged(nameof(IsChecked));
             Parent.UpdateParent();
+        }
+
+        public void RefreshCheckStateFromChildren()
+        {
+            if (!TryGetAggregateCheckState(Children, out bool? aggregateState))
+            {
+                return;
+            }
+
+            if (_isChecked != aggregateState)
+            {
+                _isChecked = aggregateState;
+                OnPropertyChanged(nameof(IsChecked));
+            }
+
+            UpdateParent();
+        }
+
+        private static bool TryGetAggregateCheckState(System.Collections.Generic.IEnumerable<DriveTreeItem> items, out bool? aggregateState)
+        {
+            bool foundSelectableChild = false;
+            bool allChecked = true;
+            bool anyChecked = false;
+
+            foreach (DriveTreeItem item in items)
+            {
+                if (!item.ParticipatesInCheckState)
+                {
+                    continue;
+                }
+
+                foundSelectableChild = true;
+
+                if (item.IsChecked != true)
+                {
+                    allChecked = false;
+                }
+
+                if (item.IsChecked == true || item.IsChecked == null)
+                {
+                    anyChecked = true;
+                }
+            }
+
+            if (!foundSelectableChild)
+            {
+                aggregateState = false;
+                return false;
+            }
+
+            aggregateState = allChecked ? true : (anyChecked ? null : false);
+            return true;
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

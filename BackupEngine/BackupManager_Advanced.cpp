@@ -59,6 +59,7 @@ namespace {
     struct DiskVolumeRestoreMetadata {
         int sourceDiskNumber = -1;
         unsigned long long sourceDiskSizeBytes = 0;
+        unsigned long long sourceUsedSpaceBytes = 0;
         std::wstring sourceVolumeGuidPath;
         std::wstring sourceVolumeMountPath;
         std::wstring sourceVolumeLabel;
@@ -418,6 +419,7 @@ namespace {
         fragment += L"<BACKUP_KIND>DISK_VOLUME_IMAGE</BACKUP_KIND>";
         fragment += L"<SOURCE_DISK_NUMBER>" + std::to_wstring(metadata.sourceDiskNumber) + L"</SOURCE_DISK_NUMBER>";
         fragment += L"<SOURCE_DISK_SIZE_BYTES>" + std::to_wstring(metadata.sourceDiskSizeBytes) + L"</SOURCE_DISK_SIZE_BYTES>";
+        fragment += L"<SOURCE_USED_SPACE_BYTES>" + std::to_wstring(metadata.sourceUsedSpaceBytes) + L"</SOURCE_USED_SPACE_BYTES>";
         fragment += L"<SOURCE_VOLUME_GUID_PATH>" + SanitizeXmlName(metadata.sourceVolumeGuidPath) + L"</SOURCE_VOLUME_GUID_PATH>";
         fragment += L"<SOURCE_VOLUME_MOUNT_PATH>" + SanitizeXmlName(metadata.sourceVolumeMountPath) + L"</SOURCE_VOLUME_MOUNT_PATH>";
         fragment += L"<SOURCE_VOLUME_LABEL>" + SanitizeXmlName(metadata.sourceVolumeLabel) + L"</SOURCE_VOLUME_LABEL>";
@@ -1728,6 +1730,18 @@ extern "C" {
                                     ARRAYSIZE(fileSystemName));
                                 metadata.sourceVolumeLabel = volumeLabel;
                                 metadata.sourceFileSystem = fileSystemName;
+
+                                ULARGE_INTEGER freeBytesAvailable = {};
+                                ULARGE_INTEGER totalNumberOfBytes = {};
+                                ULARGE_INTEGER totalNumberOfFreeBytes = {};
+                                if (GetDiskFreeSpaceExW(
+                                        metadata.sourceVolumeMountPath.c_str(),
+                                        &freeBytesAvailable,
+                                        &totalNumberOfBytes,
+                                        &totalNumberOfFreeBytes) &&
+                                    totalNumberOfBytes.QuadPart >= totalNumberOfFreeBytes.QuadPart) {
+                                    metadata.sourceUsedSpaceBytes = totalNumberOfBytes.QuadPart - totalNumberOfFreeBytes.QuadPart;
+                                }
 
                                 PARTITION_INFORMATION_EX partitionInfo = {};
                                 if (DeviceIoControl(

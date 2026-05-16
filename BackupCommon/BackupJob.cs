@@ -10,6 +10,7 @@ namespace SecureServerBackupCommon
         public BackupType Type { get; set; }
         public BackupTarget Target { get; set; }
         public List<string> SourcePaths { get; set; } = new();
+        public List<string> SelectedFilesSourceRoots { get; set; } = new();
         public string DestinationPath { get; set; } = string.Empty;
         public bool IncludeSystemState { get; set; }
         public bool CompressData { get; set; }

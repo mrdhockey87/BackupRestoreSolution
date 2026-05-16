@@ -14,6 +14,7 @@
 #include <functional>
 #include <array>
 #include <iomanip>
+#include <numeric>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -29,6 +30,7 @@ private:
         int imageIndex = 0;
         int sourceDiskNumber = -1;
         unsigned long long sourceDiskSizeBytes = 0;
+        unsigned long long sourceUsedSpaceBytes = 0;
         std::string sourceVolumeGuidPath;
         std::string sourceVolumeMountPath;
         std::string sourceVolumeLabel;
@@ -220,6 +222,8 @@ private:
         try {
             plan.sourceDiskNumber = std::stoi(diskNumber);
             plan.sourceDiskSizeBytes = std::stoull(readTag("SOURCE_DISK_SIZE_BYTES"));
+            std::string usedSpaceBytes = readTag("SOURCE_USED_SPACE_BYTES");
+            plan.sourceUsedSpaceBytes = usedSpaceBytes.empty() ? 0 : std::stoull(usedSpaceBytes);
             plan.sourceVolumeGuidPath = readTag("SOURCE_VOLUME_GUID_PATH");
             plan.sourceVolumeMountPath = readTag("SOURCE_VOLUME_MOUNT_PATH");
             plan.sourceVolumeLabel = readTag("SOURCE_VOLUME_LABEL");
@@ -576,14 +580,83 @@ private:
         std::string partitionTable = plans.front().partitionStyle == "MBR" ? "msdos" : "gpt";
         RunCommand("parted -s '" + device + "' mklabel " + partitionTable);
 
+        std::vector<unsigned long long> plannedBytes(plans.size(), 0);
+        std::vector<unsigned long long> minimumBytes(plans.size(), 0);
+        std::vector<size_t> dataPartitionIndexes;
+        dataPartitionIndexes.reserve(plans.size());
+
+        auto isGrowableDataPartition = [](const RestoreVolumePlan& plan) {
+            std::string fsType = plan.sourceFileSystem;
+            std::transform(fsType.begin(), fsType.end(), fsType.begin(), ::tolower);
+            bool isDataFileSystem = fsType.find("ntfs") != std::string::npos ||
+                                    fsType.find("ext") != std::string::npos ||
+                                    fsType.find("xfs") != std::string::npos ||
+                                    fsType.find("btrfs") != std::string::npos ||
+                                    fsType.find("refs") != std::string::npos;
+
+            return isDataFileSystem && !plan.isHiddenPartition;
+        };
+
+        for (size_t i = 0; i < plans.size(); ++i) {
+            plannedBytes[i] = plans[i].partitionLengthBytes > 0 ? plans[i].partitionLengthBytes : 0;
+            minimumBytes[i] = plannedBytes[i];
+            if (isGrowableDataPartition(plans[i])) {
+                if (plans[i].sourceUsedSpaceBytes > 0) {
+                    unsigned long long usedSpaceWithOverhead = plans[i].sourceUsedSpaceBytes + (plans[i].sourceUsedSpaceBytes / 10ULL);
+                    minimumBytes[i] = std::min(plannedBytes[i], std::max(usedSpaceWithOverhead, 1ULL));
+                }
+
+                plannedBytes[i] = minimumBytes[i];
+                dataPartitionIndexes.push_back(i);
+            }
+        }
+
+        if (targetSize > 0 && !dataPartitionIndexes.empty()) {
+            unsigned long long fixedBytes = 0;
+            for (size_t i = 0; i < plans.size(); ++i) {
+                if (std::find(dataPartitionIndexes.begin(), dataPartitionIndexes.end(), i) == dataPartitionIndexes.end()) {
+                    fixedBytes += plannedBytes[i];
+                }
+            }
+
+            unsigned long long minimumDataBytes = 0;
+            for (size_t index : dataPartitionIndexes) {
+                minimumDataBytes += minimumBytes[index];
+            }
+
+            if (fixedBytes < targetSize) {
+                unsigned long long availableDataBytes = targetSize - fixedBytes;
+                unsigned long long baselineDataBytes = std::min(minimumDataBytes, availableDataBytes);
+                unsigned long long extraDataBytes = availableDataBytes > baselineDataBytes
+                    ? availableDataBytes - baselineDataBytes
+                    : 0;
+
+                size_t preferredIndex = dataPartitionIndexes.front();
+                for (size_t index : dataPartitionIndexes) {
+                    const RestoreVolumePlan& plan = plans[index];
+                    const RestoreVolumePlan& preferredPlan = plans[preferredIndex];
+                    bool isPreferredBootOrSystem = plan.isBootVolume || plan.isSystemVolume;
+                    bool currentPreferredBootOrSystem = preferredPlan.isBootVolume || preferredPlan.isSystemVolume;
+
+                    if ((isPreferredBootOrSystem && !currentPreferredBootOrSystem) ||
+                        (isPreferredBootOrSystem == currentPreferredBootOrSystem && plan.partitionLengthBytes > preferredPlan.partitionLengthBytes)) {
+                        preferredIndex = index;
+                    }
+                }
+
+                for (size_t index : dataPartitionIndexes) {
+                    plannedBytes[index] = minimumBytes[index];
+                }
+
+                plannedBytes[preferredIndex] += extraDataBytes;
+            }
+        }
+
         unsigned long long startMiB = 1;
         const unsigned long long minMiB = 1;
         for (size_t i = 0; i < plans.size(); ++i) {
             auto& plan = plans[i];
-            unsigned long long scaledBytes = plan.partitionLengthBytes;
-            if (targetSize > 0 && sourceTotal > targetSize) {
-                scaledBytes = (plan.partitionLengthBytes * targetSize) / sourceTotal;
-            }
+            unsigned long long scaledBytes = plannedBytes[i] > 0 ? plannedBytes[i] : plan.partitionLengthBytes;
 
             unsigned long long lengthMiB = std::max<unsigned long long>(minMiB, scaledBytes / (1024ULL * 1024ULL));
             unsigned long long endMiB = startMiB + lengthMiB;

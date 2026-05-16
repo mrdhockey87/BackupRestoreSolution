@@ -173,4 +173,46 @@ public sealed class BackupExecutorHyperVTests
             Directory.Delete(tempRoot, recursive: true);
         }
     }
+
+    [Fact]
+    public void ShouldReplaceExistingFullFileArchive_WhenSelectedFilesBackupUsesJobNameArchive_ReturnsTrue()
+    {
+        var job = new BackupJob
+        {
+            Type = BackupType.SelectedFilesAndFolders,
+            Target = BackupTarget.FilesAndFolders
+        };
+
+        bool result = BackupExecutor.ShouldReplaceExistingFullFileArchive(job, isHyperVBackup: false, isSelectedFilesHistoryBackup: true);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldReplaceExistingFullFileArchive_WhenFullFilesBackup_ReturnsTrue()
+    {
+        var job = new BackupJob
+        {
+            Type = BackupType.Full,
+            Target = BackupTarget.FilesAndFolders
+        };
+
+        bool result = BackupExecutor.ShouldReplaceExistingFullFileArchive(job, isHyperVBackup: false, isSelectedFilesHistoryBackup: false);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void GetSelectedFilesHistoryArchivePath_WhenSelectedFilesBackup_UsesJobNameArchive()
+    {
+        var job = new BackupJob
+        {
+            Name = "Files-Folder",
+            DestinationPath = @"X:\BackupApplications\Files-Folders"
+        };
+
+        string archivePath = BackupExecutor.GetSelectedFilesHistoryArchivePathForTest(job, new DateTime(2026, 5, 16, 14, 35, 15));
+
+        Assert.Equal(@"X:\BackupApplications\Files-Folders\Files-Folder.ssb", archivePath);
+    }
 }

@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.82";
+        private static readonly string version_fallback_number = "6.2.4.96";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,48 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.96 Fixed Selected Files and Folder single-file backup capture when appending to the
+ *                  shared job archive by capturing selected files through their parent folder with an
+ *                  exact-path filter, avoiding WIM error 267 on direct file-path captures. mdail 5/16/2026
+ * Version 6.2.4.95 Changed Selected Files and Folder backup naming to use the plain job archive name
+ *                  like other backups, so the backup file is now JobName.ssb instead of including the
+ *                  SelectedFiles timestamp suffix. mdail 5/16/2026
+ * Version 6.2.4.94 Fixed Selected Files and Folder backup execution so all selected items now append
+ *                  into one .ssb archive for the run instead of trying to recreate the same file for each
+ *                  selected path and failing on later items with file-exists/open errors. mdail 5/16/2026
+ * Version 6.2.4.93 Fixed Selected Files and Folder backup metadata writing so file/folder backups now
+ *                  update the captured image name through the loaded-image WIM metadata path, avoiding
+ *                  XML error 1465 when saving backup metadata for selected file and folder jobs. mdail 5/16/2026
+ * Version 6.2.4.92 Selected Files jobs now save source-root anchors such as the backing disk or volume
+ *                  alongside the exact saved file list, and BackupWindowNew uses those anchors during edit
+ *                  replay so the correct drive and volume can be marked before lazy folder selection reloads. mdail 5/16/2026
+ * Version 6.2.4.91 Fixed the BackupWindowNew Selected Files tree replay again so saved file picks now restore
+ *                  checked and partial state on drives, volumes, and folders, and expanding a partially selected
+ *                  folder reapplies the saved child file checks after lazy loading. mdail 5/16/2026
+ * Version 6.2.4.90 Fixed the BackupWindowNew file/folder edit reload path so saved Selected Files lists lazily
+ *                  repopulate and re-check the tree correctly, and restored the animated loading indicator for
+ *                  Loading... nodes in the data-bound source tree. mdail 5/16/2026
+ * Version 6.2.4.89 Fixed the BackupWindowNew data-bound source tree follow-up so background drive and folder
+ *                  discovery no longer mutates bound ObservableCollections off the dispatcher thread, preventing
+ *                  the CollectionView cross-thread exception while keeping tree loading responsive. mdail 5/16/2026
+ * Version 6.2.4.88 BackupWindowNew now uses a virtualized data-bound source tree instead of rebuilding
+ *                  TreeViewItem visuals in code, reducing first-load stalls and keeping lazy folder loading
+ *                  off the UI thread so the New Backup window no longer freezes as easily while browsing. mdail 5/16/2026
+ * Version 6.2.4.87 Fixed Selected Files & Folder job saving so valid checked file and folder selections no longer
+ *                  fail validation from parent tree nodes, and persisted Selected Files lists now reload for edit
+ *                  and are used during backup execution while retention days continue saving in the job record. mdail 5/16/2026
+ * Version 6.2.4.86 BackupEngine now writes per-volume used-space bytes into disk/volume restore
+ *                  metadata, and LinuxRestore reads that field so metadata-driven disk sizing can
+ *                  use actual used data plus overhead instead of only original partition length. mdail 5/16/2026
+ * Version 6.2.4.85 LinuxRestore GTK and ncurses UI restore flows now give extra target space to
+ *                  the preferred boot/system data partition by default instead of proportionally
+ *                  shrinking all partitions during metadata-driven disk reconstruction. mdail 5/16/2026
+ * Version 6.2.4.84 VolumeConfigurationWindow now lets resizable restore volumes shrink to the
+ *                  actual data-based minimum, still defaults the layout to fill the target disk,
+ *                  and gives the boot/system data volume the largest share of extra space. mdail 5/16/2026
+ * Version 6.2.4.83 BackupWindowNew now saves Selected Files and Folder job selections to a separate
+ *                  JobName list.json file so the exact checked file and folder list is preserved with
+ *                  the job for later execution and editing. mdail 5/16/2026
  * Version 6.2.4.82 RestoreWindowNew now keeps disk and volume restore logs at a troubleshooting level,
  *                  removing per-file and per-folder restore entries while adding partitioning, formatting,
  *                  resize, and restore-stage entries that better explain restore progress and failures. mdail 5/15/2026

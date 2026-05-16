@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using SecureServerBackupCommon;
 using SecureServerBackup.Windows;
 using SecureServerBackup.Models;
@@ -183,12 +184,72 @@ public sealed class BackupWindowNewTreeTests : IDisposable
         Assert.True(allowed);
     }
 
+    [Fact]
+    public void RequiresLazyLoad_WhenVolumeNotLoaded_ReturnsTrue()
+    {
+        DriveTreeItem item = new()
+        {
+            Name = "C: (Data)",
+            FullPath = @"C:\",
+            ResolvedPath = @"C:\",
+            ItemType = DriveTreeItemType.Volume,
+            ChildrenLoaded = false
+        };
+
+        bool requiresLazyLoad = InvokeRequiresLazyLoad(item);
+
+        Assert.True(requiresLazyLoad);
+    }
+
+    [Fact]
+    public void RequiresLazyLoad_WhenFolderWithoutResolvedPath_ReturnsFalse()
+    {
+        DriveTreeItem item = new()
+        {
+            Name = "Folder",
+            FullPath = "Folder",
+            ResolvedPath = string.Empty,
+            ItemType = DriveTreeItemType.Folder,
+            ChildrenLoaded = false
+        };
+
+        bool requiresLazyLoad = InvokeRequiresLazyLoad(item);
+
+        Assert.False(requiresLazyLoad);
+    }
+
+    [Fact]
+    public void RequiresLazyLoad_WhenChildrenAlreadyLoaded_ReturnsFalse()
+    {
+        DriveTreeItem item = new()
+        {
+            Name = "Disk.vhdx",
+            FullPath = "Disk.vhdx",
+            VirtualDiskPath = @"D:\Guests\Disk.vhdx",
+            VirtualMachineName = "VmOne",
+            ItemType = DriveTreeItemType.HyperVVirtualDisk,
+            ChildrenLoaded = true
+        };
+
+        bool requiresLazyLoad = InvokeRequiresLazyLoad(item);
+
+        Assert.False(requiresLazyLoad);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
         {
             Directory.Delete(_tempDirectory, true);
         }
+    }
+
+    private static bool InvokeRequiresLazyLoad(DriveTreeItem item)
+    {
+        MethodInfo method = typeof(BackupWindowNew).GetMethod("RequiresLazyLoad", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("BackupWindowNew.RequiresLazyLoad was not found.");
+
+        return Assert.IsType<bool>(method.Invoke(null, [item]));
     }
 }
 

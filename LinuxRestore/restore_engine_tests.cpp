@@ -72,8 +72,46 @@ int main()
     allPassed &= Expect(plan.sourceDiskNumber == 2, "Metadata parsing should capture source disk number.");
     allPassed &= Expect(plan.partitionNumber == 3, "Metadata parsing should capture partition number.");
     allPassed &= Expect(plan.imageIndex == 4, "Metadata parsing should capture image index.");
+    allPassed &= Expect(plan.sourceUsedSpaceBytes == 6442450944ULL, "Metadata parsing should capture source used-space bytes.");
     allPassed &= Expect(plan.isBootVolume, "Metadata parsing should capture boot volume flag.");
     allPassed &= Expect(plan.isSystemVolume, "Metadata parsing should capture system volume flag.");
+
+    RestoreEngine::RestoreVolumePlan dataPlan;
+    dataPlan.partitionLengthBytes = 10737418240ULL;
+    dataPlan.sourceUsedSpaceBytes = 4294967296ULL;
+    dataPlan.sourceFileSystem = "NTFS";
+    dataPlan.isBootVolume = true;
+    dataPlan.isSystemVolume = true;
+
+    RestoreEngine::RestoreVolumePlan fixedPlan;
+    fixedPlan.partitionLengthBytes = 1073741824ULL;
+    fixedPlan.sourceFileSystem = "FAT32";
+    fixedPlan.isHiddenPartition = true;
+
+    const std::string targetDevice = "/dev/nonexistent-test-device";
+    std::vector<RestoreEngine::RestoreVolumePlan> sizingPlans{ dataPlan, fixedPlan };
+    std::vector<unsigned long long> plannedMinimums;
+    plannedMinimums.reserve(sizingPlans.size());
+    for (const auto& sizingPlan : sizingPlans) {
+        unsigned long long minimumBytes = sizingPlan.partitionLengthBytes;
+        std::string fsType = sizingPlan.sourceFileSystem;
+        std::transform(fsType.begin(), fsType.end(), fsType.begin(), ::tolower);
+        bool isGrowableDataPartition = (fsType.find("ntfs") != std::string::npos ||
+                                        fsType.find("ext") != std::string::npos ||
+                                        fsType.find("xfs") != std::string::npos ||
+                                        fsType.find("btrfs") != std::string::npos ||
+                                        fsType.find("refs") != std::string::npos) &&
+                                       !sizingPlan.isHiddenPartition;
+        if (isGrowableDataPartition && sizingPlan.sourceUsedSpaceBytes > 0) {
+            unsigned long long usedSpaceWithOverhead = sizingPlan.sourceUsedSpaceBytes + (sizingPlan.sourceUsedSpaceBytes / 10ULL);
+            minimumBytes = std::min(sizingPlan.partitionLengthBytes, std::max(usedSpaceWithOverhead, 1ULL));
+        }
+
+        plannedMinimums.push_back(minimumBytes);
+    }
+
+    allPassed &= Expect(plannedMinimums[0] == 4724464025ULL, "Linux sizing minimum should use source used-space bytes plus 10 percent overhead for growable data partitions.");
+    allPassed &= Expect(plannedMinimums[1] == 1073741824ULL, "Linux sizing minimum should keep original partition length for fixed or hidden partitions.");
 
     RestoreEngine::RestoreVolumePlan invalidPlan;
     allPassed &= Expect(!engine.ParseRestoreMetadataBlob("<BACKUPRESTOREMETADATA></BACKUPRESTOREMETADATA>", invalidPlan), "ParseRestoreMetadataBlob should reject metadata without a source disk number.");

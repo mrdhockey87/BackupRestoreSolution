@@ -35,13 +35,99 @@ namespace {
         return static_cast<DWORD>((xml.length() + 1) * sizeof(wchar_t));
     }
 
+    HANDLE OpenWimArchiveForFileBackup(const std::wstring& wimPath, DWORD* creationResult) {
+        if (fs::exists(wimPath)) {
+            return WIMCreateFile(
+                wimPath.c_str(),
+                WIM_GENERIC_READ | WIM_GENERIC_WRITE,
+                WIM_OPEN_EXISTING,
+                0,
+                0,
+                nullptr);
+        }
+
+        DWORD localCreationResult = 0;
+        HANDLE hWim = WIMCreateFile(
+            wimPath.c_str(),
+            WIM_GENERIC_WRITE,
+            WIM_CREATE_NEW,
+            WIM_FLAG_VERIFY | WIM_FLAG_SHARE_WRITE,
+            WIM_COMPRESS_LZMS,
+            &localCreationResult);
+
+        if (creationResult != nullptr) {
+            *creationResult = localCreationResult;
+        }
+
+        return hWim;
+    }
+
+    std::wstring UpsertImageXmlElement(const std::wstring& xml, const std::wstring& elementName, const std::wstring& elementValue) {
+        const std::wstring openTag = L"<" + elementName + L">";
+        const std::wstring closeTag = L"</" + elementName + L">";
+
+        size_t elementStart = xml.find(openTag);
+        if (elementStart != std::wstring::npos) {
+            size_t valueStart = elementStart + openTag.length();
+            size_t elementEnd = xml.find(closeTag, valueStart);
+            if (elementEnd != std::wstring::npos) {
+                return xml.substr(0, valueStart) + elementValue + xml.substr(elementEnd);
+            }
+        }
+
+        const std::wstring imageCloseTag = L"</IMAGE>";
+        size_t imageClose = xml.rfind(imageCloseTag);
+        if (imageClose != std::wstring::npos) {
+            return xml.substr(0, imageClose) + openTag + elementValue + closeTag + xml.substr(imageClose);
+        }
+
+        return L"<IMAGE>" + openTag + elementValue + closeTag + L"</IMAGE>";
+    }
+
     // Context structure for WIM capture with user exclusions
     struct FileBackupContext {
         const wchar_t** userExclusions;
         int userExclusionCount;
         ProgressCallback callback;
         int filesProcessed;
+        std::wstring exactPathFilter;
+        std::wstring captureRootPath;
     };
+
+    std::wstring NormalizePathForComparison(const std::wstring& path) {
+        std::wstring normalized = path;
+        std::replace(normalized.begin(), normalized.end(), L'/', L'\\');
+
+        while (normalized.length() > 3 && !normalized.empty() && normalized.back() == L'\\') {
+            normalized.pop_back();
+        }
+
+        return normalized;
+    }
+
+    bool ShouldIncludeExactPath(const FileBackupContext* context, const std::wstring& path) {
+        if (context == nullptr || context->exactPathFilter.empty()) {
+            return true;
+        }
+
+        std::wstring normalizedPath = NormalizePathForComparison(path);
+        if (_wcsicmp(normalizedPath.c_str(), context->exactPathFilter.c_str()) == 0) {
+            return true;
+        }
+
+        if (!context->captureRootPath.empty() && _wcsicmp(normalizedPath.c_str(), context->captureRootPath.c_str()) == 0) {
+            return true;
+        }
+
+        std::wstring prefix = normalizedPath;
+        if (!prefix.empty() && prefix.back() != L'\\') {
+            prefix += L'\\';
+        }
+
+        return !prefix.empty() &&
+               context->exactPathFilter.length() > prefix.length() &&
+               _wcsnicmp(context->exactPathFilter.c_str(), prefix.c_str(), prefix.length()) == 0;
+    }
 
     // WIM callback for file backup with exclusion filtering
     static DWORD WINAPI FileBackupCallback(DWORD msgId, WPARAM wParam, LPARAM lParam, PVOID pvContext) {
@@ -54,6 +140,11 @@ namespace {
                     const wchar_t* filePath = (const wchar_t*)wParam;
                     BOOL* pbInclude = (BOOL*)lParam;
                     std::wstring path(filePath);
+
+                    if (!ShouldIncludeExactPath(context, path)) {
+                        *pbInclude = FALSE;
+                        return WIM_MSG_SUCCESS;
+                    }
 
                     // Use centralized two-tier exclusion checking (system + user exclusions)
                     if (BackupEngine::Common::IsPathExcluded(path, context->userExclusions, context->userExclusionCount)) {
@@ -155,22 +246,16 @@ extern "C" {
                 callback(5, L"Creating backup archive...");
             }
 
-            // Create WIM file for backup
+            // Create or open WIM file for backup
             DWORD creationResult = 0;
-            HANDLE hWim = WIMCreateFile(
-                wimPath.c_str(),
-                WIM_GENERIC_WRITE,
-                WIM_CREATE_NEW,
-                WIM_FLAG_VERIFY | WIM_FLAG_SHARE_WRITE,
-                WIM_COMPRESS_LZMS,
-                &creationResult);
+            HANDLE hWim = OpenWimArchiveForFileBackup(wimPath, &creationResult);
 
             if (!hWim || hWim == INVALID_HANDLE_VALUE) {
                 DWORD error = ::GetLastError();
-                std::wstring errorMsg = L"Failed to create backup archive: " + wimPath + 
+                std::wstring errorMsg = L"Failed to open backup archive: " + wimPath + 
                                        L" (Error: " + std::to_wstring(error) + L")";
                 SetLastErrorMessage(errorMsg);
-                if (logCallback) logCallback(3, L"Failed to create WIM file", errorMsg.c_str());
+                if (logCallback) logCallback(3, L"Failed to open WIM file", errorMsg.c_str());
                 return -4;
             }
 
@@ -184,6 +269,23 @@ extern "C" {
             context.userExclusionCount = userExclusionCount;
             context.callback = callback;
             context.filesProcessed = 0;
+            context.exactPathFilter.clear();
+            context.captureRootPath.clear();
+
+            std::wstring capturePath = sourceStr;
+            if (isFile) {
+                fs::path sourceFilePath(sourceStr);
+                fs::path parentPath = sourceFilePath.parent_path();
+                if (parentPath.empty()) {
+                    SetLastErrorMessage(L"Could not determine parent directory for selected file backup");
+                    WIMCloseHandle(hWim);
+                    return -3;
+                }
+
+                capturePath = parentPath.wstring();
+                context.exactPathFilter = NormalizePathForComparison(sourceStr);
+                context.captureRootPath = NormalizePathForComparison(capturePath);
+            }
 
             // Register callback
             WIMRegisterMessageCallback(hWim, reinterpret_cast<FARPROC>(FileBackupCallback), &context);
@@ -193,7 +295,7 @@ extern "C" {
             }
 
             // Capture the source into WIM
-            HANDLE hImage = WIMCaptureImage(hWim, sourcePath, 0);
+            HANDLE hImage = WIMCaptureImage(hWim, capturePath.c_str(), 0);
 
             // Unregister callback
             WIMUnregisterMessageCallback(hWim, reinterpret_cast<FARPROC>(FileBackupCallback));
@@ -224,11 +326,53 @@ extern "C" {
             }
 
             std::wstring sanitizedImageName = SanitizeXmlName(imageName);
-            std::wstring imageXml = L"<IMAGE><NAME>" + sanitizedImageName + L"</NAME></IMAGE>";
+            wchar_t tempPath[MAX_PATH] = {};
+            if (GetTempPathW(MAX_PATH, tempPath)) {
+                WIMSetTemporaryPath(hWim, tempPath);
+            }
+
+            int imageIndex = WIMGetImageCount(hWim);
+            HANDLE hImageForMetadata = imageIndex > 0 ? WIMLoadImage(hWim, imageIndex) : INVALID_HANDLE_VALUE;
+            if (!hImageForMetadata || hImageForMetadata == INVALID_HANDLE_VALUE) {
+                DWORD error = ::GetLastError();
+                if (hImage != INVALID_HANDLE_VALUE) {
+                    WIMCloseHandle(hImage);
+                }
+                WIMCloseHandle(hWim);
+
+                std::wstring errorMsg = L"Failed to load captured image for metadata. Error: " + std::to_wstring(error);
+                SetLastErrorMessage(errorMsg);
+                if (logCallback) logCallback(3, L"Failed to load captured image for metadata", errorMsg.c_str());
+                return -5;
+            }
+
+            std::wstring imageXml;
+            wchar_t* existingXmlInfo = nullptr;
+            DWORD existingXmlSize = 0;
+
+            if (WIMGetImageInformation(hImageForMetadata, reinterpret_cast<LPVOID*>(&existingXmlInfo), &existingXmlSize) &&
+                existingXmlInfo != nullptr && existingXmlSize >= sizeof(wchar_t)) {
+                imageXml.assign(existingXmlInfo);
+                imageXml = UpsertImageXmlElement(imageXml, L"NAME", sanitizedImageName);
+                LocalFree(existingXmlInfo);
+                existingXmlInfo = nullptr;
+            }
+            else {
+                if (existingXmlInfo != nullptr) {
+                    LocalFree(existingXmlInfo);
+                    existingXmlInfo = nullptr;
+                }
+
+                imageXml = L"<IMAGE><NAME>" + sanitizedImageName + L"</NAME></IMAGE>";
+            }
+
             DWORD xmlSize = GetUnicodeXmlBufferSize(imageXml);
 
-            if (!WIMSetImageInformation(hImage, const_cast<wchar_t*>(imageXml.c_str()), xmlSize)) {
+            if (!WIMSetImageInformation(hImageForMetadata, const_cast<wchar_t*>(imageXml.c_str()), xmlSize)) {
                 DWORD error = ::GetLastError();
+                if (hImageForMetadata != INVALID_HANDLE_VALUE) {
+                    WIMCloseHandle(hImageForMetadata);
+                }
                 if (hImage != INVALID_HANDLE_VALUE) {
                     WIMCloseHandle(hImage);
                 }
@@ -239,6 +383,10 @@ extern "C" {
                 SetLastErrorMessage(errorMsg);
                 if (logCallback) logCallback(3, L"Failed to set backup metadata", errorMsg.c_str());
                 return -5;
+            }
+
+            if (hImageForMetadata != INVALID_HANDLE_VALUE) {
+                WIMCloseHandle(hImageForMetadata);
             }
 
             // Close handles

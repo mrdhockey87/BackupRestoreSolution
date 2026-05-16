@@ -47,6 +47,15 @@ namespace SecureServerBackupService
             return HasHyperVBackupArchive(destinationPath, requireLegacyFullPoint: true);
         }
 
+        public static bool ShouldReplaceExistingFullFileArchive(BackupJob job, bool isHyperVBackup, bool isSelectedFilesHistoryBackup)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            return !isHyperVBackup &&
+                   job.Target == BackupTarget.FilesAndFolders &&
+                   (job.Type == BackupType.Full || job.Type == BackupType.SelectedFilesAndFolders);
+        }
+
         private static bool HasHyperVBackupArchive(string destinationPath, bool requireLegacyFullPoint)
         {
             if (string.IsNullOrWhiteSpace(destinationPath))
@@ -116,7 +125,12 @@ namespace SecureServerBackupService
         {
             ArgumentNullException.ThrowIfNull(job);
 
-            return Path.Combine(job.DestinationPath, $"{job.Name}_SelectedFiles_{timestamp:yyyyMMdd_HHmmss}.ssb");
+            return Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+        }
+
+        public static string GetSelectedFilesHistoryArchivePathForTest(BackupJob job, DateTime timestamp)
+        {
+            return GetSelectedFilesHistoryArchivePath(job, timestamp);
         }
 
         private static IReadOnlyList<string> GetSelectedFilesHistoryArchives(string destinationPath, string jobName)
@@ -131,6 +145,19 @@ namespace SecureServerBackupService
                 .OrderByDescending(File.GetLastWriteTimeUtc)
                 .ThenByDescending(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+        }
+
+        private static IReadOnlyList<string> ResolveSourcePaths(BackupJob job)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            if (job.Type != BackupType.SelectedFilesAndFolders)
+            {
+                return job.SourcePaths;
+            }
+
+            List<string> persistedPaths = SelectedFileListStore.Load(job.Name);
+            return persistedPaths.Count > 0 ? persistedPaths : job.SourcePaths;
         }
 
         private static void CleanupSelectedFilesHistoryArchives(BackupJob job, string latestArchivePath, Action<string>? logger)
@@ -714,6 +741,7 @@ namespace SecureServerBackupService
 
                         bool isHyperVBackup = job.IsHyperVBackup || job.Target == BackupTarget.HyperV;
                         bool isSelectedFilesHistoryBackup = IsSelectedFilesHistoryBackup(job);
+                        IReadOnlyList<string> sourcePaths = ResolveSourcePaths(job);
                         string? newBackupPath = isSelectedFilesHistoryBackup
                             ? GetSelectedFilesHistoryArchivePath(job, DateTime.Now)
                             : Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
@@ -727,9 +755,18 @@ namespace SecureServerBackupService
                         }
 
                         Directory.CreateDirectory(job.DestinationPath);
+
+                        bool shouldReplaceExistingFileArchive = ShouldReplaceExistingFullFileArchive(job, isHyperVBackup, isSelectedFilesHistoryBackup);
+
+                        if (shouldReplaceExistingFileArchive && File.Exists(newBackupPath))
+                        {
+                            logger?.Invoke($"Removing previous file backup archive before creating a new full backup: {Path.GetFileName(newBackupPath)}");
+                            File.Delete(newBackupPath);
+                        }
+
                         logger?.Invoke($"Creating backup file: {Path.GetFileName(newBackupPath)}");
 
-                        foreach (var sourcePath in job.SourcePaths)
+                        foreach (var sourcePath in sourcePaths)
                         {
                             if (cancellationToken.IsCancellationRequested)
                             {

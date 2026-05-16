@@ -46,6 +46,8 @@ namespace SecureServerBackup.Windows
             public TextBlock? LabelElement { get; set; } // Label text
         }
 
+        internal sealed record VolumeSizingLayout(long[] CurrentSizes, long[] MinimumSizes, long[] MaximumSizes);
+
         /// <summary>
         /// Represents a draggable resize handle between two volumes
         /// </summary>
@@ -79,6 +81,7 @@ namespace SecureServerBackup.Windows
         // Rendering state
         private bool isRendering = false;
         private bool isResetting = false; // Track when reset is in progress
+        private readonly List<VolumeInfo> sourceVolumes;
         
         // Constants
         private const double CANVAS_HEIGHT = 80;
@@ -96,24 +99,47 @@ namespace SecureServerBackup.Windows
         {
             InitializeComponent();
             
+            sourceVolumes = sourceVols.Select(volume => new VolumeInfo
+            {
+                Label = volume.Label,
+                Size = volume.Size,
+                UsedSpace = volume.UsedSpace,
+                IsResizable = volume.IsResizable,
+                IsSystemVolume = volume.IsSystemVolume,
+                FileSystem = volume.FileSystem,
+                AllocationUnitSize = volume.AllocationUnitSize,
+                ImageIndex = volume.ImageIndex,
+                PartitionNumber = volume.PartitionNumber,
+                PartitionOffsetBytes = volume.PartitionOffsetBytes,
+                PartitionLengthBytes = volume.PartitionLengthBytes,
+                PartitionStyle = volume.PartitionStyle,
+                PartitionType = volume.PartitionType,
+                SourceVolumeGuidPath = volume.SourceVolumeGuidPath,
+                SourceVolumeMountPath = volume.SourceVolumeMountPath,
+                IsBootVolume = volume.IsBootVolume,
+                TargetSize = volume.TargetSize
+            }).ToList();
+
             targetTotalSize = targetSize;
             sourceAllocationUnitSize = sourceAUS;
             targetAllocationUnitSize = targetAUS;
+
+            VolumeSizingLayout defaultLayout = CalculateDefaultLayout(sourceVolumes, targetTotalSize, sourceAllocationUnitSize, targetAllocationUnitSize);
             
             // Convert VolumeInfo to InteractiveVolumeInfo
-            volumes = sourceVols.Select((v, idx) => new InteractiveVolumeInfo
+            volumes = sourceVolumes.Select((v, idx) => new InteractiveVolumeInfo
             {
                 Index = idx,
                 Label = v.Label,
                 OriginalSize = v.Size,
-                CurrentSize = v.Size,  // Initially same as original
+                CurrentSize = defaultLayout.CurrentSizes[idx],
                 UsedSpace = v.UsedSpace,
                 IsResizable = CanVolumeBeResized(v),
                 IsSystemVolume = v.IsSystemVolume,
                 FileSystem = v.FileSystem,
                 AllocationUnitSize = v.AllocationUnitSize,
-                MinSize = CalculateMinimumSize(v),
-                MaxSize = v.Size,  // Will be recalculated based on target
+                MinSize = defaultLayout.MinimumSizes[idx],
+                MaxSize = defaultLayout.MaximumSizes[idx],
                 Source = v
             }).ToList();
             
@@ -149,50 +175,6 @@ namespace SecureServerBackup.Windows
                 
                 txtCalculatingStatus.Text = "Calculating volume constraints...";
                 await Task.Delay(50);
-
-                // Calculate max sizes for resizable volumes
-                long nonResizableSpace = volumes.Where(v => !v.IsResizable).Sum(v => v.CurrentSize);
-                long availableForResizable = targetTotalSize - nonResizableSpace;
-                long currentResizableTotal = volumes.Where(v => v.IsResizable).Sum(v => v.CurrentSize);
-                
-                // If source > target, we need to shrink resizable volumes proportionally
-                if (sourceTotalSize > targetTotalSize)
-                {
-                    long excessSpace = sourceTotalSize - targetTotalSize;
-                    
-                    foreach (var vol in volumes.Where(v => v.IsResizable))
-                    {
-                        // Proportionally reduce size
-                        double shrinkRatio = (double)vol.CurrentSize / currentResizableTotal;
-                        long reduction = (long)(excessSpace * shrinkRatio);
-                        vol.CurrentSize = Math.Max(vol.MinSize, vol.OriginalSize - reduction);
-                        vol.MaxSize = vol.OriginalSize; // Can't grow larger than original
-                    }
-                }
-                else
-                {
-                    // Source fits, calculate max sizes
-                    long extraSpace = targetTotalSize - sourceTotalSize;
-                    
-                    foreach (var vol in volumes)
-                    {
-                        if (vol.IsResizable)
-                        {
-                            // Can grow up to original size + proportional share of extra space
-                            double growthShare = (double)vol.CurrentSize / currentResizableTotal;
-                            vol.MaxSize = vol.OriginalSize + (long)(extraSpace * growthShare);
-                        }
-                        else
-                        {
-                            vol.MaxSize = vol.CurrentSize; // Fixed size
-                        }
-                    }
-
-                    foreach (var vol in volumes.Where(v => v.IsResizable))
-                    {
-                        vol.CurrentSize = vol.MaxSize;
-                    }
-                }
 
                 txtCalculatingStatus.Text = "Rendering interactive display...";
                 await Task.Delay(50);
@@ -237,7 +219,7 @@ namespace SecureServerBackup.Windows
                     if (resizableCount > 0)
                     {
                         ShowWarning($"Source ({FormatSize(sourceTotalSize)}) is larger than target ({FormatSize(targetTotalSize)}). " +
-                                   $"{resizableCount} volume(s) have been automatically resized to fit. You can adjust sizes by dragging the handles.");
+                                   $"Resizable volumes were reduced to their minimum data-based sizes. You can adjust sizes by dragging the handles.");
                     }
                     else
                     {
@@ -691,7 +673,12 @@ namespace SecureServerBackup.Windows
         #region Helper Methods
 
         private bool CanVolumeBeResized(VolumeInfo volume)
+            => CanVolumeBeResizedForLayout(volume);
+
+        internal static bool CanVolumeBeResizedForLayout(VolumeInfo volume)
         {
+            ArgumentNullException.ThrowIfNull(volume);
+
             // Criteria: NTFS and at least 10% free space
             if (!volume.FileSystem.Equals("NTFS", StringComparison.OrdinalIgnoreCase))
                 return false;
@@ -704,19 +691,106 @@ namespace SecureServerBackup.Windows
         }
 
         private long CalculateMinimumSize(VolumeInfo volume)
+            => CalculateMinimumSizeForLayout(volume, sourceAllocationUnitSize, targetAllocationUnitSize);
+
+        internal static long CalculateMinimumSizeForLayout(VolumeInfo volume, int sourceAllocationUnitSize, int targetAllocationUnitSize)
         {
-            // Minimum = Used space + 10% overhead
-            return (long)(volume.UsedSpace * 1.10);
+            ArgumentNullException.ThrowIfNull(volume);
+
+            long actualUsedSpace = CalculateActualUsedSpaceForLayout(volume.UsedSpace, sourceAllocationUnitSize, targetAllocationUnitSize);
+            return (long)(actualUsedSpace * 1.10);
         }
 
         private long CalculateActualUsedSpace(InteractiveVolumeInfo volume)
+            => CalculateActualUsedSpaceForLayout(volume.UsedSpace, sourceAllocationUnitSize, targetAllocationUnitSize);
+
+        internal static long CalculateActualUsedSpaceForLayout(long usedSpace, int sourceAllocationUnitSize, int targetAllocationUnitSize)
         {
             // Account for allocation unit size differences
             if (sourceAllocationUnitSize == targetAllocationUnitSize)
-                return volume.UsedSpace;
+                return usedSpace;
 
-            long sourceUnits = (volume.UsedSpace + sourceAllocationUnitSize - 1) / sourceAllocationUnitSize;
+            long sourceUnits = (usedSpace + sourceAllocationUnitSize - 1) / sourceAllocationUnitSize;
             return sourceUnits * targetAllocationUnitSize;
+        }
+
+        internal static VolumeSizingLayout CalculateDefaultLayout(IReadOnlyList<VolumeInfo> sourceVolumes, long targetTotalSize, int sourceAllocationUnitSize, int targetAllocationUnitSize)
+        {
+            ArgumentNullException.ThrowIfNull(sourceVolumes);
+            if (targetTotalSize <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(targetTotalSize));
+            }
+
+            long[] currentSizes = new long[sourceVolumes.Count];
+            long[] minimumSizes = new long[sourceVolumes.Count];
+            long[] maximumSizes = new long[sourceVolumes.Count];
+            bool[] resizable = new bool[sourceVolumes.Count];
+
+            for (int i = 0; i < sourceVolumes.Count; i++)
+            {
+                VolumeInfo volume = sourceVolumes[i];
+                resizable[i] = CanVolumeBeResizedForLayout(volume);
+                minimumSizes[i] = resizable[i]
+                    ? CalculateMinimumSizeForLayout(volume, sourceAllocationUnitSize, targetAllocationUnitSize)
+                    : volume.Size;
+                currentSizes[i] = minimumSizes[i];
+            }
+
+            long remainingSpace = targetTotalSize - currentSizes.Sum();
+            int preferredGrowthIndex = GetPreferredGrowthVolumeIndex(sourceVolumes, resizable);
+            if (remainingSpace > 0 && preferredGrowthIndex >= 0)
+            {
+                currentSizes[preferredGrowthIndex] += remainingSpace;
+            }
+
+            for (int i = 0; i < sourceVolumes.Count; i++)
+            {
+                if (!resizable[i])
+                {
+                    maximumSizes[i] = sourceVolumes[i].Size;
+                    currentSizes[i] = sourceVolumes[i].Size;
+                    minimumSizes[i] = sourceVolumes[i].Size;
+                    continue;
+                }
+
+                long reservedSpace = 0;
+                for (int j = 0; j < sourceVolumes.Count; j++)
+                {
+                    if (i == j)
+                    {
+                        continue;
+                    }
+
+                    reservedSpace += resizable[j] ? minimumSizes[j] : sourceVolumes[j].Size;
+                }
+
+                maximumSizes[i] = Math.Max(minimumSizes[i], targetTotalSize - reservedSpace);
+                currentSizes[i] = Math.Min(currentSizes[i], maximumSizes[i]);
+            }
+
+            return new VolumeSizingLayout(currentSizes, minimumSizes, maximumSizes);
+        }
+
+        private static int GetPreferredGrowthVolumeIndex(IReadOnlyList<VolumeInfo> sourceVolumes, IReadOnlyList<bool> resizable)
+        {
+            List<int> resizableIndexes = Enumerable.Range(0, sourceVolumes.Count)
+                .Where(index => resizable[index])
+                .ToList();
+
+            if (resizableIndexes.Count == 0)
+            {
+                return -1;
+            }
+
+            List<int> bootOrSystemIndexes = resizableIndexes
+                .Where(index => sourceVolumes[index].IsBootVolume || sourceVolumes[index].IsSystemVolume)
+                .ToList();
+
+            List<int> candidateIndexes = bootOrSystemIndexes.Count > 0 ? bootOrSystemIndexes : resizableIndexes;
+            return candidateIndexes
+                .OrderByDescending(index => sourceVolumes[index].Size)
+                .First();
         }
 
         private void UpdateStatusBar()
@@ -727,6 +801,16 @@ namespace SecureServerBackup.Windows
             long sourceTotalSize = volumes.Sum(v => v.OriginalSize);
             txtSpaceInfo.Text = $"Source: {FormatSize(sourceTotalSize)} ? Current: {FormatSize(currentTotal)} " +
                                $"(Free: {FormatSize(extraSpace)})";
+        }
+
+        private void ApplyLayout(VolumeSizingLayout layout)
+        {
+            for (int i = 0; i < volumes.Count; i++)
+            {
+                volumes[i].CurrentSize = layout.CurrentSizes[i];
+                volumes[i].MinSize = layout.MinimumSizes[i];
+                volumes[i].MaxSize = layout.MaximumSizes[i];
+            }
         }
 
         private void ShowWarning(string message)
@@ -765,55 +849,7 @@ namespace SecureServerBackup.Windows
                 // Flag that reset is in progress (prevents SelectVolume from rendering prematurely)
                 isResetting = true;
                 
-                // Reset to original sizes FIRST
-                foreach (var vol in volumes)
-                {
-                    vol.CurrentSize = vol.OriginalSize;
-                }
-
-                // Recalculate constraints after reset (same logic as initial AnalyzeAndRender)
-                long sourceTotalSize = volumes.Sum(v => v.OriginalSize);
-                long currentResizableTotal = volumes.Where(v => v.IsResizable).Sum(v => v.CurrentSize);
-                
-                if (sourceTotalSize > targetTotalSize)
-                {
-                    // Source larger than target - shrink resizable volumes proportionally
-                    long excessSpace = sourceTotalSize - targetTotalSize;
-                    
-                    foreach (var vol in volumes.Where(v => v.IsResizable))
-                    {
-                        // Proportionally reduce size (same as initial auto-sizing)
-                        double shrinkRatio = (double)vol.CurrentSize / currentResizableTotal;
-                        long reduction = (long)(excessSpace * shrinkRatio);
-                        vol.CurrentSize = Math.Max(vol.MinSize, vol.OriginalSize - reduction);
-                        vol.MaxSize = vol.OriginalSize; // Can't grow larger than original
-                    }
-                    
-                    // Non-resizable volumes keep original size
-                    foreach (var vol in volumes.Where(v => !v.IsResizable))
-                    {
-                        vol.MaxSize = vol.CurrentSize;
-                    }
-                }
-                else
-                {
-                    // Source fits - calculate growth potential
-                    long extraSpace = targetTotalSize - sourceTotalSize;
-                    
-                    foreach (var vol in volumes)
-                    {
-                        if (vol.IsResizable)
-                        {
-                            // Can grow up to original size + proportional share of extra space
-                            double growthShare = (double)vol.CurrentSize / currentResizableTotal;
-                            vol.MaxSize = vol.OriginalSize + (long)(extraSpace * growthShare);
-                        }
-                        else
-                        {
-                            vol.MaxSize = vol.CurrentSize;
-                        }
-                    }
-                }
+                ApplyLayout(CalculateDefaultLayout(sourceVolumes, targetTotalSize, sourceAllocationUnitSize, targetAllocationUnitSize));
 
                 // Deselect without rendering (we'll render once at the end)
                 DeselectVolume(skipRender: true);
