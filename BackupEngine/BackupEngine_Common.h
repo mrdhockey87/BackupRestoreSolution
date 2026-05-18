@@ -10,6 +10,22 @@ namespace BackupEngine {
 namespace Common {
 
     // ============================================================================
+    // CURRENT JOB CONTEXT
+    // Shared across backup engine translation units so one backup run can reuse
+    // the same start timestamp for all emitted metadata.
+    // ============================================================================
+
+    void SetCurrentJobContext(const wchar_t* jobName);
+
+    void ClearCurrentJobContext();
+
+    std::wstring GetCurrentJobName();
+
+    std::wstring GetCurrentJobBackupStartTimestamp();
+
+    std::wstring GetCurrentLocalTimestamp();
+
+    // ============================================================================
     // WILDCARD PATTERN MATCHING
     // Supports patterns like *.tmp, *.log, D:\Build\*.dll
     // ============================================================================

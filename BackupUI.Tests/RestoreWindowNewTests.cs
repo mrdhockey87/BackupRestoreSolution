@@ -487,4 +487,152 @@ public sealed class BackupWindowNewTreeTests : IDisposable
 
         Assert.False(result);
     }
+
+    [Fact]
+    public void CreateRestorePointsForBackupFile_WhenArchiveContainsTwoVolumesWithRestoreMetadata_ReturnsSinglePoint()
+    {
+        DateTime timestamp = new(2026, 5, 18, 10, 30, 0);
+        IReadOnlyList<RestorePointArchiveImage> archiveImages =
+        [
+            new RestorePointArchiveImage
+            {
+                ImageIndex = 2,
+                VolumeLabel = "Data",
+                PartitionOffsetBytes = 2048,
+                VolumeIndex = 2,
+                CollapseToSingleRestorePoint = true
+            },
+            new RestorePointArchiveImage
+            {
+                ImageIndex = 1,
+                VolumeLabel = "System",
+                PartitionOffsetBytes = 1024,
+                VolumeIndex = 1,
+                CollapseToSingleRestorePoint = true
+            }
+        ];
+
+        IReadOnlyList<RestorePoint> restorePoints = RestoreWindowNew.CreateRestorePointsForBackupFile(
+            @"C:\Backups\WDrive_incremental.ssb",
+            "Incremental",
+            timestamp,
+            1,
+            archiveImages);
+
+        RestorePoint restorePoint = Assert.Single(restorePoints);
+        Assert.Equal("Point 1: Incremental Backup", restorePoint.DisplayName);
+        Assert.Equal(0, restorePoint.ImageIndex);
+    }
+
+    [Fact]
+    public void CreateRestorePointsForBackupFile_WhenArchiveContainsTwoVolumesWithoutRestoreMetadata_ReturnsOnePointPerVolume()
+    {
+        DateTime timestamp = new(2026, 5, 18, 10, 30, 0);
+        IReadOnlyList<RestorePointArchiveImage> archiveImages =
+        [
+            new RestorePointArchiveImage
+            {
+                ImageIndex = 2,
+                VolumeLabel = "Data",
+                PartitionOffsetBytes = 2048,
+                VolumeIndex = 2
+            },
+            new RestorePointArchiveImage
+            {
+                ImageIndex = 1,
+                VolumeLabel = "System",
+                PartitionOffsetBytes = 1024,
+                VolumeIndex = 1
+            }
+        ];
+
+        IReadOnlyList<RestorePoint> restorePoints = RestoreWindowNew.CreateRestorePointsForBackupFile(
+            @"C:\Backups\WDrive_incremental.ssb",
+            "Incremental",
+            timestamp,
+            1,
+            archiveImages);
+
+        Assert.Equal(2, restorePoints.Count);
+        Assert.Equal("Point 1: Incremental Backup - System", restorePoints[0].DisplayName);
+        Assert.Equal(1, restorePoints[0].ImageIndex);
+        Assert.Equal("Point 2: Incremental Backup - Data", restorePoints[1].DisplayName);
+        Assert.Equal(2, restorePoints[1].ImageIndex);
+    }
+
+    [Fact]
+    public void CreateRestorePointsForBackupFile_WhenArchiveImageMetadataIsUnavailable_ReturnsSinglePoint()
+    {
+        DateTime timestamp = new(2026, 5, 18, 10, 30, 0);
+
+        IReadOnlyList<RestorePoint> restorePoints = RestoreWindowNew.CreateRestorePointsForBackupFile(
+            @"C:\Backups\WDrive_incremental.ssb",
+            "Incremental",
+            timestamp,
+            3,
+            Array.Empty<RestorePointArchiveImage>());
+
+        RestorePoint restorePoint = Assert.Single(restorePoints);
+        Assert.Equal("Point 3: Incremental Backup", restorePoint.DisplayName);
+        Assert.Equal(0, restorePoint.ImageIndex);
+    }
+
+    [Fact]
+    public void GetRestorePointTimestamp_WhenArchiveMetadataContainsBackupStartTime_ReturnsMetadataTimestamp()
+    {
+        DateTime expectedTimestamp = new(2026, 5, 18, 9, 15, 0);
+        IReadOnlyList<RestorePointArchiveImage> archiveImages =
+        [
+            new RestorePointArchiveImage
+            {
+                ImageIndex = 1,
+                BackupStartTime = expectedTimestamp.AddMinutes(2),
+                CollapseToSingleRestorePoint = true
+            },
+            new RestorePointArchiveImage
+            {
+                ImageIndex = 2,
+                BackupStartTime = expectedTimestamp,
+                CollapseToSingleRestorePoint = true
+            }
+        ];
+
+        DateTime actualTimestamp = InvokeGetRestorePointTimestamp(@"C:\Backups\DiskBackup.ssb", archiveImages);
+
+        Assert.Equal(expectedTimestamp, actualTimestamp);
+    }
+
+    [Fact]
+    public void GetRestorePointTimestamp_WhenFileBackupMetadataContainsBackupStartTime_ReturnsMetadataTimestamp()
+    {
+        string backupDirectory = Path.Combine(Path.GetTempPath(), nameof(RestoreWindowNewTests), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(backupDirectory);
+
+        try
+        {
+            DateTime expectedTimestamp = new(2026, 5, 18, 8, 45, 0);
+            File.WriteAllText(
+                Path.Combine(backupDirectory, "backup_metadata.dat"),
+                $"#BACKUP_START_TIME|{expectedTimestamp:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}sample.txt|1|2{Environment.NewLine}");
+
+            DateTime actualTimestamp = InvokeGetRestorePointTimestamp(backupDirectory, Array.Empty<RestorePointArchiveImage>());
+
+            Assert.Equal(expectedTimestamp, actualTimestamp);
+        }
+        finally
+        {
+            if (Directory.Exists(backupDirectory))
+            {
+                Directory.Delete(backupDirectory, recursive: true);
+            }
+        }
+    }
+
+    private static DateTime InvokeGetRestorePointTimestamp(string backupPath, IReadOnlyList<RestorePointArchiveImage> archiveImages)
+    {
+        MethodInfo method = typeof(RestoreWindowNew).GetMethod("GetRestorePointTimestamp", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("GetRestorePointTimestamp method was not found.");
+
+        return Assert.IsType<DateTime>(method.Invoke(null, [backupPath, archiveImages]));
+    }
 }

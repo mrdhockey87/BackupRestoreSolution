@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.2";
+        private static readonly string version_fallback_number = "6.2.5.9";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,21 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.5.9 BackupEngine now writes one shared backup start timestamp into file/folder metadata,
+ *                 disk-volume restore metadata, and backup_metadata.dat so new restore points group by
+ *                 the backup start time across the whole run. mdail 5/18/2026
+ * Version 6.2.5.8 Restore points now use the shared backup start time from metadata so file/folder and
+ *                 multi-volume backups from the same run group under one timestamp. mdail 5/18/2026
+ * Version 6.2.5.7 Multi-volume disk archives now stay as a single restore or mount point per backup
+ *                 date so the volume choice happens after selecting the backup. mdail 5/18/2026
+ * Version 6.2.5.6 Selected Files backups now stay as a single restore or mount point even when the
+ *                 archive contains multiple images, so individual files are chosen after opening it. mdail 5/18/2026
+ * Version 6.2.5.5 Restore now expands .ssb archive restore points by image/volume so incremental and
+ *                 differential backups list one restore point per backed-up volume instead of one per file. mdail 5/18/2026
+ * Version 6.2.5.4 Import Backup now only shows and validates .ssb and .wim files, removing the old
+ *                 .brs format from the import flow and its validation messages. mdail 5/18/2026
+ * Version 6.2.5.3 Import Backup now lets users browse .ssb and .wim backups, and validation accepts
+ *                 standard .ssb archives in addition to existing native formats. mdail 5/18/2026
  * Version 6.2.5.2 Moved the Add Network Path popup action buttons up to sit directly below the example
  *                 paths and shortened the dialog height now that the extra empty space is removed. mdail 5/18/2026
  * Version 6.2.5.1 New Backup now saves custom network paths between window loads and shows a small minus

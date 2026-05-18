@@ -22,31 +22,20 @@ namespace fs = std::filesystem;
 extern void SetLastErrorMessage(const std::wstring& error);
 extern "C" BACKUPENGINE_API void GetLastErrorMessage(wchar_t* buffer, int bufferSize);
 
-// ============================================================================
-// CURRENT JOB NAME TRACKING
-// Set by C# before calling backup functions via SetCurrentJobName()
-// Used by logging functions to write to job-specific log file
-// ============================================================================
-static std::wstring g_currentJobName = L"";
-static std::mutex g_jobNameMutex;
-
 // Set the current job name (called from C# before backup starts)
 extern "C" BACKUPENGINE_API void SetCurrentJobName(const wchar_t* jobName) {
-    std::lock_guard<std::mutex> lock(g_jobNameMutex);
-    g_currentJobName = jobName ? jobName : L"";
-    OutputDebugStringW((L"[BackupEngine] SetCurrentJobName: " + g_currentJobName + L"\n").c_str());
+    BackupEngine::Common::SetCurrentJobContext(jobName);
+    OutputDebugStringW((L"[BackupEngine] SetCurrentJobName: " + BackupEngine::Common::GetCurrentJobName() + L"\n").c_str());
 }
 
 // Clear the current job name (called from C# after backup completes)
 extern "C" BACKUPENGINE_API void ClearCurrentJobName() {
-    std::lock_guard<std::mutex> lock(g_jobNameMutex);
-    g_currentJobName = L"";
+    BackupEngine::Common::ClearCurrentJobContext();
 }
 
 // Get current job name (thread-safe)
 static std::wstring GetCurrentJobName() {
-    std::lock_guard<std::mutex> lock(g_jobNameMutex);
-    return g_currentJobName;
+    return BackupEngine::Common::GetCurrentJobName();
 }
 
 // ============================================================================
@@ -83,21 +72,10 @@ namespace {
     }
 
     std::wstring FormatCurrentImageTimestamp() {
-        SYSTEMTIME localTime{};
-        GetLocalTime(&localTime);
-
-        wchar_t buffer[32] = {};
-        swprintf_s(
-            buffer,
-            L"%04u-%02u-%02u %02u:%02u:%02u",
-            localTime.wYear,
-            localTime.wMonth,
-            localTime.wDay,
-            localTime.wHour,
-            localTime.wMinute,
-            localTime.wSecond);
-
-        return buffer;
+        std::wstring backupStartTimestamp = BackupEngine::Common::GetCurrentJobBackupStartTimestamp();
+        return backupStartTimestamp.empty()
+            ? BackupEngine::Common::GetCurrentLocalTimestamp()
+            : backupStartTimestamp;
     }
 
     std::wstring FormatSystemErrorMessage(DWORD errorCode) {
@@ -411,12 +389,13 @@ namespace {
         return root;
     }
 
-    std::wstring BuildDiskVolumeMetadataFragment(const DiskVolumeRestoreMetadata& metadata) {
+    std::wstring BuildDiskVolumeMetadataFragment(const DiskVolumeRestoreMetadata& metadata, const std::wstring& backupStartTime) {
         auto boolText = [](bool value) { return value ? L"true" : L"false"; };
 
         std::wstring fragment = L"<BACKUPRESTOREMETADATA>";
         fragment += L"<SCHEMA_VERSION>1</SCHEMA_VERSION>";
         fragment += L"<BACKUP_KIND>DISK_VOLUME_IMAGE</BACKUP_KIND>";
+        fragment += L"<BACKUP_START_TIME>" + SanitizeXmlName(backupStartTime) + L"</BACKUP_START_TIME>";
         fragment += L"<SOURCE_DISK_NUMBER>" + std::to_wstring(metadata.sourceDiskNumber) + L"</SOURCE_DISK_NUMBER>";
         fragment += L"<SOURCE_DISK_SIZE_BYTES>" + std::to_wstring(metadata.sourceDiskSizeBytes) + L"</SOURCE_DISK_SIZE_BYTES>";
         fragment += L"<SOURCE_USED_SPACE_BYTES>" + std::to_wstring(metadata.sourceUsedSpaceBytes) + L"</SOURCE_USED_SPACE_BYTES>";
@@ -1396,9 +1375,14 @@ std::map<std::wstring, FILETIME> LoadBackupMetadata(const std::wstring& backupPa
     void SaveBackupMetadata(const std::wstring& backupPath, 
         const std::map<std::wstring, FILETIME>& metadata) {
         std::wstring metadataFile = backupPath + L"\\backup_metadata.dat";
+        std::wstring backupStartTimestamp = BackupEngine::Common::GetCurrentJobBackupStartTimestamp();
+        if (backupStartTimestamp.empty()) {
+            backupStartTimestamp = BackupEngine::Common::GetCurrentLocalTimestamp();
+        }
         
         std::wofstream file(metadataFile, std::ios::binary);
         if (file.is_open()) {
+            file << L"#BACKUP_START_TIME|" << backupStartTimestamp << L"\n";
             for (const auto& entry : metadata) {
                 file << entry.first << L"|" 
                      << entry.second.dwLowDateTime << L"|"
@@ -1638,6 +1622,8 @@ extern "C" {
                 if (logCallback) logCallback(0, L"Creating parent directory", parentDir.wstring().c_str());
                 fs::create_directories(parentDir);
             }
+
+            std::wstring backupStartTimestamp = FormatCurrentImageTimestamp();
 
             // Enumerate volumes on this disk using IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS
             std::wstring enumMsg = L"Enumerating volumes on Disk " + std::to_wstring(diskNumber);
@@ -1913,7 +1899,7 @@ extern "C" {
 
                 // Create image name for this volume
                 std::wstring imageName = L"Disk " + std::to_wstring(diskNumber) + L" Volume " + std::to_wstring(volumeIndex);
-                std::wstring metadataFragment = BuildDiskVolumeMetadataFragment(metadata);
+                std::wstring metadataFragment = BuildDiskVolumeMetadataFragment(metadata, backupStartTimestamp);
                 LogInfo(L"BackupDisk: Capturing entire volume as single image: " + imageName);
                 LogInfo(L"BackupDisk: Source path: " + actualSourcePath);
 

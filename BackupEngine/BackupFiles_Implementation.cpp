@@ -84,6 +84,21 @@ namespace {
         return L"<IMAGE>" + openTag + elementValue + closeTag + L"</IMAGE>";
     }
 
+    std::wstring ResolveBackupStartTimestamp() {
+        std::wstring backupStartTimestamp = BackupEngine::Common::GetCurrentJobBackupStartTimestamp();
+        return backupStartTimestamp.empty()
+            ? BackupEngine::Common::GetCurrentLocalTimestamp()
+            : backupStartTimestamp;
+    }
+
+    std::wstring BuildFileBackupMetadataPayload(const std::wstring& backupStartTime) {
+        std::wstring payload;
+        payload += L"<SCHEMA_VERSION>1</SCHEMA_VERSION>";
+        payload += L"<BACKUP_KIND>FILE_FOLDER_IMAGE</BACKUP_KIND>";
+        payload += L"<BACKUP_START_TIME>" + SanitizeXmlName(backupStartTime) + L"</BACKUP_START_TIME>";
+        return payload;
+    }
+
     // Context structure for WIM capture with user exclusions
     struct FileBackupContext {
         const wchar_t** userExclusions;
@@ -325,6 +340,11 @@ extern "C" {
                 imageName = L"File Backup";
             }
 
+            std::wstring backupStartTimestamp = ResolveBackupStartTimestamp();
+            std::wstring metadataPayload = BuildFileBackupMetadataPayload(backupStartTimestamp);
+            std::wstring imageDescription = BackupEngine::Common::GetCurrentJobName().empty()
+                ? imageName
+                : BackupEngine::Common::GetCurrentJobName();
             std::wstring sanitizedImageName = SanitizeXmlName(imageName);
             wchar_t tempPath[MAX_PATH] = {};
             if (GetTempPathW(MAX_PATH, tempPath)) {
@@ -354,6 +374,8 @@ extern "C" {
                 existingXmlInfo != nullptr && existingXmlSize >= sizeof(wchar_t)) {
                 imageXml.assign(existingXmlInfo);
                 imageXml = UpsertImageXmlElement(imageXml, L"NAME", sanitizedImageName);
+                imageXml = UpsertImageXmlElement(imageXml, L"DESCRIPTION", SanitizeXmlName(imageDescription));
+                imageXml = UpsertImageXmlElement(imageXml, L"BACKUPRESTOREMETADATA", metadataPayload);
                 LocalFree(existingXmlInfo);
                 existingXmlInfo = nullptr;
             }
@@ -363,7 +385,11 @@ extern "C" {
                     existingXmlInfo = nullptr;
                 }
 
-                imageXml = L"<IMAGE><NAME>" + sanitizedImageName + L"</NAME></IMAGE>";
+                imageXml = L"<IMAGE><NAME>" + sanitizedImageName + L"</NAME><DESCRIPTION>";
+                imageXml += SanitizeXmlName(imageDescription);
+                imageXml += L"</DESCRIPTION>";
+                imageXml += L"<BACKUPRESTOREMETADATA>" + metadataPayload + L"</BACKUPRESTOREMETADATA>";
+                imageXml += L"</IMAGE>";
             }
 
             DWORD xmlSize = GetUnicodeXmlBufferSize(imageXml);

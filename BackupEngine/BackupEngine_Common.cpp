@@ -6,9 +6,56 @@
 #include "BackupEngine_Common.h"
 #include <algorithm>
 #include <cctype>
+#include <mutex>
 
 namespace BackupEngine {
 namespace Common {
+
+namespace {
+    std::wstring g_currentJobName;
+    std::wstring g_currentJobBackupStartTimestamp;
+    std::mutex g_jobContextMutex;
+}
+
+std::wstring GetCurrentLocalTimestamp() {
+    SYSTEMTIME localTime{};
+    GetLocalTime(&localTime);
+
+    wchar_t buffer[32] = {};
+    swprintf_s(
+        buffer,
+        L"%04u-%02u-%02u %02u:%02u:%02u",
+        localTime.wYear,
+        localTime.wMonth,
+        localTime.wDay,
+        localTime.wHour,
+        localTime.wMinute,
+        localTime.wSecond);
+
+    return buffer;
+}
+
+void SetCurrentJobContext(const wchar_t* jobName) {
+    std::lock_guard<std::mutex> lock(g_jobContextMutex);
+    g_currentJobName = jobName ? jobName : L"";
+    g_currentJobBackupStartTimestamp = GetCurrentLocalTimestamp();
+}
+
+void ClearCurrentJobContext() {
+    std::lock_guard<std::mutex> lock(g_jobContextMutex);
+    g_currentJobName.clear();
+    g_currentJobBackupStartTimestamp.clear();
+}
+
+std::wstring GetCurrentJobName() {
+    std::lock_guard<std::mutex> lock(g_jobContextMutex);
+    return g_currentJobName;
+}
+
+std::wstring GetCurrentJobBackupStartTimestamp() {
+    std::lock_guard<std::mutex> lock(g_jobContextMutex);
+    return g_currentJobBackupStartTimestamp;
+}
 
 // ========================================================================
 // WILDCARD PATTERN MATCHING

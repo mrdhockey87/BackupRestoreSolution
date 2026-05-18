@@ -227,13 +227,11 @@ namespace BackupEngine {
 
     bool BrsFileManager::ValidateBackupFile(
         const wchar_t* filePath,
-        bool* isBrsFormat,
         bool* isCompressed,
         BrsHeader* header,
         wchar_t* errorMsg,
         int errorMsgSize
     ) {
-        *isBrsFormat = false;
         *isCompressed = false;
 
         // Check file extension
@@ -241,23 +239,41 @@ namespace BackupEngine {
         std::wstring ext = path.substr(path.find_last_of(L".") + 1);
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-        if (ext == L"brs") {
-            // Check if valid BRS
-            if (IsValidBrs(filePath)) {
-                *isBrsFormat = true;
-                
-                if (ReadBrsHeader(filePath, header)) {
-                    *isCompressed = (header->compressionType != 0);
-                    return true;
+        if (ext == L"ssb") {
+            // Check if valid SSB/WIM archive
+            if (IsValidWim(filePath)) {
+                *isCompressed = false;
+
+                if (header) {
+                    memset(header, 0, sizeof(BrsHeader));
+                    strcpy_s(header->backupName, "Standard Backup Archive");
+                    strcpy_s(header->backupType, "Full");
+
+                    WIN32_FILE_ATTRIBUTE_DATA fileInfo = {};
+                    if (GetFileAttributesExW(filePath, GetFileExInfoStandard, &fileInfo)) {
+                        ULARGE_INTEGER fileSize;
+                        fileSize.LowPart = fileInfo.nFileSizeLow;
+                        fileSize.HighPart = fileInfo.nFileSizeHigh;
+                        header->originalSize = fileSize.QuadPart;
+                        header->compressedSize = fileSize.QuadPart;
+
+                        FILETIME localWriteTime = fileInfo.ftLastWriteTime;
+                        FileTimeToSystemTime(&localWriteTime, &header->timestamp);
+                    }
+                    else {
+                        GetSystemTime(&header->timestamp);
+                    }
                 }
+
+                return true;
             }
-            swprintf_s(errorMsg, errorMsgSize, L"Invalid .brs file format");
+
+            swprintf_s(errorMsg, errorMsgSize, L"Invalid .ssb file format");
             return false;
         }
         else if (ext == L"wim") {
             // Check if valid WIM
             if (IsValidWim(filePath)) {
-                *isBrsFormat = false;
                 *isCompressed = false;
                 
                 // Fill header with basic info
@@ -274,7 +290,7 @@ namespace BackupEngine {
             return false;
         }
 
-        swprintf_s(errorMsg, errorMsgSize, L"Unsupported file format (must be .brs or .wim)");
+        swprintf_s(errorMsg, errorMsgSize, L"Unsupported file format (must be .ssb or .wim)");
         return false;
     }
 
@@ -472,9 +488,9 @@ namespace BackupEngine {
         int errorMsgSize
     ) {
         BrsHeader header;
-        bool isBrs, isCompressed;
+        bool isCompressed;
 
-        if (!ValidateBackupFile(filePath, &isBrs, &isCompressed, &header, errorMsg, errorMsgSize)) {
+        if (!ValidateBackupFile(filePath, &isCompressed, &header, errorMsg, errorMsgSize)) {
             return false;
         }
 

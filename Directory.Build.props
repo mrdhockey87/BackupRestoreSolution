@@ -14,7 +14,7 @@
              ================================================================ -->
        <PropertyGroup>
           <!-- SINGLE VERSION DEFINITION - Update this value only -->
-                                       <ProductVersion>6.2.5.2</ProductVersion>
+                                       <ProductVersion>6.2.5.9</ProductVersion>
     
     <!-- All version properties use the ProductVersion variable -->
     <Version>$(ProductVersion)</Version>

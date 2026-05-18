@@ -22,6 +22,7 @@ namespace SecureServerBackup.Services
             public int SourceDiskNumber { get; set; }
             public ulong SourceDiskSizeBytes { get; set; }
             public ulong SourceUsedSpaceBytes { get; set; }
+            public DateTime? BackupStartTime { get; set; }
             public string SourceVolumeGuidPath { get; set; } = string.Empty;
             public string SourceVolumeMountPath { get; set; } = string.Empty;
             public string SourceVolumeLabel { get; set; } = string.Empty;
@@ -943,6 +944,11 @@ namespace SecureServerBackup.Services
             metadata.SourceDiskSizeBytes = diskSize;
             _ = ulong.TryParse(Read("SOURCE_USED_SPACE_BYTES"), out var usedSpaceBytes);
             metadata.SourceUsedSpaceBytes = usedSpaceBytes;
+            if (DateTime.TryParse(Read("BACKUP_START_TIME"), out var backupStartTime))
+            {
+                metadata.BackupStartTime = backupStartTime;
+            }
+
             metadata.SourceVolumeGuidPath = Read("SOURCE_VOLUME_GUID_PATH");
             metadata.SourceVolumeMountPath = Read("SOURCE_VOLUME_MOUNT_PATH");
             metadata.SourceVolumeLabel = Read("SOURCE_VOLUME_LABEL");

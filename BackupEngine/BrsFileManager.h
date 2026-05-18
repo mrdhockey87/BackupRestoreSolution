@@ -45,12 +45,11 @@ namespace BackupEngine {
             void (*progressCallback)(int percent) = nullptr
         );
 
-        // Validate a backup file (.brs or .wim)
+        // Validate a backup file (.ssb or .wim)
         static bool ValidateBackupFile(
             const wchar_t* filePath,
-            bool* isBrsFormat,      // OUT: true if .brs, false if .wim
             bool* isCompressed,     // OUT: true if compressed
-            BrsHeader* header,      // OUT: header info (if .brs)
+            BrsHeader* header,      // OUT: header info
             wchar_t* errorMsg,
             int errorMsgSize
         );
