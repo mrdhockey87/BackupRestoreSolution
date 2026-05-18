@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.99";
+        private static readonly string version_fallback_number = "6.2.5.2";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,14 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.5.2 Moved the Add Network Path popup action buttons up to sit directly below the example
+ *                 paths and shortened the dialog height now that the extra empty space is removed. mdail 5/18/2026
+ * Version 6.2.5.1 New Backup now saves custom network paths between window loads and shows a small minus
+ *                 button beside each saved network share so users can confirm removal and delete the path
+ *                 from both the visible list and the persisted saved-network-path list. mdail 5/18/2026
+ * Version 6.2.5.0 Updated the New Backup network-path entry so Add Network Path renders like a button, and expanded
+ *                 the Add Network Path popup with a Browse button plus enough height to keep the bottom action buttons
+ *                 fully visible while returning the chosen network path to the textbox. mdail 5/18/2026
  * Version 6.2.4.99 Adjusted the RestoreWindowNew left-column layout so the backup summary now shows on one
  *                  comma-separated line, the restore-point list moves up directly beneath it, and the shorter
  *                  Select Backup section leaves more height available for Restore Options. mdail 5/18/2026

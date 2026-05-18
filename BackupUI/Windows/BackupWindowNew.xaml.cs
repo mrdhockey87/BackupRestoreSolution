@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Management;
 using System.Net;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading.Tasks;
@@ -99,7 +100,6 @@ namespace SecureServerBackup.Windows
                         }
                     }
                 }
-
             }
 
             public static string BuildVmDisplayName(string vmName, object? enabledState)
@@ -147,6 +147,10 @@ namespace SecureServerBackup.Windows
 
         private const double DefaultWindowHeight = 850;
         private const double EncryptionExpandedWindowHeight = 980;
+        private static readonly string SavedNetworkPathsFilePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "BackupRestoreApp",
+            "saved-network-paths.json");
 
         private ObservableCollection<DriveTreeItem> driveItems = new();
         private readonly JobManager jobManager = new();
@@ -2398,6 +2402,11 @@ namespace SecureServerBackup.Windows
 
             if (networkRoot != null)
             {
+                foreach (string savedPath in LoadSavedNetworkPaths())
+                {
+                    TryInsertNetworkPath(networkRoot, savedPath, saveAfterInsert: false);
+                }
+
                 driveItems.Add(networkRoot);
             }
         }
@@ -2418,51 +2427,10 @@ namespace SecureServerBackup.Windows
                     return;
                 }
 
-                // Check if this path already exists
-                var existing = networkRoot.Children
-                    .FirstOrDefault(c => c.FullPath.Equals(uncPath, StringComparison.OrdinalIgnoreCase));
-
-                if (existing != null)
+                if (!TryInsertNetworkPath(networkRoot, uncPath, saveAfterInsert: true))
                 {
                     CustomDialogService.ShowInfo($"Network path already added:\n{uncPath}", "Duplicate Path");
                     return;
-                }
-
-                // Extract server and share name for display
-                var pathParts = uncPath.TrimEnd('\\').Split(new[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
-                var displayName = pathParts.Length >= 2
-                    ? $"\\\\{pathParts[0]}\\{pathParts[1]}"
-                    : uncPath;
-
-                // Create network share item
-                var networkShare = new DriveTreeItem
-                {
-                    Name = $"{displayName} - Network Share",
-                    FullPath = uncPath.TrimEnd('\\') + "\\",  // Ensure trailing backslash
-                    ItemType = DriveTreeItemType.NetworkShare,
-                    Parent = networkRoot
-                };
-
-                // Add placeholder for folders
-                networkShare.Children.Add(new DriveTreeItem
-                {
-                    Name = "Loading...",
-                    ItemType = DriveTreeItemType.Folder,
-                    Parent = networkShare
-                });
-
-                // Insert before "Add Network Path..." option
-                var addOption = networkRoot.Children
-                    .FirstOrDefault(c => c.ItemType == DriveTreeItemType.NetworkBrowser);
-
-                if (addOption != null)
-                {
-                    var index = networkRoot.Children.IndexOf(addOption);
-                    networkRoot.Children.Insert(index, networkShare);
-                }
-                else
-                {
-                    networkRoot.Children.Add(networkShare);
                 }
 
                 // Refresh the tree view
@@ -2474,6 +2442,152 @@ namespace SecureServerBackup.Windows
             {
                 CustomDialogService.ShowError($"Error adding network path:\n{ex.Message}", "Error");
             }
+        }
+
+        private static List<string> LoadSavedNetworkPaths()
+        {
+            try
+            {
+                if (!File.Exists(SavedNetworkPathsFilePath))
+                {
+                    return new List<string>();
+                }
+
+                string json = File.ReadAllText(SavedNetworkPathsFilePath);
+                return JsonSerializer.Deserialize<List<string>>(json)
+                    ?.Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Select(NormalizeNetworkPath)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList() ?? new List<string>();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error loading saved network paths: {ex.Message}");
+                return new List<string>();
+            }
+        }
+
+        private static void SaveNetworkPaths(IEnumerable<string> networkPaths)
+        {
+            ArgumentNullException.ThrowIfNull(networkPaths);
+
+            try
+            {
+                string? directory = Path.GetDirectoryName(SavedNetworkPathsFilePath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                List<string> normalizedPaths = networkPaths
+                    .Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Select(NormalizeNetworkPath)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                string json = JsonSerializer.Serialize(normalizedPaths, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(SavedNetworkPathsFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error saving network paths: {ex.Message}");
+            }
+        }
+
+        private static string NormalizeNetworkPath(string path)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+            return path.Trim().TrimEnd('\\') + "\\";
+        }
+
+        private bool TryInsertNetworkPath(DriveTreeItem networkRoot, string uncPath, bool saveAfterInsert)
+        {
+            ArgumentNullException.ThrowIfNull(networkRoot);
+            ArgumentException.ThrowIfNullOrWhiteSpace(uncPath);
+
+            string normalizedPath = NormalizeNetworkPath(uncPath);
+            DriveTreeItem? existing = networkRoot.Children
+                .FirstOrDefault(c => c.ItemType == DriveTreeItemType.NetworkShare &&
+                                     c.FullPath.Equals(normalizedPath, StringComparison.OrdinalIgnoreCase));
+
+            if (existing != null)
+            {
+                return false;
+            }
+
+            string[] pathParts = normalizedPath.TrimEnd('\\').Split(new[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
+            string displayName = pathParts.Length >= 2
+                ? $"\\\\{pathParts[0]}\\{pathParts[1]}"
+                : normalizedPath;
+
+            DriveTreeItem networkShare = new()
+            {
+                Name = $"{displayName} - Network Share",
+                FullPath = normalizedPath,
+                ItemType = DriveTreeItemType.NetworkShare,
+                IsRemovableNetworkPath = true,
+                Parent = networkRoot
+            };
+
+            networkShare.Children.Add(new DriveTreeItem
+            {
+                Name = "Loading...",
+                ItemType = DriveTreeItemType.Folder,
+                Parent = networkShare
+            });
+
+            DriveTreeItem? addOption = networkRoot.Children.FirstOrDefault(c => c.ItemType == DriveTreeItemType.NetworkBrowser);
+            if (addOption != null)
+            {
+                int index = networkRoot.Children.IndexOf(addOption);
+                networkRoot.Children.Insert(index, networkShare);
+            }
+            else
+            {
+                networkRoot.Children.Add(networkShare);
+            }
+
+            if (saveAfterInsert)
+            {
+                PersistCurrentNetworkPaths(networkRoot);
+            }
+
+            return true;
+        }
+
+        private void RemoveNetworkPath_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement { DataContext: DriveTreeItem item } ||
+                item.ItemType != DriveTreeItemType.NetworkShare ||
+                !item.IsRemovableNetworkPath ||
+                item.Parent == null)
+            {
+                return;
+            }
+
+            CustomDialogResult result = CustomDialogService.ShowQuestion(
+                this,
+                $"Do you really want to delete this saved network path?\n\n{item.FullPath}",
+                "Delete Network Path");
+
+            if (result != CustomDialogResult.Yes)
+            {
+                return;
+            }
+
+            item.Parent.Children.Remove(item);
+            PersistCurrentNetworkPaths(item.Parent);
+            RefreshTreeView();
+        }
+
+        private static void PersistCurrentNetworkPaths(DriveTreeItem networkRoot)
+        {
+            ArgumentNullException.ThrowIfNull(networkRoot);
+
+            SaveNetworkPaths(networkRoot.Children
+                .Where(child => child.ItemType == DriveTreeItemType.NetworkShare && child.IsRemovableNetworkPath)
+                .Select(child => child.FullPath));
         }
 
         /// <summary>

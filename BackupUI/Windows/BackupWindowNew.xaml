@@ -30,17 +30,55 @@
 					Click="TreeItemCheckBox_Click"
 					IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 					Style="{StaticResource TreeViewCheckBoxStyle}" />
+				<Border
+					x:Name="NetworkBrowserButton"
+					Padding="8,3"
+					Background="#FFEFF6FF"
+					BorderBrush="#FF5B9BD5"
+					BorderThickness="1"
+					CornerRadius="4"
+					Cursor="Hand"
+					Visibility="Collapsed">
+					<TextBlock
+						x:Name="NetworkBrowserText"
+						VerticalAlignment="Center"
+						FontWeight="SemiBold"
+						Foreground="#FF0B5CAD"
+						MouseLeftButtonUp="TreeItem_MouseLeftButtonUp"
+						Text="{Binding DisplayName}" />
+				</Border>
 				<TextBlock
 					x:Name="ItemText"
 					VerticalAlignment="Center"
 					MouseLeftButtonUp="TreeItem_MouseLeftButtonUp"
 					Text="{Binding DisplayName}" />
+				<Button
+					x:Name="RemoveNetworkPathButton"
+					Width="18"
+					Height="18"
+					Margin="6,0,0,0"
+					Padding="0"
+					VerticalAlignment="Center"
+					Click="RemoveNetworkPath_Click"
+					Content="-"
+					FontSize="12"
+					FontWeight="Bold"
+					ToolTip="Remove saved network path"
+					Visibility="Collapsed" />
 			</StackPanel>
 			<HierarchicalDataTemplate.Triggers>
 				<DataTrigger Binding="{Binding IsLoadingPlaceholder}" Value="True">
 					<Setter TargetName="LoadingIndicator" Property="Visibility" Value="Visible" />
 					<Setter TargetName="SelectionCheckBox" Property="Visibility" Value="Collapsed" />
 					<Setter TargetName="ItemText" Property="Text" Value="Loading..." />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding ItemType}" Value="NetworkBrowser">
+					<Setter TargetName="SelectionCheckBox" Property="Visibility" Value="Collapsed" />
+					<Setter TargetName="ItemText" Property="Visibility" Value="Collapsed" />
+					<Setter TargetName="NetworkBrowserButton" Property="Visibility" Value="Visible" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding IsRemovableNetworkPath}" Value="True">
+					<Setter TargetName="RemoveNetworkPathButton" Property="Visibility" Value="Visible" />
 				</DataTrigger>
 			</HierarchicalDataTemplate.Triggers>
 		</HierarchicalDataTemplate>

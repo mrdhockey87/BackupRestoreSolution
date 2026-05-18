@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Windows;
+using Forms = System.Windows.Forms;
 
 namespace SecureServerBackup.Windows
 {
@@ -11,8 +12,30 @@ namespace SecureServerBackup.Windows
         public NetworkPathDialog()
         {
             InitializeComponent();
+            Loaded += NetworkPathDialog_Loaded;
+        }
+
+        private void NetworkPathDialog_Loaded(object sender, RoutedEventArgs e)
+        {
             txtNetworkPath.Focus();
             txtNetworkPath.SelectAll();
+        }
+
+        private void Browse_Click(object sender, RoutedEventArgs e)
+        {
+            using Forms.FolderBrowserDialog dialog = new()
+            {
+                Description = "Browse available network locations and select a shared folder"
+            };
+
+            if (dialog.ShowDialog() != Forms.DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
+            {
+                return;
+            }
+
+            txtNetworkPath.Text = dialog.SelectedPath;
+            txtNetworkPath.CaretIndex = txtNetworkPath.Text.Length;
+            txtNetworkPath.Focus();
         }
 
         private void OK_Click(object sender, RoutedEventArgs e)
