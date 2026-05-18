@@ -75,14 +75,22 @@
 							Name="pnlBackupInfo"
 							Margin="0,8,0,0"
 							Visibility="Collapsed">
-							<TextBlock
-								Name="txtBackupInfo"
-								Margin="0,0,0,5"
-								Foreground="{StaticResource SecondaryText}"
-								TextWrapping="Wrap" />
+							<WrapPanel Margin="0,0,0,5">
+								<TextBlock Name="txtBackupFileCount" Foreground="{StaticResource SecondaryText}" />
+								<TextBlock
+									Margin="0,0,4,0"
+									Foreground="{StaticResource SecondaryText}"
+									Text="," />
+								<TextBlock Name="txtBackupTotalSize" Foreground="{StaticResource SecondaryText}" />
+								<TextBlock
+									Margin="0,0,4,0"
+									Foreground="{StaticResource SecondaryText}"
+									Text="," />
+								<TextBlock Name="txtBackupRestorePointCount" Foreground="{StaticResource SecondaryText}" />
+							</WrapPanel>
 
 							<TextBlock
-								Margin="0,8,0,5"
+								Margin="0,2,0,5"
 								FontWeight="Bold"
 								Text="Select Restore Point:" />
 							<ListBox
@@ -102,8 +110,8 @@
 													Margin="0,0,8,0"
 													VerticalAlignment="Top"
 													Focusable="False"
-													IsHitTestVisible="False"
-													IsChecked="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=IsSelected, Mode=OneWay}" />
+													IsChecked="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=IsSelected, Mode=OneWay}"
+													IsHitTestVisible="False" />
 												<StackPanel>
 													<TextBlock FontWeight="Bold" Text="{Binding DisplayName}" />
 													<TextBlock
@@ -359,9 +367,7 @@
 									HorizontalAlignment="Left"
 									Click="BrowseRestoreDestination_Click"
 									Content="Browse..." />
-								<TextBlock
-									Margin="0,0,0,4"
-									Text="Target Location" />
+								<TextBlock Margin="0,0,0,4" Text="Target Location" />
 								<TextBox
 									Name="txtFolderRestoreDestination"
 									Height="25"
@@ -493,9 +499,7 @@
 						</Border>
 					</Grid>
 
-					<StackPanel
-						Grid.Row="2"
-						Margin="0,8,0,0">
+					<StackPanel Grid.Row="2" Margin="0,8,0,0">
 						<StackPanel Margin="0,0,0,4" Orientation="Horizontal">
 							<Button
 								Width="80"

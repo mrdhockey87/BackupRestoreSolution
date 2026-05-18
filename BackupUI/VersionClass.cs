@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.4.96";
+        private static readonly string version_fallback_number = "6.2.4.99";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,15 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.4.99 Adjusted the RestoreWindowNew left-column layout so the backup summary now shows on one
+ *                  comma-separated line, the restore-point list moves up directly beneath it, and the shorter
+ *                  Select Backup section leaves more height available for Restore Options. mdail 5/18/2026
+ * Version 6.2.4.98 Added RestoreWindowNew regression coverage for Selected Files History restore points
+ *                  so file/folder restore mode stays enabled even when the restore-point label uses the
+ *                  history-specific Selected Files naming. mdail 5/18/2026
+ * Version 6.2.4.97 Fixed RestoreWindowNew file and folder restore classification so regular file-path
+ *                  backup contents no longer get mistaken for disk or volume restores, re-enabling Restore
+ *                  Options and disabling the target tree correctly for file/folder restore points. mdail 5/18/2026
  * Version 6.2.4.96 Fixed Selected Files and Folder single-file backup capture when appending to the
  *                  shared job archive by capturing selected files through their parent folder with an
  *                  exact-path filter, avoiding WIM error 267 on direct file-path captures. mdail 5/16/2026

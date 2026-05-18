@@ -586,9 +586,9 @@ namespace SecureServerBackup.Windows
 
             var sizeGB = totalSize / (1024.0 * 1024.0 * 1024.0);
 
-            txtBackupInfo.Text = $"Found {backupFiles.Count} backup file(s)\n" +
-                                $"Total size: {sizeGB:F2} GB\n" +
-                                $"Restore points available: {restorePoints.Count}";
+            txtBackupFileCount.Text = $"Found {backupFiles.Count} backup file(s)";
+            txtBackupTotalSize.Text = $"Total size: {sizeGB:F2} GB";
+            txtBackupRestorePointCount.Text = $"Restore points available: {restorePoints.Count}";
         }
 
         private string CreateVolumeOnDiskForHyperVRestore(int diskNumber)
@@ -2029,59 +2029,102 @@ namespace SecureServerBackup.Windows
                 return;
             }
 
-            // Scan all backup items (not just the selected one) for disk/volume path patterns
-            bool hasDisk = false;
-            bool hasVolume = false;
-            foreach (var rawItem in lstBackupItems.Items)
-            {
-                string itemText = rawItem?.ToString() ?? string.Empty;
-                if (itemText.Contains("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasDisk = true;
-                    break;
-                }
-
-                if (itemText.StartsWith("\\?\\", StringComparison.OrdinalIgnoreCase) ||
-                    itemText.EndsWith(":\\", StringComparison.OrdinalIgnoreCase) ||
-                    itemText.EndsWith(":", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasVolume = true;
-                }
-            }
-
-            // Also check the restore-point file path for naming conventions
-            if (!hasDisk && !hasVolume)
-            {
-                string filePath = selectedPoint.FilePath ?? string.Empty;
-                if (filePath.Contains("disk", StringComparison.OrdinalIgnoreCase) ||
-                    filePath.Contains("drive", StringComparison.OrdinalIgnoreCase) ||
-                    filePath.Contains("physical", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasDisk = true;
-                }
-                else if (filePath.Contains("volume", StringComparison.OrdinalIgnoreCase) ||
-                         filePath.Contains("partition", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasVolume = true;
-                }
-            }
-
-            if (hasDisk)
-            {
-                _restoreTargetKind = RestoreTargetKind.Disk;
-            }
-            else if (hasVolume)
-            {
-                _restoreTargetKind = RestoreTargetKind.Volume;
-            }
-            else
-            {
-                _restoreTargetKind = RestoreTargetKind.FileOrFolder;
-            }
+            _restoreTargetKind = DetermineRestoreTargetKind(
+                selectedPoint.BackupType,
+                selectedPoint.FilePath,
+                lstBackupItems.Items.Cast<object>().Select(item => item?.ToString() ?? string.Empty));
 
             UpdateDestinationHelpText();
             UpdateLocationPanelVisibility();
             UpdateRestoreActionState();
+        }
+
+        internal static RestoreTargetKind DetermineRestoreTargetKind(string? backupType, string? filePath, IEnumerable<string> backupItems)
+        {
+            ArgumentNullException.ThrowIfNull(backupItems);
+
+            if (string.Equals(backupType, "Selected Files", StringComparison.OrdinalIgnoreCase))
+            {
+                return RestoreTargetKind.FileOrFolder;
+            }
+
+            bool hasItems = false;
+            bool hasDisk = false;
+            bool hasVolume = false;
+            bool hasNonDiskOrVolumeItem = false;
+
+            foreach (string itemText in backupItems.Where(item => !string.IsNullOrWhiteSpace(item)))
+            {
+                hasItems = true;
+
+                if (IsDiskBackupSurface(itemText))
+                {
+                    hasDisk = true;
+                    continue;
+                }
+
+                if (IsVolumeBackupSurface(itemText))
+                {
+                    hasVolume = true;
+                    continue;
+                }
+
+                hasNonDiskOrVolumeItem = true;
+                break;
+            }
+
+            if (hasNonDiskOrVolumeItem)
+            {
+                return RestoreTargetKind.FileOrFolder;
+            }
+
+            if (hasDisk)
+            {
+                return RestoreTargetKind.Disk;
+            }
+
+            if (hasVolume)
+            {
+                return RestoreTargetKind.Volume;
+            }
+
+            if (!hasItems)
+            {
+                string normalizedFilePath = filePath ?? string.Empty;
+                if (normalizedFilePath.Contains("disk", StringComparison.OrdinalIgnoreCase) ||
+                    normalizedFilePath.Contains("drive", StringComparison.OrdinalIgnoreCase) ||
+                    normalizedFilePath.Contains("physical", StringComparison.OrdinalIgnoreCase))
+                {
+                    return RestoreTargetKind.Disk;
+                }
+
+                if (normalizedFilePath.Contains("volume", StringComparison.OrdinalIgnoreCase) ||
+                    normalizedFilePath.Contains("partition", StringComparison.OrdinalIgnoreCase))
+                {
+                    return RestoreTargetKind.Volume;
+                }
+            }
+
+            return RestoreTargetKind.FileOrFolder;
+        }
+
+        private static bool IsDiskBackupSurface(string itemText)
+        {
+            return itemText.Contains("PHYSICALDRIVE", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsVolumeBackupSurface(string itemText)
+        {
+            if (string.IsNullOrWhiteSpace(itemText))
+            {
+                return false;
+            }
+
+            string trimmed = itemText.Trim();
+            return trimmed.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("\\?\\Volume{", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.EndsWith(@":\", StringComparison.OrdinalIgnoreCase) ||
+                   (trimmed.Length == 2 && char.IsLetter(trimmed[0]) && trimmed[1] == ':');
         }
 
         private void UpdateDestinationHelpText()

@@ -286,6 +286,50 @@ public sealed class BackupWindowNewTreeTests : IDisposable
     }
 
     [Fact]
+    public void DetermineRestoreTargetKind_WhenSelectedFilesBackup_ReturnsFileOrFolder()
+    {
+        RestoreTargetKind result = RestoreWindowNew.DetermineRestoreTargetKind(
+            backupType: "Selected Files",
+            filePath: @"C:\Backups\JobName.ssb",
+            backupItems: [@"C:\Users\me\Documents\file.txt"]);
+
+        Assert.Equal(RestoreTargetKind.FileOrFolder, result);
+    }
+
+    [Fact]
+    public void DetermineRestoreTargetKind_WhenSelectedFilesHistoryBackupType_ReturnsFileOrFolder()
+    {
+        RestoreTargetKind result = RestoreWindowNew.DetermineRestoreTargetKind(
+            backupType: "Selected Files History",
+            filePath: @"C:\Backups\JobName_SelectedFiles_20260516.ssb",
+            backupItems: [@"C:\Users\me\Documents\file.txt"]);
+
+        Assert.Equal(RestoreTargetKind.FileOrFolder, result);
+    }
+
+    [Fact]
+    public void DetermineRestoreTargetKind_WhenBackupItemsContainRegularPaths_ReturnsFileOrFolder()
+    {
+        RestoreTargetKind result = RestoreWindowNew.DetermineRestoreTargetKind(
+            backupType: "Unknown",
+            filePath: @"C:\Backups\DiskNamedJob.ssb",
+            backupItems: [@"C:\Users\me\Documents", @"C:\Users\me\Documents\file.txt"]);
+
+        Assert.Equal(RestoreTargetKind.FileOrFolder, result);
+    }
+
+    [Fact]
+    public void DetermineRestoreTargetKind_WhenBackupItemsContainOnlyVolumeRoots_ReturnsVolume()
+    {
+        RestoreTargetKind result = RestoreWindowNew.DetermineRestoreTargetKind(
+            backupType: "Unknown",
+            filePath: @"C:\Backups\JobName.ssb",
+            backupItems: [@"C:\", @"D:\"]);
+
+        Assert.Equal(RestoreTargetKind.Volume, result);
+    }
+
+    [Fact]
     public void ShouldShowRestoreTargetGroup_WhenHyperVVmRestore_ReturnsFalse()
     {
         bool result = RestoreWindowNew.ShouldShowRestoreTargetGroup(RestoreTargetKind.HyperVVm);
