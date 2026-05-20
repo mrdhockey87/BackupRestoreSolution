@@ -175,6 +175,22 @@ int main()
     allPassed &= Expect(hyperVDate != backupDates.end(), "EnumerateBackupDates should include Hyper-V backup-point directories.");
     allPassed &= Expect(hyperVDate != backupDates.end() && hyperVDate->type == "Hyper-V", "EnumerateBackupDates should label Hyper-V backup points distinctly.");
 
+    std::vector<RestoreEngine::RestoreItem> archiveTree;
+    engine.AddArchiveEntryToTree(archiveTree, "FolderOne/SubFolder/FileA.txt", false);
+    engine.AddArchiveEntryToTree(archiveTree, "FolderOne/SubFolder", true);
+    engine.AddArchiveEntryToTree(archiveTree, "RootFile.log", false);
+
+    allPassed &= Expect(archiveTree.size() == 2, "AddArchiveEntryToTree should create top-level folder and file nodes.");
+    auto folderNode = std::find_if(archiveTree.begin(), archiveTree.end(), [](const RestoreEngine::RestoreItem& item) {
+        return item.name == "FolderOne";
+    });
+    allPassed &= Expect(folderNode != archiveTree.end(), "AddArchiveEntryToTree should preserve the top-level folder name.");
+    allPassed &= Expect(folderNode != archiveTree.end() && folderNode->type == "Folder", "AddArchiveEntryToTree should mark parent segments as folders.");
+    allPassed &= Expect(folderNode != archiveTree.end() && folderNode->children.size() == 1, "AddArchiveEntryToTree should add one child for the nested folder.");
+    allPassed &= Expect(folderNode != archiveTree.end() && folderNode->children[0].name == "SubFolder", "AddArchiveEntryToTree should preserve nested folder names.");
+    allPassed &= Expect(folderNode != archiveTree.end() && folderNode->children[0].children.size() == 1, "AddArchiveEntryToTree should place file nodes under their nested folder.");
+    allPassed &= Expect(folderNode != archiveTree.end() && folderNode->children[0].children[0].path == "FolderOne/SubFolder/FileA.txt", "AddArchiveEntryToTree should preserve normalized relative archive paths.");
+
     fs::remove_all(tempDirectory);
     return allPassed ? 0 : 1;
 }

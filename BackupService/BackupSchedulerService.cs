@@ -10,6 +10,9 @@ namespace SecureServerBackupService
 {
     public class BackupSchedulerService : BackgroundService
     {
+        private const string ErrorPrefix = "[ERROR]";
+        private const string WarningPrefix = "Warning:";
+        private const string DebugPrefix = "[DEBUG]";
         private readonly ILogger<BackupSchedulerService> _logger;
         private readonly JobManager _jobManager;
         private readonly BackupExecutor _backupExecutor;
@@ -153,21 +156,7 @@ namespace SecureServerBackupService
                     _progressTracker.GetCancellationToken(job.Id),
                     message => {
                         LogToFile(message);
-                        // Also log to BackupLogger for UI
-                        if (message.Contains("fail", StringComparison.OrdinalIgnoreCase) || 
-                            message.Contains("error", StringComparison.OrdinalIgnoreCase))
-                        {
-                            BackupLogger.LogError(job.Name, message);
-                        }
-                        else if (message.Contains("success", StringComparison.OrdinalIgnoreCase) || 
-                                 message.Contains("completed", StringComparison.OrdinalIgnoreCase))
-                        {
-                            BackupLogger.LogSuccess(job.Name, message, job.DestinationPath);
-                        }
-                        else
-                        {
-                            BackupLogger.LogInfo(job.Name, message);
-                        }
+                        LogJobMessage(job, message, job.DestinationPath);
                     });
 
                 // If backup succeeded and verification is requested, run verification
@@ -186,20 +175,7 @@ namespace SecureServerBackupService
                         _progressTracker.GetCancellationToken(job.Id),
                         message => {
                             LogToFile(message);
-                            if (message.Contains("fail", StringComparison.OrdinalIgnoreCase) || 
-                                message.Contains("error", StringComparison.OrdinalIgnoreCase))
-                            {
-                                BackupLogger.LogError(job.Name, message);
-                            }
-                            else if (message.Contains("success", StringComparison.OrdinalIgnoreCase) || 
-                                     message.Contains("completed", StringComparison.OrdinalIgnoreCase))
-                            {
-                                BackupLogger.LogSuccess(job.Name, message);
-                            }
-                            else
-                            {
-                                BackupLogger.LogInfo(job.Name, message);
-                            }
+                            LogJobMessage(job, message);
                         });
 
                     if (verifySuccess)
@@ -248,6 +224,43 @@ namespace SecureServerBackupService
                 // UpdateJobAfterExecution will clear IsCurrentlyRunning flag
                 _jobManager.UpdateJobAfterExecution(job, success: false);
             }
+        }
+
+        internal static void LogJobMessage(BackupJob job, string message, string details = "")
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            if (message.StartsWith(ErrorPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                BackupLogger.LogError(job.Name, message, details);
+                return;
+            }
+
+            if (message.StartsWith(WarningPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                BackupLogger.LogWarning(job.Name, message, details);
+                return;
+            }
+
+            if (message.StartsWith(DebugPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                BackupLogger.LogInfo(job.Name, message, details);
+                return;
+            }
+
+            if (message.Contains("success", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("completed", StringComparison.OrdinalIgnoreCase))
+            {
+                BackupLogger.LogSuccess(job.Name, message, details);
+                return;
+            }
+
+            BackupLogger.LogInfo(job.Name, message, details);
         }
 
         private void LogToFile(string message)

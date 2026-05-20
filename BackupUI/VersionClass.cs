@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.9";
+        private static readonly string version_fallback_number = "6.2.5.16";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,26 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.5.16 Linux restore ncurses flow now matches the restore-point-first and all-or-selected
+ *                  restore sequence used by Windows, CLI, and GTK. mdail 5/19/2026
+ * Version 6.2.5.15 Restore now enumerates and restores Selected Files and Folder archive items directly from
+ *                  .ssb content paths so the restore-point-first and selected-items flow works with the new
+ *                  batched file/folder backup format. mdail 5/19/2026
+ * Version 6.2.5.14 Selected Files backup capture now batches chosen files and folders by source root and
+ *                  filters them through one native archive pass per root while preserving SSB metadata flow.
+ *                  mdail 5/19/2026
+ * Version 6.2.5.13 Backup activity logging now keeps filenames containing the word error as info unless
+ *                  the service explicitly tags the message as an error or warning.
+ *                  mdail 5/19/2026
+ * Version 6.2.5.12 Restore tab now groups Selected Files and Folder backups into one restore row per
+ *                  saved backup day while keeping the existing restore-point and item-selection flow.
+ *                  mdail 5/19/2026
+ * Version 6.2.5.11 File-only restores now group plain .ssb archives into one restore point per saved
+ *                  backup day/run so the user can pick that restore point, choose individual files,
+ *                  and then continue into RestoreWindowNew. mdail 5/19/2026
+ * Version 6.2.5.10 Restore now selects the restore point before RestoreWindowNew opens, asks whether
+ *                  to restore all or selected items/volumes for grouped backups, and carries that
+ *                  preselected scope into RestoreWindowNew. mdail 5/19/2026
  * Version 6.2.5.9 BackupEngine now writes one shared backup start timestamp into file/folder metadata,
  *                 disk-volume restore metadata, and backup_metadata.dat so new restore points group by
  *                 the backup start time across the whole run. mdail 5/18/2026

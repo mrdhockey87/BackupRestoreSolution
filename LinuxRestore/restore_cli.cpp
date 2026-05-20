@@ -42,7 +42,9 @@ void printUsage() {
     std::cout << "  --show-contents <backup>      Show contents of specific backup\n";
     std::cout << "  --list-volumes <backup>       List volumes in a disk/volume backup\n";
     std::cout << "    --show-hidden               Include hidden partitions (EFI, MSR, Recovery)\n";
-    std::cout << "  --restore <backup>            Start restore from backup\n";
+    std::cout << "  --restore <backup>            Start restore from backup file or backup folder\n";
+    std::cout << "    --restore-point <index>     Select restore point index when --restore targets a folder\n";
+    std::cout << "    --all                       Restore all items from the selected restore point\n";
     std::cout << "    --items <paths>             Comma-separated list of items\n";
     std::cout << "    --dest <path>               Destination (omit for original)\n";
     std::cout << "    --log-file <path>           Save restore activity to a plain-text log file\n";
@@ -60,10 +62,43 @@ void printUsage() {
     std::cout << "  restore_cli --list-volumes /media/backup/Full.ssb\n";
     std::cout << "  restore_cli --list-volumes /media/backup/Full.ssb --show-hidden\n";
     std::cout << "  restore_cli --show-contents /media/backup/Full_20260130\n";
-    std::cout << "  restore_cli --restore /media/backup/Full_20260130 --items \"/dev/sda1,/home\" --dest /mnt/restore\n";
+    std::cout << "  restore_cli --restore /media/backup --restore-point 1 --all --dest /mnt/restore\n";
+    std::cout << "  restore_cli --restore /media/backup/Full_20260130 --items \"FolderOne/File.txt,/home\" --dest /mnt/restore\n";
     std::cout << "  restore_cli --restore-disk /media/backup/Full.ssb /dev/sdb\n";
     std::cout << "  restore_cli --restore-disk /media/backup/Full.ssb /dev/sdb --show-hidden\n";
     std::cout << "  restore_cli --interactive\n\n";
+}
+
+void collectAllRestoreItems(const std::vector<RestoreEngine::RestoreItem>& items, std::vector<std::string>& selectedItems) {
+    for (const auto& item : items) {
+        selectedItems.push_back(item.path);
+    }
+}
+
+bool resolveRestorePointPath(RestoreEngine& engine, const std::string& inputPath, int restorePointIndex, std::string& resolvedPath) {
+    resolvedPath = inputPath;
+
+    if (!std::filesystem::exists(inputPath) || !std::filesystem::is_directory(inputPath)) {
+        return true;
+    }
+
+    auto restorePoints = engine.EnumerateBackupDates(inputPath);
+    if (restorePoints.empty()) {
+        std::cerr << "Error: No restore points were found in '" << inputPath << "'.\n";
+        return false;
+    }
+
+    if (restorePointIndex <= 0 || restorePointIndex > static_cast<int>(restorePoints.size())) {
+        std::cerr << "Error: When --restore points to a folder, specify --restore-point using one of these indexes:\n";
+        for (size_t i = 0; i < restorePoints.size(); ++i) {
+            std::cout << "  " << (i + 1) << ". " << restorePoints[i].date << " - "
+                      << restorePoints[i].type << " (" << restorePoints[i].size << ")\n";
+        }
+        return false;
+    }
+
+    resolvedPath = restorePoints[restorePointIndex - 1].path;
+    return true;
 }
 
 void performDiskRestore(RestoreEngine& engine, const std::string& backupPath, const std::string& targetDisk, bool showHidden, const std::string& logFilePath) {
@@ -352,37 +387,53 @@ void runInteractive(RestoreEngine& engine) {
     ensureBackupPassword(engine, selectedBackupPath);
     std::cout << "Selected: " << selectedBackupPath << "\n\n";
 
-    // Step 2: Select items to restore
-    std::cout << "Step 2: Select Items to Restore\n";
-    std::cout << "================================\n";
+    // Step 2: Choose all items vs selected items
+    std::cout << "Step 2: Choose Restore Scope\n";
+    std::cout << "=============================\n";
     
     auto tree = engine.BuildRestoreTree(selectedBackupPath);
-    
-    std::cout << "Backup contents:\n";
-    printTree(tree, 0);
-    
-    std::cout << "\nEnter items to restore (comma-separated paths), or 'all' for everything:\n";
-    std::string itemsInput;
-    std::getline(std::cin, itemsInput);
-    
-    if (itemsInput == "all") {
-        // Collect all items
-        std::function<void(const std::vector<RestoreEngine::RestoreItem>&)> collectAll;
-        collectAll = [&](const std::vector<RestoreEngine::RestoreItem>& items) {
-            for (const auto& item : items) {
-                selectedItems.push_back(item.path);
-                if (!item.children.empty()) {
-                    collectAll(item.children);
-                }
-            }
-        };
-        collectAll(tree);
+    if (tree.empty()) {
+        std::cout << "No restore items were found for the selected restore point.\n";
+        return;
+    }
+
+    char restoreAllChoice = 'y';
+    std::cout << "Restore all files/volumes from this restore point? (y/n): ";
+    std::cin >> restoreAllChoice;
+    std::cin.ignore();
+
+    bool restoreAll = (restoreAllChoice == 'y' || restoreAllChoice == 'Y');
+
+    if (restoreAll) {
+        collectAllRestoreItems(tree, selectedItems);
+        std::cout << "Selected restore scope: all items from the restore point.\n\n";
     } else {
+        std::cout << "Step 2A: Select Items to Restore\n";
+        std::cout << "================================\n";
+    
+        std::cout << "Backup contents:\n";
+        printTree(tree, 0);
+    
+        std::cout << "\nEnter items to restore (comma-separated paths):\n";
+        std::string itemsInput;
+        std::getline(std::cin, itemsInput);
+    
         selectedItems = split(itemsInput, ',');
         // Trim whitespace
         for (auto& item : selectedItems) {
             item.erase(0, item.find_first_not_of(" \t"));
             item.erase(item.find_last_not_of(" \t") + 1);
+        }
+
+        selectedItems.erase(
+            std::remove_if(selectedItems.begin(), selectedItems.end(), [](const std::string& item) {
+                return item.empty();
+            }),
+            selectedItems.end());
+
+        if (selectedItems.empty()) {
+            std::cout << "No restore items were selected. Exiting.\n";
+            return;
         }
     }
 
@@ -540,16 +591,23 @@ int main(int argc, char* argv[]) {
         printHeader();
         
         std::string backupPath = argv[2];
+        std::string resolvedBackupPath;
         std::vector<std::string> items;
         std::string dest;
         std::string logFilePath;
+        int restorePointIndex = 0;
+        bool restoreAll = false;
         bool overwrite = false;
 
         // Parse additional arguments
         for (int i = 3; i < argc; i++) {
             std::string arg = argv[i];
             
-            if (arg == "--items" && i + 1 < argc) {
+            if (arg == "--restore-point" && i + 1 < argc) {
+                restorePointIndex = std::stoi(argv[++i]);
+            } else if (arg == "--all") {
+                restoreAll = true;
+            } else if (arg == "--items" && i + 1 < argc) {
                 items = split(argv[++i], ',');
             } else if (arg == "--dest" && i + 1 < argc) {
                 dest = argv[++i];
@@ -560,12 +618,28 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        if (items.empty()) {
-            std::cerr << "Error: No items specified. Use --items <paths>\n";
+        if (!resolveRestorePointPath(engine, backupPath, restorePointIndex, resolvedBackupPath)) {
             return 1;
         }
 
-        performRestore(engine, backupPath, items, dest, overwrite, logFilePath);
+        ensureBackupPassword(engine, resolvedBackupPath);
+
+        if (restoreAll) {
+            auto tree = engine.BuildRestoreTree(resolvedBackupPath);
+            if (tree.empty()) {
+                std::cerr << "Error: No restore items were found for the selected restore point.\n";
+                return 1;
+            }
+
+            collectAllRestoreItems(tree, items);
+        }
+
+        if (items.empty()) {
+            std::cerr << "Error: No items specified. Use --all or --items <paths>\n";
+            return 1;
+        }
+
+        performRestore(engine, resolvedBackupPath, items, dest, overwrite, logFilePath);
         return 0;
     }
 

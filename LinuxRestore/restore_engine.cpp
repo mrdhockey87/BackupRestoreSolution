@@ -15,6 +15,7 @@
 #include <array>
 #include <iomanip>
 #include <numeric>
+#include <unordered_set>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -43,6 +44,16 @@ private:
         bool isBootVolume = false;
         bool isSystemVolume = false;
         bool isHiddenPartition = false;
+    };
+
+    struct RestoreItem {
+        std::string name;
+        std::string path;
+        std::string type;
+        bool checked;
+        std::vector<RestoreItem> children;
+
+        RestoreItem() : checked(false) {}
     };
 
     ProgressCallback progressCallback;
@@ -269,6 +280,193 @@ private:
         return !path.empty() && (path[0] == '/' || path[0] == '\\');
     }
 
+    static std::string NormalizeArchiveItemPath(const std::string& path) {
+        std::string normalized = Trim(path);
+        std::replace(normalized.begin(), normalized.end(), '\\', '/');
+        while (!normalized.empty() && normalized.front() == '/') {
+            normalized.erase(normalized.begin());
+        }
+        while (normalized.size() > 1 && normalized.back() == '/') {
+            normalized.pop_back();
+        }
+        return normalized;
+    }
+
+    static std::string GetPathFileName(const std::string& path) {
+        std::string normalized = NormalizeArchiveItemPath(path);
+        size_t separator = normalized.find_last_of('/');
+        return separator == std::string::npos ? normalized : normalized.substr(separator + 1);
+    }
+
+    static std::string GetPathParent(const std::string& path) {
+        std::string normalized = NormalizeArchiveItemPath(path);
+        size_t separator = normalized.find_last_of('/');
+        return separator == std::string::npos ? std::string() : normalized.substr(0, separator);
+    }
+
+    static std::vector<std::string> SplitPathSegments(const std::string& path) {
+        std::vector<std::string> segments;
+        std::string normalized = NormalizeArchiveItemPath(path);
+        std::stringstream stream(normalized);
+        std::string segment;
+        while (std::getline(stream, segment, '/')) {
+            segment = Trim(segment);
+            if (!segment.empty()) {
+                segments.push_back(segment);
+            }
+        }
+        return segments;
+    }
+
+    static RestoreItem* FindChildByName(std::vector<RestoreItem>& items, const std::string& name) {
+        for (auto& item : items) {
+            if (item.name == name) {
+                return &item;
+            }
+        }
+
+        return nullptr;
+    }
+
+    static void AddArchiveEntryToTree(std::vector<RestoreItem>& tree, const std::string& path, bool isDirectory) {
+        std::vector<std::string> segments = SplitPathSegments(path);
+        if (segments.empty()) {
+            return;
+        }
+
+        std::vector<RestoreItem>* currentLevel = &tree;
+        std::string currentPath;
+
+        for (size_t i = 0; i < segments.size(); ++i) {
+            const std::string& segment = segments[i];
+            currentPath = currentPath.empty() ? segment : (currentPath + "/" + segment);
+            bool nodeIsDirectory = (i + 1 < segments.size()) || isDirectory;
+
+            RestoreItem* existing = FindChildByName(*currentLevel, segment);
+            if (existing == nullptr) {
+                RestoreItem item;
+                item.name = segment;
+                item.path = currentPath;
+                item.type = nodeIsDirectory ? "Folder" : "File";
+                currentLevel->push_back(item);
+                existing = &currentLevel->back();
+            } else if (nodeIsDirectory && existing->type != "Folder") {
+                existing->type = "Folder";
+            }
+
+            currentLevel = &existing->children;
+        }
+    }
+
+    static bool SeemsLikeArchiveDirectoryLine(const std::string& line) {
+        std::string trimmed = Trim(line);
+        if (trimmed.empty()) {
+            return false;
+        }
+
+        if (trimmed.back() == '/') {
+            return true;
+        }
+
+        std::string lower = trimmed;
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        return lower.find("<dir>") != std::string::npos ||
+               lower.rfind("dir ", 0) == 0 ||
+               lower.find(" directory ") != std::string::npos;
+    }
+
+    static bool ShouldSkipArchiveListingLine(const std::string& line) {
+        std::string trimmed = Trim(line);
+        return trimmed.empty() ||
+               trimmed.find("Directory listing of image") != std::string::npos ||
+               trimmed.find("listing path") != std::string::npos ||
+               trimmed.find("Total bytes") != std::string::npos ||
+               trimmed.find("Total directories") != std::string::npos ||
+               trimmed.find("Total files") != std::string::npos ||
+               trimmed.find("---") != std::string::npos;
+    }
+
+    std::vector<std::pair<std::string, bool>> ListArchiveEntries(const std::string& backupPath, int imageIndex = 1) {
+        std::vector<std::pair<std::string, bool>> entries;
+
+        std::string command = "wimlib-imagex dir '" + backupPath + "' " + std::to_string(imageIndex) + " 2>/dev/null";
+        FILE* pipe = popen(command.c_str(), "r");
+        if (!pipe) {
+            SetError("Failed to read archive contents.");
+            return entries;
+        }
+
+        char buffer[1024];
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            std::string line(buffer);
+            line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+            line.erase(std::remove(line.begin(), line.end(), '\n'), line.end());
+            if (ShouldSkipArchiveListingLine(line)) {
+                continue;
+            }
+
+            std::string trimmed = Trim(line);
+            size_t slashPos = trimmed.find('/');
+            if (slashPos == std::string::npos) {
+                continue;
+            }
+
+            std::string path = NormalizeArchiveItemPath(trimmed.substr(slashPos));
+            if (path.empty()) {
+                continue;
+            }
+
+            entries.push_back({ path, SeemsLikeArchiveDirectoryLine(trimmed) });
+        }
+
+        pclose(pipe);
+        return entries;
+    }
+
+    std::vector<RestoreItem> BuildArchiveRestoreTree(const std::string& backupPath, int imageIndex = 1) {
+        std::vector<RestoreItem> tree;
+        std::vector<std::pair<std::string, bool>> entries = ListArchiveEntries(backupPath, imageIndex);
+        if (entries.empty()) {
+            return tree;
+        }
+
+        for (const auto& [path, isDirectory] : entries) {
+            AddArchiveEntryToTree(tree, path, isDirectory);
+        }
+
+        return tree;
+    }
+
+    bool ExtractSelectedArchiveItem(const std::string& backupPath,
+                                    const std::string& destPath,
+                                    const std::string& itemPath,
+                                    int imageIndex,
+                                    bool overwriteExisting) {
+        fs::create_directories(destPath);
+
+        std::string normalizedItem = NormalizeArchiveItemPath(itemPath);
+        if (normalizedItem.empty()) {
+            SetError("Selected archive item path is empty.");
+            return false;
+        }
+
+        std::string command = "wimlib-imagex extract '" + backupPath + "' " + std::to_string(imageIndex) +
+            " '" + destPath + "' '" + normalizedItem + "' --preserve-modes --preserve-timestamps";
+
+        if (overwriteExisting) {
+            command += " --overwrite";
+        }
+
+        command += " 2>/dev/null";
+        int result = system(command.c_str());
+        if (result != 0) {
+            SetError("Failed to extract archive item: " + normalizedItem);
+            return false;
+        }
+
+        return true;
+    }
+
     std::string ResolveHyperVExportPath(const std::string& backupPath) {
         std::error_code ec;
         fs::path candidate(backupPath);
@@ -341,6 +539,10 @@ private:
 
         if (IsPathRooted(item)) {
             return item;
+        }
+
+        if (fs::is_regular_file(backupPath) && IsSsbBackup(backupPath)) {
+            return NormalizeArchiveItemPath(item);
         }
 
         return (fs::path(backupPath) / fs::path(item)).string();
@@ -1597,16 +1799,6 @@ public:
     }
 
     // NEW: Build hierarchical tree of backup contents
-    struct RestoreItem {
-        std::string name;
-        std::string path;
-        std::string type;
-        bool checked;
-        std::vector<RestoreItem> children;
-
-        RestoreItem() : checked(false) {}
-    };
-
     std::vector<RestoreItem> BuildRestoreTree(const std::string& backupPath) {
         std::vector<RestoreItem> tree;
 
@@ -1618,35 +1810,7 @@ public:
                 }
 
                 if (fs::is_regular_file(workingPath) && IsSsbBackup(workingPath)) {
-                    std::string command = "wimlib-imagex dir '" + workingPath + "' 1 2>/dev/null";
-                    FILE* pipe = popen(command.c_str(), "r");
-                    if (!pipe) {
-                        SetError("Failed to read SSB contents.");
-                        return 0;
-                    }
-
-                    char buffer[1024];
-                    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-                        std::string line(buffer);
-                        if (line.empty() || line.find("Directory listing") != std::string::npos || line.find("------") != std::string::npos) {
-                            continue;
-                        }
-
-                        line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
-                        line.erase(std::remove(line.begin(), line.end(), '\n'), line.end());
-                        if (line.empty()) {
-                            continue;
-                        }
-
-                        RestoreItem item;
-                        item.name = line;
-                        item.path = line;
-                        item.type = "Item";
-                        item.checked = false;
-                        tree.push_back(item);
-                    }
-
-                    pclose(pipe);
+                    tree = BuildArchiveRestoreTree(workingPath);
                     return 0;
                 }
 
@@ -1753,6 +1917,7 @@ public:
 
                 // Determine paths
                 std::string sourcePath = ResolveSelectedItemSourcePath(backupPath, item);
+                bool archiveSelectedItem = fs::is_regular_file(backupPath) && IsSsbBackup(backupPath);
 
                 std::string targetPath;
                 if (destPath.empty()) {
@@ -1762,7 +1927,30 @@ public:
                 }
 
                 // Intelligent type detection and restore
-                if (fs::exists(sourcePath)) {
+                if (archiveSelectedItem) {
+                    if (destPath.empty()) {
+                        if (callback) {
+                            callback(percentage, "Warning: Archive item restore on Linux requires a destination path: " + item);
+                        }
+                        LogWarning("Skipped archive item restore", "Item=" + item + " | Reason=DestinationRequired");
+                    } else {
+                        ReportRestoreItem(percentage, item);
+                        fs::path destinationRoot = fs::path(destPath);
+                        fs::path requestedItem = fs::path(NormalizeArchiveItemPath(item));
+                        fs::path extractionRoot = requestedItem.has_parent_path()
+                            ? (destinationRoot / requestedItem.parent_path())
+                            : destinationRoot;
+
+                        if (ExtractSelectedArchiveItem(backupPath, extractionRoot.string(), item, 1, overwrite)) {
+                            if (callback) {
+                                callback(std::min(99, percentage + 1), "Restored archive item: " + item);
+                            }
+                        } else if (callback) {
+                            callback(percentage, "Warning: Failed to restore archive item: " + item);
+                        }
+                    }
+                }
+                else if (fs::exists(sourcePath)) {
                     if (fs::is_directory(sourcePath)) {
                         // Check if it's a disk backup (contains .img files)
                         bool hasDiskImage = false;

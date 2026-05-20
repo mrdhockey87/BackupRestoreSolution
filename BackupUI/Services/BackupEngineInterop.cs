@@ -33,6 +33,17 @@ namespace SecureServerBackup.Services
             LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int BackupFilesBySelections(
+            string sourceRoot,
+            string destPath,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] includePaths,
+            int includePathCount,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[]? userExclusions,
+            int userExclusionCount,
+            ProgressCallback? callback,
+            LogCallback? logCallback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int BackupHyperVVM(
             string vmName,
             string destPath,

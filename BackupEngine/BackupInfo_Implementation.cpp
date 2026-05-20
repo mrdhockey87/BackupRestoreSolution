@@ -1,5 +1,6 @@
 // BackupInfo_Implementation.cpp - Get backup information and list contents
 #include "BackupEngine.h"
+#include "WimMountManager.h"
 #include <Windows.h>
 #include <string>
 #include <filesystem>
@@ -9,6 +10,67 @@
 
 namespace fs = std::filesystem;
 extern void SetLastErrorMessage(const std::wstring& error);
+
+namespace {
+    struct MountedArchiveScope {
+        std::wstring mountPath;
+
+        ~MountedArchiveScope() {
+            if (!mountPath.empty()) {
+                wchar_t errorBuffer[512] = {};
+                BackupEngine::WimMountManager::UnmountWim(mountPath.c_str(), errorBuffer, static_cast<int>(_countof(errorBuffer)));
+            }
+        }
+    };
+
+    bool IsArchiveFilePath(const std::wstring& path) {
+        std::wstring extension = fs::path(path).extension().wstring();
+        return _wcsicmp(extension.c_str(), L".ssb") == 0 ||
+               _wcsicmp(extension.c_str(), L".wim") == 0;
+    }
+
+    bool TryResolveBackupContentRoot(const std::wstring& backupPath, std::wstring& contentRoot, MountedArchiveScope& mountedArchive) {
+        std::error_code ec;
+        if (fs::exists(backupPath, ec) && fs::is_directory(backupPath, ec)) {
+            contentRoot = backupPath;
+            return true;
+        }
+
+        if (!IsArchiveFilePath(backupPath)) {
+            SetLastErrorMessage(L"Backup path does not exist");
+            return false;
+        }
+
+        if (!BackupEngine::WimMountManager::Initialize()) {
+            SetLastErrorMessage(L"Failed to initialize archive mount manager");
+            return false;
+        }
+
+        wchar_t mountPathBuffer[MAX_PATH] = {};
+        wchar_t errorBuffer[512] = {};
+        std::wstring backupName = fs::path(backupPath).stem().wstring();
+        if (backupName.empty()) {
+            backupName = L"Backup";
+        }
+
+        if (!BackupEngine::WimMountManager::MountWim(
+            backupPath.c_str(),
+            backupName.c_str(),
+            L"File",
+            1,
+            mountPathBuffer,
+            static_cast<int>(_countof(mountPathBuffer)),
+            errorBuffer,
+            static_cast<int>(_countof(errorBuffer)))) {
+            SetLastErrorMessage(errorBuffer[0] == L'\0' ? L"Failed to mount backup archive" : errorBuffer);
+            return false;
+        }
+
+        mountedArchive.mountPath = mountPathBuffer;
+        contentRoot = mountedArchive.mountPath;
+        return true;
+    }
+}
 
 extern "C" {
 
@@ -105,8 +167,9 @@ extern "C" {
         }
 
         try {
-            if (!fs::exists(backupPath)) {
-                SetLastErrorMessage(L"Backup path does not exist");
+            MountedArchiveScope mountedArchive;
+            std::wstring contentRoot;
+            if (!TryResolveBackupContentRoot(backupPath, contentRoot, mountedArchive)) {
                 return -2;
             }
 
@@ -114,7 +177,7 @@ extern "C" {
             std::vector<std::wstring> files;
 
             // Enumerate all files in backup
-            for (const auto& entry : fs::recursive_directory_iterator(backupPath)) {
+            for (const auto& entry : fs::recursive_directory_iterator(contentRoot)) {
                 if (entry.is_regular_file()) {
                     // Skip metadata files
                     std::wstring filename = entry.path().filename().wstring();
@@ -123,7 +186,7 @@ extern "C" {
                     }
 
                     // Get relative path from backup root
-                    fs::path relativePath = fs::relative(entry.path(), backupPath);
+                    fs::path relativePath = fs::relative(entry.path(), contentRoot);
                     
                     // Get file size
                     uintmax_t size = 0;

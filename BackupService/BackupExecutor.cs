@@ -160,6 +160,77 @@ namespace SecureServerBackupService
             return persistedPaths.Count > 0 ? persistedPaths : job.SourcePaths;
         }
 
+        public static IReadOnlyList<FileBackupBatch> BuildFileBackupBatches(IEnumerable<string> sourcePaths)
+        {
+            ArgumentNullException.ThrowIfNull(sourcePaths);
+
+            Dictionary<string, HashSet<string>> groupedSelections = new(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string rawPath in sourcePaths)
+            {
+                if (string.IsNullOrWhiteSpace(rawPath))
+                {
+                    continue;
+                }
+
+                string normalizedPath = NormalizeBatchPath(rawPath);
+                if (string.IsNullOrWhiteSpace(normalizedPath))
+                {
+                    continue;
+                }
+
+                string sourceRoot = DetermineFileBackupSourceRoot(normalizedPath);
+                if (string.IsNullOrWhiteSpace(sourceRoot))
+                {
+                    sourceRoot = normalizedPath;
+                }
+
+                if (!groupedSelections.TryGetValue(sourceRoot, out HashSet<string>? selections))
+                {
+                    selections = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    groupedSelections[sourceRoot] = selections;
+                }
+
+                selections.Add(normalizedPath);
+            }
+
+            return groupedSelections
+                .Select(group => new FileBackupBatch(group.Key, group.Value.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray()))
+                .OrderBy(batch => batch.SourceRoot, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static string NormalizeBatchPath(string path)
+        {
+            string trimmed = path.Trim();
+            string normalized = trimmed.Replace('/', '\\');
+
+            while (normalized.Length > 3 && normalized.EndsWith("\\", StringComparison.Ordinal))
+            {
+                normalized = normalized[..^1];
+            }
+
+            return normalized;
+        }
+
+        private static string DetermineFileBackupSourceRoot(string normalizedPath)
+        {
+            if (HyperVGuestSelectionPath.TryParse(normalizedPath, out _))
+            {
+                return normalizedPath;
+            }
+
+            if (Directory.Exists(normalizedPath))
+            {
+                return normalizedPath;
+            }
+
+            string? directoryName = Path.GetDirectoryName(normalizedPath);
+            return string.IsNullOrWhiteSpace(directoryName)
+                ? normalizedPath
+                : NormalizeBatchPath(directoryName);
+        }
+
         private static void CleanupSelectedFilesHistoryArchives(BackupJob job, string latestArchivePath, Action<string>? logger)
         {
             ArgumentNullException.ThrowIfNull(job);
@@ -563,6 +634,17 @@ namespace SecureServerBackupService
             int userExclusionCount, ProgressCallback? callback, LogCallback? logCallback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        private static extern int BackupFilesBySelections(
+            string sourceRoot,
+            string destPath,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] includePaths,
+            int includePathCount,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] userExclusions,
+            int userExclusionCount,
+            ProgressCallback? callback,
+            LogCallback? logCallback);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         private static extern int BackupVolume(string volumePath, string destPath,
             [MarshalAs(UnmanagedType.I1)] bool includeSystemState,
             [MarshalAs(UnmanagedType.I1)] bool compress,
@@ -766,7 +848,9 @@ namespace SecureServerBackupService
 
                         logger?.Invoke($"Creating backup file: {Path.GetFileName(newBackupPath)}");
 
-                        foreach (var sourcePath in sourcePaths)
+                        IReadOnlyList<FileBackupBatch> fileBackupBatches = BuildFileBackupBatches(sourcePaths);
+
+                        foreach (FileBackupBatch batch in fileBackupBatches)
                         {
                             if (cancellationToken.IsCancellationRequested)
                             {
@@ -775,6 +859,7 @@ namespace SecureServerBackupService
                             }
 
                             int result;
+                            string sourcePath = batch.SourceRoot;
                             if (HyperVGuestSelectionPath.TryParse(sourcePath, out HyperVGuestSelectionInfo? guestSelection) && guestSelection != null)
                             {
                                 logger?.Invoke($"Mounting Hyper-V guest disk selection from VM '{guestSelection.VirtualMachineName}': {guestSelection.VirtualDiskPath}");
@@ -791,7 +876,7 @@ namespace SecureServerBackupService
                                 foreach (string resolvedSourcePath in resolvedSourcePaths)
                                 {
                                     logger?.Invoke($"Backing up mounted Hyper-V guest path: {resolvedSourcePath}");
-                                    result = ExecuteBackup(job, resolvedSourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
+                                    result = ExecuteFileSelectionBackup(job, batch.SelectedPaths, resolvedSourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
                                     if (result != 0)
                                     {
                                         break;
@@ -800,7 +885,7 @@ namespace SecureServerBackupService
                             }
                             else
                             {
-                                result = ExecuteBackup(job, sourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
+                                result = ExecuteFileSelectionBackup(job, batch.SelectedPaths, sourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
                             }
 
                             if (result != 0)
@@ -1430,6 +1515,41 @@ namespace SecureServerBackupService
 
             return result;
         }
+
+        private int ExecuteFileSelectionBackup(
+            BackupJob job,
+            IReadOnlyList<string> selectedPaths,
+            string sourceRoot,
+            string destPath,
+            ProgressCallback? progressCallback,
+            LogCallback logCallback,
+            Action<string>? logger)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+            ArgumentNullException.ThrowIfNull(selectedPaths);
+
+            string[] exclusionsArray = job.UserExclusions?.ToArray() ?? Array.Empty<string>();
+            string[] includePaths = selectedPaths.Where(path => !string.IsNullOrWhiteSpace(path)).ToArray();
+
+            if (includePaths.Length == 0)
+            {
+                logger?.Invoke($"[ERROR] No selected files or folders were found for source root: {sourceRoot}");
+                return -12;
+            }
+
+            logger?.Invoke($"Backing up selected files from root: {sourceRoot} ({includePaths.Length} item(s))");
+            return BackupFilesBySelections(
+                sourceRoot,
+                destPath,
+                includePaths,
+                includePaths.Length,
+                exclusionsArray,
+                exclusionsArray.Length,
+                progressCallback,
+                logCallback);
+        }
+
+        public sealed record FileBackupBatch(string SourceRoot, IReadOnlyList<string> SelectedPaths);
 
         private string? FindLastBackup(string destPath, string jobName)
         {

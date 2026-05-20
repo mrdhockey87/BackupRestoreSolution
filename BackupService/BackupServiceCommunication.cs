@@ -24,7 +24,7 @@ namespace SecureServerBackupService
 		private static readonly PipeSecurity PipeServerSecurity = new PipeSecurity
 		{
 		};
-      private readonly string _pipeName;
+	  private readonly string _pipeName;
 		private readonly CancellationTokenSource _cancellationTokenSource = new();
 		private Task? _listenTask;
 
@@ -58,15 +58,15 @@ namespace SecureServerBackupService
 			{
 				try
 				{
-                  var pipeServer = NamedPipeServerStreamAcl.Create(
-                       _pipeName,
+				  var pipeServer = NamedPipeServerStreamAcl.Create(
+					   _pipeName,
 						PipeDirection.InOut,
 						NamedPipeServerStream.MaxAllowedServerInstances,
 						PipeTransmissionMode.Message,
-                     PipeOptions.Asynchronous,
+					 PipeOptions.Asynchronous,
 						0,
 						0,
-                      PipeServerSecurity);
+					  PipeServerSecurity);
 
 					await pipeServer.WaitForConnectionAsync(_cancellationTokenSource.Token);
 
@@ -77,15 +77,15 @@ namespace SecureServerBackupService
 				{
 					break;
 				}
-               catch (Exception ex)
+			   catch (Exception ex)
 				{
-                 BackupLogger.LogServiceError("Named pipe listener error", ex.Message);
+				 BackupLogger.LogServiceError("Named pipe listener error", ex.Message);
 					await Task.Delay(1000, _cancellationTokenSource.Token);
 				}
 			}
 		}
 
-        static BackupServiceCommunication()
+		static BackupServiceCommunication()
 		{
 			PipeServerSecurity.SetAccessRule(
 				new PipeAccessRule(
@@ -121,12 +121,12 @@ namespace SecureServerBackupService
 					await writer.FlushAsync();
 				}
 			}
-         catch (IOException ex) when (IsExpectedPipeDisconnect(ex))
+		 catch (IOException ex) when (IsExpectedPipeDisconnect(ex))
 			{
 			}
-           catch (Exception ex)
+		   catch (Exception ex)
 			{
-                BackupLogger.LogServiceWarning("Named pipe client communication failed", ex.Message);
+				BackupLogger.LogServiceWarning("Named pipe client communication failed", ex.Message);
 			}
 			finally
 			{

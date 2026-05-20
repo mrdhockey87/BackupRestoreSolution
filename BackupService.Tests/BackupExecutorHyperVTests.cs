@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using SecureServerBackupCommon;
 using SecureServerBackupService;
@@ -214,5 +215,52 @@ public sealed class BackupExecutorHyperVTests
         string archivePath = BackupExecutor.GetSelectedFilesHistoryArchivePathForTest(job, new DateTime(2026, 5, 16, 14, 35, 15));
 
         Assert.Equal(@"X:\BackupApplications\Files-Folders\Files-Folder.ssb", archivePath);
+    }
+
+    [Fact]
+    public void BuildFileBackupBatches_WhenSelectionsShareParentFolder_GroupsUnderOneRoot()
+    {
+        string[] sourcePaths =
+        [
+            @"C:\Data\Docs\Quarterly\report.docx",
+            @"C:\Data\Docs\Quarterly\notes.txt"
+        ];
+
+        IReadOnlyList<BackupExecutor.FileBackupBatch> batches = BackupExecutor.BuildFileBackupBatches(sourcePaths);
+
+        BackupExecutor.FileBackupBatch batch = Assert.Single(batches);
+        Assert.Equal(@"C:\Data\Docs\Quarterly", batch.SourceRoot);
+        Assert.Equal(2, batch.SelectedPaths.Count);
+    }
+
+    [Fact]
+    public void BuildFileBackupBatches_WhenSelectionsSpanFolders_KeepsSeparateRoots()
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            string firstFolder = Path.Combine(tempRoot, "Docs", "Quarterly");
+            string secondFolder = Path.Combine(tempRoot, "Photos", "Vacation");
+            Directory.CreateDirectory(firstFolder);
+            Directory.CreateDirectory(secondFolder);
+
+            string[] sourcePaths =
+            [
+                Path.Combine(firstFolder, "report.docx"),
+                secondFolder
+            ];
+
+            IReadOnlyList<BackupExecutor.FileBackupBatch> batches = BackupExecutor.BuildFileBackupBatches(sourcePaths);
+
+            Assert.Equal(2, batches.Count);
+            Assert.Contains(batches, batch => batch.SourceRoot == firstFolder);
+            Assert.Contains(batches, batch => batch.SourceRoot == secondFolder);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
     }
 }

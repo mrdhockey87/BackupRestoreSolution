@@ -330,6 +330,54 @@ public sealed class BackupWindowNewTreeTests : IDisposable
     }
 
     [Fact]
+    public void IsSelectedFilesBackupArchive_WhenFileNameUsesSelectedFilesPattern_ReturnsTrue()
+    {
+        bool result = RestoreWindowNew.IsSelectedFilesBackupArchive(@"C:\Backups\JobName_SelectedFiles_20260519.ssb");
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldTreatBackupAsSingleFileRestorePoint_WhenPlainArchiveContainsFileItems_ReturnsTrue()
+    {
+        bool result = RestoreWindowNew.ShouldTreatBackupAsSingleFileRestorePoint(
+            @"C:\Backups\JobName.ssb",
+            [@"C:\Users\me\Documents\file.txt", @"C:\Users\me\Pictures"]);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldTreatBackupAsSingleFileRestorePoint_WhenArchiveContainsVolumeRoots_ReturnsFalse()
+    {
+        bool result = RestoreWindowNew.ShouldTreatBackupAsSingleFileRestorePoint(
+            @"C:\Backups\JobName.ssb",
+            [@"C:\", @"D:\"]);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void DetermineBackupTypeForArchive_WhenPlainArchiveContainsFileItems_ReturnsSelectedFiles()
+    {
+        string result = RestoreWindowNew.DetermineBackupTypeForArchive(
+            @"C:\Backups\JobName.ssb",
+            [@"C:\Users\me\Documents\file.txt", @"C:\Users\me\Pictures"]);
+
+        Assert.Equal("Selected Files", result);
+    }
+
+    [Fact]
+    public void DetermineBackupTypeForArchive_WhenArchiveContainsVolumeRoots_ReturnsUnknown()
+    {
+        string result = RestoreWindowNew.DetermineBackupTypeForArchive(
+            @"C:\Backups\JobName.ssb",
+            [@"C:\", @"D:\"]);
+
+        Assert.Equal("Unknown", result);
+    }
+
+    [Fact]
     public void ShouldShowRestoreTargetGroup_WhenHyperVVmRestore_ReturnsFalse()
     {
         bool result = RestoreWindowNew.ShouldShowRestoreTargetGroup(RestoreTargetKind.HyperVVm);
@@ -626,6 +674,119 @@ public sealed class BackupWindowNewTreeTests : IDisposable
                 Directory.Delete(backupDirectory, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void RestoreSelectionContext_WhenCreatedWithoutOverrides_DefaultsToRestoreAll()
+    {
+        RestoreSelectionContext context = new();
+
+        Assert.Equal(RestoreScopeKind.All, context.ScopeKind);
+    }
+
+    [Fact]
+    public void RestoreSelectionContext_WhenCreatedWithoutOverrides_HasNoSelectedItems()
+    {
+        RestoreSelectionContext context = new();
+
+        Assert.Empty(context.SelectedItems);
+    }
+
+    [Fact]
+    public void RestoreSelectionContext_WhenCreatedWithoutOverrides_HasNoSelectedVolumes()
+    {
+        RestoreSelectionContext context = new();
+
+        Assert.Empty(context.SelectedVolumes);
+    }
+
+    [Fact]
+    public void RestoreSelectionContext_WhenCreatedForSelectiveFileRestore_PreservesSelectedItems()
+    {
+        string[] selectedItems = [@"C:\Data\One.txt", @"C:\Data\Two.txt"];
+
+        RestoreSelectionContext context = new()
+        {
+            ScopeKind = RestoreScopeKind.SelectedItems,
+            SelectedItems = selectedItems
+        };
+
+        Assert.Equal(selectedItems, context.SelectedItems);
+    }
+
+    [Fact]
+    public void RestoreSelectionContext_WhenCreatedForSelectiveVolumeRestore_PreservesSelectedVolumes()
+    {
+        VolumeInfo[] selectedVolumes =
+        [
+            new VolumeInfo { Label = "Data", Size = 1024 },
+            new VolumeInfo { Label = "Logs", Size = 2048 }
+        ];
+
+        RestoreSelectionContext context = new()
+        {
+            ScopeKind = RestoreScopeKind.SelectedVolumes,
+            SelectedVolumes = selectedVolumes
+        };
+
+        Assert.Equal(selectedVolumes, context.SelectedVolumes);
+    }
+
+    [Fact]
+    public void GroupRestoreBackupEntries_WhenSelectedFilesJobHasMultipleEntriesSameDay_ReturnsOneEntryForThatDay()
+    {
+        string dayFolder = Path.Combine(Path.GetTempPath(), nameof(RestoreWindowNewTests), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dayFolder);
+
+        try
+        {
+            string first = Path.Combine(dayFolder, "JobName_20260519_080000.ssb");
+            string second = Path.Combine(dayFolder, "JobName_20260519_120000.ssb");
+            string third = Path.Combine(dayFolder, "JobName_20260520_090000.ssb");
+
+            File.WriteAllText(first, "a");
+            File.WriteAllText(second, "b");
+            File.WriteAllText(third, "c");
+
+            File.SetLastWriteTime(first, new DateTime(2026, 5, 19, 8, 0, 0));
+            File.SetLastWriteTime(second, new DateTime(2026, 5, 19, 12, 0, 0));
+            File.SetLastWriteTime(third, new DateTime(2026, 5, 20, 9, 0, 0));
+
+            BackupJob job = new()
+            {
+                Name = "JobName",
+                Type = BackupType.SelectedFilesAndFolders,
+                Target = BackupTarget.FilesAndFolders
+            };
+
+            IReadOnlyList<string> grouped = MainWindow.GroupRestoreBackupEntries(job, [first, second, third]);
+
+            Assert.Equal(2, grouped.Count);
+            Assert.Equal(third, grouped[0]);
+            Assert.Equal(second, grouped[1]);
+        }
+        finally
+        {
+            if (Directory.Exists(dayFolder))
+            {
+                Directory.Delete(dayFolder, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void GroupRestoreBackupEntries_WhenJobIsNotSelectedFiles_ReturnsAllEntries()
+    {
+        BackupJob job = new()
+        {
+            Name = "DiskJob",
+            Type = BackupType.Full,
+            Target = BackupTarget.Disk
+        };
+
+        IReadOnlyList<string> grouped = MainWindow.GroupRestoreBackupEntries(job, [@"C:\Backups\One.ssb", @"C:\Backups\Two.ssb"]);
+
+        Assert.Equal(2, grouped.Count);
     }
 
     private static DateTime InvokeGetRestorePointTimestamp(string backupPath, IReadOnlyList<RestorePointArchiveImage> archiveImages)

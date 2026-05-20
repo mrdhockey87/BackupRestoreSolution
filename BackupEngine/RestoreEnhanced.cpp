@@ -8,10 +8,84 @@
 #include <windows.h>
 #include <algorithm>
 #include "BackupEngine.h"
+#include "WimMountManager.h"
 
 namespace fs = std::filesystem;
 
 extern std::wstring g_lastError;
+
+namespace {
+    struct MountedArchiveScope {
+        std::wstring mountPath;
+
+        ~MountedArchiveScope() {
+            if (!mountPath.empty()) {
+                wchar_t errorBuffer[512] = {};
+                BackupEngine::WimMountManager::UnmountWim(mountPath.c_str(), errorBuffer, static_cast<int>(_countof(errorBuffer)));
+            }
+        }
+    };
+
+    bool IsArchiveFilePath(const std::wstring& path) {
+        std::wstring extension = fs::path(path).extension().wstring();
+        return _wcsicmp(extension.c_str(), L".ssb") == 0 ||
+               _wcsicmp(extension.c_str(), L".wim") == 0;
+    }
+
+    bool TryResolveBackupContentRoot(const std::wstring& backupPath, std::wstring& contentRoot, MountedArchiveScope& mountedArchive) {
+        std::error_code ec;
+        if (fs::exists(backupPath, ec) && fs::is_directory(backupPath, ec)) {
+            contentRoot = backupPath;
+            return true;
+        }
+
+        if (!IsArchiveFilePath(backupPath)) {
+            g_lastError = L"Backup path does not exist";
+            return false;
+        }
+
+        if (!BackupEngine::WimMountManager::Initialize()) {
+            g_lastError = L"Failed to initialize archive mount manager";
+            return false;
+        }
+
+        wchar_t mountPathBuffer[MAX_PATH] = {};
+        wchar_t errorBuffer[512] = {};
+        std::wstring backupName = fs::path(backupPath).stem().wstring();
+        if (backupName.empty()) {
+            backupName = L"Backup";
+        }
+
+        if (!BackupEngine::WimMountManager::MountWim(
+            backupPath.c_str(),
+            backupName.c_str(),
+            L"Restore",
+            1,
+            mountPathBuffer,
+            static_cast<int>(_countof(mountPathBuffer)),
+            errorBuffer,
+            static_cast<int>(_countof(errorBuffer)))) {
+            g_lastError = errorBuffer[0] == L'\0' ? L"Failed to mount backup archive" : errorBuffer;
+            return false;
+        }
+
+        mountedArchive.mountPath = mountPathBuffer;
+        contentRoot = mountedArchive.mountPath;
+        return true;
+    }
+
+    std::wstring NormalizeManifestItem(std::wstring item) {
+        item.erase(0, item.find_first_not_of(L" \t\r\n"));
+        item.erase(item.find_last_not_of(L" \t\r\n") + 1);
+        std::replace(item.begin(), item.end(), L'/', L'\\');
+        return item;
+    }
+
+    std::wstring CombineRestorePath(const std::wstring& basePath, const std::wstring& relativePath) {
+        fs::path combined = fs::path(basePath) / fs::path(relativePath);
+        return combined.lexically_normal().wstring();
+    }
+}
 
 // Helper function to get file size formatted as string
 std::wstring FormatFileSize(uintmax_t bytes) {
@@ -201,14 +275,21 @@ BACKUPENGINE_API int RestoreWithManifest(
     }
 
     try {
+        MountedArchiveScope mountedArchive;
+        std::wstring contentRoot;
+        if (!TryResolveBackupContentRoot(backupPath, contentRoot, mountedArchive)) {
+            return -1;
+        }
+
         // Parse manifest (one path per line)
         std::wistringstream manifestStream(manifest);
         std::vector<std::wstring> itemsToRestore;
         std::wstring line;
 
         while (std::getline(manifestStream, line)) {
-            if (!line.empty()) {
-                itemsToRestore.push_back(line);
+            std::wstring normalizedItem = NormalizeManifestItem(line);
+            if (!normalizedItem.empty()) {
+                itemsToRestore.push_back(normalizedItem);
             }
         }
 
@@ -235,7 +316,7 @@ BACKUPENGINE_API int RestoreWithManifest(
             }
 
             // Determine item type and call appropriate restore function
-            std::wstring sourcePath = std::wstring(backupPath) + L"\\" + item;
+            std::wstring sourcePath = CombineRestorePath(contentRoot, item);
             std::wstring targetPath = restoreToOriginal ? item : (destination + L"\\" + item);
 
             // Check what type of item this is

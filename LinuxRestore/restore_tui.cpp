@@ -32,6 +32,7 @@ private:
     std::string restoreLogPath;
     bool restoreToOriginal = true;
     bool restoreToDisk     = false;
+    bool restoreAllItems   = true;
     std::vector<RestoreEngine::DiskInfo> targetDisks;
     bool showHiddenPartitions = false;
     int  currentStep = 1;  // 1=Select Date, 2=Select Items, 3=Select Destination
@@ -236,6 +237,66 @@ private:
             if (HasCheckedItem(item.children)) return true;
         }
         return false;
+    }
+
+    void SetTopLevelItemsChecked(bool checked) {
+        for (auto& item : restoreTree) {
+            item.checked = checked;
+            SetAllChildren(item.children, checked);
+        }
+    }
+
+    bool ChooseRestoreScope() {
+        int selected = restoreAllItems ? 0 : 1;
+
+        while (true) {
+            wclear(mainWin); box(mainWin, 0, 0);
+            ShowTitle("Step 2: Choose Restore Scope");
+
+            int startY = 4;
+            mvwprintw(mainWin, startY, 2, "Restore point: %s", selectedBackupPath.c_str());
+            mvwprintw(mainWin, startY + 2, 2, "Choose what to restore before selecting the destination:");
+
+            const char* options[] = {
+                "Restore all files, folders, or volumes from this restore point",
+                "Select specific files, folders, or volumes before restoring"
+            };
+
+            for (int i = 0; i < 2; ++i) {
+                bool isCurrent = (i == selected);
+                if (isCurrent) wattron(mainWin, COLOR_PAIR(2) | A_REVERSE);
+                mvwprintw(mainWin, startY + 5 + i, 4, "(%c) %s", isCurrent ? '*' : ' ', options[i]);
+                if (isCurrent) wattroff(mainWin, COLOR_PAIR(2) | A_REVERSE);
+            }
+
+            mvwprintw(mainWin, getmaxy(mainWin) - 4, 2,
+                "UP/DOWN: Navigate | ENTER: Continue | B: Back | Q: Quit");
+            wrefresh(mainWin);
+
+            int ch = getch();
+            switch (ch) {
+                case KEY_UP:
+                case KEY_DOWN:
+                    selected = 1 - selected;
+                    break;
+                case 10:
+                case KEY_ENTER:
+                    restoreAllItems = (selected == 0);
+                    if (restoreAllItems) {
+                        SetTopLevelItemsChecked(true);
+                    } else {
+                        SetTopLevelItemsChecked(false);
+                    }
+                    return true;
+                case 'b':
+                case 'B':
+                    currentStep = 1;
+                    return false;
+                case 'q':
+                case 'Q':
+                    return false;
+            }
+        }
     }
 
     bool SelectRestoreItems() {
@@ -553,13 +614,24 @@ private:
         }
     }
 
+    void CollectAllTopLevelPaths(std::vector<std::string>& paths) {
+        paths.clear();
+        for (const auto& item : restoreTree) {
+            paths.push_back(item.path);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Restore execution
     // -----------------------------------------------------------------------
 
     void PerformRestore() {
         std::vector<std::string> selectedPaths;
-        CollectSelectedPaths(restoreTree, selectedPaths);
+        if (restoreAllItems) {
+            CollectAllTopLevelPaths(selectedPaths);
+        } else {
+            CollectSelectedPaths(restoreTree, selectedPaths);
+        }
         if (selectedPaths.empty()) {
             UpdateStatus("No items selected for restore", true); getch(); return;
         }
@@ -655,6 +727,26 @@ public:
                 }
                 case 2: {
                     LoadBackupContents();
+                    if (restoreTree.empty()) {
+                        UpdateStatus("Failed to load backup contents", true);
+                        getch();
+                        currentStep = 1;
+                        continue;
+                    }
+
+                    if (!ChooseRestoreScope()) {
+                        if (currentStep == 1) {
+                            continue;
+                        }
+
+                        return;
+                    }
+
+                    if (restoreAllItems) {
+                        currentStep = 3;
+                        continue;
+                    }
+
                     if (SelectRestoreItems()) currentStep = 3;
                     else if (currentStep == 1) continue;
                     else return;

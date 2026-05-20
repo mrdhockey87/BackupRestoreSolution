@@ -33,6 +33,7 @@ namespace SecureServerBackup.Windows
         private ObservableCollection<RestorePoint> restorePoints = new();
         private List<string> backupFiles = new();
         private readonly AvailableBackupInfo? _preloadedBackup;
+        private readonly RestoreSelectionContext? _preselectedRestore;
         private readonly bool _requireAlternateDestination;
         private readonly List<string> _bootProtectedTargets = new();
         private RestoreTargetKind _restoreTargetKind = RestoreTargetKind.FileOrFolder;
@@ -41,6 +42,7 @@ namespace SecureServerBackup.Windows
         private NativeBackupMountManager.RestoreDiskPlan? _diskRestorePlan;
         private bool _isHyperVBackupPoint;
         private bool _suppressRestorePointSelectionChanged;
+        private RestorePoint? _activeRestorePoint;
 
         // Restore target drive tree items
         private readonly ObservableCollection<DriveTreeItem> _restoreTargetItems = new();
@@ -312,7 +314,6 @@ namespace SecureServerBackup.Windows
             DateTime? earliestStartTime = archiveImages
                 .Select(image => image.BackupStartTime)
                 .Where(timestamp => timestamp.HasValue)
-                .Select(timestamp => timestamp!.Value)
                 .OrderBy(timestamp => timestamp)
                 .FirstOrDefault();
 
@@ -323,6 +324,20 @@ namespace SecureServerBackup.Windows
 
             backupStartTime = earliestStartTime.Value;
             return true;
+        }
+
+        private static IReadOnlyList<string> ParseListedBackupItems(string listedContents)
+        {
+            if (string.IsNullOrWhiteSpace(listedContents))
+            {
+                return Array.Empty<string>();
+            }
+
+            return listedContents
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(item => item.Trim())
+                .Where(item => !string.IsNullOrWhiteSpace(item) && !string.Equals(item, "(No files in backup)", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
         }
 
         private static bool TryGetFileBackupStartTime(string backupPath, out DateTime backupStartTime)
@@ -382,6 +397,12 @@ namespace SecureServerBackup.Windows
             _requireAlternateDestination = requireAlternateDestination;
         }
 
+        public RestoreWindowNew(RestoreSelectionContext restoreSelection)
+            : this(restoreSelection?.Backup ?? throw new ArgumentNullException(nameof(restoreSelection)), restoreSelection.RequireAlternateDestination)
+        {
+            _preselectedRestore = restoreSelection;
+        }
+
         private async void RestoreWindowNew_Loaded(object sender, RoutedEventArgs e)
         {
             // Always pre-load the restore target tree so it is ready when the user selects a backup
@@ -397,6 +418,289 @@ namespace SecureServerBackup.Windows
             UpdateSelectedRestoreTargetKind();
 
             await ScanBackupAsync();
+
+            if (_preselectedRestore != null)
+            {
+                ApplyPreselectedRestoreContext();
+            }
+        }
+
+        internal static IReadOnlyList<RestorePoint> GetRestorePointsForBackup(string backupPath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(backupPath);
+
+            IReadOnlyList<string> backupItems = GetBackupItemsForArchive(backupPath);
+            string backupType = DetermineBackupTypeForArchive(backupPath, backupItems);
+            IReadOnlyList<RestorePointArchiveImage> archiveImages = GetRestorePointArchiveImages(backupPath);
+            bool forceSingleRestorePoint = ShouldTreatBackupAsSingleFileRestorePoint(backupPath, backupItems);
+            DateTime timestamp = GetRestorePointTimestamp(backupPath, archiveImages);
+
+            return CreateRestorePointsForBackupFile(
+                backupPath,
+                backupType,
+                timestamp,
+                startingPointNumber: 1,
+                archiveImages,
+                forceSingleRestorePoint);
+        }
+
+        private static string DetermineBackupTypeForPath(string backupPath)
+        {
+            string fileName = Path.GetFileName(backupPath);
+            if (fileName.Contains("_SelectedFiles_", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Selected Files";
+            }
+
+            if (fileName.Contains("incremental", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Incremental";
+            }
+
+            if (fileName.Contains("differential", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Differential";
+            }
+
+            if (fileName.Contains("full", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Full";
+            }
+
+            return "Unknown";
+        }
+
+        internal static string DetermineBackupTypeForArchive(string backupPath, IReadOnlyList<string> backupItems)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(backupPath);
+            ArgumentNullException.ThrowIfNull(backupItems);
+
+            return ShouldTreatBackupAsSingleFileRestorePoint(backupPath, backupItems)
+                ? "Selected Files"
+                : DetermineBackupTypeForPath(backupPath);
+        }
+
+        private void ApplyPreselectedRestoreContext()
+        {
+            if (_preselectedRestore == null)
+            {
+                return;
+            }
+
+            RestorePoint? matchingRestorePoint = restorePoints.FirstOrDefault(point =>
+                string.Equals(point.FilePath, _preselectedRestore.RestorePoint.FilePath, StringComparison.OrdinalIgnoreCase) &&
+                point.ImageIndex == _preselectedRestore.RestorePoint.ImageIndex &&
+                point.Timestamp == _preselectedRestore.RestorePoint.Timestamp);
+
+            if (matchingRestorePoint == null)
+            {
+                matchingRestorePoint = _preselectedRestore.RestorePoint;
+                restorePoints.Clear();
+                restorePoints.Add(matchingRestorePoint);
+                lstRestorePoints.ItemsSource = restorePoints;
+            }
+
+            _activeRestorePoint = matchingRestorePoint;
+            _suppressRestorePointSelectionChanged = true;
+            lstRestorePoints.SelectedItem = matchingRestorePoint;
+            _suppressRestorePointSelectionChanged = false;
+
+            if (_preselectedRestore.ScopeKind == RestoreScopeKind.All)
+            {
+                rbRestoreAll.IsChecked = true;
+                lstBackupItems.SelectAll();
+            }
+            else
+            {
+                rbRestoreSelected.IsChecked = true;
+                lstBackupItems.SelectedItems.Clear();
+                foreach (object item in lstBackupItems.Items)
+                {
+                    if (item is string backupItem && _preselectedRestore.SelectedItems.Contains(backupItem, StringComparer.OrdinalIgnoreCase))
+                    {
+                        lstBackupItems.SelectedItems.Add(item);
+                    }
+                }
+
+                _selectedRestoreDiskGroup = _preselectedRestore.SelectedVolumes.Count > 0
+                    ? _preselectedRestore.SelectedVolumes
+                    : null;
+                _selectedRestoreVolume = _preselectedRestore.SelectedVolumes.Count == 1
+                    ? _preselectedRestore.SelectedVolumes[0]
+                    : null;
+            }
+
+            ApplyPreselectedRestoreUi();
+
+            UpdateSelectedRestoreTargetKind();
+            UpdateRestoreActionState();
+        }
+
+        private void ApplyPreselectedRestoreUi()
+        {
+            if (_preselectedRestore == null || _activeRestorePoint == null)
+            {
+                return;
+            }
+
+            if (btnBrowseBackup != null)
+            {
+                btnBrowseBackup.Visibility = Visibility.Collapsed;
+            }
+
+            if (btnScanBackup != null)
+            {
+                btnScanBackup.Visibility = Visibility.Collapsed;
+            }
+
+            if (txtRestorePointPrompt != null)
+            {
+                txtRestorePointPrompt.Visibility = Visibility.Collapsed;
+            }
+
+            if (lstRestorePoints != null)
+            {
+                lstRestorePoints.Visibility = Visibility.Collapsed;
+            }
+
+            if (txtPreselectedRestorePointSummary != null)
+            {
+                txtPreselectedRestorePointSummary.Text = $"Restore point: {_activeRestorePoint.DisplayName} — {_activeRestorePoint.Description}";
+                txtPreselectedRestorePointSummary.Visibility = Visibility.Visible;
+            }
+
+            if (txtWhatToRestoreLabel != null)
+            {
+                txtWhatToRestoreLabel.Visibility = Visibility.Collapsed;
+            }
+
+            if (rbRestoreAll != null)
+            {
+                rbRestoreAll.Visibility = Visibility.Collapsed;
+            }
+
+            if (rbRestoreSelected != null)
+            {
+                rbRestoreSelected.Visibility = Visibility.Collapsed;
+            }
+
+            if (pnlItemSelection != null)
+            {
+                pnlItemSelection.Visibility = Visibility.Collapsed;
+            }
+
+            if (txtPreselectedScopeSummary != null)
+            {
+                txtPreselectedScopeSummary.Text = _preselectedRestore.ScopeKind switch
+                {
+                    RestoreScopeKind.All => "Restore scope: all files or volumes from the selected restore point.",
+                    RestoreScopeKind.SelectedVolumes => BuildSelectedVolumeSummary(),
+                    RestoreScopeKind.SelectedItems => BuildSelectedItemSummary(),
+                    _ => string.Empty
+                };
+                txtPreselectedScopeSummary.Visibility = Visibility.Visible;
+            }
+        }
+
+        private string BuildSelectedItemSummary()
+        {
+            if (_preselectedRestore == null || _preselectedRestore.SelectedItems.Count == 0)
+            {
+                return "Restore scope: selected files or folders.";
+            }
+
+            int itemCount = _preselectedRestore.SelectedItems.Count;
+            string preview = _preselectedRestore.SelectedItems[0];
+            return itemCount == 1
+                ? $"Restore scope: selected item — {preview}"
+                : $"Restore scope: {itemCount} selected files or folders.";
+        }
+
+        private string BuildSelectedVolumeSummary()
+        {
+            if (_preselectedRestore == null || _preselectedRestore.SelectedVolumes.Count == 0)
+            {
+                return "Restore scope: selected volumes.";
+            }
+
+            int volumeCount = _preselectedRestore.SelectedVolumes.Count;
+            string firstLabel = _preselectedRestore.SelectedVolumes[0].Label;
+            return volumeCount == 1
+                ? $"Restore scope: selected volume — {firstLabel}"
+                : $"Restore scope: {volumeCount} selected volumes.";
+        }
+
+        internal static IReadOnlyList<string> GetBackupItemsForRestorePoint(RestorePoint restorePoint)
+        {
+            ArgumentNullException.ThrowIfNull(restorePoint);
+
+            try
+            {
+                using var preparedBackup = EncryptedBackupFileService.PrepareForRead(null, restorePoint.FilePath, Path.GetFileNameWithoutExtension(restorePoint.FilePath));
+                var buffer = new StringBuilder(32768);
+                int result = BackupEngineInterop.ListBackupContents(preparedBackup.WorkingPath, buffer, buffer.Capacity);
+                if (result != 0)
+                {
+                    return Array.Empty<string>();
+                }
+
+                return ParseListedBackupItems(buffer.ToString());
+            }
+            catch
+            {
+                return Array.Empty<string>();
+            }
+        }
+
+        internal static IReadOnlyList<VolumeInfo> GetBackupVolumesForRestorePoint(RestorePoint restorePoint)
+        {
+            ArgumentNullException.ThrowIfNull(restorePoint);
+
+            try
+            {
+                var imagesWithMetadata = NativeBackupMountManager.GetImageInfoWithRestoreMetadata(restorePoint.FilePath);
+                if (!imagesWithMetadata.Success || imagesWithMetadata.Images.Count == 0)
+                {
+                    return Array.Empty<VolumeInfo>();
+                }
+
+                return imagesWithMetadata.Images
+                    .Where(image => image.ImageIndex > 0)
+                    .Select((image, idx) => new VolumeInfo
+                    {
+                        ImageIndex = image.ImageIndex,
+                        Label = !string.IsNullOrWhiteSpace(image.RestoreMetadata?.SourceVolumeLabel)
+                            ? image.RestoreMetadata.SourceVolumeLabel
+                            : (!string.IsNullOrWhiteSpace(image.Name) ? image.Name : $"Volume {idx + 1}"),
+                        Size = image.RestoreMetadata?.PartitionLengthBytes > 0
+                            ? (long)image.RestoreMetadata.PartitionLengthBytes
+                            : 0,
+                        UsedSpace = image.RestoreMetadata?.SourceUsedSpaceBytes > 0
+                            ? (long)image.RestoreMetadata.SourceUsedSpaceBytes
+                            : 0,
+                        PartitionNumber = image.RestoreMetadata?.PartitionNumber ?? 0,
+                        PartitionOffsetBytes = image.RestoreMetadata?.PartitionOffsetBytes ?? 0,
+                        PartitionLengthBytes = image.RestoreMetadata?.PartitionLengthBytes ?? 0,
+                        PartitionStyle = image.RestoreMetadata?.PartitionStyle ?? string.Empty,
+                        PartitionType = image.RestoreMetadata?.PartitionType ?? string.Empty,
+                        SourceVolumeGuidPath = image.RestoreMetadata?.SourceVolumeGuidPath ?? string.Empty,
+                        SourceVolumeMountPath = image.RestoreMetadata?.SourceVolumeMountPath ?? string.Empty,
+                        IsBootVolume = image.RestoreMetadata?.IsBootVolume == true,
+                        IsSystemVolume = image.RestoreMetadata?.IsSystemVolume == true,
+                        FileSystem = image.RestoreMetadata?.SourceFileSystem ?? string.Empty,
+                        IsResizable = true,
+                        TargetSize = image.RestoreMetadata?.PartitionLengthBytes > 0
+                            ? (long)image.RestoreMetadata.PartitionLengthBytes
+                            : 0
+                    })
+                    .OrderBy(volume => volume.PartitionOffsetBytes)
+                    .ThenBy(volume => volume.PartitionNumber)
+                    .ToArray();
+            }
+            catch
+            {
+                return Array.Empty<VolumeInfo>();
+            }
         }
 
         private async Task ScanBackupAsync()
@@ -545,19 +849,41 @@ namespace SecureServerBackup.Windows
 
         private void AnalyzeBackupFiles()
         {
-            // Group files by backup type
-            var selectedFilesHistoryBackups = backupFiles
-                .Where(f => Path.GetFileName(f).Contains("_SelectedFiles_", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            var fullBackups = backupFiles.Where(f =>
-                !Path.GetFileName(f).Contains("_SelectedFiles_", StringComparison.OrdinalIgnoreCase) &&
-                f.Contains("full", StringComparison.OrdinalIgnoreCase)).ToList();
-            var incrementalBackups = backupFiles.Where(f =>
-                !Path.GetFileName(f).Contains("_SelectedFiles_", StringComparison.OrdinalIgnoreCase) &&
-                f.Contains("incremental", StringComparison.OrdinalIgnoreCase)).ToList();
-            var differentialBackups = backupFiles.Where(f =>
-                !Path.GetFileName(f).Contains("_SelectedFiles_", StringComparison.OrdinalIgnoreCase) &&
-                f.Contains("differential", StringComparison.OrdinalIgnoreCase)).ToList();
+            var selectedFilesBackups = new List<string>();
+            var fullBackups = new List<string>();
+            var incrementalBackups = new List<string>();
+            var differentialBackups = new List<string>();
+            var unknownBackups = new List<string>();
+
+            foreach (string backup in backupFiles)
+            {
+                if (ShouldTreatBackupAsSingleFileRestorePoint(backup, GetBackupItemsForArchive(backup)))
+                {
+                    selectedFilesBackups.Add(backup);
+                    continue;
+                }
+
+                string fileName = Path.GetFileName(backup);
+                if (fileName.Contains("incremental", StringComparison.OrdinalIgnoreCase))
+                {
+                    incrementalBackups.Add(backup);
+                    continue;
+                }
+
+                if (fileName.Contains("differential", StringComparison.OrdinalIgnoreCase))
+                {
+                    differentialBackups.Add(backup);
+                    continue;
+                }
+
+                if (fileName.Contains("full", StringComparison.OrdinalIgnoreCase))
+                {
+                    fullBackups.Add(backup);
+                    continue;
+                }
+
+                unknownBackups.Add(backup);
+            }
 
             // Create restore points
             int pointNumber = 1;
@@ -565,8 +891,8 @@ namespace SecureServerBackup.Windows
             // Full backups
             AddRestorePoints(fullBackups, "Full", ref pointNumber);
 
-            // Selected Files history backups
-            AddRestorePoints(selectedFilesHistoryBackups, "Selected Files", ref pointNumber, expandArchiveImages: false, forceSingleRestorePoint: true);
+            // Selected Files backups
+            AddRestorePoints(selectedFilesBackups, "Selected Files", ref pointNumber, expandArchiveImages: false, forceSingleRestorePoint: true);
 
             // Incremental backups
             AddRestorePoints(incrementalBackups, "Incremental", ref pointNumber);
@@ -575,9 +901,65 @@ namespace SecureServerBackup.Windows
             AddRestorePoints(differentialBackups, "Differential", ref pointNumber);
 
             // If no specific types found, add all files as restore points
-            if (restorePoints.Count == 0 && backupFiles.Count > 0)
+            if (restorePoints.Count == 0 && unknownBackups.Count > 0)
             {
-                AddRestorePoints(backupFiles, "Unknown", ref pointNumber);
+                AddRestorePoints(unknownBackups, "Unknown", ref pointNumber);
+            }
+        }
+
+        internal static bool IsSelectedFilesBackupArchive(string backupPath)
+        {
+            IReadOnlyList<string> backupItems = GetBackupItemsForArchive(backupPath);
+
+            return ShouldTreatBackupAsSingleFileRestorePoint(backupPath, backupItems);
+        }
+
+        internal static bool ShouldTreatBackupAsSingleFileRestorePoint(string backupPath, IReadOnlyList<string> backupItems)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(backupPath);
+            ArgumentNullException.ThrowIfNull(backupItems);
+
+            if (!string.Equals(Path.GetExtension(backupPath), ".ssb", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string fileName = Path.GetFileName(backupPath);
+            if (fileName.Contains("_SelectedFiles_", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return backupItems.Count > 0 &&
+                   DetermineRestoreTargetKind("Unknown", backupPath, backupItems) == RestoreTargetKind.FileOrFolder;
+        }
+
+        private static IReadOnlyList<string> GetBackupItemsForArchive(string backupPath)
+        {
+            if (string.IsNullOrWhiteSpace(backupPath))
+            {
+                return Array.Empty<string>();
+            }
+
+            try
+            {
+                using var preparedBackup = EncryptedBackupFileService.PrepareForRead(null, backupPath, Path.GetFileNameWithoutExtension(backupPath));
+                var buffer = new StringBuilder(32768);
+                int result = BackupEngineInterop.ListBackupContents(preparedBackup.WorkingPath, buffer, buffer.Capacity);
+                if (result != 0)
+                {
+                    return Array.Empty<string>();
+                }
+
+                return buffer.ToString()
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(item => item.Trim())
+                    .Where(item => !string.IsNullOrWhiteSpace(item))
+                    .ToArray();
+            }
+            catch
+            {
+                return Array.Empty<string>();
             }
         }
 
@@ -823,6 +1205,7 @@ namespace SecureServerBackup.Windows
 
             if (lstRestorePoints.SelectedItem is RestorePoint point)
             {
+                _activeRestorePoint = point;
                 await LoadBackupContents(point.FilePath);
             }
 
@@ -859,9 +1242,7 @@ namespace SecureServerBackup.Windows
 
                     if (result == 0)
                     {
-                        var items = buffer.ToString()
-                            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                            .ToList();
+                        var items = ParseListedBackupItems(buffer.ToString());
 
                         Dispatcher.Invoke(() =>
                         {
@@ -1485,7 +1866,7 @@ namespace SecureServerBackup.Windows
                 return false;
             }
 
-            if (lstRestorePoints.SelectedItem is not RestorePoint selectedPoint)
+            if (_activeRestorePoint is not RestorePoint selectedPoint)
             {
                 return false;
             }
@@ -1556,7 +1937,7 @@ namespace SecureServerBackup.Windows
                 return true;
             }
 
-            if (lstRestorePoints.SelectedItem is not RestorePoint selectedPoint)
+            if (_activeRestorePoint is not RestorePoint selectedPoint)
             {
                 return false;
             }
@@ -1632,7 +2013,7 @@ namespace SecureServerBackup.Windows
         {
             ArgumentNullException.ThrowIfNull(owner);
 
-            var selectedPoint = lstRestorePoints.SelectedItem as RestorePoint;
+            var selectedPoint = _activeRestorePoint;
             if (selectedPoint == null) return;
 
             var destination = _restoreTargetKind == RestoreTargetKind.FileOrFolder
@@ -1693,11 +2074,26 @@ namespace SecureServerBackup.Windows
 
                     default:
                     {
-                        result = BackupEngineInterop.RestoreFiles(
-                            preparedBackup.WorkingPath,
-                            destination,
-                            chkOverwrite.IsChecked == true,
-                            callback);
+                        if (_preselectedRestore?.ScopeKind == RestoreScopeKind.SelectedItems && _preselectedRestore.SelectedItems.Count > 0)
+                        {
+                            string manifest = string.Join(Environment.NewLine, _preselectedRestore.SelectedItems);
+                            result = BackupEngineInterop.RestoreWithManifest(
+                                preparedBackup.WorkingPath,
+                                destination,
+                                manifest,
+                                chkOverwrite.IsChecked == true,
+                                restoreSystemState: false,
+                                preservePermissions: false,
+                                callback);
+                        }
+                        else
+                        {
+                            result = BackupEngineInterop.RestoreFiles(
+                                preparedBackup.WorkingPath,
+                                destination,
+                                chkOverwrite.IsChecked == true,
+                                callback);
+                        }
                         break;
                     }
                 }
@@ -1720,7 +2116,7 @@ namespace SecureServerBackup.Windows
 
         private void ShowRestoreProgressWindow(bool keepWindowOpen)
         {
-            if (lstRestorePoints.SelectedItem is not RestorePoint selectedPoint)
+            if (_activeRestorePoint is not RestorePoint selectedPoint)
             {
                 throw new InvalidOperationException("A restore point must be selected before starting the restore.");
             }
@@ -2020,7 +2416,7 @@ namespace SecureServerBackup.Windows
 
         private bool ValidateRestore()
         {
-            if (lstRestorePoints.SelectedItem == null)
+            if (_activeRestorePoint == null)
             {
                 ShowOwnedMessage("Please select a restore point.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -2154,7 +2550,7 @@ namespace SecureServerBackup.Windows
                 return false;
             }
 
-            if (_isHyperVBackupPoint && (_restoreTargetKind == RestoreTargetKind.Disk || _restoreTargetKind == RestoreTargetKind.Volume) && HyperVRestorePointHelper.FindPrimaryVirtualDisk(((RestorePoint)lstRestorePoints.SelectedItem!).FilePath) == null)
+            if (_isHyperVBackupPoint && (_restoreTargetKind == RestoreTargetKind.Disk || _restoreTargetKind == RestoreTargetKind.Volume) && _activeRestorePoint != null && HyperVRestorePointHelper.FindPrimaryVirtualDisk(_activeRestorePoint.FilePath) == null)
             {
                 ShowOwnedMessage("The selected Hyper-V backup point does not contain a guest VHD or VHDX file that can be restored to a disk or volume target.", "Validation Error",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -2171,7 +2567,7 @@ namespace SecureServerBackup.Windows
 
         private void UpdateSelectedRestoreTargetKind()
         {
-            var selectedPoint = lstRestorePoints.SelectedItem as RestorePoint;
+            var selectedPoint = _activeRestorePoint;
             if (selectedPoint == null)
             {
                 _restoreTargetKind = restorePoints.Count > 0

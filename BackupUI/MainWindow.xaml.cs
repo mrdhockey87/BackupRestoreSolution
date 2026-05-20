@@ -851,7 +851,7 @@ namespace SecureServerBackup
                     }
 
                     var backupEntries = Directory.EnumerateFileSystemEntries(destPath, "*.ssb", SearchOption.AllDirectories);
-                    foreach (var ssb in backupEntries)
+                    foreach (string ssb in GroupRestoreBackupEntries(job, backupEntries))
                     {
                         DateTime backupDate = File.Exists(ssb)
                             ? new FileInfo(ssb).LastWriteTime
@@ -893,6 +893,42 @@ namespace SecureServerBackup
                     txtRestoreTabStatus.Text = $"Error loading restore backups: {ex.Message}";
                 }
             }
+        }
+
+        internal static IReadOnlyList<string> GroupRestoreBackupEntries(BackupJob job, IEnumerable<string> backupEntries)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+            ArgumentNullException.ThrowIfNull(backupEntries);
+
+            List<string> entries = backupEntries
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (job.Type != BackupType.SelectedFilesAndFolders || job.Target != BackupTarget.FilesAndFolders)
+            {
+                return entries
+                    .OrderByDescending(GetRestoreBackupEntryTimestamp)
+                    .ThenByDescending(path => path, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+
+            return entries
+                .GroupBy(path => GetRestoreBackupEntryTimestamp(path).Date)
+                .Select(group => group
+                    .OrderByDescending(GetRestoreBackupEntryTimestamp)
+                    .ThenByDescending(path => path, StringComparer.OrdinalIgnoreCase)
+                    .First())
+                .OrderByDescending(GetRestoreBackupEntryTimestamp)
+                .ThenByDescending(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static DateTime GetRestoreBackupEntryTimestamp(string backupPath)
+        {
+            return File.Exists(backupPath)
+                ? new FileInfo(backupPath).LastWriteTime
+                : Directory.GetLastWriteTime(backupPath);
         }
 
         private void RefreshRestoreBackups_Click(object sender, RoutedEventArgs e)
@@ -937,7 +973,13 @@ namespace SecureServerBackup
                     requireAlternateDestination = true;
                 }
 
-                var window = new RestoreWindowNew(backup, requireAlternateDestination);
+                RestoreSelectionContext? restoreSelection = PromptForRestoreSelection(backup, requireAlternateDestination);
+                if (restoreSelection == null)
+                {
+                    return;
+                }
+
+                var window = new RestoreWindowNew(restoreSelection);
                 WindowPositionManager.SetChildWindowPosition(window, this);
                 window.ShowDialog();
             }
@@ -962,12 +1004,9 @@ namespace SecureServerBackup
 
             if (matchingJob.Target == BackupTarget.Disk)
             {
-                // Only flag as boot-related if the source disk is the currently booted disk.
-                // A non-booted disk (e.g. secondary or dual-boot disk) is fully restorable from Windows.
                 int bootDiskNumber = GetBootDiskNumber();
                 if (bootDiskNumber < 0)
                 {
-                    // Could not determine boot disk - fail safe: allow restore without warning.
                     return false;
                 }
 
@@ -976,15 +1015,20 @@ namespace SecureServerBackup
                 foreach (var sourcePath in matchingJob.SourcePaths)
                 {
                     if (string.IsNullOrWhiteSpace(sourcePath))
+                    {
                         continue;
+                    }
 
                     string normalized = sourcePath.TrimEnd('\\');
                     if (string.Equals(normalized, bootDevicePath, StringComparison.OrdinalIgnoreCase))
+                    {
                         return true;
+                    }
 
-                    // Support numeric disk index stored as plain integer string.
                     if (int.TryParse(normalized, out int diskIndex) && diskIndex == bootDiskNumber)
+                    {
                         return true;
+                    }
                 }
 
                 return false;
@@ -1029,6 +1073,106 @@ namespace SecureServerBackup
             }
 
             return false;
+        }
+
+        private RestoreSelectionContext? PromptForRestoreSelection(AvailableBackupInfo backup, bool requireAlternateDestination)
+        {
+            var restorePointWindow = new RestorePointSelectionWindow(backup);
+            WindowPositionManager.SetChildWindowPosition(restorePointWindow, this);
+            if (restorePointWindow.ShowDialog() != true || restorePointWindow.SelectedRestorePoint == null)
+            {
+                return null;
+            }
+
+            IReadOnlyList<RestorePoint> restorePoints = RestoreWindowNew.GetRestorePointsForBackup(backup.BackupPath);
+            RestorePoint selectedRestorePoint = restorePointWindow.SelectedRestorePoint;
+            bool isGroupedRestore = restorePoints.Count == 1;
+
+            if (!isGroupedRestore)
+            {
+                return new RestoreSelectionContext
+                {
+                    Backup = backup,
+                    RestorePoint = selectedRestorePoint,
+                    RequireAlternateDestination = requireAlternateDestination,
+                    ScopeKind = RestoreScopeKind.All
+                };
+            }
+
+            var restoreAllResult = CustomDialogService.ShowConfirmation(
+                this,
+                "Do you want to restore all files or volumes from the selected restore point?\n\nChoose Yes to restore everything, No to choose specific items, or Cancel to stop.",
+                "Restore Scope");
+
+            if (restoreAllResult == CustomDialogResult.Cancel || restoreAllResult == CustomDialogResult.None)
+            {
+                return null;
+            }
+
+            if (restoreAllResult == CustomDialogResult.Yes)
+            {
+                return new RestoreSelectionContext
+                {
+                    Backup = backup,
+                    RestorePoint = selectedRestorePoint,
+                    RequireAlternateDestination = requireAlternateDestination,
+                    ScopeKind = RestoreScopeKind.All
+                };
+            }
+
+            IReadOnlyList<VolumeInfo> volumes = RestoreWindowNew.GetBackupVolumesForRestorePoint(selectedRestorePoint);
+            if (volumes.Count > 1)
+            {
+                var volumeWindow = new RestoreVolumeSelectionDialog(
+                    volumes,
+                    isDiskOrHyperVBackup: true,
+                    "Select the volume or full set of volumes to restore from this restore point.");
+                WindowPositionManager.SetChildWindowPosition(volumeWindow, this);
+                if (volumeWindow.ShowDialog() != true || !volumeWindow.Confirmed)
+                {
+                    return null;
+                }
+
+                IReadOnlyList<VolumeInfo> selectedVolumes = volumeWindow.SelectedDiskGroup ??
+                    (volumeWindow.SelectedVolume != null ? new[] { volumeWindow.SelectedVolume } : Array.Empty<VolumeInfo>());
+
+                if (selectedVolumes.Count == 0)
+                {
+                    return null;
+                }
+
+                return new RestoreSelectionContext
+                {
+                    Backup = backup,
+                    RestorePoint = selectedRestorePoint,
+                    RequireAlternateDestination = requireAlternateDestination,
+                    ScopeKind = RestoreScopeKind.SelectedVolumes,
+                    SelectedVolumes = selectedVolumes
+                };
+            }
+
+            IReadOnlyList<string> items = RestoreWindowNew.GetBackupItemsForRestorePoint(selectedRestorePoint);
+            if (items.Count == 0)
+            {
+                CustomDialogService.ShowWarning(this, "No selectable files or folders were found for the selected restore point.", "Restore Items Unavailable");
+                return null;
+            }
+
+            var itemWindow = new RestoreItemSelectionWindow(backup, selectedRestorePoint, items);
+            WindowPositionManager.SetChildWindowPosition(itemWindow, this);
+            if (itemWindow.ShowDialog() != true || itemWindow.SelectedItems.Count == 0)
+            {
+                return null;
+            }
+
+            return new RestoreSelectionContext
+            {
+                Backup = backup,
+                RestorePoint = selectedRestorePoint,
+                RequireAlternateDestination = requireAlternateDestination,
+                ScopeKind = RestoreScopeKind.SelectedItems,
+                SelectedItems = itemWindow.SelectedItems
+            };
         }
 
         /// <summary>

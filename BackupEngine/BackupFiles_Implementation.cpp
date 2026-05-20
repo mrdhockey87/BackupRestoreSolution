@@ -15,6 +15,11 @@ namespace fs = std::filesystem;
 extern void SetLastErrorMessage(const std::wstring& error);
 
 namespace {
+    struct FileBackupSelectionEntry {
+        std::wstring normalizedPath;
+        bool includeDescendants;
+    };
+
     std::wstring SanitizeXmlName(const std::wstring& input) {
         std::wstring result;
         result.reserve(input.size() + 16);
@@ -105,8 +110,8 @@ namespace {
         int userExclusionCount;
         ProgressCallback callback;
         int filesProcessed;
-        std::wstring exactPathFilter;
         std::wstring captureRootPath;
+        std::vector<FileBackupSelectionEntry> includeSelections;
     };
 
     std::wstring NormalizePathForComparison(const std::wstring& path) {
@@ -120,28 +125,111 @@ namespace {
         return normalized;
     }
 
-    bool ShouldIncludeExactPath(const FileBackupContext* context, const std::wstring& path) {
-        if (context == nullptr || context->exactPathFilter.empty()) {
+    bool PathsEqualInsensitive(const std::wstring& left, const std::wstring& right) {
+        return _wcsicmp(left.c_str(), right.c_str()) == 0;
+    }
+
+    std::wstring EnsureTrailingSeparator(const std::wstring& path) {
+        if (path.empty() || path.back() == L'\\') {
+            return path;
+        }
+
+        return path + L'\\';
+    }
+
+    bool IsSameOrDescendantPath(const std::wstring& path, const std::wstring& ancestor) {
+        if (PathsEqualInsensitive(path, ancestor)) {
+            return true;
+        }
+
+        std::wstring normalizedAncestor = EnsureTrailingSeparator(ancestor);
+        return path.length() > normalizedAncestor.length() &&
+               _wcsnicmp(path.c_str(), normalizedAncestor.c_str(), normalizedAncestor.length()) == 0;
+    }
+
+    std::vector<FileBackupSelectionEntry> BuildIncludeSelections(
+        const wchar_t** includePaths,
+        int includePathCount,
+        const std::wstring& captureRootPath) {
+        std::vector<FileBackupSelectionEntry> selections;
+        if (includePaths == nullptr || includePathCount <= 0) {
+            return selections;
+        }
+
+        for (int index = 0; index < includePathCount; index++) {
+            const wchar_t* includePath = includePaths[index];
+            if (includePath == nullptr || *includePath == L'\0') {
+                continue;
+            }
+
+            std::wstring normalizedPath = NormalizePathForComparison(includePath);
+            if (normalizedPath.empty()) {
+                continue;
+            }
+
+            bool includeDescendants = false;
+            try {
+                includeDescendants = fs::exists(includePath) && fs::is_directory(includePath);
+            }
+            catch (...) {
+                includeDescendants = false;
+            }
+
+            if (PathsEqualInsensitive(normalizedPath, captureRootPath)) {
+                includeDescendants = true;
+            }
+
+            auto existingSelection = std::find_if(
+                selections.begin(),
+                selections.end(),
+                [&](const FileBackupSelectionEntry& entry) {
+                    return PathsEqualInsensitive(entry.normalizedPath, normalizedPath);
+                });
+
+            if (existingSelection != selections.end()) {
+                existingSelection->includeDescendants = existingSelection->includeDescendants || includeDescendants;
+                continue;
+            }
+
+            selections.push_back(FileBackupSelectionEntry
+            {
+                normalizedPath,
+                includeDescendants
+            });
+        }
+
+        return selections;
+    }
+
+    bool ShouldIncludeSelectionPath(const FileBackupContext* context, const std::wstring& path) {
+        if (context == nullptr || context->includeSelections.empty()) {
             return true;
         }
 
         std::wstring normalizedPath = NormalizePathForComparison(path);
-        if (_wcsicmp(normalizedPath.c_str(), context->exactPathFilter.c_str()) == 0) {
+        if (normalizedPath.empty()) {
+            return false;
+        }
+
+        if (!context->captureRootPath.empty() && PathsEqualInsensitive(normalizedPath, context->captureRootPath)) {
             return true;
         }
 
-        if (!context->captureRootPath.empty() && _wcsicmp(normalizedPath.c_str(), context->captureRootPath.c_str()) == 0) {
-            return true;
+        for (const FileBackupSelectionEntry& selection : context->includeSelections) {
+            if (PathsEqualInsensitive(normalizedPath, selection.normalizedPath)) {
+                return true;
+            }
+
+            if (IsSameOrDescendantPath(selection.normalizedPath, normalizedPath)) {
+                return true;
+            }
+
+            if (selection.includeDescendants && IsSameOrDescendantPath(normalizedPath, selection.normalizedPath)) {
+                return true;
+            }
         }
 
-        std::wstring prefix = normalizedPath;
-        if (!prefix.empty() && prefix.back() != L'\\') {
-            prefix += L'\\';
-        }
-
-        return !prefix.empty() &&
-               context->exactPathFilter.length() > prefix.length() &&
-               _wcsnicmp(context->exactPathFilter.c_str(), prefix.c_str(), prefix.length()) == 0;
+        return false;
     }
 
     // WIM callback for file backup with exclusion filtering
@@ -156,7 +244,7 @@ namespace {
                     BOOL* pbInclude = (BOOL*)lParam;
                     std::wstring path(filePath);
 
-                    if (!ShouldIncludeExactPath(context, path)) {
+                    if (!ShouldIncludeSelectionPath(context, path)) {
                         *pbInclude = FALSE;
                         return WIM_MSG_SUCCESS;
                     }
@@ -202,9 +290,11 @@ namespace {
 
 extern "C" {
 
-    BACKUPENGINE_API int BackupFiles(
+    static int BackupFilesCore(
         const wchar_t* sourcePath,
         const wchar_t* destPath,
+        const wchar_t** includePaths,
+        int includePathCount,
         const wchar_t** userExclusions,
         int userExclusionCount,
         ProgressCallback callback,
@@ -284,10 +374,11 @@ extern "C" {
             context.userExclusionCount = userExclusionCount;
             context.callback = callback;
             context.filesProcessed = 0;
-            context.exactPathFilter.clear();
             context.captureRootPath.clear();
+            context.includeSelections.clear();
 
             std::wstring capturePath = sourceStr;
+            std::vector<std::wstring> defaultIncludePaths;
             if (isFile) {
                 fs::path sourceFilePath(sourceStr);
                 fs::path parentPath = sourceFilePath.parent_path();
@@ -298,9 +389,28 @@ extern "C" {
                 }
 
                 capturePath = parentPath.wstring();
-                context.exactPathFilter = NormalizePathForComparison(sourceStr);
-                context.captureRootPath = NormalizePathForComparison(capturePath);
+                defaultIncludePaths.push_back(sourceStr);
             }
+
+            context.captureRootPath = NormalizePathForComparison(capturePath);
+
+            std::vector<const wchar_t*> effectiveIncludePathPointers;
+            const wchar_t** effectiveIncludePaths = includePaths;
+            int effectiveIncludePathCount = includePathCount;
+            if (!defaultIncludePaths.empty()) {
+                effectiveIncludePathPointers.reserve(defaultIncludePaths.size());
+                for (const std::wstring& includePath : defaultIncludePaths) {
+                    effectiveIncludePathPointers.push_back(includePath.c_str());
+                }
+
+                effectiveIncludePaths = effectiveIncludePathPointers.data();
+                effectiveIncludePathCount = static_cast<int>(effectiveIncludePathPointers.size());
+            }
+
+            context.includeSelections = BuildIncludeSelections(
+                effectiveIncludePaths,
+                effectiveIncludePathCount,
+                context.captureRootPath);
 
             // Register callback
             WIMRegisterMessageCallback(hWim, reinterpret_cast<FARPROC>(FileBackupCallback), &context);
@@ -447,6 +557,44 @@ extern "C" {
             SetLastErrorMessage(L"Unknown exception in BackupFiles");
             return -99;
         }
+    }
+
+    BACKUPENGINE_API int BackupFiles(
+        const wchar_t* sourcePath,
+        const wchar_t* destPath,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
+        ProgressCallback callback,
+        LogCallback logCallback) {
+        return BackupFilesCore(
+            sourcePath,
+            destPath,
+            nullptr,
+            0,
+            userExclusions,
+            userExclusionCount,
+            callback,
+            logCallback);
+    }
+
+    BACKUPENGINE_API int BackupFilesBySelections(
+        const wchar_t* sourceRoot,
+        const wchar_t* destPath,
+        const wchar_t** includePaths,
+        int includePathCount,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
+        ProgressCallback callback,
+        LogCallback logCallback) {
+        return BackupFilesCore(
+            sourceRoot,
+            destPath,
+            includePaths,
+            includePathCount,
+            userExclusions,
+            userExclusionCount,
+            callback,
+            logCallback);
     }
 }
 

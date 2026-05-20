@@ -37,6 +37,17 @@ extern "C" {
         ProgressCallback callback,
         LogCallback logCallback);
 
+    // Backup selected files/folders from a single source root using an include-path list
+    BACKUPENGINE_API int BackupFilesBySelections(
+        const wchar_t* sourceRoot,
+        const wchar_t* destPath,
+        const wchar_t** includePaths,
+        int includePathCount,
+        const wchar_t** userExclusions,
+        int userExclusionCount,
+        ProgressCallback callback,
+        LogCallback logCallback);
+
     // Backup an entire volume (with optional system state)
     BACKUPENGINE_API int BackupVolume(
         const wchar_t* volumePath,
