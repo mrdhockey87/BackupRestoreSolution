@@ -77,4 +77,16 @@ public sealed class BackupWindowNewSelectionTests
 
 		Assert.Null(message);
 	}
+
+	[Fact]
+	public void GetSelectionValidationMessage_WhenDiskOrVolumeBackupUsesGenericValidation_DoesNotRequireSelectedFiles()
+	{
+		string? message = BackupWindowNew.GetSelectionValidationMessage(
+			selectedFilesBackup: false,
+			selectedFilesCount: 0,
+			selectedHyperVCount: 0,
+			selectedNonHyperVCount: 1);
+
+		Assert.Null(message);
+	}
 }

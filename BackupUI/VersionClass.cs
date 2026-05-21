@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.20";
+        private static readonly string version_fallback_number = "6.2.5.24";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,10 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.5.24 Restrict Selected Files validation and saved-selection reuse to file and folder backups only. mdail 5/21/2026
+ * Version 6.2.5.23 Fix disk and volume backup routing so fallback runs do not hit Selected Files validation. mdail 5/21/2026
+ * Version 6.2.5.22 Change user visible C# WIM messages and logs to SSB wording. mdail 5/21/2026
+ * Version 6.2.5.21 Change user visible C++ WIM messages and logs to SSB wording. mdail 5/21/2026
  * Version 6.2.5.20 Change the varible wimPath to ssbPath in the MainWindow mdail 5/21/2026
  * Version 6.2.5.19 Change the message on the mount screen that mentioned wim file. mdail 5/21/2026
  * Version 6.2.5.18 Selected Files backups now capture from the saved volume/share roots and rely on

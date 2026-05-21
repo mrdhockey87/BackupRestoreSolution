@@ -834,7 +834,7 @@ extern "C" {
                 xmlSize < sizeof(wchar_t)) {
                 DWORD error = GetLastError();
                 swprintf_s(errorMsg, errorMsgSize,
-                    L"No metadata found in image. WIMGetImageInformation failed with error %u.", error);
+                    L"No metadata found in image. Archive metadata retrieval failed with error %u.", error);
                 if (imageXmlInfo != nullptr) {
                     LocalFree(imageXmlInfo);
                 }

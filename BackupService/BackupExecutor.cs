@@ -121,6 +121,20 @@ namespace SecureServerBackupService
             return job.Type == BackupType.SelectedFilesAndFolders && job.Target == BackupTarget.FilesAndFolders;
         }
 
+        private static bool ShouldUseSelectedFileBatching(BackupJob job)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            return IsSelectedFilesHistoryBackup(job);
+        }
+
+        private static bool ShouldUseSelectedFileSelections(BackupJob job)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            return job.Type == BackupType.SelectedFilesAndFolders && job.Target == BackupTarget.FilesAndFolders;
+        }
+
         private static string GetSelectedFilesHistoryArchivePath(BackupJob job, DateTime timestamp)
         {
             ArgumentNullException.ThrowIfNull(job);
@@ -151,7 +165,7 @@ namespace SecureServerBackupService
         {
             ArgumentNullException.ThrowIfNull(job);
 
-            if (job.Type != BackupType.SelectedFilesAndFolders)
+            if (!ShouldUseSelectedFileSelections(job))
             {
                 return job.SourcePaths;
             }
@@ -195,6 +209,11 @@ namespace SecureServerBackupService
             if (job.IsHyperVBackup || job.Target == BackupTarget.HyperV)
             {
                 return job.HyperVMachines.Count > 0;
+            }
+
+            if (!ShouldUseSelectedFileSelections(job))
+            {
+                return job.SourcePaths.Any(path => !string.IsNullOrWhiteSpace(path));
             }
 
             return sourcePaths.Any(path => !string.IsNullOrWhiteSpace(path));
@@ -979,7 +998,7 @@ namespace SecureServerBackupService
                         };
 
                         bool isHyperVBackup = job.IsHyperVBackup || job.Target == BackupTarget.HyperV;
-                        bool isSelectedFilesHistoryBackup = IsSelectedFilesHistoryBackup(job);
+                        bool shouldUseSelectedFileBatching = ShouldUseSelectedFileBatching(job);
                         IReadOnlyList<string> sourcePaths = ResolveSourcePaths(job);
 
                         if (!HasAnyRuntimeSelections(job, sourcePaths))
@@ -990,7 +1009,7 @@ namespace SecureServerBackupService
                             return false;
                         }
 
-                        string? newBackupPath = isSelectedFilesHistoryBackup
+                        string? newBackupPath = shouldUseSelectedFileBatching
                             ? GetSelectedFilesHistoryArchivePath(job, DateTime.Now)
                             : Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
                         if (!isHyperVBackup && (job.Type == BackupType.Incremental || job.Type == BackupType.Differential))
@@ -1004,7 +1023,7 @@ namespace SecureServerBackupService
 
                         Directory.CreateDirectory(job.DestinationPath);
 
-                        bool shouldReplaceExistingFileArchive = ShouldReplaceExistingFullFileArchive(job, isHyperVBackup, isSelectedFilesHistoryBackup);
+                        bool shouldReplaceExistingFileArchive = ShouldReplaceExistingFullFileArchive(job, isHyperVBackup, shouldUseSelectedFileBatching);
 
                         if (shouldReplaceExistingFileArchive && File.Exists(newBackupPath))
                         {
@@ -1014,66 +1033,93 @@ namespace SecureServerBackupService
 
                         logger?.Invoke($"Creating backup file: {Path.GetFileName(newBackupPath)}");
 
-                        IReadOnlyList<FileBackupBatch> fileBackupBatches = isSelectedFilesHistoryBackup
-                            ? BuildSelectedFileBackupBatches(job.SelectedFilesSourceRoots, sourcePaths)
-                            : BuildFileBackupBatches(sourcePaths);
-
-                        if (isSelectedFilesHistoryBackup && fileBackupBatches.Count == 0)
+                        if (shouldUseSelectedFileBatching)
                         {
-                            logger?.Invoke("[ERROR] Selected Files backup could not start because the saved source roots are missing or no selected files and folders still map to those roots.");
-                            return false;
-                        }
+                            IReadOnlyList<FileBackupBatch> fileBackupBatches = BuildSelectedFileBackupBatches(job.SelectedFilesSourceRoots, sourcePaths);
 
-                        foreach (FileBackupBatch batch in fileBackupBatches)
-                        {
-                            if (cancellationToken.IsCancellationRequested)
+                            if (fileBackupBatches.Count == 0)
                             {
-                                logger?.Invoke("Backup cancelled by user");
+                                logger?.Invoke("[ERROR] Selected Files backup could not start because the saved source roots are missing or no selected files and folders still map to those roots.");
                                 return false;
                             }
 
-                            int result;
-                            string sourcePath = batch.SourceRoot;
-                            if (HyperVGuestSelectionPath.TryParse(sourcePath, out HyperVGuestSelectionInfo? guestSelection) && guestSelection != null)
+                            foreach (FileBackupBatch batch in fileBackupBatches)
                             {
-                                logger?.Invoke($"Mounting Hyper-V guest disk selection from VM '{guestSelection.VirtualMachineName}': {guestSelection.VirtualDiskPath}");
-
-                                using var mountedDisk = MountHyperVGuestDiskReadOnly(guestSelection.VirtualMachineName, guestSelection.VirtualDiskPath);
-                                IReadOnlyList<string> resolvedSourcePaths = ResolveHyperVGuestSourcePaths(guestSelection, mountedDisk);
-                                if (resolvedSourcePaths.Count == 0)
+                                if (cancellationToken.IsCancellationRequested)
                                 {
-                                    logger?.Invoke($"[ERROR] Hyper-V guest selection could not be resolved: {sourcePath}");
+                                    logger?.Invoke("Backup cancelled by user");
                                     return false;
                                 }
 
-                                result = 0;
-                                foreach (string resolvedSourcePath in resolvedSourcePaths)
+                                int result;
+                                string sourcePath = batch.SourceRoot;
+                                if (HyperVGuestSelectionPath.TryParse(sourcePath, out HyperVGuestSelectionInfo? guestSelection) && guestSelection != null)
                                 {
-                                    logger?.Invoke($"Backing up mounted Hyper-V guest path: {resolvedSourcePath}");
-                                    result = ExecuteFileSelectionBackup(job, batch.SelectedPaths, resolvedSourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
-                                    if (result != 0)
+                                    logger?.Invoke($"Mounting Hyper-V guest disk selection from VM '{guestSelection.VirtualMachineName}': {guestSelection.VirtualDiskPath}");
+
+                                    using var mountedDisk = MountHyperVGuestDiskReadOnly(guestSelection.VirtualMachineName, guestSelection.VirtualDiskPath);
+                                    IReadOnlyList<string> resolvedSourcePaths = ResolveHyperVGuestSourcePaths(guestSelection, mountedDisk);
+                                    if (resolvedSourcePaths.Count == 0)
                                     {
-                                        break;
+                                        logger?.Invoke($"[ERROR] Hyper-V guest selection could not be resolved: {sourcePath}");
+                                        return false;
+                                    }
+
+                                    result = 0;
+                                    foreach (string resolvedSourcePath in resolvedSourcePaths)
+                                    {
+                                        logger?.Invoke($"Backing up mounted Hyper-V guest path: {resolvedSourcePath}");
+                                        result = ExecuteFileSelectionBackup(job, batch.SelectedPaths, resolvedSourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
+                                        if (result != 0)
+                                        {
+                                            break;
+                                        }
                                     }
                                 }
-                            }
-                            else
-                            {
-                                result = ExecuteFileSelectionBackup(job, batch.SelectedPaths, sourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
-                            }
+                                else
+                                {
+                                    result = ExecuteFileSelectionBackup(job, batch.SelectedPaths, sourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
+                                }
 
-                            if (result != 0)
-                            {
-                                var error = new StringBuilder(1024);
-                                GetLastErrorMessage(error, error.Capacity);
+                                if (result != 0)
+                                {
+                                    var error = new StringBuilder(1024);
+                                    GetLastErrorMessage(error, error.Capacity);
 
-                                string errorMessage = error.ToString();
-                                logger?.Invoke($"[ERROR] Backup failed with code {result}");
-                                logger?.Invoke($"[ERROR] Error message: {(string.IsNullOrEmpty(errorMessage) ? "(empty - C++ didn't set error message)" : errorMessage)}");
-                                logger?.Invoke($"[ERROR] Source path: {sourcePath}");
-                                logger?.Invoke($"[ERROR] Destination path: {newBackupPath}");
-                                logger?.Invoke($"[DEBUG] Failed backup file preserved for analysis: {Path.GetFileName(newBackupPath)}");
-                                return false;
+                                    string errorMessage = error.ToString();
+                                    logger?.Invoke($"[ERROR] Backup failed with code {result}");
+                                    logger?.Invoke($"[ERROR] Error message: {(string.IsNullOrEmpty(errorMessage) ? "(empty - C++ didn't set error message)" : errorMessage)}");
+                                    logger?.Invoke($"[ERROR] Source path: {sourcePath}");
+                                    logger?.Invoke($"[ERROR] Destination path: {newBackupPath}");
+                                    logger?.Invoke($"[DEBUG] Failed backup file preserved for analysis: {Path.GetFileName(newBackupPath)}");
+                                    return false;
+                                }
+                            }
+                        }
+                        else if (!isHyperVBackup)
+                        {
+                            foreach (string sourcePath in sourcePaths)
+                            {
+                                if (cancellationToken.IsCancellationRequested)
+                                {
+                                    logger?.Invoke("Backup cancelled by user");
+                                    return false;
+                                }
+
+                                int result = ExecuteBackup(job, sourcePath, newBackupPath, nativeCallback, nativeLogCallback, logger);
+                                if (result != 0)
+                                {
+                                    var error = new StringBuilder(1024);
+                                    GetLastErrorMessage(error, error.Capacity);
+
+                                    string errorMessage = error.ToString();
+                                    logger?.Invoke($"[ERROR] Backup failed with code {result}");
+                                    logger?.Invoke($"[ERROR] Error message: {(string.IsNullOrEmpty(errorMessage) ? "(empty - C++ didn't set error message)" : errorMessage)}");
+                                    logger?.Invoke($"[ERROR] Source path: {sourcePath}");
+                                    logger?.Invoke($"[ERROR] Destination path: {newBackupPath}");
+                                    logger?.Invoke($"[DEBUG] Failed backup file preserved for analysis: {Path.GetFileName(newBackupPath)}");
+                                    return false;
+                                }
                             }
                         }
 
@@ -1228,7 +1274,7 @@ namespace SecureServerBackupService
                             EncryptBackupFileIfNeeded(job, newBackupPath, progressCallback, logger);
                         }
 
-                        if (isSelectedFilesHistoryBackup && newBackupPath != null)
+                        if (shouldUseSelectedFileBatching && newBackupPath != null)
                         {
                             CleanupSelectedFilesHistoryArchives(job, newBackupPath, logger);
                         }
@@ -1564,7 +1610,7 @@ namespace SecureServerBackupService
                     // Check if base backup exists
                     if (File.Exists(destPath))
                     {
-                        logger?.Invoke($"Creating incremental disk backup (WIM referential): {diskNumber}");
+                        logger?.Invoke($"Creating incremental disk backup (SSB referential): {diskNumber}");
                         result = BackupDiskIncremental(diskNumber, destPath, job.IncludeSystemState, job.CompressData,
                             exclusionsArray, exclusionCount, progressCallback, logCallback);
 
@@ -1631,7 +1677,7 @@ namespace SecureServerBackupService
                     // Check if base backup exists
                     if (File.Exists(destPath))
                     {
-                        logger?.Invoke($"Creating differential disk backup (WIM referential): {diskNumber}");
+                        logger?.Invoke($"Creating differential disk backup (SSB referential): {diskNumber}");
                         result = BackupDiskDifferential(diskNumber, destPath, job.IncludeSystemState, job.CompressData,
                             exclusionsArray, exclusionCount, progressCallback, logCallback);
 

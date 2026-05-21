@@ -78,7 +78,7 @@ namespace BackupEngine {
                     int percentage = (int)wParam;
                     // Scale to 50-90% range (mount operation is 50-90% of total)
                     percentage = 50 + (percentage * 40 / 100);
-                    userCallback(percentage, L"Mounting image...");
+                    userCallback(percentage, L"Mounting SSB archive...");
                 }
                 return WIM_MSG_SUCCESS;
             }
@@ -278,7 +278,7 @@ namespace BackupEngine {
             // This operation can take 30-60 seconds with no progress feedback
             if (!WIMMountImage(mountPoint.c_str(), wimPath, imageIndex, nullptr)) {
                 DWORD err = GetLastError();
-                swprintf_s(errorMsg, errorMsgSize, L"Failed to mount WIM image: %d", err);
+                swprintf_s(errorMsg, errorMsgSize, L"Failed to mount SSB archive image: %d", err);
 
                 // Unregister callback on failure
                 if (callback) {
@@ -323,7 +323,7 @@ namespace BackupEngine {
             return true;
         }
         catch (...) {
-            swprintf_s(errorMsg, errorMsgSize, L"Exception during WIM mount");
+            swprintf_s(errorMsg, errorMsgSize, L"Exception during SSB archive mount");
             LeaveCriticalSection(&cs);
             return false;
         }
@@ -352,7 +352,7 @@ namespace BackupEngine {
             MountedWimInfo& info = it->second;
 
             if (callback) {
-                callback(25, L"Unmounting WIM image...");
+                callback(25, L"Unmounting SSB archive image...");
             }
 
             // Log mount details for diagnostics
@@ -376,7 +376,7 @@ namespace BackupEngine {
                 DWORD err = GetLastError();
                 // FIXED: Use %u for unsigned DWORD, not %d (which caused negative numbers)
                 swprintf_s(errorMsg, errorMsgSize, 
-                    L"Failed to unmount WIM: %u (0x%X)\n\n"
+                    L"Failed to unmount SSB archive: %u (0x%X)\n\n"
                     L"Common causes:\n"
                     L"• Files still open in Explorer (close all windows showing backup)\n"
                     L"• Another program accessing mounted files\n"
@@ -391,7 +391,7 @@ namespace BackupEngine {
             }
 
             if (callback) {
-                callback(50, L"Closing WIM handle...");
+                callback(50, L"Closing archive handle...");
             }
 
             // Close the WIM handle
@@ -451,7 +451,7 @@ namespace BackupEngine {
             return true;
         }
         catch (...) {
-            swprintf_s(errorMsg, errorMsgSize, L"Exception during WIM unmount");
+            swprintf_s(errorMsg, errorMsgSize, L"Exception during SSB archive unmount");
             LeaveCriticalSection(&cs);
             return false;
         }
@@ -509,18 +509,18 @@ namespace BackupEngine {
         wchar_t* errorMsg,
         int errorMsgSize
     ) {
-        OutputDebugStringW(L"[WimMount] Validating WIM file...");
+        OutputDebugStringW(L"[WimMount] Validating SSB archive...");
 
         // Check if file exists
         if (GetFileAttributesW(wimPath) == INVALID_FILE_ATTRIBUTES) {
-            swprintf_s(errorMsg, errorMsgSize, L"WIM file not found: %s", wimPath);
+            swprintf_s(errorMsg, errorMsgSize, L"SSB archive not found: %s", wimPath);
             return false;
         }
 
         // Get file size
         WIN32_FILE_ATTRIBUTE_DATA fileInfo;
         if (!GetFileAttributesExW(wimPath, GetFileExInfoStandard, &fileInfo)) {
-            swprintf_s(errorMsg, errorMsgSize, L"Cannot access WIM file: %d", GetLastError());
+            swprintf_s(errorMsg, errorMsgSize, L"Cannot access SSB archive: %d", GetLastError());
             return false;
         }
 
@@ -531,7 +531,7 @@ namespace BackupEngine {
         // Check if file is too small to be valid WIM (WIM header is at least 208 bytes)
         if (fileSize.QuadPart < 208) {
             swprintf_s(errorMsg, errorMsgSize, 
-                L"WIM file is too small (%lld bytes). File may be incomplete or corrupted.",
+                L"SSB archive is too small (%lld bytes). File may be incomplete or corrupted.",
                 fileSize.QuadPart);
             return false;
         }
@@ -553,19 +553,19 @@ namespace BackupEngine {
         if (!wimHandle || wimHandle == INVALID_HANDLE_VALUE) {
             DWORD openError = GetLastError();
             if (openError == 5) {
-                swprintf_s(errorMsg, errorMsgSize, L"Access denied to WIM file");
+                swprintf_s(errorMsg, errorMsgSize, L"Access denied to SSB archive");
             } else if (openError == 32) {
-                swprintf_s(errorMsg, errorMsgSize, L"WIM file is in use by another process");
+                swprintf_s(errorMsg, errorMsgSize, L"SSB archive is in use by another process");
             } else if (openError == 1632) {
                 swprintf_s(errorMsg, errorMsgSize, 
-                    L"WIM file is invalid or corrupted (Error 1632).\n\n"
+                    L"SSB archive is invalid or corrupted (Error 1632).\n\n"
                     L"This usually means:\n"
                     L"- Backup was interrupted during creation\n"
                     L"- Disk space was exhausted\n"
                     L"- File system errors on backup drive\n\n"
                     L"Try running a new Full backup.");
             } else {
-                swprintf_s(errorMsg, errorMsgSize, L"Failed to open WIM file: %d", openError);
+                swprintf_s(errorMsg, errorMsgSize, L"Failed to open SSB archive: %d", openError);
             }
             return false;
         }
@@ -587,7 +587,7 @@ namespace BackupEngine {
         WIMCloseHandle(wimHandle);
 
         if (count == 0) {
-            swprintf_s(errorMsg, errorMsgSize, L"WIM file contains no images");
+            swprintf_s(errorMsg, errorMsgSize, L"SSB archive contains no images");
             return false;
         }
 
@@ -746,7 +746,7 @@ extern "C" {
         int errorMsgSize
     ) {
         if (!wimPath) {
-            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Invalid WIM path");
+            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Invalid SSB archive path");
             return -1;
         }
 
@@ -761,7 +761,7 @@ extern "C" {
         );
 
         if (!hWim || hWim == INVALID_HANDLE_VALUE) {
-            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Failed to open WIM file");
+            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Failed to open SSB archive");
             return -1;
         }
 
@@ -798,7 +798,7 @@ extern "C" {
         );
 
         if (!hWim || hWim == INVALID_HANDLE_VALUE) {
-            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Failed to open WIM file");
+            if (errorMsg) swprintf_s(errorMsg, errorMsgSize, L"Failed to open SSB archive");
             return false;
         }
 

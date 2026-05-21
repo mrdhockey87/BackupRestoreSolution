@@ -377,6 +377,103 @@ public sealed class BackupExecutorHyperVTests
     }
 
     [Fact]
+    public void ShouldUseSelectedFileBatching_WhenDiskJobUsesSelectedFilesType_ReturnsFalse()
+    {
+        var job = new BackupJob
+        {
+            Type = BackupType.SelectedFilesAndFolders,
+            Target = BackupTarget.Disk,
+            SourcePaths = [@"\\.\PHYSICALDRIVE5"],
+            SelectedFilesSourceRoots = [@"\\.\PHYSICALDRIVE5"]
+        };
+
+        bool shouldUseSelectedFileBatching = (bool)InvokePrivateStaticMethod(
+            nameof(BackupExecutor),
+            "ShouldUseSelectedFileBatching",
+            [job])!;
+
+        Assert.False(shouldUseSelectedFileBatching);
+    }
+
+    [Fact]
+    public void ShouldUseSelectedFileBatching_WhenVolumeJobUsesSelectedFilesType_ReturnsFalse()
+    {
+        var job = new BackupJob
+        {
+            Type = BackupType.SelectedFilesAndFolders,
+            Target = BackupTarget.Volume,
+            SourcePaths = [@"\\?\Volume{12345678-1234-1234-1234-123456789abc}\"],
+            SelectedFilesSourceRoots = [@"\\?\Volume{12345678-1234-1234-1234-123456789abc}\"]
+        };
+
+        bool shouldUseSelectedFileBatching = (bool)InvokePrivateStaticMethod(
+            nameof(BackupExecutor),
+            "ShouldUseSelectedFileBatching",
+            [job])!;
+
+        Assert.False(shouldUseSelectedFileBatching);
+    }
+
+    [Fact]
+    public void ShouldUseSelectedFileBatching_WhenSelectedFilesJobUsesFilesAndFoldersTarget_ReturnsTrue()
+    {
+        var job = new BackupJob
+        {
+            Type = BackupType.SelectedFilesAndFolders,
+            Target = BackupTarget.FilesAndFolders,
+            SourcePaths = [@"C:\Users\Mark\Documents\Budget.xlsx"],
+            SelectedFilesSourceRoots = [@"C:\"]
+        };
+
+        bool shouldUseSelectedFileBatching = (bool)InvokePrivateStaticMethod(
+            nameof(BackupExecutor),
+            "ShouldUseSelectedFileBatching",
+            [job])!;
+
+        Assert.True(shouldUseSelectedFileBatching);
+    }
+
+    [Fact]
+    public void ResolveSourcePaths_WhenDiskJobUsesSelectedFilesType_ReturnsOriginalSourcePaths()
+    {
+        var job = new BackupJob
+        {
+            Name = Guid.NewGuid().ToString("N"),
+            Type = BackupType.SelectedFilesAndFolders,
+            Target = BackupTarget.Disk,
+            SourcePaths = [@"\\.\PHYSICALDRIVE5"]
+        };
+
+        IReadOnlyList<string> sourcePaths = (IReadOnlyList<string>)InvokePrivateStaticMethod(
+            nameof(BackupExecutor),
+            "ResolveSourcePaths",
+            [job])!;
+
+        string sourcePath = Assert.Single(sourcePaths);
+        Assert.Equal(@"\\.\PHYSICALDRIVE5", sourcePath);
+    }
+
+    [Fact]
+    public void ResolveSourcePaths_WhenVolumeJobUsesSelectedFilesType_ReturnsOriginalSourcePaths()
+    {
+        var job = new BackupJob
+        {
+            Name = Guid.NewGuid().ToString("N"),
+            Type = BackupType.SelectedFilesAndFolders,
+            Target = BackupTarget.Volume,
+            SourcePaths = [@"\\?\Volume{12345678-1234-1234-1234-123456789abc}\"]
+        };
+
+        IReadOnlyList<string> sourcePaths = (IReadOnlyList<string>)InvokePrivateStaticMethod(
+            nameof(BackupExecutor),
+            "ResolveSourcePaths",
+            [job])!;
+
+        string sourcePath = Assert.Single(sourcePaths);
+        Assert.Equal(@"\\?\Volume{12345678-1234-1234-1234-123456789abc}\", sourcePath);
+    }
+
+    [Fact]
     public void HasAnyRuntimeSelections_WhenHyperVJobHasNoSelectedVms_ReturnsFalse()
     {
         var job = new BackupJob

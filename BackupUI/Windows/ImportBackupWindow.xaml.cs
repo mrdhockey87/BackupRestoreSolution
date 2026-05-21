@@ -32,7 +32,7 @@ namespace SecureServerBackup.Windows
             var dialog = new OpenFileDialog
             {
                 Title = "Select Backup File",
-                Filter = "Backup Files (*.ssb)|*.ssb|SSB Files (*.ssb)|*.ssb|Wim Backup File (*.wim)|*.wim|All Files (*.*)|*.*",
+                Filter = "Backup Files (*.ssb)|*.ssb|SSB Files (*.ssb)|*.ssb|Legacy SSB Backup File (*.wim)|*.wim|All Files (*.*)|*.*",
                 CheckFileExists = true
             };
 
@@ -89,13 +89,13 @@ namespace SecureServerBackup.Windows
                     txtValidationStatus.Text = "? Valid Backup File";
                     txtValidationStatus.Foreground = Brushes.Green;
                     txtValidationDetails.Text = isWimFormat
-                        ? "This is a Windows Imaging Format (.wim) backup file."
-                        : "This is a standard backup archive (.ssb) file.";
+                        ? "This is a legacy SSB backup file using the .wim extension."
+                        : "This is a standard SSB backup archive (.ssb) file.";
 
                     // Fill backup info
                     txtFormat.Text = isWimFormat
-                        ? ".wim (Windows Imaging)"
-                        : ".ssb (Standard)";
+                        ? ".wim (Legacy SSB)"
+                        : ".ssb (Standard SSB)";
                     txtBackupName.Text = backupName;
                     txtBackupType.Text = backupType;
                     txtTimestamp.Text = backupDate.ToString("yyyy-MM-dd HH:mm:ss");
@@ -118,7 +118,7 @@ namespace SecureServerBackup.Windows
                     pnlValidation.Background = new SolidColorBrush(Color.FromRgb(255, 235, 238)); // Light red
                     txtValidationStatus.Text = "? Invalid Backup File";
                     txtValidationStatus.Foreground = Brushes.Red;
-                    txtValidationDetails.Text = $"Error: {errorMsg}\n\nOnly .ssb and .wim backup files are supported.";
+                    txtValidationDetails.Text = $"Error: {errorMsg}\n\nOnly .ssb and legacy .wim SSB backup files are supported.";
 
                     BackupLogger.LogWarning("ImportBackup", 
                         $"Invalid backup file: {Path.GetFileName(filePath)}", 

@@ -652,11 +652,11 @@ static DWORD WINAPI FolderFilterCallback(DWORD msgId, WPARAM wParam, LPARAM lPar
             const wchar_t* errorPath = reinterpret_cast<const wchar_t*>(wParam);
             DWORD errorCode = static_cast<DWORD>(lParam);
             std::wstring detail = FormatWimCallbackDetail(errorPath, errorCode);
-            OutputDebugStringW((L"[WIM ERROR] " + detail).c_str());
-            LogError(L"FolderFilterCallback: WIM error", detail);
+            OutputDebugStringW((L"[SSB ERROR] " + detail).c_str());
+            LogError(L"FolderFilterCallback: SSB archive error", detail);
 
             if (context->userCallback) {
-                std::wstring uiMessage = L"WIM error: " + FormatSystemErrorMessage(errorCode);
+                std::wstring uiMessage = L"SSB archive error: " + FormatSystemErrorMessage(errorCode);
                 context->userCallback(50, uiMessage.c_str());
             }
 
@@ -669,8 +669,8 @@ static DWORD WINAPI FolderFilterCallback(DWORD msgId, WPARAM wParam, LPARAM lPar
             const wchar_t* warningPath = reinterpret_cast<const wchar_t*>(wParam);
             DWORD warningCode = static_cast<DWORD>(lParam);
             std::wstring detail = FormatWimCallbackDetail(warningPath, warningCode);
-            OutputDebugStringW((L"[WIM WARNING] " + detail).c_str());
-            LogWarning(L"FolderFilterCallback: WIM warning", detail);
+            OutputDebugStringW((L"[SSB WARNING] " + detail).c_str());
+            LogWarning(L"FolderFilterCallback: SSB archive warning", detail);
             return WIM_MSG_SUCCESS;
         }
     }

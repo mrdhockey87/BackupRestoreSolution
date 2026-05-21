@@ -1194,15 +1194,15 @@ private:
         // Check if wimlib-imagex is available
         int result = system("which wimlib-imagex > /dev/null 2>&1");
         if (result != 0) {
-            SetError("wimlib-imagex not found. Install wimlib: sudo apt-get install wimtools");
-            std::cerr << "\nTo extract SSB backups, install wimlib:" << std::endl;
+            SetError("SSB extraction tool not found. Install wimlib: sudo apt-get install wimtools");
+            std::cerr << "\nTo extract SSB backups, install the SSB extraction tool (wimlib):" << std::endl;
             std::cerr << "  Debian/Ubuntu: sudo apt-get install wimtools" << std::endl;
             std::cerr << "  Fedora/RHEL:   sudo dnf install wimlib-utils" << std::endl;
             std::cerr << "  Arch Linux:    sudo pacman -S wimlib" << std::endl;
             return -1;
         }
 
-        ReportProgress(20, "Using wimlib to extract SSB backup...");
+        ReportProgress(20, "Using the SSB extraction tool to extract the SSB backup...");
 
         // First, get information about the SSB archive
         std::string infoCmd = "wimlib-imagex info '" + ssbPath + "' 2>&1";

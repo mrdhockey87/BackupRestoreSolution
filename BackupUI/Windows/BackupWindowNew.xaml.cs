@@ -3800,7 +3800,7 @@ namespace SecureServerBackup.Windows
         {
             ArgumentNullException.ThrowIfNull(job);
 
-            if (job.Type != BackupType.SelectedFilesAndFolders)
+            if (job.Type != BackupType.SelectedFilesAndFolders || job.Target != BackupTarget.FilesAndFolders)
             {
                 return job.SourcePaths;
             }
@@ -3813,7 +3813,7 @@ namespace SecureServerBackup.Windows
         {
             ArgumentNullException.ThrowIfNull(job);
 
-            if (job.Type != BackupType.SelectedFilesAndFolders)
+            if (job.Type != BackupType.SelectedFilesAndFolders || job.Target != BackupTarget.FilesAndFolders)
             {
                 return job.SourcePaths;
             }
@@ -4091,7 +4091,7 @@ namespace SecureServerBackup.Windows
 
         private void CollectSelectedItems(BackupJob job)
         {
-            bool selectedFilesAndFoldersOnly = job.Type == BackupType.SelectedFilesAndFolders;
+            bool selectedFilesAndFoldersOnly = job.Type == BackupType.SelectedFilesAndFolders && job.Target == BackupTarget.FilesAndFolders;
 
             if (selectedFilesAndFoldersOnly)
             {
