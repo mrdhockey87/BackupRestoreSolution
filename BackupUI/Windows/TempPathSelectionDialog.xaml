@@ -32,7 +32,7 @@
 			Margin="0,0,0,10"
 			Foreground="{StaticResource SecondaryText}"
 			TextWrapping="Wrap">
-			<Run Text="The WIM API requires a temporary directory to decompress and process backup image data during mount operations." />
+			<Run Text="The Secure Server Backup requires a temporary directory to decompress and process backup image data during mount operations." />
 			<LineBreak /><LineBreak />
 			<Run Text="Choose a location with adequate free space (several GB may be needed for large backups)." />
 		</TextBlock>

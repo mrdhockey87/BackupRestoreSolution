@@ -240,6 +240,62 @@ namespace SecureServerBackupService
                 .ToArray();
         }
 
+        private static IReadOnlyList<FileBackupBatch> BuildSelectedFileBackupBatches(
+            IEnumerable<string> sourceRoots,
+            IEnumerable<string> selectedPaths)
+        {
+            ArgumentNullException.ThrowIfNull(sourceRoots);
+            ArgumentNullException.ThrowIfNull(selectedPaths);
+
+            string[] normalizedRoots = sourceRoots
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(NormalizeBatchPath)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(path => path.Length)
+                .ToArray();
+
+            if (normalizedRoots.Length == 0)
+            {
+                return Array.Empty<FileBackupBatch>();
+            }
+
+            Dictionary<string, HashSet<string>> groupedSelections = new(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string rawPath in selectedPaths)
+            {
+                if (string.IsNullOrWhiteSpace(rawPath))
+                {
+                    continue;
+                }
+
+                string normalizedPath = NormalizeBatchPath(rawPath);
+                if (string.IsNullOrWhiteSpace(normalizedPath))
+                {
+                    continue;
+                }
+
+                string? sourceRoot = FindBestSelectedFileSourceRoot(normalizedPath, normalizedRoots);
+                if (string.IsNullOrWhiteSpace(sourceRoot))
+                {
+                    continue;
+                }
+
+                if (!groupedSelections.TryGetValue(sourceRoot, out HashSet<string>? selections))
+                {
+                    selections = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    groupedSelections[sourceRoot] = selections;
+                }
+
+                selections.Add(normalizedPath);
+            }
+
+            return groupedSelections
+                .Select(group => new FileBackupBatch(group.Key, group.Value.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray()))
+                .OrderBy(batch => batch.SourceRoot, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
         private static string NormalizeBatchPath(string path)
         {
             string trimmed = path.Trim();
@@ -269,6 +325,67 @@ namespace SecureServerBackupService
             return string.IsNullOrWhiteSpace(directoryName)
                 ? normalizedPath
                 : NormalizeBatchPath(directoryName);
+        }
+
+        private static string? FindBestSelectedFileSourceRoot(string normalizedPath, IReadOnlyList<string> normalizedRoots)
+        {
+            foreach (string sourceRoot in normalizedRoots)
+            {
+                if (IsSelectedPathUnderSourceRoot(normalizedPath, sourceRoot))
+                {
+                    return sourceRoot;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsSelectedPathUnderSourceRoot(string normalizedPath, string sourceRoot)
+        {
+            HyperVGuestSelectionInfo? parsedSelectedGuestPath;
+            HyperVGuestSelectionInfo? parsedSourceGuestRoot;
+            bool selectedGuestParsed = HyperVGuestSelectionPath.TryParse(normalizedPath, out parsedSelectedGuestPath);
+            bool sourceGuestParsed = HyperVGuestSelectionPath.TryParse(sourceRoot, out parsedSourceGuestRoot);
+
+            if (selectedGuestParsed && sourceGuestParsed)
+            {
+                if (parsedSelectedGuestPath == null || parsedSourceGuestRoot == null)
+                {
+                    return false;
+                }
+
+                HyperVGuestSelectionInfo selectedGuest = parsedSelectedGuestPath;
+                HyperVGuestSelectionInfo sourceGuest = parsedSourceGuestRoot;
+
+                if (!string.Equals(selectedGuest.VirtualMachineName, sourceGuest.VirtualMachineName, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(selectedGuest.VirtualDiskPath, sourceGuest.VirtualDiskPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                return sourceGuest.Kind switch
+                {
+                    HyperVGuestSelectionKind.VirtualDisk => true,
+                    HyperVGuestSelectionKind.Volume => selectedGuest.PartitionNumber == sourceGuest.PartitionNumber,
+                    _ => false
+                };
+            }
+
+            if (HyperVGuestSelectionPath.IsEncodedPath(normalizedPath) || HyperVGuestSelectionPath.IsEncodedPath(sourceRoot))
+            {
+                return false;
+            }
+
+            if (string.Equals(normalizedPath, sourceRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            string sourceRootWithSeparator = sourceRoot.EndsWith("\\", StringComparison.Ordinal)
+                ? sourceRoot
+                : sourceRoot + "\\";
+
+            return normalizedPath.StartsWith(sourceRootWithSeparator, StringComparison.OrdinalIgnoreCase);
         }
 
         private static void CleanupSelectedFilesHistoryArchives(BackupJob job, string latestArchivePath, Action<string>? logger)
@@ -897,7 +1014,15 @@ namespace SecureServerBackupService
 
                         logger?.Invoke($"Creating backup file: {Path.GetFileName(newBackupPath)}");
 
-                        IReadOnlyList<FileBackupBatch> fileBackupBatches = BuildFileBackupBatches(sourcePaths);
+                        IReadOnlyList<FileBackupBatch> fileBackupBatches = isSelectedFilesHistoryBackup
+                            ? BuildSelectedFileBackupBatches(job.SelectedFilesSourceRoots, sourcePaths)
+                            : BuildFileBackupBatches(sourcePaths);
+
+                        if (isSelectedFilesHistoryBackup && fileBackupBatches.Count == 0)
+                        {
+                            logger?.Invoke("[ERROR] Selected Files backup could not start because the saved source roots are missing or no selected files and folders still map to those roots.");
+                            return false;
+                        }
 
                         foreach (FileBackupBatch batch in fileBackupBatches)
                         {

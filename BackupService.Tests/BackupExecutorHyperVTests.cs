@@ -235,6 +235,67 @@ public sealed class BackupExecutorHyperVTests
     }
 
     [Fact]
+    public void BuildSelectedFileBackupBatches_WhenSelectionsShareVolumeRoot_UsesPersistedRoot()
+    {
+        IReadOnlyList<BackupExecutor.FileBackupBatch> batches = InvokeBuildSelectedFileBackupBatches(
+            [@"C:\"],
+            [
+                @"C:\Users\Mark\Documents\Budget.xlsx",
+                @"C:\Users\Mark\Pictures\Vacation\img1.jpg"
+            ]);
+
+        BackupExecutor.FileBackupBatch batch = Assert.Single(batches);
+        Assert.Equal(@"C:\", batch.SourceRoot);
+        Assert.Equal(2, batch.SelectedPaths.Count);
+    }
+
+    [Fact]
+    public void BuildSelectedFileBackupBatches_WhenPersistedRootsMissing_ReturnsNoBatches()
+    {
+        IReadOnlyList<BackupExecutor.FileBackupBatch> batches = InvokeBuildSelectedFileBackupBatches(
+            Array.Empty<string>(),
+            [@"C:\Users\Mark\Documents\Budget.xlsx"]);
+
+        Assert.Empty(batches);
+    }
+
+    [Fact]
+    public void BuildSelectedFileBackupBatches_WhenSelectionDoesNotMapToPersistedRoot_ReturnsNoBatches()
+    {
+        IReadOnlyList<BackupExecutor.FileBackupBatch> batches = InvokeBuildSelectedFileBackupBatches(
+            [@"D:\"],
+            [@"C:\Users\Mark\Documents\Budget.xlsx"]);
+
+        Assert.Empty(batches);
+    }
+
+    [Fact]
+    public void BuildSelectedFileBackupBatches_WhenHyperVGuestSelectionsShareEncodedVolumeRoot_UsesPersistedGuestRoot()
+    {
+        string guestRoot = HyperVGuestSelectionPath.Encode(
+            HyperVGuestSelectionKind.Volume,
+            "VmOne",
+            @"D:\Guests\VmOne.vhdx",
+            2,
+            string.Empty);
+        string guestFile = HyperVGuestSelectionPath.Encode(
+            HyperVGuestSelectionKind.File,
+            "VmOne",
+            @"D:\Guests\VmOne.vhdx",
+            2,
+            @"Users\Mark\Documents\Budget.xlsx");
+
+        IReadOnlyList<BackupExecutor.FileBackupBatch> batches = InvokeBuildSelectedFileBackupBatches(
+            [guestRoot],
+            [guestFile]);
+
+        BackupExecutor.FileBackupBatch batch = Assert.Single(batches);
+        Assert.Equal(guestRoot, batch.SourceRoot);
+        Assert.Single(batch.SelectedPaths);
+        Assert.Equal(guestFile, batch.SelectedPaths[0]);
+    }
+
+    [Fact]
     public void BuildFileBackupBatches_WhenSelectionsSpanFolders_KeepsSeparateRoots()
     {
         string tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -339,6 +400,17 @@ public sealed class BackupExecutorHyperVTests
             ?? throw new InvalidOperationException($"Method '{methodName}' was not found on '{typeName}'.");
 
         return method.Invoke(null, args);
+    }
+
+    private static IReadOnlyList<BackupExecutor.FileBackupBatch> InvokeBuildSelectedFileBackupBatches(
+        IEnumerable<string> sourceRoots,
+        IEnumerable<string> selectedPaths)
+    {
+        return (IReadOnlyList<BackupExecutor.FileBackupBatch>)(InvokePrivateStaticMethod(
+            nameof(BackupExecutor),
+            "BuildSelectedFileBackupBatches",
+            [sourceRoots, selectedPaths])
+            ?? throw new InvalidOperationException("BuildSelectedFileBackupBatches returned null."));
     }
 
     private static IReadOnlyList<string> GetResolutionPaths(object resolution, string propertyName)

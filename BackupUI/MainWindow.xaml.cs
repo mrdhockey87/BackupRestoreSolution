@@ -1676,9 +1676,9 @@ namespace SecureServerBackup
                 try
                 {
                     // Get selected backup point if Inc/Diff
-                    string wimPath = GetBackupPointPath(backup);
+                    string ssbPath = GetBackupPointPath(backup);
 
-                    if (string.IsNullOrEmpty(wimPath))
+                    if (string.IsNullOrEmpty(ssbPath))
                     {
                         CustomDialogService.ShowWarning(this, "Please select a backup point to mount.",
                                       "No Backup Point Selected");
@@ -1686,8 +1686,8 @@ namespace SecureServerBackup
                     }
 
                     // Check if backup has multiple images/restore points
-                    System.Diagnostics.Debug.WriteLine($"[Mount] Checking image count for: {wimPath}");
-                    var (countSuccess, imageCount, countError) = NativeBackupMountManager.GetImageCount(wimPath);
+                    System.Diagnostics.Debug.WriteLine($"[Mount] Checking image count for: {ssbPath}");
+                    var (countSuccess, imageCount, countError) = NativeBackupMountManager.GetImageCount(ssbPath);
 
                     int selectedImageIndex = 1; // Default to first image
 
@@ -1704,7 +1704,7 @@ namespace SecureServerBackup
                         System.Diagnostics.Debug.WriteLine($"[Mount] Backup has {imageCount} images - showing selection dialog");
 
                         // Get detailed image information
-                        var (infoSuccess, images, infoError) = NativeBackupMountManager.GetImageInfo(wimPath);
+                        var (infoSuccess, images, infoError) = NativeBackupMountManager.GetImageInfo(ssbPath);
 
                         if (!infoSuccess || images.Count == 0)
                         {
@@ -1774,11 +1774,11 @@ namespace SecureServerBackup
                     {
                         // Mount asynchronously with progress updates
                         System.Diagnostics.Debug.WriteLine($"[Mount] Calling NativeBackupMountManager.MountBackupAsync...");
-                        System.Diagnostics.Debug.WriteLine($"[Mount] Parameters: wimPath={wimPath}, backupName={backup.BackupName}, backupType={backup.BackupType}, imageIndex={selectedImageIndex}, tempPath={selectedTempPath}");
+                        System.Diagnostics.Debug.WriteLine($"[Mount] Parameters: ssbPath={ssbPath}, backupName={backup.BackupName}, backupType={backup.BackupType}, imageIndex={selectedImageIndex}, tempPath={selectedTempPath}");
 
                         using var preparedBackup = EncryptedBackupFileService.PrepareForRead(
                             this,
-                            wimPath,
+                            ssbPath,
                             backup.BackupName,
                             backup.ProtectedEncryptionPassword);
 

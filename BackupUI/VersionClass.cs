@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.17";
+        private static readonly string version_fallback_number = "6.2.5.20";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,8 +69,12 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.5.20 Change the varible wimPath to ssbPath in the MainWindow mdail 5/21/2026
+ * Version 6.2.5.19 Change the message on the mount screen that mentioned wim file. mdail 5/21/2026
+ * Version 6.2.5.18 Selected Files backups now capture from the saved volume/share roots and rely on
+ *                  callback filtering, while missing legacy roots stop the backup with an error. mdail 5/21/2026
  * Version 6.2.5.17 Missing file/folder selections now log warnings unless all selected items are gone,
- *                  and edit backup now alerts on missing saved selections while saving only live file picks. mdail 5/21/20026
+ *                  and edit backup now alerts on missing saved selections while saving only live file picks. mdail 5/21/2026
  * Version 6.2.5.16 Linux restore ncurses flow now matches the restore-point-first and all-or-selected
  *                  restore sequence used by Windows, CLI, and GTK. mdail 5/19/2026
  * Version 6.2.5.15 Restore now enumerates and restores Selected Files and Folder archive items directly from
