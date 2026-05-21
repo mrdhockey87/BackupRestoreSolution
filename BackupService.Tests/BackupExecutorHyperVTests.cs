@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using SecureServerBackupCommon;
 using SecureServerBackupService;
 using Xunit;
@@ -262,5 +263,90 @@ public sealed class BackupExecutorHyperVTests
         {
             Directory.Delete(tempRoot, recursive: true);
         }
+    }
+
+    [Fact]
+    public void ResolveSelectedFilePaths_WhenSomeSelectionsMissing_ReturnsPresentAndMissingPaths()
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            string existingFolder = Path.Combine(tempRoot, "Docs");
+            Directory.CreateDirectory(existingFolder);
+            string existingFile = Path.Combine(existingFolder, "report.docx");
+            File.WriteAllText(existingFile, "data");
+            string missingFile = Path.Combine(existingFolder, "missing.txt");
+
+            object resolution = InvokePrivateStaticMethod(
+                nameof(BackupExecutor),
+                "ResolveSelectedFilePathsForExecution",
+                [new[] { existingFile, missingFile }])!;
+
+            IReadOnlyList<string> resolvedPaths = GetResolutionPaths(resolution, "ResolvedPaths");
+            IReadOnlyList<string> missingPaths = GetResolutionPaths(resolution, "MissingPaths");
+
+            Assert.Single(resolvedPaths);
+            Assert.Contains(existingFile, resolvedPaths, StringComparer.OrdinalIgnoreCase);
+            Assert.Single(missingPaths);
+            Assert.Contains(missingFile, missingPaths, StringComparer.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void HasAnyRuntimeSelections_WhenSelectedFilesJobHasNoPersistedSelections_ReturnsFalse()
+    {
+        var job = new BackupJob
+        {
+            Type = BackupType.SelectedFilesAndFolders,
+            Target = BackupTarget.FilesAndFolders
+        };
+
+        bool hasSelections = (bool)InvokePrivateStaticMethod(
+            nameof(BackupExecutor),
+            "HasAnyRuntimeSelections",
+            [job, Array.Empty<string>()])!;
+
+        Assert.False(hasSelections);
+    }
+
+    [Fact]
+    public void HasAnyRuntimeSelections_WhenHyperVJobHasNoSelectedVms_ReturnsFalse()
+    {
+        var job = new BackupJob
+        {
+            Target = BackupTarget.HyperV,
+            IsHyperVBackup = true
+        };
+
+        bool hasSelections = (bool)InvokePrivateStaticMethod(
+            nameof(BackupExecutor),
+            "HasAnyRuntimeSelections",
+            [job, Array.Empty<string>()])!;
+
+        Assert.False(hasSelections);
+    }
+
+    private static object? InvokePrivateStaticMethod(string typeName, string methodName, object?[] args)
+    {
+        Type type = typeof(BackupExecutor);
+        MethodInfo method = type.GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException($"Method '{methodName}' was not found on '{typeName}'.");
+
+        return method.Invoke(null, args);
+    }
+
+    private static IReadOnlyList<string> GetResolutionPaths(object resolution, string propertyName)
+    {
+        PropertyInfo property = resolution.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)
+            ?? throw new InvalidOperationException($"Property '{propertyName}' was not found on '{resolution.GetType().Name}'.");
+
+        return (IReadOnlyList<string>)(property.GetValue(resolution)
+            ?? throw new InvalidOperationException($"Property '{propertyName}' returned null."));
     }
 }

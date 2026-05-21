@@ -160,6 +160,46 @@ namespace SecureServerBackupService
             return persistedPaths.Count > 0 ? persistedPaths : job.SourcePaths;
         }
 
+        private static bool SelectionPathExists(string path)
+        {
+            return File.Exists(path) || Directory.Exists(path);
+        }
+
+        private sealed record FileSelectionResolution(IReadOnlyList<string> ResolvedPaths, IReadOnlyList<string> MissingPaths);
+
+        private static FileSelectionResolution ResolveSelectedFilePathsForExecution(IReadOnlyList<string> selectedPaths)
+        {
+            ArgumentNullException.ThrowIfNull(selectedPaths);
+
+            string[] includePaths = selectedPaths
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            string[] resolvedIncludePaths = includePaths
+                .Where(SelectionPathExists)
+                .ToArray();
+
+            string[] missingIncludePaths = includePaths
+                .Except(resolvedIncludePaths, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return new FileSelectionResolution(resolvedIncludePaths, missingIncludePaths);
+        }
+
+        private static bool HasAnyRuntimeSelections(BackupJob job, IReadOnlyList<string> sourcePaths)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+            ArgumentNullException.ThrowIfNull(sourcePaths);
+
+            if (job.IsHyperVBackup || job.Target == BackupTarget.HyperV)
+            {
+                return job.HyperVMachines.Count > 0;
+            }
+
+            return sourcePaths.Any(path => !string.IsNullOrWhiteSpace(path));
+        }
+
         public static IReadOnlyList<FileBackupBatch> BuildFileBackupBatches(IEnumerable<string> sourcePaths)
         {
             ArgumentNullException.ThrowIfNull(sourcePaths);
@@ -824,6 +864,15 @@ namespace SecureServerBackupService
                         bool isHyperVBackup = job.IsHyperVBackup || job.Target == BackupTarget.HyperV;
                         bool isSelectedFilesHistoryBackup = IsSelectedFilesHistoryBackup(job);
                         IReadOnlyList<string> sourcePaths = ResolveSourcePaths(job);
+
+                        if (!HasAnyRuntimeSelections(job, sourcePaths))
+                        {
+                            logger?.Invoke(isHyperVBackup
+                                ? "[ERROR] Backup failed because the saved Hyper-V selection is missing. Edit the backup and select a Hyper-V system to back up."
+                                : "[ERROR] Backup failed because the saved selection is missing. Edit the backup and select something to back up.");
+                            return false;
+                        }
+
                         string? newBackupPath = isSelectedFilesHistoryBackup
                             ? GetSelectedFilesHistoryArchivePath(job, DateTime.Now)
                             : Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
@@ -1529,20 +1578,40 @@ namespace SecureServerBackupService
             ArgumentNullException.ThrowIfNull(selectedPaths);
 
             string[] exclusionsArray = job.UserExclusions?.ToArray() ?? Array.Empty<string>();
-            string[] includePaths = selectedPaths.Where(path => !string.IsNullOrWhiteSpace(path)).ToArray();
+            FileSelectionResolution selectionResolution = ResolveSelectedFilePathsForExecution(selectedPaths);
+            string[] resolvedIncludePaths = selectionResolution.ResolvedPaths.ToArray();
+            IReadOnlyList<string> missingIncludePaths = selectionResolution.MissingPaths;
 
-            if (includePaths.Length == 0)
+            if (missingIncludePaths.Count > 0)
+            {
+                string missingSummary = string.Join(", ", missingIncludePaths.Take(3));
+                if (missingIncludePaths.Count > 3)
+                {
+                    missingSummary += ", ...";
+                }
+
+                if (resolvedIncludePaths.Length > 0)
+                {
+                    logger?.Invoke($"[WARNING] Skipping {missingIncludePaths.Count} missing selected file(s) or folder(s): {missingSummary}");
+                }
+                else
+                {
+                    logger?.Invoke($"[ERROR] All selected files or folders are missing for source root '{sourceRoot}': {missingSummary}");
+                }
+            }
+
+            if (resolvedIncludePaths.Length == 0)
             {
                 logger?.Invoke($"[ERROR] No selected files or folders were found for source root: {sourceRoot}");
                 return -12;
             }
 
-            logger?.Invoke($"Backing up selected files from root: {sourceRoot} ({includePaths.Length} item(s))");
+            logger?.Invoke($"Backing up selected files from root: {sourceRoot} ({resolvedIncludePaths.Length} item(s))");
             return BackupFilesBySelections(
                 sourceRoot,
                 destPath,
-                includePaths,
-                includePaths.Length,
+                resolvedIncludePaths,
+                resolvedIncludePaths.Length,
                 exclusionsArray,
                 exclusionsArray.Length,
                 progressCallback,

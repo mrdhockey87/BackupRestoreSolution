@@ -165,6 +165,7 @@ namespace SecureServerBackup.Windows
         private readonly Dictionary<string, MountedHyperVGuestTreeDisk> _hyperVDiskMountDirectories = new(StringComparer.OrdinalIgnoreCase);
         private string? _hyperVGuestMountRoot;
         private HashSet<string> _pendingSelectionPaths = new(StringComparer.OrdinalIgnoreCase);
+        private List<string> _missingSavedSelectionPaths = new();
 
         private sealed record MountedHyperVGuestExecutionPartition(int PartitionNumber, string MountPath, bool CreatedMountDirectory);
 
@@ -417,6 +418,8 @@ namespace SecureServerBackup.Windows
                     await PreSelectItemsAsync(_pathsToPreselect);
                 }
 
+                ShowMissingSavedSelectionsWarning();
+
                 // Update retention settings visibility based on initially selected backup type
                 // This ensures the panel shows correctly when Full Backup is preselected
                 if (pnlRetentionSettings != null)
@@ -437,6 +440,7 @@ namespace SecureServerBackup.Windows
         /// </summary>
         private async Task PreSelectItemsAsync(List<string> pathsToSelect)
         {
+            _missingSavedSelectionPaths.Clear();
             _pendingSelectionPaths = pathsToSelect
                 .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Select(NormalizeSelectionPath)
@@ -455,11 +459,72 @@ namespace SecureServerBackup.Windows
                 }
                 else
                 {
-                    await PreSelectStandardItemAsync(path);
+                    bool matched = await PreSelectStandardItemAsync(path);
+                    if (!matched)
+                    {
+                        _missingSavedSelectionPaths.Add(path);
+                    }
                 }
             }
 
             RefreshLoadedSelectionStates();
+        }
+
+        private void ShowMissingSavedSelectionsWarning()
+        {
+            if (_editingJob == null || _missingSavedSelectionPaths.Count == 0)
+            {
+                return;
+            }
+
+            List<string> missingSelections = _missingSavedSelectionPaths
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (missingSelections.Count == 0)
+            {
+                return;
+            }
+
+            string message = BuildMissingSavedSelectionsWarningMessage(_editingJob.Type, missingSelections);
+            _missingSavedSelectionPaths.Clear();
+
+            CustomDialogService.ShowWarning(this,
+                message,
+                "Missing Saved Selections");
+        }
+
+        internal static string BuildMissingSavedSelectionsWarningMessage(BackupType backupType, IReadOnlyList<string> missingSelections)
+        {
+            ArgumentNullException.ThrowIfNull(missingSelections);
+
+            string summary = string.Join(Environment.NewLine, missingSelections.Take(10));
+            if (missingSelections.Count > 10)
+            {
+                summary += Environment.NewLine + "...";
+            }
+
+            string intro = backupType == BackupType.SelectedFilesAndFolders
+                ? "Some saved file or folder selections could not be found and were removed from the current selection list. The tree now shows only the selections that are still present."
+                : "Some saved backup selections could not be found. The current selection list was cleared, so select something to back up before saving.";
+
+            return intro + Environment.NewLine + Environment.NewLine + summary;
+        }
+
+        internal static string? GetSelectionValidationMessage(bool selectedFilesBackup, int selectedFilesCount, int selectedHyperVCount, int selectedNonHyperVCount)
+        {
+            if (selectedFilesBackup)
+            {
+                return selectedFilesCount == 0
+                    ? "Please select at least one file, folder, or network share to back up."
+                    : null;
+            }
+
+            return selectedHyperVCount == 0 && selectedNonHyperVCount == 0
+                ? "Please select at least one drive, volume, folder, or Hyper-V system to backup."
+                : null;
         }
 
         private async Task<bool> PreSelectStandardItemAsync(string pathToSelect)
@@ -4246,6 +4311,9 @@ namespace SecureServerBackup.Windows
                 !IsDescendantOfHyperVItem(item) &&
                 item.ItemType != DriveTreeItemType.NetworkRoot &&
                 item.ItemType != DriveTreeItemType.NetworkBrowser).ToList();
+            List<DriveTreeItem> selectedFilesItems = rbSelectedFilesAndFolders?.IsChecked == true
+                ? GetEffectiveSelectedFilesAndFoldersItems()
+                : new List<DriveTreeItem>();
 
             if (rbCloneHyperV?.IsChecked == true)
             {
@@ -4266,10 +4334,20 @@ namespace SecureServerBackup.Windows
             {
                 if (rbSelectedFilesAndFolders?.IsChecked == true)
                 {
-                    List<DriveTreeItem> selectedFilesItems = GetEffectiveSelectedFilesAndFoldersItems();
                     if (!IsSelectedFilesAndFoldersSelectionAllowed(selectedFilesItems))
                     {
                         CustomDialogService.ShowWarning("Selected Files & Folder backups can only include checked files, folders, or network share roots from the tree.", "Validation Error");
+                        return false;
+                    }
+
+                    string? selectionValidationMessage = GetSelectionValidationMessage(
+                        selectedFilesBackup: true,
+                        selectedFilesCount: selectedFilesItems.Count,
+                        selectedHyperVCount: selectedHyperV.Count,
+                        selectedNonHyperVCount: selectedNonHyperV.Count);
+                    if (!string.IsNullOrWhiteSpace(selectionValidationMessage))
+                    {
+                        CustomDialogService.ShowWarning(selectionValidationMessage, "Validation Error");
                         return false;
                     }
                 }
@@ -4281,10 +4359,18 @@ namespace SecureServerBackup.Windows
                     return false;
                 }
 
-                if (selectedHyperV.Count == 0 && selectedNonHyperV.Count == 0)
+                if (rbSelectedFilesAndFolders?.IsChecked != true)
                 {
-                    CustomDialogService.ShowWarning("Please select at least one drive, volume, folder, or Hyper-V system to backup.", "Validation Error");
-                    return false;
+                    string? selectionValidationMessage = GetSelectionValidationMessage(
+                        selectedFilesBackup: false,
+                        selectedFilesCount: selectedFilesItems.Count,
+                        selectedHyperVCount: selectedHyperV.Count,
+                        selectedNonHyperVCount: selectedNonHyperV.Count);
+                    if (!string.IsNullOrWhiteSpace(selectionValidationMessage))
+                    {
+                        CustomDialogService.ShowWarning(selectionValidationMessage, "Validation Error");
+                        return false;
+                    }
                 }
             }
 
