@@ -151,6 +151,38 @@ public sealed class RegularHyperVRestoreHelperTests
     }
 
     [Fact]
+    public void BuildDefaultHyperVVirtualDiskPath_WhenBackupNameProvided_UsesJobNamedSingleVhdxFile()
+    {
+        string result = RestoreWindowNew.RegularHyperVRestoreHelper.BuildDefaultHyperVVirtualDiskPath(@"D:\HyperV\Disks", "System Backup Job");
+
+        Assert.Equal(@"D:\HyperV\Disks\System Backup Job.vhdx", result);
+    }
+
+    [Fact]
+    public void BuildDefaultHyperVVirtualDiskPath_WhenBackupNameContainsInvalidCharacters_SanitizesFileName()
+    {
+        string result = RestoreWindowNew.RegularHyperVRestoreHelper.BuildDefaultHyperVVirtualDiskPath(@"D:\HyperV\Disks", "System:Backup/Job*");
+
+        Assert.Equal(@"D:\HyperV\Disks\System_Backup_Job_.vhdx", result);
+    }
+
+    [Fact]
+    public void BuildDefaultHyperVVirtualDiskPath_WhenBackupNameMatchesCloneJob_UsesSingleJobNamedVhdx()
+    {
+        string result = RestoreWindowNew.RegularHyperVRestoreHelper.BuildDefaultHyperVVirtualDiskPath(@"D:\VM Clones", "SingleVolumeClone");
+
+        Assert.Equal(@"D:\VM Clones\SingleVolumeClone.vhdx", result);
+    }
+
+    [Fact]
+    public void GetDefaultHyperVVmName_WhenSingleVhdxPathProvided_UsesJobNamedFileStem()
+    {
+        string result = RestoreWindowNew.RegularHyperVRestoreHelper.GetDefaultHyperVVmName(@"D:\HyperV\Disks\System Backup Job.vhdx");
+
+        Assert.Equal("System Backup Job", result);
+    }
+
+    [Fact]
     public void BuildCreateVirtualMachineScript_WhenGenerationTwoAndAutoStartEnabled_UsesFirmwareAndStartCommands()
     {
         string result = RestoreWindowNew.RegularHyperVRestoreHelper.BuildCreateVirtualMachineScript(

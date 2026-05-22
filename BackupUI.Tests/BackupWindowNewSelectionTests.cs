@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SecureServerBackup.Models;
 using SecureServerBackup.Windows;
 using SecureServerBackupCommon;
 using Xunit;
@@ -88,5 +89,66 @@ public sealed class BackupWindowNewSelectionTests
 			selectedNonHyperVCount: 1);
 
 		Assert.Null(message);
+	}
+
+	[Fact]
+	public void DriveTreeItem_WhenSelectionDisabled_DoesNotParticipateInCheckState()
+	{
+		DriveTreeItem item = new()
+		{
+			Name = "Disk 0",
+			ItemType = DriveTreeItemType.Disk,
+			IsSelectionEnabled = false
+		};
+
+		Assert.False(item.ParticipatesInCheckState);
+	}
+
+	[Fact]
+	public void DriveTreeItem_WhenDiskSelectionEnabled_ParticipatesInCheckState()
+	{
+		DriveTreeItem item = new()
+		{
+			Name = "Disk 0",
+			ItemType = DriveTreeItemType.Disk,
+			IsSelectionEnabled = true
+		};
+
+		Assert.True(item.ParticipatesInCheckState);
+	}
+
+	[Fact]
+	public void DriveTreeItem_WhenDisabledChildExists_DoesNotPromoteParentToChecked()
+	{
+		DriveTreeItem parent = new()
+		{
+			Name = "Hyper-V: VmOne",
+			ItemType = DriveTreeItemType.HyperVSystem
+		};
+
+		DriveTreeItem enabledChild = new()
+		{
+			Name = "Enabled child",
+			ItemType = DriveTreeItemType.HyperVSystem,
+			Parent = parent,
+			IsSelectionEnabled = true,
+			IsChecked = false
+		};
+
+		DriveTreeItem disabledChild = new()
+		{
+			Name = "Disabled disk",
+			ItemType = DriveTreeItemType.Disk,
+			Parent = parent,
+			IsSelectionEnabled = false,
+			IsChecked = true
+		};
+
+		parent.Children.Add(enabledChild);
+		parent.Children.Add(disabledChild);
+
+		enabledChild.IsChecked = true;
+
+		Assert.True(parent.IsChecked);
 	}
 }

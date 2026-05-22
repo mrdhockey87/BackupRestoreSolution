@@ -28,6 +28,7 @@
 				<CheckBox
 					x:Name="SelectionCheckBox"
 					Click="TreeItemCheckBox_Click"
+					IsEnabled="{Binding IsSelectionEnabled}"
 					IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 					Style="{StaticResource TreeViewCheckBoxStyle}" />
 				<Border

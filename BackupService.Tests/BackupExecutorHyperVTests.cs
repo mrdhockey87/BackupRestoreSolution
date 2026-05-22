@@ -219,6 +219,62 @@ public sealed class BackupExecutorHyperVTests
     }
 
     [Fact]
+    public void GetVirtualDiskClonePath_WhenCloneJobConfigured_UsesJobNamedVhdx()
+    {
+        var job = new BackupJob
+        {
+            Name = "System Backup Job",
+            DestinationPath = @"X:\HyperVClones"
+        };
+
+        string clonePath = job.GetVirtualDiskClonePath();
+
+        Assert.Equal(@"X:\HyperVClones\System Backup Job.vhdx", clonePath);
+    }
+
+    [Fact]
+    public void ShouldCloneToVirtualDiskAsDisk_WhenTargetIsDisk_ReturnsTrue()
+    {
+        var job = new BackupJob
+        {
+            Target = BackupTarget.Disk,
+            SourcePaths = [@"\\.\PHYSICALDRIVE2"]
+        };
+
+        bool result = job.ShouldCloneToVirtualDiskAsDisk();
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldCloneToVirtualDiskAsDisk_WhenTargetIsSingleVolume_ReturnsFalse()
+    {
+        var job = new BackupJob
+        {
+            Target = BackupTarget.Volume,
+            SourcePaths = [@"\\?\Volume{1234}\"]
+        };
+
+        bool result = job.ShouldCloneToVirtualDiskAsDisk();
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void ShouldCloneToVirtualDiskAsDisk_WhenMultipleVolumesSelected_ReturnsTrue()
+    {
+        var job = new BackupJob
+        {
+            Target = BackupTarget.Volume,
+            SourcePaths = [@"\\?\Volume{1111}\", @"\\?\Volume{2222}\"]
+        };
+
+        bool result = job.ShouldCloneToVirtualDiskAsDisk();
+
+        Assert.True(result);
+    }
+
+    [Fact]
     public void BuildFileBackupBatches_WhenSelectionsShareParentFolder_GroupsUnderOneRoot()
     {
         string[] sourcePaths =

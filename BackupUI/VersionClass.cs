@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.24";
+        private static readonly string version_fallback_number = "6.2.5.27";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,9 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.5.27 Clone Hyper-V System now reloads the New Backup source tree and disables non-Hyper-V selections. mdail 5/22/2026
+ * Version 6.2.5.26 Clone to Virtual Disk backup jobs now create one job-named .vhdx for disk and volume selections. mdail 5/22/2026
+ * Version 6.2.5.25 Clone-to-Hyper-V disk restores now create one job-named .vhdx file for multi-partition source disks. mdail 5/22/2026
  * Version 6.2.5.24 Restrict Selected Files validation and saved-selection reuse to file and folder backups only. mdail 5/21/2026
  * Version 6.2.5.23 Fix disk and volume backup routing so fallback runs do not hit Selected Files validation. mdail 5/21/2026
  * Version 6.2.5.22 Change user visible C# WIM messages and logs to SSB wording. mdail 5/21/2026

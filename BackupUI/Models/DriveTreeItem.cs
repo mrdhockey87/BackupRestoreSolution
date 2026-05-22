@@ -11,6 +11,7 @@ namespace SecureServerBackup.Models
         private bool? _isChecked = false;
         private bool _isExpanded = false;
         private bool _childrenLoaded = false;
+        private bool _isSelectionEnabled = true;
 
         public string Name { get; set; } = string.Empty;
         public string FullPath { get; set; } = string.Empty;
@@ -36,6 +37,20 @@ namespace SecureServerBackup.Models
             {
                 _childrenLoaded = value;
                 OnPropertyChanged();
+            }
+        }
+
+        public bool IsSelectionEnabled
+        {
+            get => _isSelectionEnabled;
+            set
+            {
+                if (_isSelectionEnabled != value)
+                {
+                    _isSelectionEnabled = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(ParticipatesInCheckState));
+                }
             }
         }
 
@@ -94,7 +109,7 @@ namespace SecureServerBackup.Models
 
         public bool IsLoadingPlaceholder => string.Equals(Name, "Loading...", StringComparison.Ordinal);
 
-        public bool ParticipatesInCheckState => !IsLoadingPlaceholder;
+        public bool ParticipatesInCheckState => !IsLoadingPlaceholder && IsSelectionEnabled;
 
         private void UpdateChildren(bool? value)
         {
@@ -102,6 +117,11 @@ namespace SecureServerBackup.Models
             {
                 foreach (var child in Children)
                 {
+                    if (!child.ParticipatesInCheckState)
+                    {
+                        continue;
+                    }
+
                     child._isChecked = value;
                     child.OnPropertyChanged(nameof(IsChecked));
                     child.UpdateChildren(value);

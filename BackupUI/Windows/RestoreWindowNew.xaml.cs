@@ -103,6 +103,18 @@ namespace SecureServerBackup.Windows
                 return Path.GetDirectoryName(virtualDiskPath)?.Trim() ?? string.Empty;
             }
 
+            public static string BuildDefaultHyperVVirtualDiskPath(string? directoryPath, string? backupName)
+            {
+                string sanitizedBackupName = SanitizeFileName(backupName);
+                string fileName = string.IsNullOrWhiteSpace(sanitizedBackupName)
+                    ? "RestoredBackup.vhdx"
+                    : sanitizedBackupName + ".vhdx";
+
+                return string.IsNullOrWhiteSpace(directoryPath)
+                    ? fileName
+                    : Path.Combine(directoryPath.Trim(), fileName);
+            }
+
             public static string BuildCreateVirtualMachineScript(string vmName, string vmStoragePath, string virtualDiskPath, int generation, bool startAfterCreate)
             {
                 string escapedVmName = EscapePowerShellSingleQuotedString(vmName);
@@ -122,6 +134,24 @@ namespace SecureServerBackup.Windows
             private static string EscapePowerShellSingleQuotedString(string value)
             {
                 return (value ?? string.Empty).Replace("'", "''", StringComparison.Ordinal);
+            }
+
+            private static string SanitizeFileName(string? value)
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    return string.Empty;
+                }
+
+                char[] invalidChars = Path.GetInvalidFileNameChars();
+                var builder = new StringBuilder(value.Length);
+
+                foreach (char character in value.Trim())
+                {
+                    builder.Append(invalidChars.Contains(character) ? '_' : character);
+                }
+
+                return builder.ToString().Trim().TrimEnd('.');
             }
         }
 
@@ -1538,20 +1568,30 @@ namespace SecureServerBackup.Windows
                 return;
             }
 
-            string virtualDiskPath = txtHyperVVirtualDiskPath.Text.Trim();
+            System.Windows.Controls.TextBox hyperVVirtualDiskPathTextBox = txtHyperVVirtualDiskPath;
+            System.Windows.Controls.TextBox newHyperVVmNameTextBox = txtNewHyperVVmName;
+            System.Windows.Controls.TextBox newHyperVVmPathTextBox = txtNewHyperVVmPath;
+
+            if (string.IsNullOrWhiteSpace(hyperVVirtualDiskPathTextBox.Text))
+            {
+                string defaultDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                hyperVVirtualDiskPathTextBox.Text = RegularHyperVRestoreHelper.BuildDefaultHyperVVirtualDiskPath(defaultDirectory, _preloadedBackup?.BackupName ?? string.Empty);
+            }
+
+            string virtualDiskPath = hyperVVirtualDiskPathTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(virtualDiskPath))
             {
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(txtNewHyperVVmName.Text))
+            if (string.IsNullOrWhiteSpace(newHyperVVmNameTextBox.Text))
             {
-                txtNewHyperVVmName.Text = RegularHyperVRestoreHelper.GetDefaultHyperVVmName(virtualDiskPath);
+                newHyperVVmNameTextBox.Text = RegularHyperVRestoreHelper.GetDefaultHyperVVmName(virtualDiskPath);
             }
 
-            if (string.IsNullOrWhiteSpace(txtNewHyperVVmPath.Text))
+            if (string.IsNullOrWhiteSpace(newHyperVVmPathTextBox.Text))
             {
-                txtNewHyperVVmPath.Text = RegularHyperVRestoreHelper.GetDefaultHyperVVmStoragePath(virtualDiskPath);
+                newHyperVVmPathTextBox.Text = RegularHyperVRestoreHelper.GetDefaultHyperVVmStoragePath(virtualDiskPath);
             }
         }
 
@@ -1632,6 +1672,21 @@ namespace SecureServerBackup.Windows
 
         private void BrowseHyperVVirtualDisk_Click(object sender, RoutedEventArgs e)
         {
+            if (txtHyperVVirtualDiskPath == null)
+            {
+                return;
+            }
+
+            System.Windows.Controls.TextBox hyperVVirtualDiskPathTextBox = txtHyperVVirtualDiskPath;
+
+            string currentPath = hyperVVirtualDiskPathTextBox.Text?.Trim() ?? string.Empty;
+            string initialDirectory = !string.IsNullOrWhiteSpace(currentPath)
+                ? Path.GetDirectoryName(currentPath) ?? string.Empty
+                : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            string initialFileName = !string.IsNullOrWhiteSpace(currentPath)
+                ? Path.GetFileName(currentPath)
+                : Path.GetFileName(RegularHyperVRestoreHelper.BuildDefaultHyperVVirtualDiskPath(initialDirectory, _preloadedBackup?.BackupName));
+
             using var saveDialog = new SaveFileDialog
             {
                 Title = "Select Hyper-V virtual disk destination",
@@ -1639,13 +1694,15 @@ namespace SecureServerBackup.Windows
                 DefaultExt = "vhdx",
                 AddExtension = true,
                 OverwritePrompt = false,
-                CheckPathExists = true
+                CheckPathExists = true,
+                InitialDirectory = initialDirectory,
+                FileName = initialFileName
             };
 
             if (saveDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                 _selectedTargetPath = saveDialog.FileName;
-                txtHyperVVirtualDiskPath.Text = saveDialog.FileName;
+                hyperVVirtualDiskPathTextBox.Text = saveDialog.FileName;
                 ApplyDefaultNewHyperVVmSettings();
             }
         }
@@ -2909,7 +2966,7 @@ namespace SecureServerBackup.Windows
 
             Directory.CreateDirectory(Path.GetDirectoryName(virtualDiskPath) ?? throw new InvalidOperationException("Invalid Hyper-V virtual disk path."));
 
-            bool restoreAsDisk = backupFiles.Count == 1 && HyperVRestorePointHelper.FindPrimaryVirtualDisk(backupFiles[0]) == virtualDiskPath;
+            bool restoreAsDisk = _restoreTargetKind == RestoreTargetKind.Disk;
 
             callback(5, "Creating or preparing Hyper-V virtual disk...");
             PrepareHyperVVirtualDiskFile(virtualDiskPath, restoreAsDisk);

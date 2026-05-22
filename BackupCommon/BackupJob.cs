@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace SecureServerBackupCommon
 {
@@ -44,5 +46,43 @@ namespace SecureServerBackupCommon
         // Optional AES-128 backup encryption settings
         public bool EncryptBackup { get; set; } = false;
         public string ProtectedEncryptionPassword { get; set; } = string.Empty;
+
+        public string GetVirtualDiskClonePath()
+        {
+            string fileName = string.IsNullOrWhiteSpace(Name)
+                ? "Clone.vhdx"
+                : $"{SanitizeFileName(Name)}.vhdx";
+
+            return Path.Combine(DestinationPath, fileName);
+        }
+
+        public bool ShouldCloneToVirtualDiskAsDisk()
+        {
+            if (Target == BackupTarget.Disk)
+            {
+                return true;
+            }
+
+            if (Target != BackupTarget.Volume)
+            {
+                return false;
+            }
+
+            return SourcePaths
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count() > 1;
+        }
+
+        private static string SanitizeFileName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "Clone";
+            }
+
+            char[] invalidCharacters = Path.GetInvalidFileNameChars();
+            return new string(value.Select(ch => invalidCharacters.Contains(ch) ? '_' : ch).ToArray());
+        }
     }
 }

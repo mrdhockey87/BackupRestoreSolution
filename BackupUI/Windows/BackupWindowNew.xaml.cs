@@ -1565,6 +1565,8 @@ namespace SecureServerBackup.Windows
                 // Load network locations
                 await LoadNetworkDrives();
 
+                ApplyBackupTypeSelectionRestrictions();
+
                 // Restore previously checked state
                 if (checkedPaths.Count > 0)
                     RestoreCheckedPaths(driveItems, checkedPaths);
@@ -2754,6 +2756,54 @@ namespace SecureServerBackup.Windows
                 pnlCloneOptions.Visibility = Visibility.Collapsed;
                 pnlBackupDestination.Visibility = Visibility.Visible;
             }
+
+            ApplyBackupTypeSelectionRestrictions();
+
+            if (rbCloneHyperV?.IsChecked == true)
+            {
+                _ = ReloadDriveTreeForBackupTypeAsync();
+            }
+        }
+
+        private async Task ReloadDriveTreeForBackupTypeAsync()
+        {
+            try
+            {
+                await LoadDrives();
+            }
+            catch (Exception ex)
+            {
+                CustomDialogService.ShowError($"Error reloading drives: {ex.Message}", "Error");
+            }
+        }
+
+        private void ApplyBackupTypeSelectionRestrictions()
+        {
+            bool hyperVSystemsOnly = rbCloneHyperV?.IsChecked == true;
+
+            foreach (DriveTreeItem item in driveItems)
+            {
+                ApplySelectionRestrictionRecursive(item, hyperVSystemsOnly);
+            }
+        }
+
+        private static void ApplySelectionRestrictionRecursive(DriveTreeItem item, bool hyperVSystemsOnly)
+        {
+            bool isHyperVSystem = item.ItemType == DriveTreeItemType.HyperVSystem;
+            bool isSystemDiskSelection = item.ItemType == DriveTreeItemType.Disk;
+            bool isNetworkBrowser = item.ItemType == DriveTreeItemType.NetworkBrowser;
+
+            item.IsSelectionEnabled = !hyperVSystemsOnly || isHyperVSystem || isSystemDiskSelection || isNetworkBrowser;
+
+            if (!item.IsSelectionEnabled)
+            {
+                item.IsChecked = false;
+            }
+
+            foreach (DriveTreeItem child in item.Children)
+            {
+                ApplySelectionRestrictionRecursive(child, hyperVSystemsOnly);
+            }
         }
 
         private void BrowseDestination_Click(object sender, RoutedEventArgs e)
@@ -3458,6 +3508,101 @@ namespace SecureServerBackup.Windows
                     int result = -1;
                     string backupArchivePath = GetBackupArchivePath(job.DestinationPath, job.Name);
 
+                    if (job.Type == BackupType.CloneToVirtualDisk)
+                    {
+                        string virtualDiskPath = job.GetVirtualDiskClonePath();
+                        bool cloneAsDisk = job.ShouldCloneToVirtualDiskAsDisk();
+
+                        Dispatcher.Invoke(() =>
+                        {
+                            txtProgress.Text = cloneAsDisk
+                                ? $"Cloning selected source into virtual disk {Path.GetFileName(virtualDiskPath)}..."
+                                : $"Cloning selected volume into virtual disk {Path.GetFileName(virtualDiskPath)}...";
+                        });
+
+                        string temporaryArchiveDirectory = Path.Combine(Path.GetTempPath(), "SecureServerBackup", "VirtualDiskClone", Guid.NewGuid().ToString("N"));
+                        Directory.CreateDirectory(temporaryArchiveDirectory);
+
+                        string temporaryArchivePath = GetBackupArchivePath(temporaryArchiveDirectory, job.Name);
+
+                        try
+                        {
+                            if (cloneAsDisk)
+                            {
+                                string diskPath = job.SourcePaths.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path))
+                                    ?? throw new InvalidOperationException("Clone to Virtual Disk requires a selected source disk.");
+                                string diskNumStr = diskPath.Replace("\\\\?\\PHYSICALDRIVE", "").Replace("\\\\.\\PHYSICALDRIVE", "");
+                                if (!int.TryParse(diskNumStr, out int diskNum))
+                                {
+                                    throw new InvalidOperationException($"Invalid disk path format: {diskPath}");
+                                }
+
+                                result = BackupEngineInterop.BackupDisk(
+                                    diskNum,
+                                    temporaryArchivePath,
+                                    job.IncludeSystemState,
+                                    job.CompressData,
+                                    null,
+                                    0,
+                                    progressCallback,
+                                    null);
+
+                                if (result != 0)
+                                {
+                                    var errorBuffer = new StringBuilder(4096);
+                                    BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                                    throw new Exception($"Disk capture for virtual disk clone failed: {errorBuffer}");
+                                }
+                            }
+                            else
+                            {
+                                string volumePath = job.SourcePaths.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path))
+                                    ?? throw new InvalidOperationException("Clone to Virtual Disk requires a selected source volume.");
+
+                                result = BackupEngineInterop.BackupVolume(
+                                    volumePath,
+                                    temporaryArchivePath,
+                                    job.IncludeSystemState,
+                                    job.CompressData,
+                                    null,
+                                    0,
+                                    progressCallback,
+                                    null);
+
+                                if (result != 0)
+                                {
+                                    var errorBuffer = new StringBuilder(4096);
+                                    BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                                    throw new Exception($"Volume capture for virtual disk clone failed: {errorBuffer}");
+                                }
+                            }
+
+                            CreateHyperVVirtualDiskFromArchive(temporaryArchivePath, virtualDiskPath, cloneAsDisk, progressCallback);
+                        }
+                        finally
+                        {
+                            try
+                            {
+                                if (Directory.Exists(temporaryArchiveDirectory))
+                                {
+                                    Directory.Delete(temporaryArchiveDirectory, recursive: true);
+                                }
+                            }
+                            catch (Exception cleanupEx)
+                            {
+                                Debug.WriteLine($"Temporary virtual disk clone cleanup warning: {cleanupEx.Message}");
+                            }
+                        }
+
+                        Dispatcher.Invoke(() =>
+                        {
+                            progressBar.Value = 100;
+                            txtProgress.Text = $"Virtual disk clone completed: {Path.GetFileName(virtualDiskPath)}";
+                        });
+
+                        return;
+                    }
+
                     // Execute based on job type
                     if (job.IsHyperVBackup && job.HyperVMachines.Count > 0)
                     {
@@ -3709,6 +3854,142 @@ namespace SecureServerBackup.Windows
         private static string GetBackupArchivePath(string destPath, string jobName)
         {
             return Path.Combine(destPath, $"{jobName}.ssb");
+        }
+
+        private static void CreateHyperVVirtualDiskFromArchive(string archivePath, string virtualDiskPath, bool restoreAsDisk, BackupEngineInterop.ProgressCallback progressCallback)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(virtualDiskPath) ?? throw new InvalidOperationException("Invalid Hyper-V virtual disk clone path."));
+
+            PrepareHyperVVirtualDiskFile(virtualDiskPath, createFixedDisk: restoreAsDisk);
+
+            var mountResult = BackupMountManager.MountVirtualDisk(virtualDiskPath, readOnly: false);
+            if (!mountResult.Success || string.IsNullOrWhiteSpace(mountResult.DriveLetter))
+            {
+                throw new InvalidOperationException($"Failed to mount the Hyper-V virtual disk clone: {mountResult.Error}");
+            }
+
+            string mountedDriveRoot = mountResult.DriveLetter.EndsWith(":", StringComparison.Ordinal)
+                ? mountResult.DriveLetter + "\\"
+                : mountResult.DriveLetter;
+
+            try
+            {
+                int result;
+                if (restoreAsDisk)
+                {
+                    int targetDiskNumber = GetDiskNumberForDriveLetter(mountedDriveRoot);
+                    result = BackupEngineInterop.RestoreDiskFromImage(archivePath, 1, targetDiskNumber, false, progressCallback);
+                }
+                else
+                {
+                    int targetDiskNumber = GetDiskNumberForDriveLetter(mountedDriveRoot);
+                    string targetVolumePath = CreateVolumeOnDiskForHyperVRestore(targetDiskNumber);
+                    result = BackupEngineInterop.RestoreVolumeFromImage(archivePath, 1, targetVolumePath, false, progressCallback);
+                }
+
+                if (result != 0)
+                {
+                    var errorBuffer = new StringBuilder(4096);
+                    BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                    throw new InvalidOperationException($"Failed to create the Hyper-V virtual disk clone: {errorBuffer}");
+                }
+            }
+            finally
+            {
+                BackupMountManager.UnmountVirtualDisk(virtualDiskPath);
+            }
+        }
+
+        private static void PrepareHyperVVirtualDiskFile(string virtualDiskPath, bool createFixedDisk)
+        {
+            string diskType = createFixedDisk ? "Fixed" : "Dynamic";
+            long sizeBytes = createFixedDisk ? 137438953472L : 68719476736L;
+            string script = $"$path='{virtualDiskPath.Replace("'", "''")}'; if (Test-Path $path) {{ Dismount-DiskImage -ImagePath $path -ErrorAction SilentlyContinue; Remove-Item -Path $path -Force -ErrorAction SilentlyContinue; }}; New-VHD -Path $path -SizeBytes {sizeBytes} -{diskType} | Out-Null";
+
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            });
+
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Failed to prepare the Hyper-V virtual disk file. {errors}".Trim());
+            }
+        }
+
+        private static int GetDiskNumberForDriveLetter(string driveLetter)
+        {
+            string normalizedRoot = driveLetter.Trim().TrimEnd('\\') + "\\";
+            string driveName = normalizedRoot[..2];
+            string escapedDriveName = driveName.Replace("'", "''", StringComparison.Ordinal);
+
+            string script = $"$partition = Get-Partition -DriveLetter '{escapedDriveName[0]}' -ErrorAction Stop; $disk = $partition | Get-Disk -ErrorAction Stop; $disk.Number";
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string output = process?.StandardOutput.ReadToEnd() ?? string.Empty;
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Failed to resolve the mounted virtual disk number. {errors}".Trim());
+            }
+
+            string diskText = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? string.Empty;
+            if (!int.TryParse(diskText.Trim(), out int diskNumber))
+            {
+                throw new InvalidOperationException("The mounted virtual disk number could not be determined.");
+            }
+
+            return diskNumber;
+        }
+
+        private static string CreateVolumeOnDiskForHyperVRestore(int diskNumber)
+        {
+            string script = $"$diskNumber={diskNumber}; Clear-Disk -Number $diskNumber -RemoveData -RemoveOEM -Confirm:$false -ErrorAction Stop; Initialize-Disk -Number $diskNumber -PartitionStyle GPT -ErrorAction Stop; $partition = New-Partition -DiskNumber $diskNumber -UseMaximumSize -AssignDriveLetter -ErrorAction Stop; Format-Volume -Partition $partition -FileSystem NTFS -NewFileSystemLabel 'SSBClone' -Confirm:$false -Force -ErrorAction Stop | Out-Null; ($partition | Get-Volume).UniqueId";
+
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            string output = process?.StandardOutput.ReadToEnd() ?? string.Empty;
+            string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
+            process?.WaitForExit();
+
+            if (process == null || process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Failed to prepare the virtual disk volume. {errors}".Trim());
+            }
+
+            string volumeId = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(volumeId))
+            {
+                throw new InvalidOperationException("The prepared virtual disk volume path could not be determined.");
+            }
+
+            return volumeId.Trim();
         }
 
         private static bool HasBackupArchive(string destPath, string jobName)

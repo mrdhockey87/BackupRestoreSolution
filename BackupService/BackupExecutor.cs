@@ -109,6 +109,16 @@ namespace SecureServerBackupService
             return new string(value.Select(ch => invalidCharacters.Contains(ch) ? '_' : ch).ToArray());
         }
 
+        public static string GetVirtualDiskClonePathForTest(BackupJob job)
+        {
+            return job.GetVirtualDiskClonePath();
+        }
+
+        public static bool ShouldCloneToVirtualDiskAsDiskForTest(BackupJob job)
+        {
+            return job.ShouldCloneToVirtualDiskAsDisk();
+        }
+
         private static string EscapePowerShellSingleQuotedString(string value)
         {
             return (value ?? string.Empty).Replace("'", "''", StringComparison.Ordinal);
