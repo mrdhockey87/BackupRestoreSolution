@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.27";
+        private static readonly string version_fallback_number = "6.2.5.33";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,22 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.5.34 Had the AI verify that the SetupCL only occured when the Hyper-v clone was renamed or created
+ * 				    with disk-based cloning, and that the pending request was properly written through the backup 
+ * 				    engine with the correct flags. It also found and fixed a mismatch in the hlper signature. mdail 5/23/2026
+ * Version 6.2.5.33 Clone Hyper-V System now writes the SetupCl pending request through the unmanaged backup 
+ *                  engine using OFFLINE_SYSTEM and OperationFlags 0x00000004. mdail 5/23/2026
+ * Version 6.2.5.32 Clone Hyper-V System now schedules SetupCl in the cloned VHDX SYSTEM hive for renamed and 
+ *                  disk-based clones before first boot. mdail 5/23/2026
+ * Version 6.2.5.31 Updated LinuxRestore version text, SSB restore help, encrypted backup guidance, and Hyper-V 
+ *                  recovery wording. mdail 5/23/2026
+ * Version 6.2.5.30 Clone Hyper-V System no longer duplicates the New Backup source tree when the backup type 
+ *                  changes while the list is still loading. mdail 5/23/2026
+ * Version 6.2.5.29 Clone Hyper-V System now supports the optional Rename Hyper-V System setting,
+ *                  validates the new Windows system name, clones into a job-named target folder and .vhdx,
+ *                  creates the new Hyper-V VM, and regenerates the MAC address while the VM stays off. mdail 5/23/2026
+ * Version 6.2.5.28 Clone Hyper-V System now reloads the New Backup source tree while keeping physical disks enabled,
+ *                  and adds regression coverage for the updated selection state behavior. mdail 5/23/2026
  * Version 6.2.5.27 Clone Hyper-V System now reloads the New Backup source tree and disables non-Hyper-V selections. mdail 5/22/2026
  * Version 6.2.5.26 Clone to Virtual Disk backup jobs now create one job-named .vhdx for disk and volume selections. mdail 5/22/2026
  * Version 6.2.5.25 Clone-to-Hyper-V disk restores now create one job-named .vhdx file for multi-partition source disks. mdail 5/22/2026

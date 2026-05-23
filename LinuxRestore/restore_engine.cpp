@@ -1,6 +1,6 @@
 // LinuxRestore/restore_engine.cpp
 // Cross-platform restore engine for Linux-based bootable USB
-// Version 5.13.7.0 - Added SSB archive support for unified backup format
+// Version 6.2.5.31 - Updated LinuxRestore messaging for encrypted SSB and Hyper-V recovery flows
 
 #include <iostream>
 #include <sstream>

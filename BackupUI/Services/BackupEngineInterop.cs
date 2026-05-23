@@ -151,6 +151,10 @@ namespace SecureServerBackup.Services
             ProgressCallback? callback);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int ScheduleOfflineSystemSetupCl(
+            string systemHivePath);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern int ListBackupContents(
             string backupPath,
             StringBuilder buffer,

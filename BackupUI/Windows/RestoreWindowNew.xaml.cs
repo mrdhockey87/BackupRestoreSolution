@@ -131,6 +131,12 @@ namespace SecureServerBackup.Windows
                 return $"$vmName='{escapedVmName}'; $vmPath='{escapedVmStoragePath}'; $diskPath='{escapedVirtualDiskPath}'; if ([string]::IsNullOrWhiteSpace($vmName)) {{ throw 'A virtual machine name is required.'; }}; if ([string]::IsNullOrWhiteSpace($vmPath)) {{ throw 'A virtual machine storage path is required.'; }}; if ([string]::IsNullOrWhiteSpace($diskPath)) {{ throw 'A Hyper-V virtual disk path is required.'; }}; New-Item -ItemType Directory -Path $vmPath -Force | Out-Null; if (Get-VM -Name $vmName -ErrorAction SilentlyContinue) {{ throw \"A Hyper-V virtual machine named '$vmName' already exists.\"; }}; New-VM -Name $vmName -Generation {generation} -Path $vmPath -MemoryStartupBytes 2GB -ErrorAction Stop | Out-Null; Add-VMHardDiskDrive -VMName $vmName -ControllerType {controllerType} -ControllerNumber 0 -ControllerLocation 0 -Path $diskPath -ErrorAction Stop | Out-Null{firmwareCommand}{startCommand}";
             }
 
+            public static string BuildRegenerateMacAddressScript(string vmName)
+            {
+                string escapedVmName = EscapePowerShellSingleQuotedString(vmName);
+                return $"$vmName='{escapedVmName}'; $vm = Get-VM -Name $vmName -ErrorAction Stop; if ($vm.State -notin @('Off','Saved')) {{ throw 'The Hyper-V virtual machine must be off before regenerating the MAC address.'; }}; Get-VMNetworkAdapter -VMName $vmName -ErrorAction Stop | ForEach-Object {{ Set-VMNetworkAdapter -VMName $vmName -Name $_.Name -DynamicMacAddress -ErrorAction Stop | Out-Null }}";
+            }
+
             private static string EscapePowerShellSingleQuotedString(string value)
             {
                 return (value ?? string.Empty).Replace("'", "''", StringComparison.Ordinal);

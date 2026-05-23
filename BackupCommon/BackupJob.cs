@@ -47,6 +47,10 @@ namespace SecureServerBackupCommon
         public bool EncryptBackup { get; set; } = false;
         public string ProtectedEncryptionPassword { get; set; } = string.Empty;
 
+        // Optional Clone Hyper-V System rename settings
+        public bool RenameHyperVSystem { get; set; } = false;
+        public string RenameHyperVSystemName { get; set; } = string.Empty;
+
         public string GetVirtualDiskClonePath()
         {
             string fileName = string.IsNullOrWhiteSpace(Name)

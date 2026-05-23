@@ -1,6 +1,6 @@
 # Backup & Restore - Linux Recovery USB
 
-**Version 5.13.7.0** (Updated with WIM/.ssb backup support, encrypted backup restore support, and Hyper-V backup-point browsing)
+**Version 6.2.5.31** (Updated with SSB archive restore support, encrypted backup restore support, and Hyper-V backup-point recovery)
 
 A lightweight, bootable Linux-based restore solution that works with backups created by the Backup & Restore Windows application.
 
@@ -10,7 +10,7 @@ A lightweight, bootable Linux-based restore solution that works with backups cre
 ✓ **Small Footprint** - ~500 MB total (vs 2+ GB for WinPE)  
 ✓ **Fast Boot** - Alpine Linux boots in seconds  
 ✓ **NTFS Support** - Can restore to Windows partitions  
-✓ **WIM Support** - Extracts .ssb/.wim backup files (NEW in 5.13.7.0)
+✓ **SSB Archive Support** - Extracts `.ssb` backup files and preserves restore metadata
 ✓ **Encrypted Backup Support** - Prompts for password and restores AES-128 encrypted .ssb backups
 ✓ **Hyper-V Backup Point Support** - Detects Hyper-V `.ssb` folders and restores exported VM files
 ✓ **Intelligent Restore** - Auto-detects disk/volume/file backups
@@ -19,20 +19,20 @@ A lightweight, bootable Linux-based restore solution that works with backups cre
 
 ---
 
-## What's New in 5.13.7.0
+## What's New in 6.2.5.31
 
-### WIM (.ssb) Backup Support
+### LinuxRestore Refresh
 
-The restore engine now supports the unified WIM backup format:
-- **Detects .ssb files** - Automatically recognizes Windows Imaging backups
-- **Uses wimlib** - Extracts WIM archives with full metadata
-- **Cross-platform** - Same backup format works on Windows and Linux
-- **Backward Compatible** - Still supports legacy folder-based backups
+LinuxRestore now reflects the current restore workflow more clearly:
+- **Consistent versioning** - CLI, GTK UI, and documentation now report the current product version
+- **Encrypted SSB restores** - Linux recovery prompts for passwords before listing or restoring encrypted backups
+- **Hyper-V backup-point recovery** - Linux recovery restores files from Hyper-V backup-point folders
+- **Metadata-aware disk restore** - Disk reconstruction guidance matches the current restore behavior
 
 ### Intelligent Restore Type Detection
 
 The restore engine automatically detects backup types:
-- **WIM Archives** (.ssb, .wim) - Extracts using wimlib-imagex
+- **SSB Archives** (`.ssb`) - Extracts using `wimlib-imagex`
 - **Hyper-V Backup Point Directories** - Restores exported VM files and guest disks as files
 - **Disk Images** (.img files) - Warns about manual restore requirement
 - **Volume Backups** (with SystemState) - Restores files, notes system state is Windows-only
@@ -47,7 +47,7 @@ This matches the Windows restore functionality for consistent cross-platform rec
 
 ### Runtime Dependencies
 
-**For WIM/.ssb backup support, install wimlib:**
+**For `.ssb` archive restore support, install `wimlib`:**
 
 ```bash
 # Debian/Ubuntu

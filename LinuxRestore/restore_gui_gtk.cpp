@@ -1,5 +1,5 @@
 // LinuxRestore/restore_gui_gtk.cpp
-// Graphical User Interface using GTK+ 3.0 - Version 4.7.3.0
+// Graphical User Interface using GTK+ 3.0 - Version 6.2.5.31
 // Enhanced with 3-step wizard matching Windows RestoreWindowNew:
 // - Step 3 uses a two-panel layout (options left, full-height target tree right)
 // - Target tree shows ALL disks including boot disk (greyed/insensitive)
@@ -921,7 +921,7 @@ public:
     RestoreGUI() {
         window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
         gtk_window_set_title(GTK_WINDOW(window),
-            "Secure Server Backup — Linux Recovery v4.7.3");
+            "Secure Server Backup — Linux Recovery v6.2.5.31");
         gtk_window_set_default_size(GTK_WINDOW(window), 1000, 680);
         g_signal_connect(window, "delete-event", G_CALLBACK(onDelete), NULL);
 

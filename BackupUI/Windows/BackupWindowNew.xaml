@@ -28,8 +28,8 @@
 				<CheckBox
 					x:Name="SelectionCheckBox"
 					Click="TreeItemCheckBox_Click"
-					IsEnabled="{Binding IsSelectionEnabled}"
 					IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+					IsEnabled="{Binding IsSelectionEnabled}"
 					Style="{StaticResource TreeViewCheckBoxStyle}" />
 				<Border
 					x:Name="NetworkBrowserButton"
@@ -333,6 +333,25 @@
 							Margin="0,0,0,10"
 							Content="Verify backup after completion"
 							IsChecked="True" />
+
+						<StackPanel
+							Name="pnlCloneHyperVRename"
+							Margin="0,0,0,10"
+							Visibility="Collapsed">
+							<CheckBox
+								Name="chkRenameHyperVSystem"
+								Margin="0,0,0,10"
+								Checked="RenameHyperVSystem_CheckedChanged"
+								Content="Rename Hyper-V System"
+								Unchecked="RenameHyperVSystem_CheckedChanged" />
+							<StackPanel Name="pnlRenameHyperVSystemName" Visibility="Collapsed">
+								<TextBlock Margin="0,0,0,5" Text="New Name:" />
+								<TextBox
+									Name="txtRenameHyperVSystemName"
+									Height="25"
+									Margin="0,0,0,5" />
+							</StackPanel>
+						</StackPanel>
 
 						<Button
 							Name="btnManageExclusions"

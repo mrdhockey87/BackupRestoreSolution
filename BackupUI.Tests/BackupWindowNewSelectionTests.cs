@@ -117,6 +117,27 @@ public sealed class BackupWindowNewSelectionTests
 		Assert.True(item.ParticipatesInCheckState);
 	}
 
+	[Theory]
+	[InlineData("SERVER01")]
+	[InlineData("HV-CLONE-1")]
+	[InlineData("ABC123")]
+	public void IsValidWindowsComputerName_WhenNameIsValid_ReturnsTrue(string name)
+	{
+		Assert.True(BackupWindowNew.IsValidWindowsComputerName(name));
+	}
+
+	[Theory]
+	[InlineData("")]
+	[InlineData("TOO-LONG-COMPUTER")]
+	[InlineData("BAD NAME")]
+	[InlineData("-BADNAME")]
+	[InlineData("BADNAME-")]
+	[InlineData("BAD.NAME")]
+	public void IsValidWindowsComputerName_WhenNameIsInvalid_ReturnsFalse(string name)
+	{
+		Assert.False(BackupWindowNew.IsValidWindowsComputerName(name));
+	}
+
 	[Fact]
 	public void DriveTreeItem_WhenDisabledChildExists_DoesNotPromoteParentToChecked()
 	{

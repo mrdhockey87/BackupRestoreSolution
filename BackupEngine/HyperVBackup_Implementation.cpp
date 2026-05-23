@@ -12,6 +12,7 @@
 #include <fstream>
 #include <shlwapi.h>
 #include <cwchar>
+#include <vector>
 
 #pragma comment(lib, "wbemuuid.lib")
 #pragma comment(lib, "shlwapi.lib")
@@ -31,15 +32,58 @@ namespace {
 	};
 
 	constexpr wchar_t HyperVMetadataFileName[] = L"hyperv_backup_info.txt";
+	constexpr wchar_t OfflineSystemHiveName[] = L"OFFLINE_SYSTEM";
 
-	std::wstring TrimWhitespace(const std::wstring& value) {
-		size_t start = value.find_first_not_of(L" \t\r\n");
-		if (start == std::wstring::npos) {
-			return L"";
+		std::wstring TrimWhitespace(const std::wstring& value) {
+			size_t start = value.find_first_not_of(L" \t\r\n");
+			if (start == std::wstring::npos) {
+				return L"";
+			}
+
+			size_t end = value.find_last_not_of(L" \t\r\n");
+			return value.substr(start, end - start + 1);
 		}
 
-		size_t end = value.find_last_not_of(L" \t\r\n");
-		return value.substr(start, end - start + 1);
+	bool EnablePrivilege(const wchar_t* privilegeName) {
+		if (privilegeName == nullptr || *privilegeName == L'\0') {
+			return false;
+		}
+
+		HANDLE tokenHandle = nullptr;
+		if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &tokenHandle)) {
+			return false;
+		}
+
+		TOKEN_PRIVILEGES privileges = {};
+		bool success = false;
+		if (LookupPrivilegeValueW(nullptr, privilegeName, &privileges.Privileges[0].Luid)) {
+			privileges.PrivilegeCount = 1;
+			privileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+			if (AdjustTokenPrivileges(tokenHandle, FALSE, &privileges, sizeof(privileges), nullptr, nullptr) && GetLastError() == ERROR_SUCCESS) {
+				success = true;
+			}
+		}
+
+		CloseHandle(tokenHandle);
+		return success;
+	}
+
+	std::wstring GetRegistryErrorMessage(const wchar_t* operation, LONG status) {
+		LPWSTR buffer = nullptr;
+		DWORD flags = FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS;
+		std::wstring message = operation == nullptr ? L"Registry operation failed" : std::wstring(operation);
+
+		if (FormatMessageW(flags, nullptr, static_cast<DWORD>(status), 0, reinterpret_cast<LPWSTR>(&buffer), 0, nullptr) != 0 && buffer != nullptr) {
+			message += L": ";
+			message += TrimWhitespace(buffer);
+			LocalFree(buffer);
+		}
+		else {
+			message += L". Error code: ";
+			message += std::to_wstring(status);
+		}
+
+		return message;
 	}
 
 	std::wstring GetTimestampId() {
@@ -205,6 +249,140 @@ namespace {
 		const std::wstring& parentPath,
 		ProgressCallback callback);
 
+	class OfflineHiveScope {
+	public:
+		OfflineHiveScope() = default;
+
+		~OfflineHiveScope() {
+			Unload();
+		}
+
+		bool Load(const std::wstring& hivePath) {
+			if (hivePath.empty()) {
+				SetLastErrorMessage(L"The offline SYSTEM hive path is empty.");
+				return false;
+			}
+
+			if (!EnablePrivilege(SE_RESTORE_NAME) || !EnablePrivilege(SE_BACKUP_NAME)) {
+				SetLastErrorMessage(L"Failed to enable the privileges required to load the offline SYSTEM hive.");
+				return false;
+			}
+
+			LONG unloadStatus = RegUnLoadKeyW(HKEY_LOCAL_MACHINE, OfflineSystemHiveName);
+			if (unloadStatus != ERROR_SUCCESS && unloadStatus != ERROR_FILE_NOT_FOUND) {
+				SetLastErrorMessage(GetRegistryErrorMessage(L"Failed to unload an existing OFFLINE_SYSTEM hive", unloadStatus));
+				return false;
+			}
+
+			LONG loadStatus = RegLoadKeyW(HKEY_LOCAL_MACHINE, OfflineSystemHiveName, hivePath.c_str());
+			if (loadStatus != ERROR_SUCCESS) {
+				SetLastErrorMessage(GetRegistryErrorMessage(L"Failed to load the offline SYSTEM hive as OFFLINE_SYSTEM", loadStatus));
+				return false;
+			}
+
+			_loaded = true;
+			return true;
+		}
+
+		bool Unload() {
+			if (!_loaded) {
+				return true;
+			}
+
+			LONG unloadStatus = RegUnLoadKeyW(HKEY_LOCAL_MACHINE, OfflineSystemHiveName);
+			if (unloadStatus != ERROR_SUCCESS) {
+				SetLastErrorMessage(GetRegistryErrorMessage(L"Failed to unload the OFFLINE_SYSTEM hive", unloadStatus));
+				return false;
+			}
+
+			_loaded = false;
+			return true;
+		}
+
+	private:
+		bool _loaded = false;
+	};
+
+}
+
+extern "C" BACKUPENGINE_API int ScheduleOfflineSystemSetupCl(const wchar_t* systemHivePath) {
+	if (systemHivePath == nullptr || *systemHivePath == L'\0') {
+		SetLastErrorMessage(L"The offline SYSTEM hive path is required.");
+		return -1;
+	}
+
+	try {
+		std::wstring hivePath(systemHivePath);
+		if (!fs::exists(hivePath) || fs::is_directory(hivePath)) {
+			SetLastErrorMessage(L"The offline SYSTEM hive path does not exist or is not a file.");
+			return -2;
+		}
+
+		OfflineHiveScope hiveScope;
+		if (!hiveScope.Load(hivePath)) {
+			return -3;
+		}
+
+		HKEY pendingRequestKey = nullptr;
+		DWORD disposition = 0;
+		LONG status = RegCreateKeyExW(
+			HKEY_LOCAL_MACHINE,
+			L"OFFLINE_SYSTEM\\Setup\\SetupCl\\PendingRequest",
+			0,
+			nullptr,
+			REG_OPTION_NON_VOLATILE,
+			KEY_QUERY_VALUE | KEY_SET_VALUE,
+			nullptr,
+			&pendingRequestKey,
+			&disposition);
+
+		if (status != ERROR_SUCCESS || pendingRequestKey == nullptr) {
+			SetLastErrorMessage(GetRegistryErrorMessage(L"Failed to open OFFLINE_SYSTEM\\Setup\\SetupCl\\PendingRequest", status));
+			hiveScope.Unload();
+			return -4;
+		}
+
+		DWORD operationFlags = 0x00000004;
+		status = RegSetValueExW(
+			pendingRequestKey,
+			L"OperationFlags",
+			0,
+			REG_DWORD,
+			reinterpret_cast<const BYTE*>(&operationFlags),
+			static_cast<DWORD>(sizeof(operationFlags)));
+
+		if (status != ERROR_SUCCESS) {
+			RegCloseKey(pendingRequestKey);
+			SetLastErrorMessage(GetRegistryErrorMessage(L"Failed to set SetupCl OperationFlags", status));
+			hiveScope.Unload();
+			return -5;
+		}
+
+		status = RegDeleteValueW(pendingRequestKey, L"SidAccountDomainNew");
+		if (status != ERROR_SUCCESS && status != ERROR_FILE_NOT_FOUND) {
+			RegCloseKey(pendingRequestKey);
+			SetLastErrorMessage(GetRegistryErrorMessage(L"Failed to remove SetupCl SidAccountDomainNew", status));
+			hiveScope.Unload();
+			return -6;
+		}
+
+		RegFlushKey(pendingRequestKey);
+		RegCloseKey(pendingRequestKey);
+
+		if (!hiveScope.Unload()) {
+			return -7;
+		}
+
+		return 0;
+	}
+	catch (const std::exception& ex) {
+		SetLastErrorMessage(L"Failed to schedule SetupCl in the offline SYSTEM hive.");
+		return -99;
+	}
+	catch (...) {
+		SetLastErrorMessage(L"An unknown error occurred while scheduling SetupCl in the offline SYSTEM hive.");
+		return -100;
+	}
 }
 
 // Helper to execute WMI method

@@ -175,6 +175,10 @@ extern "C" {
         bool startAfterRestore,
         ProgressCallback callback);
 
+    // Schedule SetupCl against an offline SYSTEM hive for cloned Hyper-V first boot
+    BACKUPENGINE_API int ScheduleOfflineSystemSetupCl(
+        const wchar_t* systemHivePath);
+
     // ====================
     // Verification & Utility Functions
     // ====================

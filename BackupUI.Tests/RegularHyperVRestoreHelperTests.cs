@@ -213,4 +213,66 @@ public sealed class RegularHyperVRestoreHelperTests
         Assert.DoesNotContain("Set-VMFirmware", result);
         Assert.DoesNotContain("Start-VM", result);
     }
+
+    [Fact]
+    public void BuildRegenerateMacAddressScript_WhenVmNameProvided_UsesDynamicMacAddressWhileVmIsOff()
+    {
+        string result = RestoreWindowNew.RegularHyperVRestoreHelper.BuildRegenerateMacAddressScript("Clone VM");
+
+        Assert.Contains("Get-VM -Name $vmName -ErrorAction Stop", result);
+        Assert.Contains("$vm.State -notin @('Off','Saved')", result);
+        Assert.Contains("Set-VMNetworkAdapter -VMName $vmName", result);
+        Assert.Contains("-DynamicMacAddress", result);
+    }
+
+    [Fact]
+    public void ShouldScheduleSetupCl_WhenRenameRequested_ReturnsTrue()
+    {
+        bool result = BackupWindowNew.HyperVBackupTreeHelper.ShouldScheduleSetupCl(
+            renameHyperVSystem: true,
+            renameHyperVSystemName: "RenamedClone",
+            target: SecureServerBackupCommon.BackupTarget.HyperV,
+            sourcePaths: null);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldScheduleSetupCl_WhenDiskCloneSourceSelected_ReturnsTrue()
+    {
+        bool result = BackupWindowNew.HyperVBackupTreeHelper.ShouldScheduleSetupCl(
+            renameHyperVSystem: false,
+            renameHyperVSystemName: string.Empty,
+            target: SecureServerBackupCommon.BackupTarget.Disk,
+            sourcePaths: new[] { @"\\.\PHYSICALDRIVE2" },
+            protectedDiskIndexes: new[] { 2 });
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldScheduleSetupCl_WhenDiskCloneSourceIsNotProtected_ReturnsFalse()
+    {
+        bool result = BackupWindowNew.HyperVBackupTreeHelper.ShouldScheduleSetupCl(
+            renameHyperVSystem: false,
+            renameHyperVSystemName: string.Empty,
+            target: SecureServerBackupCommon.BackupTarget.Disk,
+            sourcePaths: new[] { @"\\.\PHYSICALDRIVE3" },
+            protectedDiskIndexes: new[] { 2 });
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void ShouldScheduleSetupCl_WhenNeitherRenameNorSystemDiskClone_ReturnsFalse()
+    {
+        bool result = BackupWindowNew.HyperVBackupTreeHelper.ShouldScheduleSetupCl(
+            renameHyperVSystem: false,
+            renameHyperVSystemName: string.Empty,
+            target: SecureServerBackupCommon.BackupTarget.HyperV,
+            sourcePaths: new[] { @"C:\Backups\VmExport" },
+            protectedDiskIndexes: new[] { 0 });
+
+        Assert.False(result);
+    }
 }

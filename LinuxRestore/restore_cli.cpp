@@ -1,7 +1,7 @@
 // LinuxRestore/restore_cli.cpp
-// Command-line interface for Linux restore - Version 4.7.3.0
+// Command-line interface for Linux restore - Version 6.2.5.31
 // Enhanced with backup date selection, item selection, destination mapping, metadata-driven disk restore mapping,
-// and restore-target disk tree (matching Windows restore page)
+// encrypted SSB backup prompts, and restore-target disk tree (matching Windows restore page)
 
 #include <iostream>
 #include <string>
@@ -13,7 +13,7 @@ void printHeader() {
     std::cout << "\n";
     std::cout << "========================================\n";
     std::cout << " Backup & Restore - Linux Recovery CLI\n";
-    std::cout << " Version 4.7.3.0\n";
+    std::cout << " Version 6.2.5.31\n";
     std::cout << "========================================\n";
     std::cout << "\n";
 }
@@ -64,6 +64,7 @@ void printUsage() {
     std::cout << "  restore_cli --show-contents /media/backup/Full_20260130\n";
     std::cout << "  restore_cli --restore /media/backup --restore-point 1 --all --dest /mnt/restore\n";
     std::cout << "  restore_cli --restore /media/backup/Full_20260130 --items \"FolderOne/File.txt,/home\" --dest /mnt/restore\n";
+    std::cout << "  restore_cli --restore /media/backup/EncryptedBackup.ssb --all --dest /mnt/restore\n";
     std::cout << "  restore_cli --restore-disk /media/backup/Full.ssb /dev/sdb\n";
     std::cout << "  restore_cli --restore-disk /media/backup/Full.ssb /dev/sdb --show-hidden\n";
     std::cout << "  restore_cli --interactive\n\n";
@@ -209,9 +210,9 @@ void performRestore(RestoreEngine& engine, const std::string& backupPath,
     std::cout << "\n\n";
     
     if (success) {
-        std::cout << "? Restore completed successfully!\n";
+        std::cout << "Restore completed successfully!\n";
     } else {
-        std::cerr << "? Restore failed: " << engine.GetLastError() << "\n";
+        std::cerr << "Restore failed: " << engine.GetLastError() << "\n";
     }
 }
 
@@ -325,10 +326,10 @@ void mountPartition(RestoreEngine& engine, const std::string& device,
     int result = engine.MountNTFSPartition(device, mountPoint);
     
     if (result == 0) {
-        std::cout << "? Mounted successfully!\n";
+        std::cout << "Mounted successfully!\n";
         std::cout << "You can now access files at: " << mountPoint << "\n";
     } else {
-        std::cout << "? Mount failed: " << engine.GetLastError() << "\n";
+        std::cout << "Mount failed: " << engine.GetLastError() << "\n";
     }
 }
 
@@ -338,9 +339,9 @@ void unmountPartition(RestoreEngine& engine, const std::string& mountPoint) {
     int result = engine.UnmountPartition(mountPoint);
     
     if (result == 0) {
-        std::cout << "? Unmounted successfully!\n";
+        std::cout << "Unmounted successfully!\n";
     } else {
-        std::cout << "? Unmount failed: " << engine.GetLastError() << "\n";
+        std::cout << "Unmount failed: " << engine.GetLastError() << "\n";
     }
 }
 
@@ -513,7 +514,7 @@ void runInteractive(RestoreEngine& engine) {
     std::cin >> confirm;
 
     if (confirm == 'y' || confirm == 'Y') {
-        performRestore(engine, selectedBackupPath, selectedItems, destination, overwrite);
+        performRestore(engine, selectedBackupPath, selectedItems, destination, overwrite, std::string());
     } else {
         std::cout << "Restore cancelled.\n";
     }
