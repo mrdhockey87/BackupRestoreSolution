@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.33";
+        private static readonly string version_fallback_number = "6.2.5.34";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,9 +69,8 @@ namespace SecureServerBackup
 
 /*
  *  
- * Version 6.2.5.34 Had the AI verify that the SetupCL only occured when the Hyper-v clone was renamed or created
- * 				    with disk-based cloning, and that the pending request was properly written through the backup 
- * 				    engine with the correct flags. It also found and fixed a mismatch in the hlper signature. mdail 5/23/2026
+ * Version 6.2.5.34 Clone Hyper-V System now schedules SetupCl only for renamed clones or current system-disk clones,
+ *                  and fixes the SetupCl helper signature. mdail 5/25/2026
  * Version 6.2.5.33 Clone Hyper-V System now writes the SetupCl pending request through the unmanaged backup 
  *                  engine using OFFLINE_SYSTEM and OperationFlags 0x00000004. mdail 5/23/2026
  * Version 6.2.5.32 Clone Hyper-V System now schedules SetupCl in the cloned VHDX SYSTEM hive for renamed and 
