@@ -1,4 +1,7 @@
+using System;
 using System.Linq;
+using System.IO;
+using SecureServerBackupCommon;
 using SecureServerBackup.Windows;
 using Xunit;
 
@@ -274,5 +277,102 @@ public sealed class RegularHyperVRestoreHelperTests
             protectedDiskIndexes: new[] { 0 });
 
         Assert.False(result);
+    }
+
+    [Fact]
+    public void CreateCloneHyperVPaths_WhenRenameRequested_UsesRenamedLayout()
+    {
+        string rootPath = Path.Combine(Path.GetTempPath(), "SecureServerBackupTests", Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var job = new BackupJob
+            {
+                Name = "Clone Job",
+                DestinationPath = rootPath,
+                RenameHyperVSystem = true,
+                RenameHyperVSystemName = "RenamedClone"
+            };
+
+            BackupWindowNew.CloneHyperVPaths result = BackupWindowNew.CreateCloneHyperVPaths(job);
+
+            Assert.Equal(Path.Combine(rootPath, "RenamedClone"), result.RootDirectory);
+            Assert.Equal(Path.Combine(result.RootDirectory, "HyperVSys"), result.HyperVSystemDirectory);
+            Assert.Equal(Path.Combine(result.RootDirectory, "HyperVDisk"), result.HyperVDiskDirectory);
+            Assert.Equal(Path.Combine(result.HyperVDiskDirectory, "RenamedClone.vhdx"), result.VirtualDiskPath);
+            Assert.Equal("RenamedClone", result.VmName);
+            Assert.True(Directory.Exists(result.HyperVSystemDirectory));
+            Assert.True(Directory.Exists(result.HyperVDiskDirectory));
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                Directory.Delete(rootPath, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateCloneHyperVPaths_WhenDiskCloneWithoutRename_UsesJobFolderAndCurrentSystemVmName()
+    {
+        string rootPath = Path.Combine(Path.GetTempPath(), "SecureServerBackupTests", Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var job = new BackupJob
+            {
+                Name = "Disk Clone Job",
+                DestinationPath = rootPath,
+                Target = BackupTarget.Disk,
+                SourcePaths = new() { @"\\.\PHYSICALDRIVE0" },
+                RenameHyperVSystem = false,
+                RenameHyperVSystemName = string.Empty
+            };
+
+            BackupWindowNew.CloneHyperVPaths result = BackupWindowNew.CreateCloneHyperVPaths(job);
+
+            Assert.Equal(Path.Combine(rootPath, "Disk Clone Job"), result.RootDirectory);
+            Assert.Equal(Environment.MachineName, result.VmName);
+            Assert.Equal(Path.Combine(result.HyperVDiskDirectory, $"{Environment.MachineName}.vhdx"), result.VirtualDiskPath);
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                Directory.Delete(rootPath, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateCloneHyperVPaths_WhenRenameNotRequested_UsesJobNameLayout()
+    {
+        string rootPath = Path.Combine(Path.GetTempPath(), "SecureServerBackupTests", Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var job = new BackupJob
+            {
+                Name = "Clone Job",
+                DestinationPath = rootPath,
+                RenameHyperVSystem = false,
+                RenameHyperVSystemName = string.Empty
+            };
+
+            BackupWindowNew.CloneHyperVPaths result = BackupWindowNew.CreateCloneHyperVPaths(job);
+
+            Assert.Equal(Path.Combine(rootPath, "Clone Job"), result.RootDirectory);
+            Assert.Equal(Path.Combine(result.HyperVDiskDirectory, "Clone Job.vhdx"), result.VirtualDiskPath);
+            Assert.Equal("Clone Job", result.VmName);
+            Assert.True(Directory.Exists(result.RootDirectory));
+        }
+        finally
+        {
+            if (Directory.Exists(rootPath))
+            {
+                Directory.Delete(rootPath, recursive: true);
+            }
+        }
     }
 }

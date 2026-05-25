@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.34";
+        private static readonly string version_fallback_number = "6.2.5.40";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,15 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.5.40 Update the Clone Hyper-V System to create a subdirectory in the target and then a directory for the system & 
+ *                  one for the disk and place the cloned VM files these. mdail 5/25/2026
+ * Version 6.2.5.39 Clone Hyper-V System now preserves exported VM files in HyperVSys and the merged disk in HyperVDisk, with renamed clone file layout support. mdail 5/25/2026
+ * Version 6.2.5.38 Clone Hyper-V System now saves the rename fields and reopens with the saved VM selection. mdail 5/25/2026
+ * Version 6.2.5.37 Change the mounting image progress to better fit the file path names. the last row had 2 textblocks
+ * 				    so I added a row and add a margin to the bottom of what was the last row of the grid so the file 
+ * 				    oath naems would has some space above them, I also set the window Height to SizeToContent. mdail 5/25/2026 
+ * Version 6.2.5.36 Added a Browse button to the Restore tab so users can add .ssb files like on Mount Backups. mdail 5/25/2026
+ * Version 6.2.5.35 Changed two places the referenced Silver State Backup for the .ssb files instead of Secure Server Backup mdail 5/25/2026
  * Version 6.2.5.34 Clone Hyper-V System now schedules SetupCl only for renamed clones or current system-disk clones,
  *                  and fixes the SetupCl helper signature. mdail 5/25/2026
  * Version 6.2.5.33 Clone Hyper-V System now writes the SetupCl pending request through the unmanaged backup 

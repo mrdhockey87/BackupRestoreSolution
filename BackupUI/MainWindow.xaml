@@ -745,6 +745,12 @@
 								Margin="5,5"
 								Click="RefreshRestoreBackups_Click"
 								Content="Refresh" />
+							<Button
+								Width="100"
+								Height="30"
+								Margin="5,5"
+								Click="BrowseRestoreBackup_Click"
+								Content="Browse..." />
 						</StackPanel>
 						<GroupBox
 							Grid.Row="1"

@@ -936,6 +936,57 @@ namespace SecureServerBackup
             LoadRestoreBackups();
         }
 
+        private void BrowseRestoreBackup_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Select Backup File to Restore",
+                Filter = "Secure Server Backup Files (*.ssb)|*.ssb|All Files (*.*)|*.*",
+                DefaultExt = ".ssb",
+                Multiselect = false
+            };
+
+            if (openFileDialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            string selectedFile = openFileDialog.FileName;
+            var fileInfo = new FileInfo(selectedFile);
+            var backups = dgRestoreBackups.ItemsSource as List<AvailableBackupInfo> ?? new List<AvailableBackupInfo>();
+
+            bool exists = backups.Any(b => b.BackupPath.Equals(selectedFile, StringComparison.OrdinalIgnoreCase));
+            if (exists)
+            {
+                CustomDialogService.ShowInfo(this, "This backup is already in the list.", "Already Added");
+                return;
+            }
+
+            backups.Add(new AvailableBackupInfo
+            {
+                BackupName = Path.GetFileNameWithoutExtension(selectedFile),
+                BackupType = GetBackupTypeFromFilename(Path.GetFileNameWithoutExtension(selectedFile)),
+                BackupDate = fileInfo.LastWriteTime,
+                BackupPath = selectedFile,
+                IsEncrypted = BackupEncryptionService.IsEncryptedBackupFile(selectedFile)
+            });
+
+            dgRestoreBackups.ItemsSource = null;
+            dgRestoreBackups.ItemsSource = backups;
+
+            if (txtNoRestoreBackups != null)
+            {
+                txtNoRestoreBackups.Visibility = Visibility.Collapsed;
+            }
+
+            if (txtRestoreTabStatus != null)
+            {
+                txtRestoreTabStatus.Text = "Select a backup to open the restore workflow. Restoring the boot/system drive requires the Linux recovery environment.";
+            }
+
+            CustomDialogService.ShowSuccess(this, $"Backup file added for restore: {Path.GetFileName(selectedFile)}", "Backup Added");
+        }
+
         private void RestoreBackupFromTab_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not Button btn || btn.Tag is not AvailableBackupInfo backup)
@@ -1613,7 +1664,7 @@ namespace SecureServerBackup
             var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Select Backup File to Mount",
-                Filter = "Silver State Backup Files (*.ssb)|*.ssb|All Files (*.*)|*.*",
+                Filter = "Secure Server Backup Files (*.ssb)|*.ssb|All Files (*.*)|*.*",
                 DefaultExt = ".ssb",
                 Multiselect = false
             };
@@ -2120,7 +2171,7 @@ namespace SecureServerBackup
             var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Select Backup File to Verify",
-                Filter = "Silver State Backup Files (*.ssb)|*.ssb|All Files (*.*)|*.*",
+                Filter = "Secure Server Backup Files (*.ssb)|*.ssb|All Files (*.*)|*.*",
                 DefaultExt = ".ssb",
                 Multiselect = false
             };

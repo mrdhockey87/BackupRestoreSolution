@@ -22,6 +22,8 @@ namespace SecureServerBackup.Windows
 {
     public partial class BackupWindowNew : Window
     {
+        internal sealed record CloneHyperVPaths(string RootDirectory, string HyperVSystemDirectory, string HyperVDiskDirectory, string VirtualDiskPath, string VmName);
+
         public sealed record HyperVVirtualDiskInfo(string VirtualMachineName, string VirtualMachineDisplayName, string VirtualDiskPath);
 
         public static class HyperVBackupTreeHelper
@@ -385,18 +387,10 @@ namespace SecureServerBackup.Windows
             }
 
             // Store job data for pre-selection after tree loads
-            if (job.Target == BackupTarget.Disk || job.Target == BackupTarget.Volume || job.Target == BackupTarget.FilesAndFolders)
+            IReadOnlyList<string> replayPaths = GetReplayPathsForJob(job);
+            if (replayPaths.Count > 0)
             {
-                // Pre-selection will happen in BackupWindowNew_Loaded after drives are loaded
-                // Store the paths to select
-                IReadOnlyList<string> pathsToPreselect = job.Type == BackupType.SelectedFilesAndFolders
-                    ? GetSelectedFilesReplayPaths(job)
-                    : job.SourcePaths;
-                _pathsToPreselect = new List<string>(pathsToPreselect);
-            }
-            else if (job.IsHyperVBackup)
-            {
-                _pathsToPreselect = new List<string>(job.HyperVMachines);
+                _pathsToPreselect = new List<string>(replayPaths);
             }
 
             // Load schedule
@@ -4033,28 +4027,23 @@ namespace SecureServerBackup.Windows
 
         private void ExecuteCloneHyperVSystemJob(BackupJob job, BackupEngineInterop.ProgressCallback progressCallback)
         {
-            string targetDirectory = CreateCloneHyperVTargetDirectory(job);
-            string virtualDiskPath = Path.Combine(targetDirectory, $"{job.Name}.vhdx");
+            CloneHyperVPaths clonePaths = CreateCloneHyperVPaths(job);
 
             if (job.HyperVMachines.Count > 0)
             {
                 string sourceVmName = job.HyperVMachines[0];
                 progressCallback(5, $"Exporting Hyper-V VM '{sourceVmName}' for clone...");
-                CreateCloneHyperVVirtualDiskFromVm(sourceVmName, virtualDiskPath);
+                CreateCloneHyperVVirtualDiskFromVm(sourceVmName, clonePaths, job.RenameHyperVSystem);
             }
             else if (job.Target == BackupTarget.Disk && job.SourcePaths.Count > 0)
             {
-                progressCallback(5, $"Cloning selected disk into {Path.GetFileName(virtualDiskPath)}...");
-                CreateCloneHyperVVirtualDiskFromDisk(job, virtualDiskPath, progressCallback);
+                progressCallback(5, $"Cloning selected disk into {Path.GetFileName(clonePaths.VirtualDiskPath)}...");
+                CreateCloneHyperVVirtualDiskFromDisk(job, clonePaths.VirtualDiskPath, progressCallback);
             }
             else
             {
                 throw new InvalidOperationException("Clone Hyper-V System requires either a selected Hyper-V VM or a selected disk.");
             }
-
-            string vmName = job.RenameHyperVSystem && !string.IsNullOrWhiteSpace(job.RenameHyperVSystemName)
-                ? job.RenameHyperVSystemName.Trim()
-                : job.Name;
 
             bool shouldScheduleSetupCl = HyperVBackupTreeHelper.ShouldScheduleSetupCl(
                 job.RenameHyperVSystem,
@@ -4063,29 +4052,48 @@ namespace SecureServerBackup.Windows
                 job.SourcePaths,
                 GetCurrentSystemDiskIndexes());
 
-            progressCallback(90, $"Creating Hyper-V VM '{vmName}'...");
-            CreateCloneHyperVVirtualMachine(vmName, targetDirectory, virtualDiskPath);
+            progressCallback(90, $"Creating Hyper-V VM '{clonePaths.VmName}'...");
+            CreateCloneHyperVVirtualMachine(clonePaths.VmName, clonePaths.HyperVSystemDirectory, clonePaths.VirtualDiskPath);
 
             if (shouldScheduleSetupCl)
             {
-                progressCallback(93, $"Scheduling SetupCl for '{vmName}'...");
-                ScheduleSetupClPendingRequest(virtualDiskPath, vmName);
+                progressCallback(93, $"Scheduling SetupCl for '{clonePaths.VmName}'...");
+                ScheduleSetupClPendingRequest(clonePaths.VirtualDiskPath, clonePaths.VmName);
             }
 
-            progressCallback(95, $"Regenerating MAC address for '{vmName}'...");
-            RegenerateHyperVVirtualMachineMacAddress(vmName);
+            progressCallback(95, $"Regenerating MAC address for '{clonePaths.VmName}'...");
+            RegenerateHyperVVirtualMachineMacAddress(clonePaths.VmName);
         }
 
-        private static string CreateCloneHyperVTargetDirectory(BackupJob job)
+        internal static CloneHyperVPaths CreateCloneHyperVPaths(BackupJob job)
         {
+            ArgumentNullException.ThrowIfNull(job);
+
             if (string.IsNullOrWhiteSpace(job.DestinationPath))
             {
                 throw new InvalidOperationException("Clone Hyper-V System requires a destination folder.");
             }
 
-            string targetDirectory = Path.Combine(job.DestinationPath, job.Name);
-            Directory.CreateDirectory(targetDirectory);
-            return targetDirectory;
+            bool renameRequested = job.RenameHyperVSystem && !string.IsNullOrWhiteSpace(job.RenameHyperVSystemName);
+            bool diskClone = job.Target == BackupTarget.Disk && (job.SourcePaths?.Count > 0);
+            string vmName = renameRequested
+                ? job.RenameHyperVSystemName!.Trim()
+                : diskClone
+                    ? Environment.MachineName
+                    : job.Name;
+            string rootDirectoryName = renameRequested
+                ? vmName
+                : job.Name;
+            string rootDirectory = Path.Combine(job.DestinationPath, rootDirectoryName);
+            string hyperVSystemDirectory = Path.Combine(rootDirectory, "HyperVSys");
+            string hyperVDiskDirectory = Path.Combine(rootDirectory, "HyperVDisk");
+
+            Directory.CreateDirectory(rootDirectory);
+            Directory.CreateDirectory(hyperVSystemDirectory);
+            Directory.CreateDirectory(hyperVDiskDirectory);
+
+            string virtualDiskPath = Path.Combine(hyperVDiskDirectory, $"{vmName}.vhdx");
+            return new CloneHyperVPaths(rootDirectory, hyperVSystemDirectory, hyperVDiskDirectory, virtualDiskPath, vmName);
         }
 
         private static void CreateCloneHyperVVirtualDiskFromDisk(BackupJob job, string virtualDiskPath, BackupEngineInterop.ProgressCallback progressCallback)
@@ -4139,35 +4147,106 @@ namespace SecureServerBackup.Windows
             }
         }
 
-        private static void CreateCloneHyperVVirtualDiskFromVm(string sourceVmName, string virtualDiskPath)
+        private static void CreateCloneHyperVVirtualDiskFromVm(string sourceVmName, CloneHyperVPaths clonePaths, bool renameExportedArtifacts)
         {
-            string temporaryExportRoot = Path.Combine(Path.GetTempPath(), "SecureServerBackup", "CloneHyperVSystemExport", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(temporaryExportRoot);
+            ArgumentException.ThrowIfNullOrWhiteSpace(sourceVmName);
+            ArgumentNullException.ThrowIfNull(clonePaths);
 
-            try
+            PrepareCloneHyperVExportDirectory(clonePaths.HyperVSystemDirectory);
+            string exportRootPath = ExportHyperVVmWithPowerShell(sourceVmName, clonePaths.HyperVSystemDirectory);
+
+            if (renameExportedArtifacts)
             {
-                string exportPointPath = ExportHyperVVmWithPowerShell(sourceVmName, temporaryExportRoot);
-                string sourceDiskPath = FindPrimaryHyperVVirtualDisk(exportPointPath);
-                if (string.IsNullOrWhiteSpace(sourceDiskPath))
-                {
-                    throw new InvalidOperationException("The exported Hyper-V VM did not contain a source virtual disk.");
-                }
-
-                CopyAndMergeHyperVVirtualDisk(sourceDiskPath, virtualDiskPath);
+                RenameCloneHyperVExportArtifacts(exportRootPath, sourceVmName, clonePaths.VmName);
             }
-            finally
+
+            string sourceDiskPath = FindPrimaryHyperVVirtualDisk(exportRootPath);
+            if (string.IsNullOrWhiteSpace(sourceDiskPath))
             {
-                try
-                {
-                    if (Directory.Exists(temporaryExportRoot))
-                    {
-                        Directory.Delete(temporaryExportRoot, recursive: true);
-                    }
-                }
-                catch (Exception cleanupEx)
-                {
-                    Debug.WriteLine($"Clone Hyper-V export cleanup warning: {cleanupEx.Message}");
-                }
+                throw new InvalidOperationException("The exported Hyper-V VM did not contain a source virtual disk.");
+            }
+
+            CopyAndMergeHyperVVirtualDisk(sourceDiskPath, clonePaths.VirtualDiskPath);
+        }
+
+        private static void PrepareCloneHyperVExportDirectory(string exportRootPath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(exportRootPath);
+
+            Directory.CreateDirectory(exportRootPath);
+
+            foreach (string directory in Directory.EnumerateDirectories(exportRootPath))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+
+            foreach (string file in Directory.EnumerateFiles(exportRootPath))
+            {
+                File.Delete(file);
+            }
+        }
+
+        private static void RenameCloneHyperVExportArtifacts(string exportRootPath, string sourceVmName, string targetVmName)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(exportRootPath);
+            ArgumentException.ThrowIfNullOrWhiteSpace(sourceVmName);
+            ArgumentException.ThrowIfNullOrWhiteSpace(targetVmName);
+
+            string normalizedSourceVmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(sourceVmName);
+            if (string.IsNullOrWhiteSpace(normalizedSourceVmName) ||
+                string.Equals(normalizedSourceVmName, targetVmName, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            foreach (string filePath in Directory.EnumerateFiles(exportRootPath, "*", SearchOption.AllDirectories)
+                         .OrderByDescending(path => path.Length))
+            {
+                RenameCloneHyperVExportPath(filePath, normalizedSourceVmName, targetVmName, isDirectory: false);
+            }
+
+            foreach (string directoryPath in Directory.EnumerateDirectories(exportRootPath, "*", SearchOption.AllDirectories)
+                         .OrderByDescending(path => path.Length))
+            {
+                RenameCloneHyperVExportPath(directoryPath, normalizedSourceVmName, targetVmName, isDirectory: true);
+            }
+        }
+
+        private static void RenameCloneHyperVExportPath(string path, string sourceVmName, string targetVmName, bool isDirectory)
+        {
+            string fileSystemEntryName = Path.GetFileName(path);
+            if (string.IsNullOrWhiteSpace(fileSystemEntryName))
+            {
+                return;
+            }
+
+            string renamedEntryName = Regex.Replace(
+                fileSystemEntryName,
+                Regex.Escape(sourceVmName),
+                targetVmName.Replace("$", "$$", StringComparison.Ordinal),
+                RegexOptions.IgnoreCase);
+
+            if (string.Equals(fileSystemEntryName, renamedEntryName, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            string parentDirectory = Path.GetDirectoryName(path)
+                ?? throw new InvalidOperationException("Failed to resolve the parent directory for the exported Hyper-V artifact.");
+            string targetPath = Path.Combine(parentDirectory, renamedEntryName);
+
+            if (File.Exists(targetPath) || Directory.Exists(targetPath))
+            {
+                throw new InvalidOperationException($"The exported Hyper-V artifact '{targetPath}' already exists.");
+            }
+
+            if (isDirectory)
+            {
+                Directory.Move(path, targetPath);
+            }
+            else
+            {
+                File.Move(path, targetPath);
             }
         }
 
@@ -4241,13 +4320,10 @@ namespace SecureServerBackup.Windows
 
         private static string ExportHyperVVmWithPowerShell(string vmName, string exportRootPath)
         {
-            string pointId = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
-            string backupPointPath = Path.Combine(exportRootPath, $"Full_{pointId}.ssb");
-            string exportPath = Path.Combine(backupPointPath, "Export");
-            Directory.CreateDirectory(exportPath);
+            Directory.CreateDirectory(exportRootPath);
 
             string escapedVmName = EscapePowerShellSingleQuotedString(vmName);
-            string escapedExportPath = EscapePowerShellSingleQuotedString(exportPath);
+            string escapedExportPath = EscapePowerShellSingleQuotedString(exportRootPath);
             string script =
                 "$ProgressPreference='SilentlyContinue'; $VerbosePreference='SilentlyContinue'; $WarningPreference='Continue'; " +
                 "Import-Module Hyper-V -ErrorAction Stop; " +
@@ -4257,18 +4333,17 @@ namespace SecureServerBackup.Windows
                 "catch { Export-VM -Name $vmName -Path $exportPath -ErrorAction Stop | Out-Null }";
 
             RunPowerShell(script);
-            return backupPointPath;
+            return exportRootPath;
         }
 
-        private static string FindPrimaryHyperVVirtualDisk(string exportPointPath)
+        private static string FindPrimaryHyperVVirtualDisk(string exportRootPath)
         {
-            string exportPath = Path.Combine(exportPointPath, "Export");
-            if (!Directory.Exists(exportPath))
+            if (!Directory.Exists(exportRootPath))
             {
                 return string.Empty;
             }
 
-            return Directory.EnumerateFiles(exportPath, "*.vhd*", SearchOption.AllDirectories)
+            return Directory.EnumerateFiles(exportRootPath, "*.vhd*", SearchOption.AllDirectories)
                 .Select(path => new FileInfo(path))
                 .OrderByDescending(file => file.Length)
                 .ThenBy(file => file.FullName, StringComparer.OrdinalIgnoreCase)
@@ -4529,10 +4604,51 @@ namespace SecureServerBackup.Windows
                 .ToList();
         }
 
+        internal static IReadOnlyList<string> GetReplayPathsForJob(BackupJob job)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            if (job.Type == BackupType.CloneHyperVSystem)
+            {
+                IReadOnlyList<string> cloneHyperVPaths = job.HyperVMachines.Count > 0
+                    ? job.HyperVMachines
+                    : job.SourcePaths;
+
+                return cloneHyperVPaths
+                    .Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            if (job.Target == BackupTarget.Disk || job.Target == BackupTarget.Volume || job.Target == BackupTarget.FilesAndFolders)
+            {
+                return job.Type == BackupType.SelectedFilesAndFolders
+                    ? GetSelectedFilesReplayPaths(job)
+                    : job.SourcePaths
+                        .Where(path => !string.IsNullOrWhiteSpace(path))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+            }
+
+            if (job.IsHyperVBackup)
+            {
+                return job.HyperVMachines
+                    .Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return Array.Empty<string>();
+        }
+
         private BackupJob CreateJobFromInput()
         {
             var backupType = GetSelectedBackupType();
             int selectedFilesRetentionDays = GetSelectedFilesRetentionDays();
+            bool renameHyperVSystem = backupType == BackupType.CloneHyperVSystem && chkRenameHyperVSystem?.IsChecked == true;
+            string renameHyperVSystemName = renameHyperVSystem
+                ? txtRenameHyperVSystemName?.Text?.Trim() ?? string.Empty
+                : string.Empty;
             
             var job = new BackupJob
             {
@@ -4546,7 +4662,9 @@ namespace SecureServerBackup.Windows
                 EncryptBackup = chkEncryptBackup.IsChecked == true,
                 ProtectedEncryptionPassword = chkEncryptBackup.IsChecked == true ? GetEnteredEncryptionPassword() : string.Empty,
                 RetainFullBackupCount = int.TryParse(txtRetainCount.Text, out int retainCount) ? Math.Max(1, retainCount) : 1,
-                SelectedFilesRetentionDays = selectedFilesRetentionDays
+                SelectedFilesRetentionDays = selectedFilesRetentionDays,
+                RenameHyperVSystem = renameHyperVSystem,
+                RenameHyperVSystemName = renameHyperVSystemName
             };
 
             // For Clone Hyper-V System, create subdirectories

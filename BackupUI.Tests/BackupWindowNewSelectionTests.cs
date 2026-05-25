@@ -172,4 +172,37 @@ public sealed class BackupWindowNewSelectionTests
 
 		Assert.True(parent.IsChecked);
 	}
+
+	[Fact]
+	public void GetReplayPathsForJob_WhenCloneHyperVSystemWithSavedVmNames_PrefersHyperVMachines()
+	{
+		BackupJob job = new()
+		{
+			Type = BackupType.CloneHyperVSystem,
+			Target = BackupTarget.HyperV,
+			HyperVMachines = new List<string> { "VmOne" },
+			SourcePaths = new List<string> { @"\\.\PHYSICALDRIVE2" }
+		};
+
+		IReadOnlyList<string> replayPaths = BackupWindowNew.GetReplayPathsForJob(job);
+
+		Assert.Single(replayPaths);
+		Assert.Equal("VmOne", replayPaths[0]);
+	}
+
+	[Fact]
+	public void GetReplayPathsForJob_WhenCloneHyperVSystemWithoutSavedVmNames_FallsBackToSourcePaths()
+	{
+		BackupJob job = new()
+		{
+			Type = BackupType.CloneHyperVSystem,
+			Target = BackupTarget.HyperV,
+			SourcePaths = new List<string> { @"\\.\PHYSICALDRIVE2" }
+		};
+
+		IReadOnlyList<string> replayPaths = BackupWindowNew.GetReplayPathsForJob(job);
+
+		Assert.Single(replayPaths);
+		Assert.Equal(@"\\.\PHYSICALDRIVE2", replayPaths[0]);
+	}
 }

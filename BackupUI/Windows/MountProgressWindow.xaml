@@ -9,10 +9,12 @@
 	BorderBrush="{StaticResource LightBorderBrush}"
 	BorderThickness="1"
 	ResizeMode="NoResize"
+	SizeToContent="Height"
 	WindowStartupLocation="CenterOwner"
 	WindowStyle="None">
 	<Grid Margin="20">
 		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="Auto" />
@@ -48,6 +50,7 @@
 		<TextBlock
 			Name="txtStatus"
 			Grid.Row="3"
+			Margin="0,0,0,5"
 			VerticalAlignment="Top"
 			FontSize="12"
 			Foreground="{StaticResource SecondaryText}"
@@ -57,7 +60,7 @@
 		<!--  Current File Being Processed (v6.0.1.19)  -->
 		<TextBlock
 			Name="txtCurrentFile"
-			Grid.Row="3"
+			Grid.Row="4"
 			Margin="0,0,0,5"
 			VerticalAlignment="Bottom"
 			FontSize="10"
