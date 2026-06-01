@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using SecureServerBackupCommon;
 using SecureServerBackup.Models;
 using SecureServerBackup.Services;
+using BackupEngineInterop = SecureServerBackup.Services.BackupEngineInterop;
 using SecureServerBackup.Windows;
 
 namespace SecureServerBackup

@@ -450,6 +450,97 @@ namespace SecureServerBackupService
             }
         }
 
+        public static void CleanupOldClones(BackupJob job, string latestClonePath, Action<string>? logger)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            if (string.IsNullOrWhiteSpace(job.DestinationPath) || !Directory.Exists(job.DestinationPath))
+            {
+                return;
+            }
+
+            int retentionDays = Math.Clamp(job.CloneRetentionDays, 1, 30);
+            DateTime cutoffUtc = DateTime.UtcNow.AddDays(-retentionDays);
+
+            try
+            {
+                // For CloneHyperVSystem: directories are created with job name or renamed VM name
+                // For CloneToVirtualDisk: VHDX files are created with job name
+                string[] subdirectories = Directory.GetDirectories(job.DestinationPath);
+
+                foreach (string dir in subdirectories)
+                {
+                    // Skip the latest clone directory
+                    if (string.Equals(dir, latestClonePath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    // Check if directory name matches the job name pattern
+                    string dirName = Path.GetFileName(dir);
+                    if (!dirName.StartsWith(job.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    DateTime dirWriteTimeUtc = Directory.GetLastWriteTimeUtc(dir);
+                    if (dirWriteTimeUtc >= cutoffUtc)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        Directory.Delete(dir, recursive: true);
+                        logger?.Invoke($"Removed old clone directory outside retention window: {dirName}");
+                    }
+                    catch (Exception cleanupEx)
+                    {
+                        logger?.Invoke($"Warning: Failed to remove old clone directory '{dirName}': {cleanupEx.Message}");
+                    }
+                }
+
+                // Also cleanup old VHDX files for CloneToVirtualDisk
+                if (job.Type == BackupType.CloneToVirtualDisk)
+                {
+                    string[] vhdxFiles = Directory.GetFiles(job.DestinationPath, "*.vhdx");
+                    foreach (string vhdx in vhdxFiles)
+                    {
+                        if (string.Equals(vhdx, latestClonePath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        string fileName = Path.GetFileNameWithoutExtension(vhdx);
+                        if (!fileName.StartsWith(job.Name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        DateTime fileWriteTimeUtc = File.GetLastWriteTimeUtc(vhdx);
+                        if (fileWriteTimeUtc >= cutoffUtc)
+                        {
+                            continue;
+                        }
+
+                        try
+                        {
+                            File.Delete(vhdx);
+                            logger?.Invoke($"Removed old clone VHDX outside retention window: {Path.GetFileName(vhdx)}");
+                        }
+                        catch (Exception cleanupEx)
+                        {
+                            logger?.Invoke($"Warning: Failed to remove old clone VHDX '{Path.GetFileName(vhdx)}': {cleanupEx.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.Invoke($"Warning: Error during clone retention cleanup: {ex.Message}");
+            }
+        }
+
         private static string RunPowerShell(string script)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(script);
@@ -1017,6 +1108,72 @@ namespace SecureServerBackupService
                                 ? "[ERROR] Backup failed because the saved Hyper-V selection is missing. Edit the backup and select a Hyper-V system to back up."
                                 : "[ERROR] Backup failed because the saved selection is missing. Edit the backup and select something to back up.");
                             return false;
+                        }
+
+                        // Clone jobs (CloneToVirtualDisk and CloneHyperVSystem) now execute through shared helpers
+                        if (job.Type == BackupType.CloneToVirtualDisk)
+                        {
+                            logger?.Invoke($"[CLONE] Executing CloneToVirtualDisk job '{job.Name}'...");
+                            logger?.Invoke($"[CLONE] Retention policy: keep last {job.CloneRetentionDays} days of clones.");
+                            logger?.Invoke($"[CLONE] Clone destination: {job.GetVirtualDiskClonePath()}");
+
+                            try
+                            {
+                                SecureServerBackupCommon.BackupEngineInterop.ProgressCallback commonCallback = (percentage, message) =>
+                                {
+                                    nativeCallback?.Invoke(percentage, message);
+                                    progressCallback?.Invoke(percentage, message);
+                                };
+
+                                bool cloneSuccess = CloneExecutionHelper.ExecuteCloneToVirtualDiskJob(job, commonCallback);
+
+                                if (cloneSuccess)
+                                {
+                                    logger?.Invoke("[CLONE] Clone to Virtual Disk completed successfully");
+                                    string latestClonePath = job.GetVirtualDiskClonePath();
+                                    CleanupOldClones(job, latestClonePath, logger);
+                                    progressCallback?.Invoke(100, "Clone completed successfully!");
+                                }
+                                else
+                                {
+                                    logger?.Invoke("[ERROR] Clone to Virtual Disk failed");
+                                }
+
+                                return cloneSuccess;
+                            }
+                            catch (Exception cloneEx)
+                            {
+                                logger?.Invoke($"[ERROR] Clone to Virtual Disk failed: {cloneEx.Message}");
+                                return false;
+                            }
+                        }
+
+                        if (job.Type == BackupType.CloneHyperVSystem)
+                        {
+                            logger?.Invoke($"[CLONE] Executing CloneHyperVSystem job '{job.Name}'...");
+                            logger?.Invoke($"[CLONE] Retention policy: keep last {job.CloneRetentionDays} days of clones.");
+                            logger?.Invoke($"[CLONE] Clone destination: {Path.Combine(job.DestinationPath, job.Name)}");
+
+                            try
+                            {
+                                SecureServerBackupCommon.BackupEngineInterop.ProgressCallback commonCallback = (percentage, message) =>
+                                {
+                                    nativeCallback?.Invoke(percentage, message);
+                                    progressCallback?.Invoke(percentage, message);
+                                };
+
+                                CloneExecutionHelper.ExecuteCloneHyperVSystemJob(job, commonCallback);
+                                logger?.Invoke("[CLONE] Clone Hyper-V System completed successfully");
+                                string latestClonePath = Path.Combine(job.DestinationPath, job.Name);
+                                CleanupOldClones(job, latestClonePath, logger);
+                                progressCallback?.Invoke(100, "Clone completed successfully!");
+                                return true;
+                            }
+                            catch (Exception cloneEx)
+                            {
+                                logger?.Invoke($"[ERROR] Clone Hyper-V System failed: {cloneEx.Message}");
+                                return false;
+                            }
                         }
 
                         string? newBackupPath = shouldUseSelectedFileBatching

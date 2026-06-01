@@ -16,6 +16,7 @@ using System.Windows.Forms;
 using SecureServerBackupCommon;
 using SecureServerBackup.Models;
 using SecureServerBackup.Services;
+using BackupEngineInterop = SecureServerBackup.Services.BackupEngineInterop;
 using MessageBox = System.Windows.MessageBox;
 
 namespace SecureServerBackup.Windows
@@ -379,6 +380,7 @@ namespace SecureServerBackup.Windows
             chkVerify.IsChecked = job.VerifyAfterBackup;
             txtRetainCount.Text = job.RetainFullBackupCount.ToString();
             cmbSelectedFilesRetentionDays.Text = Math.Clamp(job.SelectedFilesRetentionDays, 1, 30).ToString();
+            cmbCloneRetentionDays.Text = Math.Clamp(job.CloneRetentionDays, 1, 30).ToString();
             chkEncryptBackup.IsChecked = job.EncryptBackup;
 
             _hasSavedEncryptionPassword = job.EncryptBackup && !string.IsNullOrWhiteSpace(job.ProtectedEncryptionPassword);
@@ -412,6 +414,11 @@ namespace SecureServerBackup.Windows
             if (pnlSelectedFilesRetention != null)
             {
                 pnlSelectedFilesRetention.Visibility = job.Type == BackupType.SelectedFilesAndFolders ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (pnlCloneRetention != null)
+            {
+                pnlCloneRetention.Visibility = job.Type == BackupType.CloneToVirtualDisk || job.Type == BackupType.CloneHyperVSystem ? Visibility.Visible : Visibility.Collapsed;
             }
 
             // Store job data for pre-selection after tree loads
@@ -2255,7 +2262,7 @@ namespace SecureServerBackup.Windows
             }
         }
 
-        private IReadOnlyList<int> GetCurrentSystemDiskIndexes()
+        private static IReadOnlyList<int> GetCurrentSystemDiskIndexes()
         {
             List<int> indexes = new();
 
@@ -2867,6 +2874,13 @@ namespace SecureServerBackup.Windows
             if (pnlSelectedFilesRetention != null)
             {
                 pnlSelectedFilesRetention.Visibility = isSelectedFilesBackup ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            // Show clone retention panel for clone backup types
+            bool isCloneBackup = rbCloneVirtual?.IsChecked == true || rbCloneHyperV?.IsChecked == true;
+            if (pnlCloneRetention != null)
+            {
+                pnlCloneRetention.Visibility = isCloneBackup ? Visibility.Visible : Visibility.Collapsed;
             }
 
             // Clone to Disk: Show ONLY Clone to Physical Disk field
@@ -3736,94 +3750,12 @@ namespace SecureServerBackup.Windows
 
                     if (job.Type == BackupType.CloneToVirtualDisk)
                     {
-                        string virtualDiskPath = job.GetVirtualDiskClonePath();
-                        bool cloneAsDisk = job.ShouldCloneToVirtualDiskAsDisk();
-
-                        Dispatcher.Invoke(() =>
-                        {
-                            txtProgress.Text = cloneAsDisk
-                                ? $"Cloning selected source into virtual disk {Path.GetFileName(virtualDiskPath)}..."
-                                : $"Cloning selected volume into virtual disk {Path.GetFileName(virtualDiskPath)}...";
-                        });
-
-                        string temporaryArchiveDirectory = Path.Combine(Path.GetTempPath(), "SecureServerBackup", "VirtualDiskClone", Guid.NewGuid().ToString("N"));
-                        Directory.CreateDirectory(temporaryArchiveDirectory);
-
-                        string temporaryArchivePath = GetBackupArchivePath(temporaryArchiveDirectory, job.Name);
-
-                        try
-                        {
-                            if (cloneAsDisk)
-                            {
-                                string diskPath = job.SourcePaths.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path))
-                                    ?? throw new InvalidOperationException("Clone to Virtual Disk requires a selected source disk.");
-                                string diskNumStr = diskPath.Replace("\\\\?\\PHYSICALDRIVE", "").Replace("\\\\.\\PHYSICALDRIVE", "");
-                                if (!int.TryParse(diskNumStr, out int diskNum))
-                                {
-                                    throw new InvalidOperationException($"Invalid disk path format: {diskPath}");
-                                }
-
-                                result = BackupEngineInterop.BackupDisk(
-                                    diskNum,
-                                    temporaryArchivePath,
-                                    job.IncludeSystemState,
-                                    job.CompressData,
-                                    null,
-                                    0,
-                                    progressCallback,
-                                    null);
-
-                                if (result != 0)
-                                {
-                                    var errorBuffer = new StringBuilder(4096);
-                                    BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
-                                    throw new Exception($"Disk capture for virtual disk clone failed: {errorBuffer}");
-                                }
-                            }
-                            else
-                            {
-                                string volumePath = job.SourcePaths.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path))
-                                    ?? throw new InvalidOperationException("Clone to Virtual Disk requires a selected source volume.");
-
-                                result = BackupEngineInterop.BackupVolume(
-                                    volumePath,
-                                    temporaryArchivePath,
-                                    job.IncludeSystemState,
-                                    job.CompressData,
-                                    null,
-                                    0,
-                                    progressCallback,
-                                    null);
-
-                                if (result != 0)
-                                {
-                                    var errorBuffer = new StringBuilder(4096);
-                                    BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
-                                    throw new Exception($"Volume capture for virtual disk clone failed: {errorBuffer}");
-                                }
-                            }
-
-                            CreateHyperVVirtualDiskFromArchive(temporaryArchivePath, virtualDiskPath, cloneAsDisk, progressCallback);
-                        }
-                        finally
-                        {
-                            try
-                            {
-                                if (Directory.Exists(temporaryArchiveDirectory))
-                                {
-                                    Directory.Delete(temporaryArchiveDirectory, recursive: true);
-                                }
-                            }
-                            catch (Exception cleanupEx)
-                            {
-                                Debug.WriteLine($"Temporary virtual disk clone cleanup warning: {cleanupEx.Message}");
-                            }
-                        }
+                        ExecuteCloneToVirtualDiskJob(job, progressCallback);
 
                         Dispatcher.Invoke(() =>
                         {
                             progressBar.Value = 100;
-                            txtProgress.Text = $"Virtual disk clone completed: {Path.GetFileName(virtualDiskPath)}";
+                            txtProgress.Text = $"Virtual disk clone completed!";
                         });
 
                         return;
@@ -4095,7 +4027,7 @@ namespace SecureServerBackup.Windows
             return Path.Combine(destPath, $"{jobName}.ssb");
         }
 
-        private void ExecuteCloneHyperVSystemJob(BackupJob job, BackupEngineInterop.ProgressCallback progressCallback)
+        public static void ExecuteCloneHyperVSystemJob(BackupJob job, BackupEngineInterop.ProgressCallback progressCallback)
         {
             CloneHyperVPaths clonePaths = CreateCloneHyperVPaths(job);
 
@@ -4164,6 +4096,97 @@ namespace SecureServerBackup.Windows
 
             string virtualDiskPath = Path.Combine(hyperVDiskDirectory, $"{vmName}.vhdx");
             return new CloneHyperVPaths(rootDirectory, hyperVSystemDirectory, hyperVDiskDirectory, virtualDiskPath, vmName);
+        }
+
+        public static bool ExecuteCloneToVirtualDiskJob(BackupJob job, BackupEngineInterop.ProgressCallback progressCallback)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+            ArgumentNullException.ThrowIfNull(progressCallback);
+
+            string virtualDiskPath = job.GetVirtualDiskClonePath();
+            bool cloneAsDisk = job.ShouldCloneToVirtualDiskAsDisk();
+
+            progressCallback(0, cloneAsDisk
+                ? $"Cloning selected source into virtual disk {Path.GetFileName(virtualDiskPath)}..."
+                : $"Cloning selected volume into virtual disk {Path.GetFileName(virtualDiskPath)}...");
+
+            string temporaryArchiveDirectory = Path.Combine(Path.GetTempPath(), "SecureServerBackup", "VirtualDiskClone", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temporaryArchiveDirectory);
+
+            string temporaryArchivePath = GetBackupArchivePath(temporaryArchiveDirectory, job.Name);
+
+            try
+            {
+                int result;
+                if (cloneAsDisk)
+                {
+                    string diskPath = job.SourcePaths.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path))
+                        ?? throw new InvalidOperationException("Clone to Virtual Disk requires a selected source disk.");
+                    string diskNumStr = diskPath.Replace("\\\\?\\PHYSICALDRIVE", "").Replace("\\\\.\\PHYSICALDRIVE", "");
+                    if (!int.TryParse(diskNumStr, out int diskNum))
+                    {
+                        throw new InvalidOperationException($"Invalid disk path format: {diskPath}");
+                    }
+
+                    result = BackupEngineInterop.BackupDisk(
+                        diskNum,
+                        temporaryArchivePath,
+                        job.IncludeSystemState,
+                        job.CompressData,
+                        null,
+                        0,
+                        progressCallback,
+                        null);
+
+                    if (result != 0)
+                    {
+                        var errorBuffer = new StringBuilder(4096);
+                        BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                        throw new InvalidOperationException($"Disk capture for virtual disk clone failed: {errorBuffer}");
+                    }
+                }
+                else
+                {
+                    string volumePath = job.SourcePaths.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path))
+                        ?? throw new InvalidOperationException("Clone to Virtual Disk requires a selected source volume.");
+
+                    result = BackupEngineInterop.BackupVolume(
+                        volumePath,
+                        temporaryArchivePath,
+                        job.IncludeSystemState,
+                        job.CompressData,
+                        null,
+                        0,
+                        progressCallback,
+                        null);
+
+                    if (result != 0)
+                    {
+                        var errorBuffer = new StringBuilder(4096);
+                        BackupEngineInterop.GetLastErrorMessage(errorBuffer, errorBuffer.Capacity);
+                        throw new InvalidOperationException($"Volume capture for virtual disk clone failed: {errorBuffer}");
+                    }
+                }
+
+                CreateHyperVVirtualDiskFromArchive(temporaryArchivePath, virtualDiskPath, cloneAsDisk, progressCallback);
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(temporaryArchiveDirectory))
+                    {
+                        Directory.Delete(temporaryArchiveDirectory, recursive: true);
+                    }
+                }
+                catch (Exception cleanupEx)
+                {
+                    Debug.WriteLine($"Temporary virtual disk clone cleanup warning: {cleanupEx.Message}");
+                }
+            }
+
+            progressCallback(100, $"Virtual disk clone completed: {Path.GetFileName(virtualDiskPath)}");
+            return true;
         }
 
         private static void CreateCloneHyperVVirtualDiskFromDisk(BackupJob job, string virtualDiskPath, BackupEngineInterop.ProgressCallback progressCallback)
@@ -4718,11 +4741,12 @@ namespace SecureServerBackup.Windows
         {
             var backupType = GetSelectedBackupType();
             int selectedFilesRetentionDays = GetSelectedFilesRetentionDays();
+            int cloneRetentionDays = GetCloneRetentionDays();
             bool renameHyperVSystem = backupType == BackupType.CloneHyperVSystem && chkRenameHyperVSystem?.IsChecked == true;
             string renameHyperVSystemName = renameHyperVSystem
                 ? txtRenameHyperVSystemName?.Text?.Trim() ?? string.Empty
                 : string.Empty;
-            
+
             var job = new BackupJob
             {
                 Id = Guid.NewGuid(),
@@ -4736,6 +4760,7 @@ namespace SecureServerBackup.Windows
                 ProtectedEncryptionPassword = chkEncryptBackup.IsChecked == true ? GetEnteredEncryptionPassword() : string.Empty,
                 RetainFullBackupCount = int.TryParse(txtRetainCount.Text, out int retainCount) ? Math.Max(1, retainCount) : 1,
                 SelectedFilesRetentionDays = selectedFilesRetentionDays,
+                CloneRetentionDays = cloneRetentionDays,
                 RenameHyperVSystem = renameHyperVSystem,
                 RenameHyperVSystemName = renameHyperVSystemName
             };
@@ -4817,6 +4842,14 @@ namespace SecureServerBackup.Windows
         private int GetSelectedFilesRetentionDays()
         {
             string retentionText = cmbSelectedFilesRetentionDays.Text?.Trim() ?? string.Empty;
+            return int.TryParse(retentionText, out int retentionDays)
+                ? Math.Clamp(retentionDays, 1, 30)
+                : 7;
+        }
+
+        private int GetCloneRetentionDays()
+        {
+            string retentionText = cmbCloneRetentionDays.Text?.Trim() ?? string.Empty;
             return int.TryParse(retentionText, out int retentionDays)
                 ? Math.Clamp(retentionDays, 1, 30)
                 : 7;
@@ -5295,6 +5328,16 @@ namespace SecureServerBackup.Windows
                 if (!int.TryParse(retentionText, out int retentionDays) || retentionDays < 1 || retentionDays > 30)
                 {
                     CustomDialogService.ShowWarning("Please enter a Selected Files retention value between 1 and 30 days.", "Validation Error");
+                    return false;
+                }
+            }
+
+            if (rbCloneVirtual?.IsChecked == true || rbCloneHyperV?.IsChecked == true)
+            {
+                string retentionText = cmbCloneRetentionDays.Text?.Trim() ?? string.Empty;
+                if (!int.TryParse(retentionText, out int retentionDays) || retentionDays < 1 || retentionDays > 30)
+                {
+                    CustomDialogService.ShowWarning("Please enter a Clone retention value between 1 and 30 days.", "Validation Error");
                     return false;
                 }
             }

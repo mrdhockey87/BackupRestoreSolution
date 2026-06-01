@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.43";
+        private static readonly string version_fallback_number = "6.3.5.47";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,14 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.47 Removed some of the magin spacing below items on the BackupNewWindow so it fit on the screen better mdail 6/1/2026
+ * Version 6.3.5.46 Scheduled clone jobs (CloneToVirtualDisk/CloneHyperVSystem) now execute through shared CloneExecutionHelper.
+ *                  Refactored clone logic from BackupUI into BackupCommon for service scheduling support with full retention cleanup. mdail 6/1/2026
+ * Version 6.2.5.45 Clone jobs (CloneToVirtualDisk/CloneHyperVSystem) now support retention settings (keep last 1-30 days of clones).
+ *                  Clone retention UI added to BackupWindowNew with automatic cleanup after manual execution. Scheduled execution
+ *                  pending architecture refactoring. mdail 6/1/2026
+ * Version 6.2.5.44 Clone Hyper-V System jobs now route directly through the UI instead of the service, preventing
+ *                  the legacy .ssb archive path and ensuring the job-folder-based HyperVSys/HyperVDisk layout is used. mdail 6/1/2026
  * Version 6.2.5.43 BackupWindowNew now opens fully within the screen work area by clamping window height and position
  *                  on load and after encryption UI changes, preventing the bottom from extending below the taskbar. mdail 6/1/2026
  * Version 6.2.5.42 Fix Clone Hyper-V edit initialization race: prevent premature tree reloads during job load so
@@ -77,7 +85,8 @@ namespace SecureServerBackup
  *                  missing-selection warnings for saved VM names. mdail 6/1/2026
  * Version 6.2.5.40 Update the Clone Hyper-V System to create a subdirectory in the target and then a directory for the system & 
  *                  one for the disk and place the cloned VM files these. mdail 5/25/2026
- * Version 6.2.5.39 Clone Hyper-V System now preserves exported VM files in HyperVSys and the merged disk in HyperVDisk, with renamed clone file layout support. mdail 5/25/2026
+ * Version 6.2.5.39 Clone Hyper-V System now preserves exported VM files in HyperVSys and the merged disk in HyperVDisk, with 
+ *                  renamed clone file layout support. mdail 5/25/2026
  * Version 6.2.5.38 Clone Hyper-V System now saves the rename fields and reopens with the saved VM selection. mdail 5/25/2026
  * Version 6.2.5.37 Change the mounting image progress to better fit the file path names. the last row had 2 textblocks
  * 				    so I added a row and add a margin to the bottom of what was the last row of the grid so the file 

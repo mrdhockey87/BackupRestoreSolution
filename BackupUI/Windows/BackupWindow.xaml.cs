@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using SecureServerBackupCommon;
 using SecureServerBackup.Models;
 using SecureServerBackup.Services;
+using BackupEngineInterop = SecureServerBackup.Services.BackupEngineInterop;
 using Microsoft.Win32;
 using System.Windows.Forms;
 using MessageBox = System.Windows.MessageBox;

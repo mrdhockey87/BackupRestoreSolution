@@ -14,6 +14,7 @@ using System.Windows.Forms;
 using SecureServerBackupCommon;
 using SecureServerBackup.Models;
 using SecureServerBackup.Services;
+using BackupEngineInterop = SecureServerBackup.Services.BackupEngineInterop;
 using MessageBox = System.Windows.MessageBox;
 
 namespace SecureServerBackup.Windows
