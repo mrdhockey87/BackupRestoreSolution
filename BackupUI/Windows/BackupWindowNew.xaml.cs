@@ -28,6 +28,23 @@ namespace SecureServerBackup.Windows
 
         public static class HyperVBackupTreeHelper
         {
+            public static string NormalizeSavedHyperVSystemName(string? value)
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    return string.Empty;
+                }
+
+                string normalizedValue = value.Trim();
+                const string hyperVPrefix = "Hyper-V:";
+                if (normalizedValue.StartsWith(hyperVPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    normalizedValue = normalizedValue[hyperVPrefix.Length..].Trim();
+                }
+
+                return RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(normalizedValue);
+            }
+
             public static IReadOnlyList<HyperVVirtualDiskInfo> ParseVirtualDiskEnumeration(string? output)
             {
                 if (string.IsNullOrWhiteSpace(output))
@@ -198,6 +215,8 @@ namespace SecureServerBackup.Windows
         private bool _windowHeightWasAutoAdjusted;
         private bool _isLoadingDrives;
         private bool _reloadDrivesAfterLoad;
+        private bool _isInitializingJobData;
+        private bool _hasCompletedInitialDriveLoad;
         private readonly Dictionary<string, MountedHyperVGuestTreeDisk> _hyperVDiskMountDirectories = new(StringComparer.OrdinalIgnoreCase);
         private string? _hyperVGuestMountRoot;
         private HashSet<string> _pendingSelectionPaths = new(StringComparer.OrdinalIgnoreCase);
@@ -283,9 +302,14 @@ namespace SecureServerBackup.Windows
             try
             {
                 InitializeComponent();
+
+                // Set MaxHeight early to prevent window from exceeding work area
+                MaxHeight = SystemParameters.WorkArea.Height - 20;
+
                 InitializeScheduleControls();
                 AdjustWindowHeightForEncryption();
-                
+                EnsureWindowWithinScreenBounds();
+
                 // Load drives after window is fully loaded
                 Loaded += BackupWindowNew_Loaded;
                 Closed += BackupWindowNew_Closed;
@@ -304,6 +328,10 @@ namespace SecureServerBackup.Windows
 
         private void LoadJobData(BackupJob job)
         {
+            _isInitializingJobData = true;
+
+            try
+            {
             // Set window title
             this.Title = $"Edit Backup - {job.Name}";
 
@@ -444,13 +472,22 @@ namespace SecureServerBackup.Windows
                     chkSunday.IsChecked = job.Schedule.DaysOfWeek.Contains(DayOfWeek.Sunday);
                 }
             }
+            }
+            finally
+            {
+                _isInitializingJobData = false;
+            }
         }
 
         private async void BackupWindowNew_Loaded(object sender, RoutedEventArgs e)
         {
             try
             {
+                // Ensure window is positioned within screen bounds on initial load
+                EnsureWindowWithinScreenBounds();
+
                 await LoadDrives();
+                _hasCompletedInitialDriveLoad = true;
 
                 // Pre-select items if editing a job
                 if (_pathsToPreselect != null && _pathsToPreselect.Count > 0)
@@ -673,13 +710,14 @@ namespace SecureServerBackup.Windows
         /// </summary>
         private bool PreSelectHyperVSystemByName(string savedVmName)
         {
-            if (string.IsNullOrWhiteSpace(savedVmName))
+            string normalizedSavedVmName = HyperVBackupTreeHelper.NormalizeSavedHyperVSystemName(savedVmName);
+            if (string.IsNullOrWhiteSpace(normalizedSavedVmName))
                 return false;
 
             DriveTreeItem? match = driveItems.FirstOrDefault(item =>
                 item.ItemType == DriveTreeItemType.HyperVSystem &&
-                (string.Equals(item.VirtualMachineName, savedVmName, StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(item.FullPath), savedVmName, StringComparison.OrdinalIgnoreCase)));
+                (string.Equals(HyperVBackupTreeHelper.NormalizeSavedHyperVSystemName(item.VirtualMachineName), normalizedSavedVmName, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(HyperVBackupTreeHelper.NormalizeSavedHyperVSystemName(item.FullPath), normalizedSavedVmName, StringComparison.OrdinalIgnoreCase)));
 
             if (match == null)
                 return false;
@@ -2861,7 +2899,7 @@ namespace SecureServerBackup.Windows
 
             ApplyBackupTypeSelectionRestrictions();
 
-            if (rbCloneHyperV?.IsChecked == true)
+            if (rbCloneHyperV?.IsChecked == true && !_isInitializingJobData && _hasCompletedInitialDriveLoad)
             {
                 _ = ReloadDriveTreeForBackupTypeAsync();
             }
@@ -3449,6 +3487,7 @@ namespace SecureServerBackup.Windows
         {
             UpdateEncryptionUiState();
             AdjustWindowHeightForEncryption();
+            // EnsureWindowWithinScreenBounds is now called within AdjustWindowHeightForEncryption
         }
 
         private void UpdateEncryptionUiState()
@@ -3514,6 +3553,37 @@ namespace SecureServerBackup.Windows
             {
                 Height = adjustedHeight;
                 _windowHeightWasAutoAdjusted = false;
+            }
+
+            // Ensure window stays within screen bounds after height adjustment
+            EnsureWindowWithinScreenBounds();
+        }
+
+        /// <summary>
+        /// Ensures the window is positioned completely within the screen's working area,
+        /// adjusting position if it extends beyond screen bounds (e.g., below taskbar)
+        /// </summary>
+        private void EnsureWindowWithinScreenBounds()
+        {
+            if (WindowState == WindowState.Maximized)
+            {
+                return;
+            }
+
+            double workAreaHeight = SystemParameters.WorkArea.Height;
+            double workAreaTop = SystemParameters.WorkArea.Top;
+
+            // Check if window extends below the working area
+            if (Top + Height > workAreaTop + workAreaHeight)
+            {
+                // Reposition window so bottom aligns with work area bottom
+                Top = Math.Max(workAreaTop, workAreaTop + workAreaHeight - Height);
+            }
+
+            // Ensure top of window is not above screen
+            if (Top < workAreaTop)
+            {
+                Top = workAreaTop;
             }
         }
 
@@ -4612,6 +4682,9 @@ namespace SecureServerBackup.Windows
             {
                 IReadOnlyList<string> cloneHyperVPaths = job.HyperVMachines.Count > 0
                     ? job.HyperVMachines
+                        .Select(HyperVBackupTreeHelper.NormalizeSavedHyperVSystemName)
+                        .Where(path => !string.IsNullOrWhiteSpace(path))
+                        .ToList()
                     : job.SourcePaths;
 
                 return cloneHyperVPaths
@@ -4764,7 +4837,8 @@ namespace SecureServerBackup.Windows
         {
             if (item.ItemType == DriveTreeItemType.HyperVSystem && item.IsChecked == true)
             {
-                string vmName = RestoreWindowNew.RegularHyperVRestoreHelper.NormalizeHyperVVmName(item.FullPath);
+                string vmName = HyperVBackupTreeHelper.NormalizeSavedHyperVSystemName(
+                    string.IsNullOrWhiteSpace(item.VirtualMachineName) ? item.FullPath : item.VirtualMachineName);
                 if (!string.IsNullOrWhiteSpace(vmName))
                 {
                     job.HyperVMachines.Add(vmName);

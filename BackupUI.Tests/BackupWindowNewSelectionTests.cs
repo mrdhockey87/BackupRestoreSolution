@@ -190,6 +190,25 @@ public sealed class BackupWindowNewSelectionTests
 		Assert.Equal("VmOne", replayPaths[0]);
 	}
 
+	[Theory]
+	[InlineData("Hyper-V: Win10OEM (Running)", "Win10OEM")]
+	[InlineData("Win10OEM (Off)", "Win10OEM")]
+	[InlineData("Win10OEM", "Win10OEM")]
+	public void GetReplayPathsForJob_WhenCloneHyperVSystemUsesLegacyDisplayNames_NormalizesVmNames(string savedVmName, string expectedVmName)
+	{
+		BackupJob job = new()
+		{
+			Type = BackupType.CloneHyperVSystem,
+			Target = BackupTarget.HyperV,
+			HyperVMachines = new List<string> { savedVmName }
+		};
+
+		IReadOnlyList<string> replayPaths = BackupWindowNew.GetReplayPathsForJob(job);
+
+		Assert.Single(replayPaths);
+		Assert.Equal(expectedVmName, replayPaths[0]);
+	}
+
 	[Fact]
 	public void GetReplayPathsForJob_WhenCloneHyperVSystemWithoutSavedVmNames_FallsBackToSourcePaths()
 	{
@@ -204,5 +223,16 @@ public sealed class BackupWindowNewSelectionTests
 
 		Assert.Single(replayPaths);
 		Assert.Equal(@"\\.\PHYSICALDRIVE2", replayPaths[0]);
+	}
+
+	[Fact]
+	public void BuildMissingSavedSelectionsWarningMessage_WhenCloneHyperVSystem_ExplainsSelectionCleared()
+	{
+		string message = BackupWindowNew.BuildMissingSavedSelectionsWarningMessage(
+			BackupType.CloneHyperVSystem,
+			new List<string> { "Win10OEM" });
+
+		Assert.Contains("current selection list was cleared", message, StringComparison.Ordinal);
+		Assert.Contains("Win10OEM", message, StringComparison.Ordinal);
 	}
 }

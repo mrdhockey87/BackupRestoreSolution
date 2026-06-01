@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.2.5.40";
+        private static readonly string version_fallback_number = "6.2.5.43";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,12 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.2.5.43 BackupWindowNew now opens fully within the screen work area by clamping window height and position
+ *                  on load and after encryption UI changes, preventing the bottom from extending below the taskbar. mdail 6/1/2026
+ * Version 6.2.5.42 Fix Clone Hyper-V edit initialization race: prevent premature tree reloads during job load so
+ *                  saved Hyper-V VM selections are preserved and false missing-selection warnings are avoided. mdail 6/1/2026
+ * Version 6.2.5.41 Clone Hyper-V System now keeps saved Hyper-V VM selections when reopening jobs and avoids false 
+ *                  missing-selection warnings for saved VM names. mdail 6/1/2026
  * Version 6.2.5.40 Update the Clone Hyper-V System to create a subdirectory in the target and then a directory for the system & 
  *                  one for the disk and place the cloned VM files these. mdail 5/25/2026
  * Version 6.2.5.39 Clone Hyper-V System now preserves exported VM files in HyperVSys and the merged disk in HyperVDisk, with renamed clone file layout support. mdail 5/25/2026
