@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.47";
+        private static readonly string version_fallback_number = "6.3.5.49";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,12 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.49 Removed redundant HyperVSys and HyperVDisk subdirectory creation from Hyper-V system clone path.
+ *                  Export-VM creates its own subdirectory structure, so explicit directory creation was unnecessary
+ *                  and could cause access-denied errors during post-export rename operations. mdail 6/2/2026
+ * Version 6.3.5.48 Fixed Hyper-V system clone progress stalling at 10% during export by running Export-VM in background
+ *                  with periodic progress updates. Added retry logic with delays for directory renames to handle locked
+ *                  files after export. Added 2-second stabilization delay after export completion before renaming. mdail 6/2/2026
  * Version 6.3.5.47 Removed some of the magin spacing below items on the BackupNewWindow so it fit on the screen better mdail 6/1/2026
  * Version 6.3.5.46 Scheduled clone jobs (CloneToVirtualDisk/CloneHyperVSystem) now execute through shared CloneExecutionHelper.
  *                  Refactored clone logic from BackupUI into BackupCommon for service scheduling support with full retention cleanup. mdail 6/1/2026

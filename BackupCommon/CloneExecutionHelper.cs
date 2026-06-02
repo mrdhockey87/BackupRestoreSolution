@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace SecureServerBackupCommon
 {
@@ -182,15 +183,11 @@ namespace SecureServerBackupCommon
 				? vmName
 				: job.Name;
 			string rootDirectory = Path.Combine(job.DestinationPath, rootDirectoryName);
-			string hyperVSystemDirectory = Path.Combine(rootDirectory, "HyperVSys");
-			string hyperVDiskDirectory = Path.Combine(rootDirectory, "HyperVDisk");
 
 			Directory.CreateDirectory(rootDirectory);
-			Directory.CreateDirectory(hyperVSystemDirectory);
-			Directory.CreateDirectory(hyperVDiskDirectory);
 
-			string virtualDiskPath = Path.Combine(hyperVDiskDirectory, $"{vmName}.vhdx");
-			return new CloneHyperVPaths(rootDirectory, hyperVSystemDirectory, hyperVDiskDirectory, virtualDiskPath, vmName);
+			string virtualDiskPath = Path.Combine(rootDirectory, $"{vmName}.vhdx");
+			return new CloneHyperVPaths(rootDirectory, rootDirectory, rootDirectory, virtualDiskPath, vmName);
 		}
 
 		private static void CreateCloneHyperVVirtualDiskFromDisk(BackupJob job, string virtualDiskPath, BackupEngineInterop.ProgressCallback progressCallback)
@@ -257,19 +254,35 @@ namespace SecureServerBackupCommon
 			ArgumentException.ThrowIfNullOrWhiteSpace(sourceVmName);
 			ArgumentNullException.ThrowIfNull(clonePaths);
 
-			PrepareCloneHyperVExportDirectory(clonePaths.HyperVSystemDirectory);
+			PrepareCloneHyperVExportDirectory(clonePaths.RootDirectory);
 
-			progressCallback(10, $"Exporting VM '{sourceVmName}'...");
-			ExportHyperVVmWithPowerShell(sourceVmName, clonePaths.HyperVSystemDirectory);
+			progressCallback(10, $"Exporting VM '{sourceVmName}'... (this may take several minutes)");
+
+			// Start export in background and provide progress updates
+			var exportTask = Task.Run(() => ExportHyperVVmWithPowerShell(sourceVmName, clonePaths.RootDirectory));
+			int currentProgress = 10;
+			while (!exportTask.Wait(TimeSpan.FromSeconds(5)))
+			{
+				currentProgress = Math.Min(currentProgress + 2, 35);
+				progressCallback(currentProgress, $"Still exporting VM '{sourceVmName}'...");
+			}
+
+			if (exportTask.Exception != null)
+			{
+				throw exportTask.Exception.InnerException ?? exportTask.Exception;
+			}
+
+			progressCallback(38, "Export complete. Waiting for file system to stabilize...");
+			System.Threading.Thread.Sleep(2000); // Give file system time to release locks
 
 			if (renameExportedArtifacts)
 			{
 				progressCallback(40, "Renaming exported artifacts...");
-				RenameCloneHyperVExportArtifacts(clonePaths.HyperVSystemDirectory, sourceVmName, clonePaths.VmName);
+				RenameCloneHyperVExportArtifacts(clonePaths.RootDirectory, sourceVmName, clonePaths.VmName);
 			}
 
 			progressCallback(50, "Finding virtual disk...");
-			string sourceDiskPath = FindPrimaryHyperVVirtualDisk(clonePaths.HyperVSystemDirectory);
+			string sourceDiskPath = FindPrimaryHyperVVirtualDisk(clonePaths.RootDirectory);
 			if (string.IsNullOrWhiteSpace(sourceDiskPath))
 			{
 				throw new InvalidOperationException("The exported Hyper-V VM did not contain a source virtual disk.");
@@ -308,7 +321,8 @@ namespace SecureServerBackupCommon
 				$"$vmName = '{escapedVmName}'; " +
 				$"$exportPath = '{escapedExportPath}'; " +
 				"try { Export-VM -Name $vmName -Path $exportPath -CaptureLiveState CaptureDataConsistentState -ErrorAction Stop | Out-Null } " +
-				"catch { Export-VM -Name $vmName -Path $exportPath -ErrorAction Stop | Out-Null }";
+				"catch { Export-VM -Name $vmName -Path $exportPath -ErrorAction Stop | Out-Null }; " +
+				"Write-Output 'EXPORT_COMPLETE'";
 
 			RunPowerShellScript(script);
 		}
@@ -367,8 +381,37 @@ namespace SecureServerBackupCommon
 				throw new InvalidOperationException($"The exported Hyper-V artifact '{targetPath}' already exists.");
 			}
 
-			if (isDirectory)
+			// Retry rename operation with delays to handle locked files
+			const int maxRetries = 3;
+			for (int retry = 0; retry < maxRetries; retry++)
 			{
+				try
+				{
+					if (isDirectory)
+					{
+						Directory.Move(path, targetPath);
+					}
+					else
+					{
+						File.Move(path, targetPath);
+					}
+					return; // Success
+				}
+				catch (UnauthorizedAccessException) when (retry < maxRetries - 1)
+				{
+					// Wait and retry - file may still be locked
+					System.Threading.Thread.Sleep(1000 * (retry + 1));
+				}
+				catch (IOException ex) when (ex.Message.Contains("being used by another process") && retry < maxRetries - 1)
+				{
+					// File locked by another process - wait and retry
+					System.Threading.Thread.Sleep(1000 * (retry + 1));
+				}
+			}
+
+			// Final attempt - let exception bubble up if it still fails
+			if (isDirectory)
+			{  
 				Directory.Move(path, targetPath);
 			}
 			else
