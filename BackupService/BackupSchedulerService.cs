@@ -159,6 +159,9 @@ namespace SecureServerBackupService
                         LogJobMessage(job, message, job.DestinationPath);
                     });
 
+                // Check if the job was cancelled
+                bool wasCancelled = _progressTracker.GetCancellationToken(job.Id).IsCancellationRequested;
+
                 // If backup succeeded and verification is requested, run verification
                 if (success && job.VerifyAfterBackup && !_progressTracker.GetCancellationToken(job.Id).IsCancellationRequested)
                 {
@@ -196,7 +199,13 @@ namespace SecureServerBackupService
 
                 _progressTracker.CompleteJob(job.Id, success);
 
-                if (success)
+                if (wasCancelled)
+                {
+                    _logger.LogInformation("Job was cancelled by user: {jobName}", job.Name);
+                    LogToFile($"Job cancelled by user: {job.Name}");
+                    BackupLogger.LogWarning(job.Name, "Backup cancelled by user");
+                }
+                else if (success)
                 {
                     _logger.LogInformation("Job completed successfully: {jobName}", job.Name);
                     LogToFile($"Job completed successfully: {job.Name}");
@@ -210,7 +219,7 @@ namespace SecureServerBackupService
                 }
 
                 // UpdateJobAfterExecution will clear IsCurrentlyRunning flag
-                _jobManager.UpdateJobAfterExecution(job, success);
+                _jobManager.UpdateJobAfterExecution(job, success, wasCancelled);
             }
             catch (Exception ex)
             {
@@ -222,7 +231,7 @@ namespace SecureServerBackupService
 
                 // CRITICAL: Update job state even on exception to prevent infinite loop
                 // UpdateJobAfterExecution will clear IsCurrentlyRunning flag
-                _jobManager.UpdateJobAfterExecution(job, success: false);
+                _jobManager.UpdateJobAfterExecution(job, success: false, wasCancelled: false);
             }
         }
 

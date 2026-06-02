@@ -379,8 +379,8 @@ namespace SecureServerBackup.Windows
             chkCompress.IsChecked = job.CompressData;
             chkVerify.IsChecked = job.VerifyAfterBackup;
             txtRetainCount.Text = job.RetainFullBackupCount.ToString();
-            cmbSelectedFilesRetentionDays.Text = Math.Clamp(job.SelectedFilesRetentionDays, 1, 30).ToString();
-            cmbCloneRetentionDays.Text = Math.Clamp(job.CloneRetentionDays, 1, 30).ToString();
+            cmbSelectedFilesRetentionCount.Text = Math.Clamp(job.SelectedFilesRetentionCount, 1, 30).ToString();
+            cmbCloneRetentionCount.Text = Math.Clamp(job.CloneRetentionCount, 1, 30).ToString();
             chkEncryptBackup.IsChecked = job.EncryptBackup;
 
             _hasSavedEncryptionPassword = job.EncryptBackup && !string.IsNullOrWhiteSpace(job.ProtectedEncryptionPassword);
@@ -4740,8 +4740,8 @@ namespace SecureServerBackup.Windows
         private BackupJob CreateJobFromInput()
         {
             var backupType = GetSelectedBackupType();
-            int selectedFilesRetentionDays = GetSelectedFilesRetentionDays();
-            int cloneRetentionDays = GetCloneRetentionDays();
+            int selectedFilesRetentionCount = GetSelectedFilesRetentionCount();
+            int cloneRetentionCount = GetCloneRetentionCount();
             bool renameHyperVSystem = backupType == BackupType.CloneHyperVSystem && chkRenameHyperVSystem?.IsChecked == true;
             string renameHyperVSystemName = renameHyperVSystem
                 ? txtRenameHyperVSystemName?.Text?.Trim() ?? string.Empty
@@ -4759,8 +4759,8 @@ namespace SecureServerBackup.Windows
                 EncryptBackup = chkEncryptBackup.IsChecked == true,
                 ProtectedEncryptionPassword = chkEncryptBackup.IsChecked == true ? GetEnteredEncryptionPassword() : string.Empty,
                 RetainFullBackupCount = int.TryParse(txtRetainCount.Text, out int retainCount) ? Math.Max(1, retainCount) : 1,
-                SelectedFilesRetentionDays = selectedFilesRetentionDays,
-                CloneRetentionDays = cloneRetentionDays,
+                SelectedFilesRetentionCount = selectedFilesRetentionCount,
+                CloneRetentionCount = cloneRetentionCount,
                 RenameHyperVSystem = renameHyperVSystem,
                 RenameHyperVSystemName = renameHyperVSystemName
             };
@@ -4839,19 +4839,19 @@ namespace SecureServerBackup.Windows
             return job;
         }
 
-        private int GetSelectedFilesRetentionDays()
+        private int GetSelectedFilesRetentionCount()
         {
-            string retentionText = cmbSelectedFilesRetentionDays.Text?.Trim() ?? string.Empty;
-            return int.TryParse(retentionText, out int retentionDays)
-                ? Math.Clamp(retentionDays, 1, 30)
+            string retentionText = cmbSelectedFilesRetentionCount.Text?.Trim() ?? string.Empty;
+            return int.TryParse(retentionText, out int retentionCount)
+                ? Math.Clamp(retentionCount, 1, 30)
                 : 7;
         }
 
-        private int GetCloneRetentionDays()
+        private int GetCloneRetentionCount()
         {
-            string retentionText = cmbCloneRetentionDays.Text?.Trim() ?? string.Empty;
-            return int.TryParse(retentionText, out int retentionDays)
-                ? Math.Clamp(retentionDays, 1, 30)
+            string retentionText = cmbCloneRetentionCount.Text?.Trim() ?? string.Empty;
+            return int.TryParse(retentionText, out int retentionCount)
+                ? Math.Clamp(retentionCount, 1, 30)
                 : 7;
         }
 
@@ -5324,20 +5324,20 @@ namespace SecureServerBackup.Windows
 
             if (rbSelectedFilesAndFolders?.IsChecked == true)
             {
-                string retentionText = cmbSelectedFilesRetentionDays.Text?.Trim() ?? string.Empty;
-                if (!int.TryParse(retentionText, out int retentionDays) || retentionDays < 1 || retentionDays > 30)
+                string retentionText = cmbSelectedFilesRetentionCount.Text?.Trim() ?? string.Empty;
+                if (!int.TryParse(retentionText, out int retentionCount) || retentionCount < 1 || retentionCount > 30)
                 {
-                    CustomDialogService.ShowWarning("Please enter a Selected Files retention value between 1 and 30 days.", "Validation Error");
+                    CustomDialogService.ShowWarning("Please enter a Selected Files retention value between 1 and 30 versions.", "Validation Error");
                     return false;
                 }
             }
 
             if (rbCloneVirtual?.IsChecked == true || rbCloneHyperV?.IsChecked == true)
             {
-                string retentionText = cmbCloneRetentionDays.Text?.Trim() ?? string.Empty;
-                if (!int.TryParse(retentionText, out int retentionDays) || retentionDays < 1 || retentionDays > 30)
+                string retentionText = cmbCloneRetentionCount.Text?.Trim() ?? string.Empty;
+                if (!int.TryParse(retentionText, out int retentionCount) || retentionCount < 1 || retentionCount > 30)
                 {
-                    CustomDialogService.ShowWarning("Please enter a Clone retention value between 1 and 30 days.", "Validation Error");
+                    CustomDialogService.ShowWarning("Please enter a Clone retention value between 1 and 30 clones.", "Validation Error");
                     return false;
                 }
             }

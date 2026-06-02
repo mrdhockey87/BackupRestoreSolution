@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.49";
+        private static readonly string version_fallback_number = "6.3.5.53";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,20 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.53 Fixed cancelled backup jobs to not retry immediately. When a user aborts a backup, the job now 
+ *                  returns to the normal schedule instead of entering the failure retry path. The 15-minute retry 
+ *                  delay is preserved for actual backup failures. Cancellation state is now tracked separately from 
+ *                  failure state in the service scheduler and job manager. mdail 6/2/2026
+ * Version 6.3.5.52 Fixed Hyper-V clone verification to check for directory structure and VHDX files instead of
+ *                  expecting single .ssb archives. Clone verification now validates the clone folder and VHDX
+ *                  file existence for both CloneToVirtualDisk and CloneHyperVSystem job types. mdail 6/2/2026
+ * Version 6.3.5.51 Changed Selected Files & Folder retention from days-based to count-based. Selected Files jobs
+ *                  now keep the last X versions instead of the last X days. Cleanup logic sorts by write time
+ *                  and deletes the oldest history points beyond the retention count. UI and logging updated. mdail 6/2/2026
+ * Version 6.3.5.50 Changed Hyper-V clone retention from days-based to count-based. Clone jobs now keep
+ *                  the last X clones instead of the last X days of clones. Cleanup logic sorts by write time
+ *                  and deletes the oldest clones beyond the retention count. UI and logging updated to reflect
+ *                  clone count instead of days. mdail 6/2/2026
  * Version 6.3.5.49 Removed redundant HyperVSys and HyperVDisk subdirectory creation from Hyper-V system clone path.
  *                  Export-VM creates its own subdirectory structure, so explicit directory creation was unnecessary
  *                  and could cause access-denied errors during post-export rename operations. mdail 6/2/2026

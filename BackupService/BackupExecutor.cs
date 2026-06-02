@@ -421,31 +421,29 @@ namespace SecureServerBackupService
         {
             ArgumentNullException.ThrowIfNull(job);
 
-            int retentionDays = Math.Clamp(job.SelectedFilesRetentionDays, 1, 30);
-            DateTime cutoffUtc = DateTime.UtcNow.AddDays(-retentionDays);
+            int retentionCount = Math.Clamp(job.SelectedFilesRetentionCount, 1, 30);
             IReadOnlyList<string> historyArchives = GetSelectedFilesHistoryArchives(job.DestinationPath, job.Name);
 
-            foreach (string archivePath in historyArchives)
+            // Collect archives excluding the latest, sort by write time descending (newest first)
+            var matchingArchives = historyArchives
+                .Where(archivePath => !string.Equals(archivePath, latestArchivePath, StringComparison.OrdinalIgnoreCase))
+                .Select(archivePath => new { Path = archivePath, WriteTime = File.GetLastWriteTimeUtc(archivePath) })
+                .OrderByDescending(x => x.WriteTime)
+                .ToList();
+
+            // Keep only the most recent N history points (exclude latest which is already excluded)
+            var archivesToDelete = matchingArchives.Skip(retentionCount).ToList();
+
+            foreach (var archiveInfo in archivesToDelete)
             {
-                if (string.Equals(archivePath, latestArchivePath, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                DateTime archiveWriteTimeUtc = File.GetLastWriteTimeUtc(archivePath);
-                if (archiveWriteTimeUtc >= cutoffUtc)
-                {
-                    continue;
-                }
-
                 try
                 {
-                    File.Delete(archivePath);
-                    logger?.Invoke($"Removed Selected Files history point outside retention window: {Path.GetFileName(archivePath)}");
+                    File.Delete(archiveInfo.Path);
+                    logger?.Invoke($"Removed old Selected Files history point (keeping last {retentionCount} versions): {Path.GetFileName(archiveInfo.Path)}");
                 }
                 catch (Exception cleanupEx)
                 {
-                    logger?.Invoke($"Warning: Failed to remove old Selected Files history point '{Path.GetFileName(archivePath)}': {cleanupEx.Message}");
+                    logger?.Invoke($"Warning: Failed to remove old Selected Files history point '{Path.GetFileName(archiveInfo.Path)}': {cleanupEx.Message}");
                 }
             }
         }
@@ -459,8 +457,7 @@ namespace SecureServerBackupService
                 return;
             }
 
-            int retentionDays = Math.Clamp(job.CloneRetentionDays, 1, 30);
-            DateTime cutoffUtc = DateTime.UtcNow.AddDays(-retentionDays);
+            int retentionCount = Math.Clamp(job.CloneRetentionCount, 1, 30);
 
             try
             {
@@ -468,35 +465,27 @@ namespace SecureServerBackupService
                 // For CloneToVirtualDisk: VHDX files are created with job name
                 string[] subdirectories = Directory.GetDirectories(job.DestinationPath);
 
-                foreach (string dir in subdirectories)
+                // Collect directories matching the job name pattern, excluding the latest clone
+                var matchingDirs = subdirectories
+                    .Where(dir => !string.Equals(dir, latestClonePath, StringComparison.OrdinalIgnoreCase))
+                    .Where(dir => Path.GetFileName(dir).StartsWith(job.Name, StringComparison.OrdinalIgnoreCase))
+                    .Select(dir => new { Path = dir, WriteTime = Directory.GetLastWriteTimeUtc(dir) })
+                    .OrderByDescending(x => x.WriteTime)
+                    .ToList();
+
+                // Keep only the most recent N clones (exclude latest which is already excluded)
+                var dirsToDelete = matchingDirs.Skip(retentionCount).ToList();
+
+                foreach (var dirInfo in dirsToDelete)
                 {
-                    // Skip the latest clone directory
-                    if (string.Equals(dir, latestClonePath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    // Check if directory name matches the job name pattern
-                    string dirName = Path.GetFileName(dir);
-                    if (!dirName.StartsWith(job.Name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    DateTime dirWriteTimeUtc = Directory.GetLastWriteTimeUtc(dir);
-                    if (dirWriteTimeUtc >= cutoffUtc)
-                    {
-                        continue;
-                    }
-
                     try
                     {
-                        Directory.Delete(dir, recursive: true);
-                        logger?.Invoke($"Removed old clone directory outside retention window: {dirName}");
+                        Directory.Delete(dirInfo.Path, recursive: true);
+                        logger?.Invoke($"Removed old clone directory (keeping last {retentionCount} clones): {Path.GetFileName(dirInfo.Path)}");
                     }
                     catch (Exception cleanupEx)
                     {
-                        logger?.Invoke($"Warning: Failed to remove old clone directory '{dirName}': {cleanupEx.Message}");
+                        logger?.Invoke($"Warning: Failed to remove old clone directory '{Path.GetFileName(dirInfo.Path)}': {cleanupEx.Message}");
                     }
                 }
 
@@ -504,33 +493,28 @@ namespace SecureServerBackupService
                 if (job.Type == BackupType.CloneToVirtualDisk)
                 {
                     string[] vhdxFiles = Directory.GetFiles(job.DestinationPath, "*.vhdx");
-                    foreach (string vhdx in vhdxFiles)
+
+                    // Collect VHDX files matching the job name pattern, excluding the latest clone
+                    var matchingVhdx = vhdxFiles
+                        .Where(vhdx => !string.Equals(vhdx, latestClonePath, StringComparison.OrdinalIgnoreCase))
+                        .Where(vhdx => Path.GetFileNameWithoutExtension(vhdx).StartsWith(job.Name, StringComparison.OrdinalIgnoreCase))
+                        .Select(vhdx => new { Path = vhdx, WriteTime = File.GetLastWriteTimeUtc(vhdx) })
+                        .OrderByDescending(x => x.WriteTime)
+                        .ToList();
+
+                    // Keep only the most recent N clones (exclude latest which is already excluded)
+                    var vhdxToDelete = matchingVhdx.Skip(retentionCount).ToList();
+
+                    foreach (var vhdxInfo in vhdxToDelete)
                     {
-                        if (string.Equals(vhdx, latestClonePath, StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue;
-                        }
-
-                        string fileName = Path.GetFileNameWithoutExtension(vhdx);
-                        if (!fileName.StartsWith(job.Name, StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue;
-                        }
-
-                        DateTime fileWriteTimeUtc = File.GetLastWriteTimeUtc(vhdx);
-                        if (fileWriteTimeUtc >= cutoffUtc)
-                        {
-                            continue;
-                        }
-
                         try
                         {
-                            File.Delete(vhdx);
-                            logger?.Invoke($"Removed old clone VHDX outside retention window: {Path.GetFileName(vhdx)}");
+                            File.Delete(vhdxInfo.Path);
+                            logger?.Invoke($"Removed old clone VHDX (keeping last {retentionCount} clones): {Path.GetFileName(vhdxInfo.Path)}");
                         }
                         catch (Exception cleanupEx)
                         {
-                            logger?.Invoke($"Warning: Failed to remove old clone VHDX '{Path.GetFileName(vhdx)}': {cleanupEx.Message}");
+                            logger?.Invoke($"Warning: Failed to remove old clone VHDX '{Path.GetFileName(vhdxInfo.Path)}': {cleanupEx.Message}");
                         }
                     }
                 }
@@ -1114,7 +1098,7 @@ namespace SecureServerBackupService
                         if (job.Type == BackupType.CloneToVirtualDisk)
                         {
                             logger?.Invoke($"[CLONE] Executing CloneToVirtualDisk job '{job.Name}'...");
-                            logger?.Invoke($"[CLONE] Retention policy: keep last {job.CloneRetentionDays} days of clones.");
+                            logger?.Invoke($"[CLONE] Retention policy: keep last {job.CloneRetentionCount} clones.");
                             logger?.Invoke($"[CLONE] Clone destination: {job.GetVirtualDiskClonePath()}");
 
                             try
@@ -1151,7 +1135,7 @@ namespace SecureServerBackupService
                         if (job.Type == BackupType.CloneHyperVSystem)
                         {
                             logger?.Invoke($"[CLONE] Executing CloneHyperVSystem job '{job.Name}'...");
-                            logger?.Invoke($"[CLONE] Retention policy: keep last {job.CloneRetentionDays} days of clones.");
+                            logger?.Invoke($"[CLONE] Retention policy: keep last {job.CloneRetentionCount} clones.");
                             logger?.Invoke($"[CLONE] Clone destination: {Path.Combine(job.DestinationPath, job.Name)}");
 
                             try
@@ -1529,11 +1513,46 @@ namespace SecureServerBackupService
                             return false;
                         }
 
-                        string backupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
-                        if (!File.Exists(backupPath))
+                        string backupPath;
+
+                        // Hyper-V clone jobs use directory structures instead of .ssb files
+                        if (job.Type == BackupType.CloneHyperVSystem || job.Type == BackupType.CloneToVirtualDisk)
                         {
-                            logger?.Invoke($"[ERROR] Backup file not found: {backupPath}");
-                            return false;
+                            // For clone jobs, the backup path is the job folder containing the VHDX/VM files
+                            string cloneFolderName = job.RenameHyperVSystem && !string.IsNullOrWhiteSpace(job.RenameHyperVSystemName)
+                                ? job.RenameHyperVSystemName.Trim()
+                                : job.Name;
+                            backupPath = Path.Combine(job.DestinationPath, cloneFolderName);
+
+                            if (!Directory.Exists(backupPath))
+                            {
+                                logger?.Invoke($"[ERROR] Clone directory not found: {backupPath}");
+                                return false;
+                            }
+
+                            // Verify the VHDX file exists
+                            string vhdxPath = Path.Combine(backupPath, $"{cloneFolderName}.vhdx");
+                            if (!File.Exists(vhdxPath))
+                            {
+                                logger?.Invoke($"[ERROR] Clone VHDX file not found: {vhdxPath}");
+                                return false;
+                            }
+
+                            logger?.Invoke($"Clone verification PASSED: Found clone directory and VHDX file");
+                            logger?.Invoke($"Clone path: {backupPath}");
+                            logger?.Invoke($"VHDX file: {Path.GetFileName(vhdxPath)}");
+                            progressCallback?.Invoke(100, "Clone verification completed successfully");
+                            return true;
+                        }
+                        else
+                        {
+                            // Standard backups use .ssb archive files
+                            backupPath = Path.Combine(job.DestinationPath, $"{job.Name}.ssb");
+                            if (!File.Exists(backupPath))
+                            {
+                                logger?.Invoke($"[ERROR] Backup file not found: {backupPath}");
+                                return false;
+                            }
                         }
 
                         logger?.Invoke($"Verifying backup file: {Path.GetFileName(backupPath)}");

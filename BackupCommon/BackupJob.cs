@@ -24,8 +24,8 @@ namespace SecureServerBackupCommon
         
         // Retention settings
         public int RetainFullBackupCount { get; set; } = 1; // Default: keep only 1 full backup
-        public int SelectedFilesRetentionDays { get; set; } = 7; // Keep Selected Files history points for this many days
-        public int CloneRetentionDays { get; set; } = 7; // Keep clone directories for this many days (CloneToVirtualDisk and CloneHyperVSystem)
+        public int SelectedFilesRetentionCount { get; set; } = 7; // Keep this many of the most recent Selected Files history points
+        public int CloneRetentionCount { get; set; } = 7; // Keep this many of the most recent clones (CloneToVirtualDisk and CloneHyperVSystem)
 
         // Retry tracking
         public int ConsecutiveFailures { get; set; } = 0; // Track consecutive backup failures for retry limit

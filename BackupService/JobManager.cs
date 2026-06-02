@@ -86,7 +86,7 @@ namespace SecureServerBackupService
             return dueJobs;
         }
 
-        public void UpdateJobAfterExecution(BackupJob job, bool success = true)
+        public void UpdateJobAfterExecution(BackupJob job, bool success = true, bool wasCancelled = false)
         {
             LoadJobs();
 
@@ -99,6 +99,22 @@ namespace SecureServerBackupService
 
             currentJob.LastRunTime = DateTime.Now;
             currentJob.IsCurrentlyRunning = false; // Mark job as no longer running
+
+            if (wasCancelled)
+            {
+                // User cancelled the backup - don't retry, just reset to normal schedule
+                currentJob.ConsecutiveFailures = 0; // Reset failure counter
+                CalculateNextRunTime(currentJob, isInitialCalculation: false);
+
+                BackupLogger.LogWarning(
+                    jobName: currentJob.Name,
+                    message: "Backup cancelled by user.",
+                    details: $"Next scheduled backup: {currentJob.NextScheduledRun:yyyy-MM-dd HH:mm:ss}"
+                );
+
+                SaveJobs();
+                return;
+            }
 
             if (!success)
             {
