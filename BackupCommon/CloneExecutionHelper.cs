@@ -186,7 +186,11 @@ namespace SecureServerBackupCommon
 
 			Directory.CreateDirectory(rootDirectory);
 
-			string virtualDiskPath = Path.Combine(rootDirectory, $"{vmName}.vhdx");
+			// Place VHDX in Virtual Hard Disks subdirectory where Export-VM places exported VHDXs
+			// This ensures Import-VM can find the VHDX when reading the .vmcx configuration
+			string virtualHardDisksDirectory = Path.Combine(rootDirectory, "Virtual Hard Disks");
+			Directory.CreateDirectory(virtualHardDisksDirectory);
+			string virtualDiskPath = Path.Combine(virtualHardDisksDirectory, $"{vmName}.vhdx");
 			return new CloneHyperVPaths(rootDirectory, rootDirectory, rootDirectory, virtualDiskPath, vmName);
 		}
 
@@ -510,47 +514,50 @@ namespace SecureServerBackupCommon
 				}
 			}
 
-			// Delete VHD files (if any legacy format exists)
-			foreach (string vhdPath in Directory.EnumerateFiles(exportRootPath, "*.vhd", SearchOption.AllDirectories))
-			{
-				try
+				// Delete VHD files (if any legacy format exists)
+				foreach (string vhdPath in Directory.EnumerateFiles(exportRootPath, "*.vhd", SearchOption.AllDirectories))
 				{
-					File.Delete(vhdPath);
+					try
+					{
+						File.Delete(vhdPath);
+					}
+					catch (Exception ex)
+					{
+						Debug.WriteLine($"Warning: Could not delete temporary VHD file '{vhdPath}': {ex.Message}");
+					}
 				}
-				catch (Exception ex)
-				{
-					Debug.WriteLine($"Warning: Could not delete temporary VHD file '{vhdPath}': {ex.Message}");
-				}
-			}
 
-			// Delete Snapshots directory if it exists
-			string snapshotsPath = Path.Combine(exportRootPath, "Snapshots");
-			if (Directory.Exists(snapshotsPath))
-			{
-				try
+				// Delete Snapshots directory if it exists
+				string snapshotsPath = Path.Combine(exportRootPath, "Snapshots");
+				if (Directory.Exists(snapshotsPath))
 				{
-					Directory.Delete(snapshotsPath, recursive: true);
+					try
+					{
+						Directory.Delete(snapshotsPath, recursive: true);
+					}
+					catch (Exception ex)
+					{
+						Debug.WriteLine($"Warning: Could not delete Snapshots directory '{snapshotsPath}': {ex.Message}");
+					}
 				}
-				catch (Exception ex)
-				{
-					Debug.WriteLine($"Warning: Could not delete Snapshots directory '{snapshotsPath}': {ex.Message}");
-				}
-			}
 
-			// Delete Virtual Machines\Snapshots directory if it exists (nested structure from export)
-			string vmSnapshotsPath = Path.Combine(exportRootPath, "Virtual Machines", "Snapshots");
-			if (Directory.Exists(vmSnapshotsPath))
-			{
-				try
+				// Delete Virtual Machines\Snapshots directory if it exists (nested structure from export)
+				string vmSnapshotsPath = Path.Combine(exportRootPath, "Virtual Machines", "Snapshots");
+				if (Directory.Exists(vmSnapshotsPath))
 				{
-					Directory.Delete(vmSnapshotsPath, recursive: true);
+					try
+					{
+						Directory.Delete(vmSnapshotsPath, recursive: true);
+					}
+					catch (Exception ex)
+					{
+						Debug.WriteLine($"Warning: Could not delete Virtual Machines\\Snapshots directory '{vmSnapshotsPath}': {ex.Message}");
+					}
 				}
-				catch (Exception ex)
-				{
-					Debug.WriteLine($"Warning: Could not delete Virtual Machines\\Snapshots directory '{vmSnapshotsPath}': {ex.Message}");
-				}
+
+				// NOTE: We do NOT delete the Virtual Hard Disks directory because it now contains
+				// the final merged VHDX that Import-VM needs to reference from the .vmcx configuration
 			}
-		}
 
 		private static void CreateCloneHyperVVirtualMachine(string vmName, string vmStoragePath, string virtualDiskPath)
 		{

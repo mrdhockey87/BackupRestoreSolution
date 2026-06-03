@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.56";
+        private static readonly string version_fallback_number = "6.3.5.58";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,18 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.58 Fixed Hyper-V system clone VHDX location by merging the virtual disk into the "Virtual Hard Disks"
+ *                  subdirectory where Export-VM originally places exported VHDXs. This ensures Import-VM can find the
+ *                  VHDX when reading the .vmcx configuration file, preventing "file already exists" errors and
+ *                  "path not found" failures. Removed VhdDestinationPath from Import-VM since the VHDX is now in the
+ *                  expected standard export location. CleanupHyperVExportArtifacts no longer deletes the Virtual Hard
+ *                  Disks directory, preserving the final merged VHDX for successful VM import and verification. mdail 6/3/2026
+ * Version 6.3.5.57 Fixed Hyper-V system clone Import-VM failure when VHDX already exists in default storage location
+ *                  by adding VhdDestinationPath and VirtualMachinePath parameters to keep the cloned VHDX in the
+ *                  clone folder instead of copying to Hyper-V's default location. This prevents "file already exists"
+ *                  errors when creating multiple clones or when files from previous clones remain. Also fixed clone
+ *                  verification to correctly validate the directory structure and VHDX files for CloneHyperVSystem jobs
+ *                  instead of looking for non-existent .ssb archive files. mdail 6/3/2026
  * Version 6.3.5.56 Fixed Hyper-V system clone to clean up temporary export artifacts after disk consolidation.
  *                  After merging the differencing disk chain (AVHDX) into the final consolidated VHDX, the clone
  *                  process now deletes all temporary AVHDX files, old VHDX files, and Snapshots directories from
