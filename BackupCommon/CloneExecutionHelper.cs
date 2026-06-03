@@ -290,6 +290,9 @@ namespace SecureServerBackupCommon
 
 			progressCallback(60, "Merging virtual disk...");
 			CopyAndMergeHyperVVirtualDisk(sourceDiskPath, clonePaths.VirtualDiskPath);
+
+			progressCallback(70, "Cleaning up temporary export files...");
+			CleanupHyperVExportArtifacts(clonePaths.RootDirectory, clonePaths.VirtualDiskPath);
 		}
 
 		private static void PrepareCloneHyperVExportDirectory(string exportRootPath)
@@ -441,19 +444,112 @@ namespace SecureServerBackupCommon
 
 			string escapedSourcePath = sourceDiskPath.Replace("'", "''");
 			string escapedTargetPath = targetDiskPath.Replace("'", "''");
+
+			// Build the merge chain: if source is .avhdx, merge through parent chain to final target
 			string script =
 				"$ErrorActionPreference='Stop'; " +
 				$"$sourcePath = '{escapedSourcePath}'; " +
 				$"$targetPath = '{escapedTargetPath}'; " +
 				"$currentPath = $sourcePath; " +
+				"$mergeChain = @(); " +
+				// Build the chain of parent disks if source is differencing
 				"while ($currentPath.ToLowerInvariant().EndsWith('.avhdx')) { " +
-				"  $mergedPath = [System.IO.Path]::ChangeExtension($currentPath, '.merged.vhdx'); " +
-				"  Merge-VHD -Path $currentPath -DestinationPath $mergedPath -Force -ErrorAction Stop | Out-Null; " +
-				"  $currentPath = $mergedPath; " +
+				"  $mergeChain += $currentPath; " +
+				"  $vhd = Get-VHD -Path $currentPath -ErrorAction Stop; " +
+				"  if ($vhd.ParentPath) { $currentPath = $vhd.ParentPath; } else { break; } " +
 				"} " +
-				"Copy-Item -Path $currentPath -Destination $targetPath -Force -ErrorAction Stop";
+				// Merge from deepest parent to target in one step
+				"if ($mergeChain.Count -gt 0) { " +
+				"  Merge-VHD -Path $mergeChain[0] -DestinationPath $targetPath -Force -ErrorAction Stop | Out-Null; " +
+				"} else { " +
+				"  Copy-Item -Path $currentPath -Destination $targetPath -Force -ErrorAction Stop; " +
+				"}";
 
 			RunPowerShellScript(script);
+		}
+
+		private static void CleanupHyperVExportArtifacts(string exportRootPath, string preservedVhdxPath)
+		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(exportRootPath);
+			ArgumentException.ThrowIfNullOrWhiteSpace(preservedVhdxPath);
+
+			if (!Directory.Exists(exportRootPath))
+			{
+				return;
+			}
+
+			string normalizedPreservedPath = Path.GetFullPath(preservedVhdxPath);
+
+			// Delete all AVHDX differencing disks (snapshots)
+			foreach (string avhdxPath in Directory.EnumerateFiles(exportRootPath, "*.avhdx", SearchOption.AllDirectories))
+			{
+				try
+				{
+					File.Delete(avhdxPath);
+				}
+				catch (Exception ex)
+				{
+					Debug.WriteLine($"Warning: Could not delete temporary AVHDX file '{avhdxPath}': {ex.Message}");
+				}
+			}
+
+			// Delete all VHDX files EXCEPT the final merged one
+			foreach (string vhdxPath in Directory.EnumerateFiles(exportRootPath, "*.vhdx", SearchOption.AllDirectories))
+			{
+				string normalizedVhdxPath = Path.GetFullPath(vhdxPath);
+				if (!string.Equals(normalizedVhdxPath, normalizedPreservedPath, StringComparison.OrdinalIgnoreCase))
+				{
+					try
+					{
+						File.Delete(vhdxPath);
+					}
+					catch (Exception ex)
+					{
+						Debug.WriteLine($"Warning: Could not delete temporary VHDX file '{vhdxPath}': {ex.Message}");
+					}
+				}
+			}
+
+			// Delete VHD files (if any legacy format exists)
+			foreach (string vhdPath in Directory.EnumerateFiles(exportRootPath, "*.vhd", SearchOption.AllDirectories))
+			{
+				try
+				{
+					File.Delete(vhdPath);
+				}
+				catch (Exception ex)
+				{
+					Debug.WriteLine($"Warning: Could not delete temporary VHD file '{vhdPath}': {ex.Message}");
+				}
+			}
+
+			// Delete Snapshots directory if it exists
+			string snapshotsPath = Path.Combine(exportRootPath, "Snapshots");
+			if (Directory.Exists(snapshotsPath))
+			{
+				try
+				{
+					Directory.Delete(snapshotsPath, recursive: true);
+				}
+				catch (Exception ex)
+				{
+					Debug.WriteLine($"Warning: Could not delete Snapshots directory '{snapshotsPath}': {ex.Message}");
+				}
+			}
+
+			// Delete Virtual Machines\Snapshots directory if it exists (nested structure from export)
+			string vmSnapshotsPath = Path.Combine(exportRootPath, "Virtual Machines", "Snapshots");
+			if (Directory.Exists(vmSnapshotsPath))
+			{
+				try
+				{
+					Directory.Delete(vmSnapshotsPath, recursive: true);
+				}
+				catch (Exception ex)
+				{
+					Debug.WriteLine($"Warning: Could not delete Virtual Machines\\Snapshots directory '{vmSnapshotsPath}': {ex.Message}");
+				}
+			}
 		}
 
 		private static void CreateCloneHyperVVirtualMachine(string vmName, string vmStoragePath, string virtualDiskPath)

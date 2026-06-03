@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.54";
+        private static readonly string version_fallback_number = "6.3.5.56";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,7 +69,20 @@ namespace SecureServerBackup
 
 /*
  *  
- * Version 6.3.5.54 Fixed user-cancelled backups to abort cleanly without any retry. When a user aborts a backup, 
+ * Version 6.3.5.56 Fixed Hyper-V system clone to clean up temporary export artifacts after disk consolidation.
+ *                  After merging the differencing disk chain (AVHDX) into the final consolidated VHDX, the clone
+ *                  process now deletes all temporary AVHDX files, old VHDX files, and Snapshots directories from
+ *                  the export folder. The Import-VM process uses -Copy -GenerateNewId to create a fresh VM
+ *                  configuration that references only the merged VHDX, so the old differencing chain and snapshot
+ *                  metadata are no longer needed. This preserves a true backup of the original virtual system while
+ *                  keeping only the essential consolidated disk file. mdail 6/3/2026
+ * Version 6.3.5.55 Fixed Hyper-V system clone disk consolidation to merge the differencing disk chain
+ *                  (AVHDX/VHDX parent chain) directly to the final target VHDX path in the clone root
+ *                  directory instead of creating intermediate .merged.vhdx files in the source export
+ *                  directory. The PowerShell merge script now uses Get-VHD to walk the parent chain and
+ *                  Merge-VHD to consolidate directly to the clone destination, ensuring the cloned VM
+ *                  configuration references the correct merged disk location. mdail 6/3/2026
+ * Version 6.3.5.54 Fixed user-cancelled backups to abort cleanly without any retry. When a user aborts a backup,
  *                  the job now resets to not-running state and leaves the next scheduled run unchanged. Cancelled 
  *                  jobs no longer enter any retry path or reschedule logic - they simply abort and wait for the 
  *                  next regular scheduled time. mdail 6/3/2026
