@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.53";
+        private static readonly string version_fallback_number = "6.3.5.54";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,10 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.54 Fixed user-cancelled backups to abort cleanly without any retry. When a user aborts a backup, 
+ *                  the job now resets to not-running state and leaves the next scheduled run unchanged. Cancelled 
+ *                  jobs no longer enter any retry path or reschedule logic - they simply abort and wait for the 
+ *                  next regular scheduled time. mdail 6/3/2026
  * Version 6.3.5.53 Fixed cancelled backup jobs to not retry immediately. When a user aborts a backup, the job now 
  *                  returns to the normal schedule instead of entering the failure retry path. The 15-minute retry 
  *                  delay is preserved for actual backup failures. Cancellation state is now tracked separately from 

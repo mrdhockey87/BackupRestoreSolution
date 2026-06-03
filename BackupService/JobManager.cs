@@ -102,14 +102,15 @@ namespace SecureServerBackupService
 
             if (wasCancelled)
             {
-                // User cancelled the backup - don't retry, just reset to normal schedule
+                // User cancelled the backup - just reset state, don't schedule anything
                 currentJob.ConsecutiveFailures = 0; // Reset failure counter
-                CalculateNextRunTime(currentJob, isInitialCalculation: false);
+                // Don't recalculate next run time - leave it as-is so the normal schedule continues
+                // The job will run again at its next regularly scheduled time
 
                 BackupLogger.LogWarning(
                     jobName: currentJob.Name,
                     message: "Backup cancelled by user.",
-                    details: $"Next scheduled backup: {currentJob.NextScheduledRun:yyyy-MM-dd HH:mm:ss}"
+                    details: $"Job aborted. Next scheduled backup: {currentJob.NextScheduledRun:yyyy-MM-dd HH:mm:ss}"
                 );
 
                 SaveJobs();
