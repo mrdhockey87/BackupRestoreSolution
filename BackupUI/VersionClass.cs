@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.58";
+        private static readonly string version_fallback_number = "6.3.5.65";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,44 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.65 Try 2 at fixing the scrollbar styling for the whole app from the online claude, 
+ *                  worked this time and is the way I want it. mdail 6/4/2026
+ * Version 6.3.5.64 Used the online claude to properly fix the scrollbar styling for the backup jobs list on the
+ *                  main page. The scrollbar track is now MediumTurquoise and the thumb is ButtonBackground (dark cyan),
+ *                  providing better contrast and visibility while matching the application's turquoise theme as the 
+ *                  copilot fix did not change anything. mdail 6/4/2026
+ * Version 6.3.5.63 Fixed main page backup jobs list scrollbar styling so the thumb/slider is now darker than
+ *                  the scrollbar track background, improving visibility and matching the application's turquoise
+ *                  theme. Changed scrollbar track from DarkTurquoise to MediumTurquoise and thumb from
+ *                  PrimaryTurquoise to ButtonBackground (dark cyan) for better contrast. mdail 6/4/2026
+ * Version 6.3.5.62 Fixed Hyper-V system clone to create a fresh VM from scratch instead of importing the exported
+ *                  VM configuration that references the AVHDX snapshot chain. The clone process now imports the
+ *                  exported .vmcx temporarily to read the source VM settings (generation, memory, CPU count, network
+ *                  switch), removes that temporary import, and then creates a completely new VM using New-VM with
+ *                  the merged VHDX. This prevents Hyper-V from looking for missing AVHDX files when starting the
+ *                  cloned VM and ensures the clone uses only the consolidated standalone VHDX. mdail 6/4/2026
+ * Version 6.3.5.61 Fixed Hyper-V system clone VM import by restructuring the clone flow to defer cleanup until
+ *                  after Import-VM completes. Previously, CleanupHyperVExportArtifacts removed temporary AVHDX
+ *                  and VHDX files before Import-VM, causing "unable to import virtual machine due to configuration
+ *                  errors" because the .vmcx references those files. The merged VHDX is now placed in a separate
+ *                  MergedDisk folder outside the export tree, Import-VM -Copy imports from the intact export
+ *                  structure to Hyper-V's default location, the VM's disk is replaced with the merged VHDX, and
+ *                  then the temporary export subdirectory is deleted. This ensures Import-VM sees a valid export
+ *                  structure while preserving the final consolidated disk for the clone. mdail 6/4/2026
+ * Version 6.3.5.60 Fixed Hyper-V system clone Import-VM failure when AVHDX files already exist in Hyper-V's default
+ *                  storage location (C:\ProgramData\Microsoft\Windows\Virtual Hard Disks) by adding explicit
+ *                  -VirtualMachinePath and -VhdDestinationPath parameters to Import-VM -Copy. These parameters direct
+ *                  Import-VM to place all copied VM files (configuration and virtual disks) in the clone directory
+ *                  instead of the default system paths, preventing "file already exists" errors when creating multiple
+ *                  clones or when files from previous clone attempts remain in the default location. The VM and disk
+ *                  folders are derived from the .vmcx and final VHDX paths respectively. mdail 6/4/2026
+ * Version 6.3.5.59 Fixed Hyper-V system clone VHDX location by placing the merged virtual disk in the export
+ *                  subdirectory's "Virtual Hard Disks" folder (e.g., BackupName\ExportedVmName\Virtual Hard Disks\vm.vhdx)
+ *                  instead of a separate root-level Virtual Hard Disks directory. Export-VM creates a subdirectory
+ *                  structure with the VM name, and the .vmcx configuration file references VHDXs relative to that export
+ *                  subdirectory. The merge now resolves the export subdirectory from the source disk path and places the
+ *                  final VHDX where Import-VM expects it, preventing "file already exists" errors and path-not-found failures.
+ *                  CreateCloneHyperVVirtualDiskFromVm now returns the actual VHDX path for VM creation and SetupCl scheduling. mdail 6/4/2026
  * Version 6.3.5.58 Fixed Hyper-V system clone VHDX location by merging the virtual disk into the "Virtual Hard Disks"
  *                  subdirectory where Export-VM originally places exported VHDXs. This ensures Import-VM can find the
  *                  VHDX when reading the .vmcx configuration file, preventing "file already exists" errors and
