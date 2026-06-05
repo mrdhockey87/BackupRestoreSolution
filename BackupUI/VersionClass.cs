@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.65";
+        private static readonly string version_fallback_number = "6.3.5.66";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,10 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.66 Changed Hyper-V System Clone for VM sources to keep the exported virtual hard disk chain
+ *                  as-is instead of consolidating it into a new VHDX. The clone now imports the exported VM
+ *                  configuration with a new ID while preserving the existing rename flow, SetupCl SID-change
+ *                  scheduling, and MAC address regeneration behavior. mdail 6/5/2026
  * Version 6.3.5.65 Try 2 at fixing the scrollbar styling for the whole app from the online claude, 
  *                  worked this time and is the way I want it. mdail 6/4/2026
  * Version 6.3.5.64 Used the online claude to properly fix the scrollbar styling for the backup jobs list on the

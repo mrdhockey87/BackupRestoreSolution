@@ -124,20 +124,21 @@ namespace SecureServerBackupCommon
 		public static void ExecuteCloneHyperVSystemJob(BackupJob job, BackupEngineInterop.ProgressCallback progressCallback)
 		{
 			CloneHyperVPaths clonePaths = CreateCloneHyperVPaths(job);
-			string actualVhdxPath;
-			string? exportSubdirectory = null;
+			string actualVirtualDiskPath;
+			bool cloneFromExportedVm = false;
 
 			if (job.HyperVMachines.Count > 0)
 			{
 				string sourceVmName = job.HyperVMachines[0];
 				progressCallback(5, $"Exporting Hyper-V VM '{sourceVmName}' for clone...");
-				(actualVhdxPath, exportSubdirectory) = CreateCloneHyperVVirtualDiskFromVm(sourceVmName, clonePaths, job.RenameHyperVSystem, progressCallback);
+				actualVirtualDiskPath = CreateCloneHyperVVirtualDiskFromVm(sourceVmName, clonePaths, job.RenameHyperVSystem, progressCallback);
+				cloneFromExportedVm = true;
 			}
 			else if (job.Target == BackupTarget.Disk && job.SourcePaths.Count > 0)
 			{
 				progressCallback(5, $"Cloning selected disk into {Path.GetFileName(clonePaths.VirtualDiskPath)}...");
 				CreateCloneHyperVVirtualDiskFromDisk(job, clonePaths.VirtualDiskPath, progressCallback);
-				actualVhdxPath = clonePaths.VirtualDiskPath;
+				actualVirtualDiskPath = clonePaths.VirtualDiskPath;
 			}
 			else
 			{
@@ -154,25 +155,18 @@ namespace SecureServerBackupCommon
 			if (shouldScheduleSetupCl)
 			{
 				progressCallback(75, $"Scheduling SetupCl for '{clonePaths.VmName}'...");
-				ScheduleSetupClPendingRequest(actualVhdxPath);
+				ScheduleSetupClPendingRequest(actualVirtualDiskPath);
 			}
 
-			progressCallback(80, $"Importing Hyper-V VM '{clonePaths.VmName}'...");
-			CreateCloneHyperVVirtualMachine(clonePaths.VmName, clonePaths.HyperVSystemDirectory, actualVhdxPath);
-
-			// Clean up the temporary export artifacts after successful import
-			if (!string.IsNullOrEmpty(exportSubdirectory) && Directory.Exists(exportSubdirectory))
+			if (cloneFromExportedVm)
 			{
-				progressCallback(93, "Cleaning up temporary export files...");
-				try
-				{
-					// The merged VHDX is outside the export tree, so we can safely delete the entire export subdirectory
-					Directory.Delete(exportSubdirectory, recursive: true);
-				}
-				catch (Exception ex)
-				{
-					Debug.WriteLine($"Warning: Could not fully clean up export directory '{exportSubdirectory}': {ex.Message}");
-				}
+				progressCallback(80, $"Importing Hyper-V VM '{clonePaths.VmName}'...");
+				CreateCloneHyperVVirtualMachineFromExport(clonePaths.VmName, clonePaths.RootDirectory);
+			}
+			else
+			{
+				progressCallback(80, $"Creating Hyper-V VM '{clonePaths.VmName}'...");
+				CreateCloneHyperVVirtualMachine(clonePaths.VmName, clonePaths.HyperVSystemDirectory, actualVirtualDiskPath);
 			}
 
 			progressCallback(95, $"Regenerating MAC address for '{clonePaths.VmName}'...");
@@ -269,7 +263,7 @@ namespace SecureServerBackupCommon
 			}
 		}
 
-		private static (string mergedVhdxPath, string exportSubdirectory) CreateCloneHyperVVirtualDiskFromVm(string sourceVmName, CloneHyperVPaths clonePaths, bool renameExportedArtifacts, BackupEngineInterop.ProgressCallback progressCallback)
+		private static string CreateCloneHyperVVirtualDiskFromVm(string sourceVmName, CloneHyperVPaths clonePaths, bool renameExportedArtifacts, BackupEngineInterop.ProgressCallback progressCallback)
 		{
 			ArgumentException.ThrowIfNullOrWhiteSpace(sourceVmName);
 			ArgumentNullException.ThrowIfNull(clonePaths);
@@ -301,32 +295,16 @@ namespace SecureServerBackupCommon
 				RenameCloneHyperVExportArtifacts(clonePaths.RootDirectory, sourceVmName, clonePaths.VmName);
 			}
 
-					progressCallback(50, "Finding virtual disk...");
-					string sourceDiskPath = FindPrimaryHyperVVirtualDisk(clonePaths.RootDirectory);
-					if (string.IsNullOrWhiteSpace(sourceDiskPath))
-					{
-						throw new InvalidOperationException("The exported Hyper-V VM did not contain a source virtual disk.");
-					}
+			progressCallback(50, "Finding virtual disk...");
+			string sourceDiskPath = FindPrimaryHyperVVirtualDisk(clonePaths.RootDirectory);
+			if (string.IsNullOrWhiteSpace(sourceDiskPath))
+			{
+				throw new InvalidOperationException("The exported Hyper-V VM did not contain a source virtual disk.");
+			}
 
-					// Find the export subdirectory (where Export-VM placed the VM configuration)
-					// The structure is: RootDirectory\ExportedVmName\Virtual Hard Disks\disk.vhdx
-					string exportSubdirectory = Path.GetDirectoryName(Path.GetDirectoryName(sourceDiskPath))
-						?? throw new InvalidOperationException("Could not determine export subdirectory structure.");
-
-					// Place the merged VHDX in a separate location outside the export tree
-					// This avoids conflicts during Import-VM -Copy
-					string mergedVhdxDirectory = Path.Combine(clonePaths.RootDirectory, "MergedDisk");
-					Directory.CreateDirectory(mergedVhdxDirectory);
-					string targetDiskPath = Path.Combine(mergedVhdxDirectory, $"{clonePaths.VmName}.vhdx");
-
-					progressCallback(60, "Merging virtual disk...");
-					CopyAndMergeHyperVVirtualDisk(sourceDiskPath, targetDiskPath);
-
-					// Don't clean up yet - Import-VM needs the original export structure intact
-					// We'll clean up after the VM is imported and the disk is replaced
-
-					return (targetDiskPath, exportSubdirectory);
-				}
+			progressCallback(60, "Keeping exported virtual disk chain unchanged...");
+			return sourceDiskPath;
+		}
 
 		private static void PrepareCloneHyperVExportDirectory(string exportRootPath)
 		{
@@ -594,6 +572,12 @@ namespace SecureServerBackupCommon
 			RunPowerShellScript(script);
 		}
 
+		private static void CreateCloneHyperVVirtualMachineFromExport(string vmName, string exportRootPath)
+		{
+			string script = BuildImportVirtualMachineFromExportScript(vmName, exportRootPath);
+			RunPowerShellScript(script);
+		}
+
 		private static string BuildCreateVirtualMachineScript(string vmName, string vmStoragePath, string virtualDiskPath)
 		{
 			string escapedVmName = vmName.Replace("'", "''");
@@ -623,6 +607,22 @@ namespace SecureServerBackupCommon
 				"$newVm | Set-VMProcessor -Count $processorCount -ErrorAction Stop; " +
 				// Connect to the same virtual switch if one was found
 				"if ($switchName) { $newVm | Get-VMNetworkAdapter | Connect-VMNetworkAdapter -SwitchName $switchName -ErrorAction SilentlyContinue }";
+		}
+
+		private static string BuildImportVirtualMachineFromExportScript(string vmName, string exportRootPath)
+		{
+			string escapedVmName = vmName.Replace("'", "''");
+			string escapedExportRootPath = exportRootPath.Replace("'", "''");
+
+			return
+				"$ErrorActionPreference='Stop'; " +
+				"Import-Module Hyper-V -ErrorAction Stop; " +
+				$"$vmName = '{escapedVmName}'; " +
+				$"$exportRootPath = '{escapedExportRootPath}'; " +
+				"$vmcxPath = Get-ChildItem -Path $exportRootPath -Filter '*.vmcx' -Recurse -ErrorAction Stop | Select-Object -First 1 -ExpandProperty FullName; " +
+				"if (-not $vmcxPath) { throw 'No .vmcx configuration file found in clone directory'; }; " +
+				"$importedVm = Import-VM -Path $vmcxPath -GenerateNewId -ErrorAction Stop; " +
+				"if ($importedVm.Name -ne $vmName) { Rename-VM -VM $importedVm -NewName $vmName -ErrorAction Stop | Out-Null; }";
 		}
 
 		private static void ScheduleSetupClPendingRequest(string virtualDiskPath)
