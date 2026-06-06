@@ -171,10 +171,10 @@ namespace SecureServerBackupCommon
 
 			progressCallback(95, $"Regenerating MAC address for '{clonePaths.VmName}'...");
 			RegenerateHyperVVirtualMachineMacAddress(clonePaths.VmName);
+			progressCallback(100, $"Clone Hyper-V System completed: {clonePaths.VmName}");
 		}
 
 		// Helper methods
-
 		private static CloneHyperVPaths CreateCloneHyperVPaths(BackupJob job)
 		{
 			ArgumentNullException.ThrowIfNull(job);
@@ -616,13 +616,16 @@ namespace SecureServerBackupCommon
 
 			return
 				"$ErrorActionPreference='Stop'; " +
+				"$ProgressPreference='SilentlyContinue'; $VerbosePreference='SilentlyContinue'; $WarningPreference='SilentlyContinue'; " +
 				"Import-Module Hyper-V -ErrorAction Stop; " +
 				$"$vmName = '{escapedVmName}'; " +
 				$"$exportRootPath = '{escapedExportRootPath}'; " +
 				"$vmcxPath = Get-ChildItem -Path $exportRootPath -Filter '*.vmcx' -Recurse -ErrorAction Stop | Select-Object -First 1 -ExpandProperty FullName; " +
 				"if (-not $vmcxPath) { throw 'No .vmcx configuration file found in clone directory'; }; " +
 				"$importedVm = Import-VM -Path $vmcxPath -GenerateNewId -ErrorAction Stop; " +
-				"if ($importedVm.Name -ne $vmName) { Rename-VM -VM $importedVm -NewName $vmName -ErrorAction Stop | Out-Null; }";
+				"if ($importedVm.Name -ne $vmName) { Rename-VM -VM $importedVm -NewName $vmName -ErrorAction Stop | Out-Null; } " +
+				"Get-VM -Name $vmName -ErrorAction Stop | Out-Null; " +
+				"Write-Output 'IMPORT_COMPLETE'";
 		}
 
 		private static void ScheduleSetupClPendingRequest(string virtualDiskPath)
@@ -677,21 +680,26 @@ namespace SecureServerBackupCommon
 
 		private static string RunPowerShellScript(string script)
 		{
-			var process = Process.Start(new ProcessStartInfo
+			using var process = Process.Start(new ProcessStartInfo
 			{
 				FileName = "powershell.exe",
-				Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+				Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"{script}\"",
 				UseShellExecute = false,
 				RedirectStandardError = true,
 				RedirectStandardOutput = true,
 				CreateNoWindow = true
-			});
+			}) ?? throw new InvalidOperationException("Failed to start the PowerShell process.");
 
-			string output = process?.StandardOutput.ReadToEnd() ?? string.Empty;
-			string errors = process?.StandardError.ReadToEnd() ?? string.Empty;
-			process?.WaitForExit();
+			Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+			Task<string> errorTask = process.StandardError.ReadToEndAsync();
 
-			if (process == null || process.ExitCode != 0)
+			process.WaitForExit();
+			Task.WaitAll(outputTask, errorTask);
+
+			string output = outputTask.Result;
+			string errors = errorTask.Result;
+
+			if (process.ExitCode != 0)
 			{
 				throw new InvalidOperationException($"PowerShell script failed. {errors}".Trim());
 			}

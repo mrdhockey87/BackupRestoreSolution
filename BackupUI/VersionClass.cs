@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.66";
+        private static readonly string version_fallback_number = "6.3.5.67";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,10 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.67 Fixed Hyper-V System Clone progress hanging at 80% after import. The clone helper now
+ *                  reports an explicit 100% completion update after MAC regeneration, and the PowerShell
+ *                  runner drains stdout and stderr concurrently in non-interactive mode so Import-VM
+ *                  completion cannot stall the UI progress window or completion logging. mdail 6/6/2026
  * Version 6.3.5.66 Changed Hyper-V System Clone for VM sources to keep the exported virtual hard disk chain
  *                  as-is instead of consolidating it into a new VHDX. The clone now imports the exported VM
  *                  configuration with a new ID while preserving the existing rename flow, SetupCl SID-change
