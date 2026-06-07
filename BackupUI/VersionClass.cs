@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.67";
+        private static readonly string version_fallback_number = "6.3.5.68";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,10 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.68 Fixed Hyper-V System Clone import failure after switching back to preserving the exported
+ *                  disk chain. Import-VM now uses the required -Copy parameter set with explicit clone-local
+ *                  VirtualMachine, VirtualHardDisks, Snapshots, and SmartPaging destination folders while
+ *                  still generating a new VM ID and preserving rename, SetupCl, and MAC reset behavior. mdail 6/7/2026
  * Version 6.3.5.67 Fixed Hyper-V System Clone progress hanging at 80% after import. The clone helper now
  *                  reports an explicit 100% completion update after MAC regeneration, and the PowerShell
  *                  runner drains stdout and stderr concurrently in non-interactive mode so Import-VM

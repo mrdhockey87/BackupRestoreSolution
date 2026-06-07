@@ -620,9 +620,18 @@ namespace SecureServerBackupCommon
 				"Import-Module Hyper-V -ErrorAction Stop; " +
 				$"$vmName = '{escapedVmName}'; " +
 				$"$exportRootPath = '{escapedExportRootPath}'; " +
+				"$copyRootPath = Join-Path $exportRootPath '_ImportedVm'; " +
+				"$copyVmPath = Join-Path $copyRootPath 'VirtualMachine'; " +
+				"$copyVhdPath = Join-Path $copyRootPath 'VirtualHardDisks'; " +
+				"$copySnapshotPath = Join-Path $copyRootPath 'Snapshots'; " +
+				"$copyPagingPath = Join-Path $copyRootPath 'SmartPaging'; " +
+				"New-Item -ItemType Directory -Path $copyVmPath -Force | Out-Null; " +
+				"New-Item -ItemType Directory -Path $copyVhdPath -Force | Out-Null; " +
+				"New-Item -ItemType Directory -Path $copySnapshotPath -Force | Out-Null; " +
+				"New-Item -ItemType Directory -Path $copyPagingPath -Force | Out-Null; " +
 				"$vmcxPath = Get-ChildItem -Path $exportRootPath -Filter '*.vmcx' -Recurse -ErrorAction Stop | Select-Object -First 1 -ExpandProperty FullName; " +
 				"if (-not $vmcxPath) { throw 'No .vmcx configuration file found in clone directory'; }; " +
-				"$importedVm = Import-VM -Path $vmcxPath -GenerateNewId -ErrorAction Stop; " +
+				"$importedVm = Import-VM -Path $vmcxPath -Copy -GenerateNewId -VirtualMachinePath $copyVmPath -VhdDestinationPath $copyVhdPath -SnapshotFilePath $copySnapshotPath -SmartPagingFilePath $copyPagingPath -ErrorAction Stop; " +
 				"if ($importedVm.Name -ne $vmName) { Rename-VM -VM $importedVm -NewName $vmName -ErrorAction Stop | Out-Null; } " +
 				"Get-VM -Name $vmName -ErrorAction Stop | Out-Null; " +
 				"Write-Output 'IMPORT_COMPLETE'";
