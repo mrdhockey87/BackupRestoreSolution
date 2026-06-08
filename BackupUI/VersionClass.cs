@@ -69,6 +69,9 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.70 Renamed some methods in the backupwindowsnew that had WIM references in there name, changed
+ *                  them to SSB since that is the new name of the product and it hides the WIM file format 
+ *                  from the user and hackers. mdail 6/8/2026
  * Version 6.3.5.69 Changed Hyper-V System Clone so SetupCl scheduling and MAC address regeneration run only
  *                  when Rename Hyper-V System is selected. Also added an immediate 1% progress update at clone
  *                  startup so the UI no longer appears stuck at 0% before the first export or disk-clone phase

@@ -1938,13 +1938,13 @@ namespace SecureServerBackup.Windows
                 System.Diagnostics.Debug.WriteLine($"=== Loading volumes for Disk {diskNum}: {diskItem.FullPath} ===");
                 
                 // Try method 1: WMI Associators (most accurate but sometimes fails)
-                volumesFound = TryLoadVolumesViaWMI(diskItem, diskNum);
+                volumesFound = TryLoadVolumesViaSSB(diskItem, diskNum);
                 
                 // Try method 2: Alternative WMI query if method 1 failed
                 if (!volumesFound)
                 {
                     System.Diagnostics.Debug.WriteLine($"Method 1 failed, trying alternative WMI query for disk {diskNum}");
-                    volumesFound = TryLoadVolumesViaAlternativeWMI(diskItem, diskNum);
+                    volumesFound = TryLoadVolumesViaAlternativeSSB(diskItem, diskNum);
                 }
             }
             catch (Exception ex)
@@ -1960,7 +1960,7 @@ namespace SecureServerBackup.Windows
             }
         }
 
-        private bool TryLoadVolumesViaWMI(DriveTreeItem diskItem, int diskNum)
+        private bool TryLoadVolumesViaSSB(DriveTreeItem diskItem, int diskNum)
         {
             var volumesFound = false;
             
@@ -2002,13 +2002,13 @@ namespace SecureServerBackup.Windows
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"TryLoadVolumesViaWMI failed: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"TryLoadVolumesViaSSB failed: {ex.Message}");
             }
             
             return volumesFound;
         }
 
-        private bool TryLoadVolumesViaAlternativeWMI(DriveTreeItem diskItem, int diskNum)
+        private bool TryLoadVolumesViaAlternativeSSB(DriveTreeItem diskItem, int diskNum)
         {
             var volumesFound = false;
             
@@ -2125,7 +2125,7 @@ namespace SecureServerBackup.Windows
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"TryLoadVolumesViaAlternativeWMI failed: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"TryLoadVolumesViaAlternativeSSB failed: {ex.Message}");
             }
             
             return volumesFound;
