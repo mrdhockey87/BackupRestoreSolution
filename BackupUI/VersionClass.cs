@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.68";
+        private static readonly string version_fallback_number = "6.3.5.69";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,10 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.69 Changed Hyper-V System Clone so SetupCl scheduling and MAC address regeneration run only
+ *                  when Rename Hyper-V System is selected. Also added an immediate 1% progress update at clone
+ *                  startup so the UI no longer appears stuck at 0% before the first export or disk-clone phase
+ *                  reports progress. mdail 6/7/2026
  * Version 6.3.5.68 Fixed Hyper-V System Clone import failure after switching back to preserving the exported
  *                  disk chain. Import-VM now uses the required -Copy parameter set with explicit clone-local
  *                  VirtualMachine, VirtualHardDisks, Snapshots, and SmartPaging destination folders while

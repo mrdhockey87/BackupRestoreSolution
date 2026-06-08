@@ -28,3 +28,6 @@
   - Both must warn that the target will be formatted and all data lost.
   - Restore progress should show a progress bar plus the current file/folder name being restored.
 - When reporting a restore-flow fix, verify it actually reaches the expected UI step and execution sequence instead of assuming a metadata-path change solved the issue.
+
+## Hyper-V System Clone Flow
+- In this repo's Hyper-V System Clone flow, SetupCl scheduling and MAC reset should run only when the Rename Hyper-V System option is selected.

@@ -126,6 +126,9 @@ namespace SecureServerBackupCommon
 			CloneHyperVPaths clonePaths = CreateCloneHyperVPaths(job);
 			string actualVirtualDiskPath;
 			bool cloneFromExportedVm = false;
+			bool renameRequested = job.RenameHyperVSystem && !string.IsNullOrWhiteSpace(job.RenameHyperVSystemName);
+
+			progressCallback(1, $"Starting Hyper-V System Clone '{job.Name}'...");
 
 			if (job.HyperVMachines.Count > 0)
 			{
@@ -145,12 +148,7 @@ namespace SecureServerBackupCommon
 				throw new InvalidOperationException("Clone Hyper-V System requires either a selected Hyper-V VM or a selected disk.");
 			}
 
-			bool shouldScheduleSetupCl = HyperVBackupTreeHelper.ShouldScheduleSetupCl(
-				job.RenameHyperVSystem,
-				job.RenameHyperVSystemName,
-				job.Target,
-				job.SourcePaths,
-				GetCurrentSystemDiskIndexes());
+			bool shouldScheduleSetupCl = renameRequested;
 
 			if (shouldScheduleSetupCl)
 			{
@@ -169,8 +167,11 @@ namespace SecureServerBackupCommon
 				CreateCloneHyperVVirtualMachine(clonePaths.VmName, clonePaths.HyperVSystemDirectory, actualVirtualDiskPath);
 			}
 
-			progressCallback(95, $"Regenerating MAC address for '{clonePaths.VmName}'...");
-			RegenerateHyperVVirtualMachineMacAddress(clonePaths.VmName);
+			if (renameRequested)
+			{
+				progressCallback(95, $"Regenerating MAC address for '{clonePaths.VmName}'...");
+				RegenerateHyperVVirtualMachineMacAddress(clonePaths.VmName);
+			}
 			progressCallback(100, $"Clone Hyper-V System completed: {clonePaths.VmName}");
 		}
 

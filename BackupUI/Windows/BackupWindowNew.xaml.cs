@@ -4030,6 +4030,9 @@ namespace SecureServerBackup.Windows
         public static void ExecuteCloneHyperVSystemJob(BackupJob job, BackupEngineInterop.ProgressCallback progressCallback)
         {
             CloneHyperVPaths clonePaths = CreateCloneHyperVPaths(job);
+            bool renameRequested = job.RenameHyperVSystem && !string.IsNullOrWhiteSpace(job.RenameHyperVSystemName);
+
+            progressCallback(1, $"Starting Hyper-V System Clone '{job.Name}'...");
 
             if (job.HyperVMachines.Count > 0)
             {
@@ -4047,12 +4050,7 @@ namespace SecureServerBackup.Windows
                 throw new InvalidOperationException("Clone Hyper-V System requires either a selected Hyper-V VM or a selected disk.");
             }
 
-            bool shouldScheduleSetupCl = HyperVBackupTreeHelper.ShouldScheduleSetupCl(
-                job.RenameHyperVSystem,
-                job.RenameHyperVSystemName,
-                job.Target,
-                job.SourcePaths,
-                GetCurrentSystemDiskIndexes());
+            bool shouldScheduleSetupCl = renameRequested;
 
             progressCallback(90, $"Creating Hyper-V VM '{clonePaths.VmName}'...");
             CreateCloneHyperVVirtualMachine(clonePaths.VmName, clonePaths.HyperVSystemDirectory, clonePaths.VirtualDiskPath);
@@ -4063,8 +4061,13 @@ namespace SecureServerBackup.Windows
                 ScheduleSetupClPendingRequest(clonePaths.VirtualDiskPath, clonePaths.VmName);
             }
 
-            progressCallback(95, $"Regenerating MAC address for '{clonePaths.VmName}'...");
-            RegenerateHyperVVirtualMachineMacAddress(clonePaths.VmName);
+            if (renameRequested)
+            {
+                progressCallback(95, $"Regenerating MAC address for '{clonePaths.VmName}'...");
+                RegenerateHyperVVirtualMachineMacAddress(clonePaths.VmName);
+            }
+
+            progressCallback(100, $"Clone Hyper-V System completed: {clonePaths.VmName}");
         }
 
         internal static CloneHyperVPaths CreateCloneHyperVPaths(BackupJob job)
