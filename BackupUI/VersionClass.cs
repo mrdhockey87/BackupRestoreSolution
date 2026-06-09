@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.69";
+        private static readonly string version_fallback_number = "6.3.5.71";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,17 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.72 I started to add the new Hyper-V clone verification logic, Clone the Hyper-v with WIM, Resate 
+ *                  error handeling that the CLaude online did and it kept crashing, so I had the Copliot fix
+ *                  it so it compile. So I don't know whare it is at right now. The note below is from where copilot
+ *                  fixed it so it would compile. The way I was adding it shouldn't have effected the way the app works
+ *                  right now and I should have been able to change the functioning later, I'm not sure if it 
+ *                  worked out that way by the time it got it to compile. Looking at it in Gitty up I think it should work
+ *                  the way it used to, and I should be able to change it to the new way later. mdail 6/9/2026
+ * Version 6.3.5.71 Updated Hyper-V clone verification for preserved AVHDX/VHDX chains so valid differencing
+ *                  chains no longer fail verification just because AVHDX files and parent locators exist.
+ *                  Also changed the verification status enum handling to use the correct native values and
+ *                  updated user-visible WIM verification wording to SSB image wording. mdail 6/9/2026
  * Version 6.3.5.70 Renamed some methods in the backupwindowsnew that had WIM references in there name, changed
  *                  them to SSB since that is the new name of the product and it hides the WIM file format 
  *                  from the user and hackers. mdail 6/8/2026

@@ -76,8 +76,10 @@
     <ClInclude Include="BackupEngine.h" />
     <ClInclude Include="BackupEngine_Common.h" />
     <ClInclude Include="BrsFileManager.h" />
+    <ClInclude Include="RecoveryManager.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="ShellExtension.h" />
+    <ClInclude Include="VerificationEngine.h" />
     <ClInclude Include="VSSSnapshotManager.h" />
     <ClInclude Include="WimMountManager.h" />
   </ItemGroup>
@@ -90,12 +92,15 @@
     <ClCompile Include="BackupManager_Advanced.cpp" />
     <ClCompile Include="BrsFileManager.cpp" />
     <ClCompile Include="HyperVBackup_Implementation.cpp" />
+    <ClCompile Include="HyperVEngineExports.cpp" />
     <ClCompile Include="HyperVManager.cpp" />
     <ClCompile Include="HyperV_Enumeration.cpp" />
     <ClCompile Include="RecoveryEnvironment.cpp" />
+    <ClCompile Include="RecoveryManager.cpp" />
     <ClCompile Include="RestoreEngine_Advanced.cpp" />
     <ClCompile Include="RestoreEnhanced.cpp" />
     <ClCompile Include="ShellExtension.cpp" />
+    <ClCompile Include="VerificationEngine.cpp" />
     <ClCompile Include="VolumeEnumeration.cpp" />
     <ClCompile Include="VSSManager.cpp" />
     <ClCompile Include="HyperVRestore.cpp" />
@@ -122,4 +127,3 @@
     <Error Condition="!Exists('..\packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\zlib-msvc-x64.1.2.11.8900\build\native\zlib-msvc-x64.targets'))" />
   </Target>
 </Project>
-

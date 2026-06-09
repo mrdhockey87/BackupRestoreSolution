@@ -375,7 +375,7 @@ extern "C" BACKUPENGINE_API int ScheduleOfflineSystemSetupCl(const wchar_t* syst
 
 		return 0;
 	}
-	catch (const std::exception& ex) {
+	catch (std::runtime_error& ex) {
 		SetLastErrorMessage(L"Failed to schedule SetupCl in the offline SYSTEM hive.");
 		return -99;
 	}
