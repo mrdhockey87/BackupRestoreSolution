@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.71";
+        private static readonly string version_fallback_number = "6.3.5.76";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,18 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.76 Added automated tests for VM-source Hyper-V clone verification and introduced internal
+ *                  test hooks so the managed clone flow can be validated without real PowerShell, Hyper-V,
+ *                  or native clone verification execution. mdail 6/15/2026
+ * Version 6.3.5.75 Added post-clone verification for VM-source Hyper-V system clones so the managed clone flow
+ *                  now calls the native Hyper-V verification engine after import/create completes using the
+ *                  exported disk path, export root, and target VM name. mdail 6/15/2026
+ * Version 6.3.5.74 Prior to the .73 fix, I added the Disk Consolidator to the Hyper-V clone flow from the online CLaude
+ *  			    code to do the Hyper-V clone with WIM backup type, but it had it set to use the same VirtDisk Microsoft 
+ *  			    vendor symbol as the verification engine so I had the have copilot fix it. mdail 6/15/2026
+ * Version 6.3.5.73 Fixed the native Hyper-V disk consolidator build so it no longer links against the unresolved
+ *                  VirtDisk Microsoft vendor symbol. DiskConsolidator now uses the same explicit Microsoft
+ *                  virtual storage vendor GUID pattern as the verification engine. mdail 6/15/2026
  * Version 6.3.5.72 I started to add the new Hyper-V clone verification logic, Clone the Hyper-v with WIM, Resate 
  *                  error handeling that the CLaude online did and it kept crashing, so I had the Copliot fix
  *                  it so it compile. So I don't know whare it is at right now. The note below is from where copilot

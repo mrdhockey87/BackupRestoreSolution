@@ -1,6 +1,6 @@
 //HyperVEngineExports.cpp
 #include "BackupEngine.h"
-//#include "../core/DiskConsolidator.h"
+#include "DiskConsolidator.h"
 #include "RecoveryManager.h"
 #include "VerificationEngine.h"
 
@@ -15,7 +15,7 @@
 
 // ── Global engine state ───────────────────────────────────────────────────────
 //static HyperVCloneEngine* g_cloneEngine = nullptr;
-//static DiskConsolidator* g_consolidator = nullptr;
+static DiskConsolidator* g_consolidator = nullptr;
 static RecoveryManager* g_recovery = nullptr;
 
 static HVE_ProgressCallback g_progressCb = nullptr;
@@ -73,7 +73,7 @@ HVE_RESULT __stdcall HVE_Initialize()
         }
 
         //g_cloneEngine = new HyperVCloneEngine(&g_cancelFlag, FireProgress, FireStatus);
-       // g_consolidator = new DiskConsolidator(&g_cancelFlag, FireProgress, FireStatus);
+        g_consolidator = new DiskConsolidator(&g_cancelFlag, FireProgress, FireStatus);
         g_recovery = new RecoveryManager(FireStatus);
 
         return HVE_OK;
@@ -90,7 +90,7 @@ HVE_RESULT __stdcall HVE_Shutdown()
     try
     {
         //delete g_cloneEngine;  g_cloneEngine = nullptr;
-        //delete g_consolidator; g_consolidator = nullptr;
+        delete g_consolidator; g_consolidator = nullptr;
         delete g_recovery;     g_recovery = nullptr;
         CoUninitialize();
         return HVE_OK;
@@ -176,8 +176,8 @@ HVE_RESULT __stdcall HVE_CloneVM(const HVE_CloneVMParams* params)
             FireStatus(HVE_EVT_PHASE_START, L"Consolidating AVHDX chain");
             FireProgress(35, L"Scanning disk chain...");
 
-            //r = g_consolidator->ConsolidateChain(params->exportStagingPath);
-            //if (r != HVE_OK) { SetLastError(g_consolidator->GetLastError()); return r; }
+            HVE_RESULT r = g_consolidator->ConsolidateChain(params->exportStagingPath);
+            if (r != HVE_OK) { SetLastError(g_consolidator->GetLastError()); return r; }
             if (g_cancelFlag) return HVE_ERR_CANCELLED;
 
             FireStatus(HVE_EVT_PHASE_END, L"Consolidation complete");
@@ -230,7 +230,7 @@ HVE_RESULT __stdcall HVE_CloneDisk(const HVE_CloneDiskParams* params)
         FireStatus(HVE_EVT_PHASE_START, L"Disk clone started");
         FireProgress(0, L"Opening source disk...");
 
-      /*  HVE_RESULT r = g_consolidator->CloneDisk(
+        HVE_RESULT r = g_consolidator->CloneDisk(
             params->sourceVhdxPath,
             params->destinationPath,
             params->consolidateChain,
@@ -240,7 +240,7 @@ HVE_RESULT __stdcall HVE_CloneDisk(const HVE_CloneDiskParams* params)
         {
             SetLastError(g_consolidator->GetLastError());
             return r;
-        }*/
+        }
 
         FireProgress(100, L"Disk clone complete.");
         FireStatus(HVE_EVT_PHASE_END, L"Disk clone complete");
@@ -271,11 +271,11 @@ HVE_RESULT __stdcall HVE_ConsolidateAVHDX(
 
     try
     {
-        //FireStatus(HVE_EVT_PHASE_START, L"AVHDX consolidation");
-        //HVE_RESULT r = g_consolidator->ConsolidateToSingleVHDX(exportPath, outputVhdxPath);
+        FireStatus(HVE_EVT_PHASE_START, L"AVHDX consolidation");
+        HVE_RESULT r = g_consolidator->ConsolidateToSingleVHDX(exportPath, outputVhdxPath);
 
-        //if (r != HVE_OK) SetLastError(g_consolidator->GetLastError());
-       // return r;
+        if (r != HVE_OK) SetLastError(g_consolidator->GetLastError());
+        return r;
     }
     catch (const std::exception&)
     {

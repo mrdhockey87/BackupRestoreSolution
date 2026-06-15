@@ -12,6 +12,7 @@
 #include <fstream>
 #include <shlwapi.h>
 #include <cwchar>
+#include <stdexcept>
 #include <vector>
 
 #pragma comment(lib, "wbemuuid.lib")
@@ -375,7 +376,7 @@ extern "C" BACKUPENGINE_API int ScheduleOfflineSystemSetupCl(const wchar_t* syst
 
 		return 0;
 	}
-	catch (std::runtime_error& ex) {
+	catch (std::runtime_error&) {
 		SetLastErrorMessage(L"Failed to schedule SetupCl in the offline SYSTEM hive.");
 		return -99;
 	}

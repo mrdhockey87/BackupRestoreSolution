@@ -510,7 +510,7 @@
 		cannot reliably resolve keyed styles from a merged dictionary
 		at template-application time — doing so silently breaks the
 		entire ResourceDictionary.
-
+		
 		Track      = MediumTurquoise  (#48D1CC)
 		Thumb      = ButtonBackground (#008B8B dark cyan)
 		Thumb hover= ButtonHover      (#20B2AA light sea green)
@@ -519,9 +519,8 @@
 		Arrow glyph= ButtonForeground (#000000 black)
 		================================================================
 	-->
-	<!--  ── Vertical ScrollBar ControlTemplate  ──────────────────── -->
-	<ControlTemplate x:Key="VerticalScrollBarTemplate"
-					 TargetType="ScrollBar">
+	<!--  ── Vertical ScrollBar ControlTemplate  ────────────────────  -->
+	<ControlTemplate x:Key="VerticalScrollBarTemplate" TargetType="ScrollBar">
 		<Grid>
 			<Grid.RowDefinitions>
 				<RowDefinition Height="18" />
@@ -529,55 +528,49 @@
 				<RowDefinition Height="18" />
 			</Grid.RowDefinitions>
 			<!--  Track groove  -->
-			<Border Grid.Row="1"
-					Background="{StaticResource MediumTurquoise}"
-					BorderBrush="{StaticResource LightBorderBrush}"
-					BorderThickness="1,0" />
+			<Border
+				Grid.Row="1"
+				Background="{StaticResource MediumTurquoise}"
+				BorderBrush="{StaticResource LightBorderBrush}"
+				BorderThickness="1,0" />
 			<!--  Line-Up arrow button  -->
-			<RepeatButton Grid.Row="0"
-						  Command="ScrollBar.LineUpCommand">
+			<RepeatButton Grid.Row="0" Command="ScrollBar.LineUpCommand">
 				<RepeatButton.Template>
 					<ControlTemplate TargetType="RepeatButton">
-						<Border x:Name="ArrowBd"
-								Background="{StaticResource DarkTurquoise}"
-								BorderBrush="{StaticResource BorderBrush}"
-								BorderThickness="1"
-								CornerRadius="2">
-							<Path Width="8"
-								  Height="5"
-								  HorizontalAlignment="Center"
-								  VerticalAlignment="Center"
-								  Data="M 0 5 L 4 0 L 8 5 Z"
-								  Fill="{StaticResource ButtonForeground}"
-								  Stretch="Fill" />
+						<Border
+							x:Name="ArrowBd"
+							Background="{StaticResource DarkTurquoise}"
+							BorderBrush="{StaticResource BorderBrush}"
+							BorderThickness="1"
+							CornerRadius="2">
+							<Path
+								Width="8"
+								Height="5"
+								HorizontalAlignment="Center"
+								VerticalAlignment="Center"
+								Data="M 0 5 L 4 0 L 8 5 Z"
+								Fill="{StaticResource ButtonForeground}"
+								Stretch="Fill" />
 						</Border>
 						<ControlTemplate.Triggers>
-							<Trigger Property="IsMouseOver"
-									 Value="True">
-								<Setter TargetName="ArrowBd"
-										Property="Background"
-										Value="{StaticResource ButtonHover}" />
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="ArrowBd" Property="Background" Value="{StaticResource ButtonHover}" />
 							</Trigger>
-							<Trigger Property="IsPressed"
-									 Value="True">
-								<Setter TargetName="ArrowBd"
-										Property="Background"
-										Value="{StaticResource ButtonPressed}" />
+							<Trigger Property="IsPressed" Value="True">
+								<Setter TargetName="ArrowBd" Property="Background" Value="{StaticResource ButtonPressed}" />
 							</Trigger>
-							<Trigger Property="IsEnabled"
-									 Value="False">
-								<Setter TargetName="ArrowBd"
-										Property="Opacity"
-										Value="0.4" />
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter TargetName="ArrowBd" Property="Opacity" Value="0.4" />
 							</Trigger>
 						</ControlTemplate.Triggers>
 					</ControlTemplate>
 				</RepeatButton.Template>
 			</RepeatButton>
 			<!--  Track + Thumb  -->
-			<Track x:Name="PART_Track"
-				   Grid.Row="1"
-				   IsDirectionReversed="True">
+			<Track
+				x:Name="PART_Track"
+				Grid.Row="1"
+				IsDirectionReversed="True">
 				<Track.DecreaseRepeatButton>
 					<RepeatButton Command="ScrollBar.PageUpCommand">
 						<RepeatButton.Template>
@@ -591,30 +584,22 @@
 					<Thumb MinHeight="20">
 						<Thumb.Template>
 							<ControlTemplate TargetType="Thumb">
-								<Border x:Name="ThumbBd"
-										Margin="2,0"
-										Background="{StaticResource ButtonBackground}"
-										BorderBrush="{StaticResource BorderBrush}"
-										BorderThickness="1"
-										CornerRadius="3" />
+								<Border
+									x:Name="ThumbBd"
+									Margin="2,0"
+									Background="{StaticResource ButtonBackground}"
+									BorderBrush="{StaticResource BorderBrush}"
+									BorderThickness="1"
+									CornerRadius="3" />
 								<ControlTemplate.Triggers>
-									<Trigger Property="IsMouseOver"
-											 Value="True">
-										<Setter TargetName="ThumbBd"
-												Property="Background"
-												Value="{StaticResource ButtonHover}" />
+									<Trigger Property="IsMouseOver" Value="True">
+										<Setter TargetName="ThumbBd" Property="Background" Value="{StaticResource ButtonHover}" />
 									</Trigger>
-									<Trigger Property="IsDragging"
-											 Value="True">
-										<Setter TargetName="ThumbBd"
-												Property="Background"
-												Value="{StaticResource ButtonPressed}" />
+									<Trigger Property="IsDragging" Value="True">
+										<Setter TargetName="ThumbBd" Property="Background" Value="{StaticResource ButtonPressed}" />
 									</Trigger>
-									<Trigger Property="IsEnabled"
-											 Value="False">
-										<Setter TargetName="ThumbBd"
-												Property="Opacity"
-												Value="0.4" />
+									<Trigger Property="IsEnabled" Value="False">
+										<Setter TargetName="ThumbBd" Property="Opacity" Value="0.4" />
 									</Trigger>
 								</ControlTemplate.Triggers>
 							</ControlTemplate>
@@ -632,41 +617,33 @@
 				</Track.IncreaseRepeatButton>
 			</Track>
 			<!--  Line-Down arrow button  -->
-			<RepeatButton Grid.Row="2"
-						  Command="ScrollBar.LineDownCommand">
+			<RepeatButton Grid.Row="2" Command="ScrollBar.LineDownCommand">
 				<RepeatButton.Template>
 					<ControlTemplate TargetType="RepeatButton">
-						<Border x:Name="ArrowBd"
-								Background="{StaticResource DarkTurquoise}"
-								BorderBrush="{StaticResource BorderBrush}"
-								BorderThickness="1"
-								CornerRadius="2">
-							<Path Width="8"
-								  Height="5"
-								  HorizontalAlignment="Center"
-								  VerticalAlignment="Center"
-								  Data="M 0 0 L 4 5 L 8 0 Z"
-								  Fill="{StaticResource ButtonForeground}"
-								  Stretch="Fill" />
+						<Border
+							x:Name="ArrowBd"
+							Background="{StaticResource DarkTurquoise}"
+							BorderBrush="{StaticResource BorderBrush}"
+							BorderThickness="1"
+							CornerRadius="2">
+							<Path
+								Width="8"
+								Height="5"
+								HorizontalAlignment="Center"
+								VerticalAlignment="Center"
+								Data="M 0 0 L 4 5 L 8 0 Z"
+								Fill="{StaticResource ButtonForeground}"
+								Stretch="Fill" />
 						</Border>
 						<ControlTemplate.Triggers>
-							<Trigger Property="IsMouseOver"
-									 Value="True">
-								<Setter TargetName="ArrowBd"
-										Property="Background"
-										Value="{StaticResource ButtonHover}" />
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="ArrowBd" Property="Background" Value="{StaticResource ButtonHover}" />
 							</Trigger>
-							<Trigger Property="IsPressed"
-									 Value="True">
-								<Setter TargetName="ArrowBd"
-										Property="Background"
-										Value="{StaticResource ButtonPressed}" />
+							<Trigger Property="IsPressed" Value="True">
+								<Setter TargetName="ArrowBd" Property="Background" Value="{StaticResource ButtonPressed}" />
 							</Trigger>
-							<Trigger Property="IsEnabled"
-									 Value="False">
-								<Setter TargetName="ArrowBd"
-										Property="Opacity"
-										Value="0.4" />
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter TargetName="ArrowBd" Property="Opacity" Value="0.4" />
 							</Trigger>
 						</ControlTemplate.Triggers>
 					</ControlTemplate>
@@ -674,9 +651,8 @@
 			</RepeatButton>
 		</Grid>
 	</ControlTemplate>
-	<!--  ── Horizontal ScrollBar ControlTemplate  ─────────────────── -->
-	<ControlTemplate x:Key="HorizontalScrollBarTemplate"
-					 TargetType="ScrollBar">
+	<!--  ── Horizontal ScrollBar ControlTemplate  ───────────────────  -->
+	<ControlTemplate x:Key="HorizontalScrollBarTemplate" TargetType="ScrollBar">
 		<Grid>
 			<Grid.ColumnDefinitions>
 				<ColumnDefinition Width="18" />
@@ -684,55 +660,49 @@
 				<ColumnDefinition Width="18" />
 			</Grid.ColumnDefinitions>
 			<!--  Track groove  -->
-			<Border Grid.Column="1"
-					Background="{StaticResource MediumTurquoise}"
-					BorderBrush="{StaticResource LightBorderBrush}"
-					BorderThickness="0,1" />
+			<Border
+				Grid.Column="1"
+				Background="{StaticResource MediumTurquoise}"
+				BorderBrush="{StaticResource LightBorderBrush}"
+				BorderThickness="0,1" />
 			<!--  Line-Left arrow button  -->
-			<RepeatButton Grid.Column="0"
-						  Command="ScrollBar.LineLeftCommand">
+			<RepeatButton Grid.Column="0" Command="ScrollBar.LineLeftCommand">
 				<RepeatButton.Template>
 					<ControlTemplate TargetType="RepeatButton">
-						<Border x:Name="ArrowBd"
-								Background="{StaticResource DarkTurquoise}"
-								BorderBrush="{StaticResource BorderBrush}"
-								BorderThickness="1"
-								CornerRadius="2">
-							<Path Width="5"
-								  Height="8"
-								  HorizontalAlignment="Center"
-								  VerticalAlignment="Center"
-								  Data="M 5 0 L 0 4 L 5 8 Z"
-								  Fill="{StaticResource ButtonForeground}"
-								  Stretch="Fill" />
+						<Border
+							x:Name="ArrowBd"
+							Background="{StaticResource DarkTurquoise}"
+							BorderBrush="{StaticResource BorderBrush}"
+							BorderThickness="1"
+							CornerRadius="2">
+							<Path
+								Width="5"
+								Height="8"
+								HorizontalAlignment="Center"
+								VerticalAlignment="Center"
+								Data="M 5 0 L 0 4 L 5 8 Z"
+								Fill="{StaticResource ButtonForeground}"
+								Stretch="Fill" />
 						</Border>
 						<ControlTemplate.Triggers>
-							<Trigger Property="IsMouseOver"
-									 Value="True">
-								<Setter TargetName="ArrowBd"
-										Property="Background"
-										Value="{StaticResource ButtonHover}" />
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="ArrowBd" Property="Background" Value="{StaticResource ButtonHover}" />
 							</Trigger>
-							<Trigger Property="IsPressed"
-									 Value="True">
-								<Setter TargetName="ArrowBd"
-										Property="Background"
-										Value="{StaticResource ButtonPressed}" />
+							<Trigger Property="IsPressed" Value="True">
+								<Setter TargetName="ArrowBd" Property="Background" Value="{StaticResource ButtonPressed}" />
 							</Trigger>
-							<Trigger Property="IsEnabled"
-									 Value="False">
-								<Setter TargetName="ArrowBd"
-										Property="Opacity"
-										Value="0.4" />
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter TargetName="ArrowBd" Property="Opacity" Value="0.4" />
 							</Trigger>
 						</ControlTemplate.Triggers>
 					</ControlTemplate>
 				</RepeatButton.Template>
 			</RepeatButton>
 			<!--  Track + Thumb  -->
-			<Track x:Name="PART_Track"
-				   Grid.Column="1"
-				   IsDirectionReversed="False">
+			<Track
+				x:Name="PART_Track"
+				Grid.Column="1"
+				IsDirectionReversed="False">
 				<Track.DecreaseRepeatButton>
 					<RepeatButton Command="ScrollBar.PageLeftCommand">
 						<RepeatButton.Template>
@@ -746,30 +716,22 @@
 					<Thumb MinWidth="20">
 						<Thumb.Template>
 							<ControlTemplate TargetType="Thumb">
-								<Border x:Name="ThumbBd"
-										Margin="0,2"
-										Background="{StaticResource ButtonBackground}"
-										BorderBrush="{StaticResource BorderBrush}"
-										BorderThickness="1"
-										CornerRadius="3" />
+								<Border
+									x:Name="ThumbBd"
+									Margin="0,2"
+									Background="{StaticResource ButtonBackground}"
+									BorderBrush="{StaticResource BorderBrush}"
+									BorderThickness="1"
+									CornerRadius="3" />
 								<ControlTemplate.Triggers>
-									<Trigger Property="IsMouseOver"
-											 Value="True">
-										<Setter TargetName="ThumbBd"
-												Property="Background"
-												Value="{StaticResource ButtonHover}" />
+									<Trigger Property="IsMouseOver" Value="True">
+										<Setter TargetName="ThumbBd" Property="Background" Value="{StaticResource ButtonHover}" />
 									</Trigger>
-									<Trigger Property="IsDragging"
-											 Value="True">
-										<Setter TargetName="ThumbBd"
-												Property="Background"
-												Value="{StaticResource ButtonPressed}" />
+									<Trigger Property="IsDragging" Value="True">
+										<Setter TargetName="ThumbBd" Property="Background" Value="{StaticResource ButtonPressed}" />
 									</Trigger>
-									<Trigger Property="IsEnabled"
-											 Value="False">
-										<Setter TargetName="ThumbBd"
-												Property="Opacity"
-												Value="0.4" />
+									<Trigger Property="IsEnabled" Value="False">
+										<Setter TargetName="ThumbBd" Property="Opacity" Value="0.4" />
 									</Trigger>
 								</ControlTemplate.Triggers>
 							</ControlTemplate>
@@ -787,41 +749,33 @@
 				</Track.IncreaseRepeatButton>
 			</Track>
 			<!--  Line-Right arrow button  -->
-			<RepeatButton Grid.Column="2"
-						  Command="ScrollBar.LineRightCommand">
+			<RepeatButton Grid.Column="2" Command="ScrollBar.LineRightCommand">
 				<RepeatButton.Template>
 					<ControlTemplate TargetType="RepeatButton">
-						<Border x:Name="ArrowBd"
-								Background="{StaticResource DarkTurquoise}"
-								BorderBrush="{StaticResource BorderBrush}"
-								BorderThickness="1"
-								CornerRadius="2">
-							<Path Width="5"
-								  Height="8"
-								  HorizontalAlignment="Center"
-								  VerticalAlignment="Center"
-								  Data="M 0 0 L 5 4 L 0 8 Z"
-								  Fill="{StaticResource ButtonForeground}"
-								  Stretch="Fill" />
+						<Border
+							x:Name="ArrowBd"
+							Background="{StaticResource DarkTurquoise}"
+							BorderBrush="{StaticResource BorderBrush}"
+							BorderThickness="1"
+							CornerRadius="2">
+							<Path
+								Width="5"
+								Height="8"
+								HorizontalAlignment="Center"
+								VerticalAlignment="Center"
+								Data="M 0 0 L 5 4 L 0 8 Z"
+								Fill="{StaticResource ButtonForeground}"
+								Stretch="Fill" />
 						</Border>
 						<ControlTemplate.Triggers>
-							<Trigger Property="IsMouseOver"
-									 Value="True">
-								<Setter TargetName="ArrowBd"
-										Property="Background"
-										Value="{StaticResource ButtonHover}" />
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="ArrowBd" Property="Background" Value="{StaticResource ButtonHover}" />
 							</Trigger>
-							<Trigger Property="IsPressed"
-									 Value="True">
-								<Setter TargetName="ArrowBd"
-										Property="Background"
-										Value="{StaticResource ButtonPressed}" />
+							<Trigger Property="IsPressed" Value="True">
+								<Setter TargetName="ArrowBd" Property="Background" Value="{StaticResource ButtonPressed}" />
 							</Trigger>
-							<Trigger Property="IsEnabled"
-									 Value="False">
-								<Setter TargetName="ArrowBd"
-										Property="Opacity"
-										Value="0.4" />
+							<Trigger Property="IsEnabled" Value="False">
+								<Setter TargetName="ArrowBd" Property="Opacity" Value="0.4" />
 							</Trigger>
 						</ControlTemplate.Triggers>
 					</ControlTemplate>
@@ -831,28 +785,18 @@
 	</ControlTemplate>
 	<!--  ── Implicit ScrollBar style — picks template by Orientation  -->
 	<Style TargetType="ScrollBar">
-		<Setter Property="SnapsToDevicePixels"
-				Value="True" />
-		<Setter Property="OverridesDefaultStyle"
-				Value="True" />
+		<Setter Property="SnapsToDevicePixels" Value="True" />
+		<Setter Property="OverridesDefaultStyle" Value="True" />
 		<Style.Triggers>
-			<Trigger Property="Orientation"
-					 Value="Vertical">
-				<Setter Property="Width"
-						Value="14" />
-				<Setter Property="MinWidth"
-						Value="14" />
-				<Setter Property="Template"
-						Value="{StaticResource VerticalScrollBarTemplate}" />
+			<Trigger Property="Orientation" Value="Vertical">
+				<Setter Property="Width" Value="14" />
+				<Setter Property="MinWidth" Value="14" />
+				<Setter Property="Template" Value="{StaticResource VerticalScrollBarTemplate}" />
 			</Trigger>
-			<Trigger Property="Orientation"
-					 Value="Horizontal">
-				<Setter Property="Height"
-						Value="14" />
-				<Setter Property="MinHeight"
-						Value="14" />
-				<Setter Property="Template"
-						Value="{StaticResource HorizontalScrollBarTemplate}" />
+			<Trigger Property="Orientation" Value="Horizontal">
+				<Setter Property="Height" Value="14" />
+				<Setter Property="MinHeight" Value="14" />
+				<Setter Property="Template" Value="{StaticResource HorizontalScrollBarTemplate}" />
 			</Trigger>
 		</Style.Triggers>
 	</Style>

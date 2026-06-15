@@ -124,6 +124,93 @@ namespace SecureServerBackupCommon
 			NonRepairable = 2
 		}
 
+		public enum HyperVVerifyStatus
+		{
+			Pass = 0,
+			Fail = 1,
+			Warning = 2,
+			Skipped = 3
+		}
+
+		[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode, Pack = 8)]
+		public struct HyperVVerifyCheckResult
+		{
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+			public string CheckName;
+
+			public HyperVVerifyStatus Status;
+
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 512)]
+			public string Detail;
+
+			public ulong ElapsedMs;
+		}
+
+		[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode, Pack = 8)]
+		public struct HyperVVerifyReport
+		{
+			[MarshalAs(UnmanagedType.I1)]
+			public bool OverallPass;
+
+			public int TotalChecks;
+			public int PassCount;
+			public int FailCount;
+			public int WarnCount;
+
+			[MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
+			public HyperVVerifyCheckResult[] Checks;
+
+			public ulong SourceVhdxBytes;
+			public ulong CloneVhdxBytes;
+
+			[MarshalAs(UnmanagedType.I1)]
+			public bool ChecksumMatch;
+
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 65)]
+			public string SourceChecksum;
+
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 65)]
+			public string CloneChecksum;
+
+			[MarshalAs(UnmanagedType.I1)]
+			public bool VmBootTestPerformed;
+
+			[MarshalAs(UnmanagedType.I1)]
+			public bool VmBootedCleanly;
+
+			public uint VmBootTimeMs;
+
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 512)]
+			public string FirstFailureDetail;
+		}
+
+		[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode, Pack = 8)]
+		public struct HyperVVerifyParams
+		{
+			[MarshalAs(UnmanagedType.LPWStr)]
+			public string? SourceVmName;
+
+			[MarshalAs(UnmanagedType.LPWStr)]
+			public string CloneVmName;
+
+			[MarshalAs(UnmanagedType.LPWStr)]
+			public string? SourceVhdxPath;
+
+			[MarshalAs(UnmanagedType.LPWStr)]
+			public string CloneVhdxPath;
+
+			[MarshalAs(UnmanagedType.LPWStr)]
+			public string CloneExportPath;
+
+			[MarshalAs(UnmanagedType.I1)]
+			public bool PerformBootTest;
+
+			[MarshalAs(UnmanagedType.I1)]
+			public bool PerformChecksumVerify;
+
+			public uint BootTestTimeoutSec;
+		}
+
 		[DllImport(DllName, EntryPoint = "CheckBackupImageHealth", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
 		public static extern int CheckBackupImageStatus(
 			string backupPath,
@@ -176,6 +263,11 @@ namespace SecureServerBackupCommon
 		public static extern int VerifyBackup(
 			string backupPath,
 			ProgressCallback? callback);
+
+		[DllImport(DllName, EntryPoint = "HVE_VerifyClone", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Unicode)]
+		private static extern int VerifyHyperVCloneNative(
+			in HyperVVerifyParams parameters,
+			out HyperVVerifyReport report);
 
 		[DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
 		public static extern void GetLastErrorMessage(
@@ -270,6 +362,33 @@ namespace SecureServerBackupCommon
 			ProgressCallback? callback)
 		{
 			return VerifyBackup(backupPath, callback);
+		}
+
+		public static int VerifyHyperVClone(
+			HyperVVerifyParams parameters,
+			out HyperVVerifyReport report)
+		{
+			parameters.CloneVmName = string.IsNullOrWhiteSpace(parameters.CloneVmName)
+				? throw new ArgumentException("Clone VM name is required.", nameof(parameters))
+				: parameters.CloneVmName;
+
+			parameters.CloneVhdxPath = string.IsNullOrWhiteSpace(parameters.CloneVhdxPath)
+				? throw new ArgumentException("Clone virtual disk path is required.", nameof(parameters))
+				: parameters.CloneVhdxPath;
+
+			parameters.CloneExportPath = string.IsNullOrWhiteSpace(parameters.CloneExportPath)
+				? throw new ArgumentException("Clone export path is required.", nameof(parameters))
+				: parameters.CloneExportPath;
+
+			report = new HyperVVerifyReport
+			{
+				Checks = new HyperVVerifyCheckResult[32],
+				SourceChecksum = string.Empty,
+				CloneChecksum = string.Empty,
+				FirstFailureDetail = string.Empty
+			};
+
+			return VerifyHyperVCloneNative(in parameters, out report);
 		}
 
 		public static int CheckBackupImageStatusWithProgress(

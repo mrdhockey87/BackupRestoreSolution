@@ -14,6 +14,21 @@ namespace SecureServerBackupCommon
 	/// </summary>
 	public static class CloneExecutionHelper
 	{
+		internal static Func<string, CloneHyperVPaths, bool, BackupEngineInterop.ProgressCallback, string>? CreateCloneHyperVVirtualDiskFromVmOverride { get; set; }
+		internal static Action<string, string>? CreateCloneHyperVVirtualMachineFromExportOverride { get; set; }
+		internal static Action<string>? ScheduleSetupClPendingRequestOverride { get; set; }
+		internal static Action<string>? RegenerateHyperVVirtualMachineMacAddressOverride { get; set; }
+		internal static Func<BackupEngineInterop.HyperVVerifyParams, (int Result, BackupEngineInterop.HyperVVerifyReport Report)>? VerifyHyperVCloneOverride { get; set; }
+
+		internal static void ResetTestOverrides()
+		{
+			CreateCloneHyperVVirtualDiskFromVmOverride = null;
+			CreateCloneHyperVVirtualMachineFromExportOverride = null;
+			ScheduleSetupClPendingRequestOverride = null;
+			RegenerateHyperVVirtualMachineMacAddressOverride = null;
+			VerifyHyperVCloneOverride = null;
+		}
+
 		/// <summary>
 		/// Executes a CloneToVirtualDisk job.
 		/// </summary>
@@ -125,6 +140,7 @@ namespace SecureServerBackupCommon
 		{
 			CloneHyperVPaths clonePaths = CreateCloneHyperVPaths(job);
 			string actualVirtualDiskPath;
+			string? sourceVmName = null;
 			bool cloneFromExportedVm = false;
 			bool renameRequested = job.RenameHyperVSystem && !string.IsNullOrWhiteSpace(job.RenameHyperVSystemName);
 
@@ -132,9 +148,9 @@ namespace SecureServerBackupCommon
 
 			if (job.HyperVMachines.Count > 0)
 			{
-				string sourceVmName = job.HyperVMachines[0];
+				sourceVmName = job.HyperVMachines[0];
 				progressCallback(5, $"Exporting Hyper-V VM '{sourceVmName}' for clone...");
-				actualVirtualDiskPath = CreateCloneHyperVVirtualDiskFromVm(sourceVmName, clonePaths, job.RenameHyperVSystem, progressCallback);
+				actualVirtualDiskPath = (CreateCloneHyperVVirtualDiskFromVmOverride ?? CreateCloneHyperVVirtualDiskFromVm)(sourceVmName, clonePaths, job.RenameHyperVSystem, progressCallback);
 				cloneFromExportedVm = true;
 			}
 			else if (job.Target == BackupTarget.Disk && job.SourcePaths.Count > 0)
@@ -153,13 +169,13 @@ namespace SecureServerBackupCommon
 			if (shouldScheduleSetupCl)
 			{
 				progressCallback(75, $"Scheduling SetupCl for '{clonePaths.VmName}'...");
-				ScheduleSetupClPendingRequest(actualVirtualDiskPath);
+				(ScheduleSetupClPendingRequestOverride ?? ScheduleSetupClPendingRequest)(actualVirtualDiskPath);
 			}
 
 			if (cloneFromExportedVm)
 			{
 				progressCallback(80, $"Importing Hyper-V VM '{clonePaths.VmName}'...");
-				CreateCloneHyperVVirtualMachineFromExport(clonePaths.VmName, clonePaths.RootDirectory);
+				(CreateCloneHyperVVirtualMachineFromExportOverride ?? CreateCloneHyperVVirtualMachineFromExport)(clonePaths.VmName, clonePaths.RootDirectory);
 			}
 			else
 			{
@@ -170,8 +186,19 @@ namespace SecureServerBackupCommon
 			if (renameRequested)
 			{
 				progressCallback(95, $"Regenerating MAC address for '{clonePaths.VmName}'...");
-				RegenerateHyperVVirtualMachineMacAddress(clonePaths.VmName);
+				(RegenerateHyperVVirtualMachineMacAddressOverride ?? RegenerateHyperVVirtualMachineMacAddress)(clonePaths.VmName);
 			}
+
+			if (cloneFromExportedVm)
+			{
+				progressCallback(renameRequested ? 97 : 95, $"Verifying cloned Hyper-V VM '{clonePaths.VmName}'...");
+				VerifyClonedHyperVVirtualMachine(
+					sourceVmName,
+					clonePaths.VmName,
+					actualVirtualDiskPath,
+					clonePaths.RootDirectory);
+			}
+
 			progressCallback(100, $"Clone Hyper-V System completed: {clonePaths.VmName}");
 		}
 
@@ -340,6 +367,50 @@ namespace SecureServerBackupCommon
 				"Write-Output 'EXPORT_COMPLETE'";
 
 			RunPowerShellScript(script);
+		}
+
+		private static void VerifyClonedHyperVVirtualMachine(
+			string? sourceVmName,
+			string cloneVmName,
+			string cloneVirtualDiskPath,
+			string cloneExportRootPath)
+		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(cloneVmName);
+			ArgumentException.ThrowIfNullOrWhiteSpace(cloneVirtualDiskPath);
+			ArgumentException.ThrowIfNullOrWhiteSpace(cloneExportRootPath);
+
+			var verifyParams = new BackupEngineInterop.HyperVVerifyParams
+			{
+				SourceVmName = string.IsNullOrWhiteSpace(sourceVmName) ? null : sourceVmName,
+				CloneVmName = cloneVmName,
+				SourceVhdxPath = null,
+				CloneVhdxPath = cloneVirtualDiskPath,
+				CloneExportPath = cloneExportRootPath,
+				PerformBootTest = false,
+				PerformChecksumVerify = false,
+				BootTestTimeoutSec = 120
+			};
+
+			(int result, BackupEngineInterop.HyperVVerifyReport report) = VerifyHyperVCloneOverride is null
+				? InvokeNativeHyperVCloneVerification(verifyParams)
+				: VerifyHyperVCloneOverride(verifyParams);
+
+			if (result == 0 && report.OverallPass)
+			{
+				return;
+			}
+
+			string failureDetail = string.IsNullOrWhiteSpace(report.FirstFailureDetail)
+				? "The cloned Hyper-V system did not pass verification."
+				: report.FirstFailureDetail.Trim();
+
+			throw new InvalidOperationException($"Clone Hyper-V System verification failed: {failureDetail}");
+		}
+
+		private static (int Result, BackupEngineInterop.HyperVVerifyReport Report) InvokeNativeHyperVCloneVerification(BackupEngineInterop.HyperVVerifyParams verifyParams)
+		{
+			int result = BackupEngineInterop.VerifyHyperVClone(verifyParams, out BackupEngineInterop.HyperVVerifyReport report);
+			return (result, report);
 		}
 
 		private static void RenameCloneHyperVExportArtifacts(string exportRootPath, string sourceVmName, string targetVmName)
