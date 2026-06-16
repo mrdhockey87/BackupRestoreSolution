@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.76";
+        private static readonly string version_fallback_number = "6.3.5.80";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,16 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.80 Updated the version metadata to 6.3.5.80 after the New Backup window follow-up
+ *                  changes for the Hyper-V export retention wording and backup-type layout updates. mdail 6/16/2026
+ * Version 6.3.5.79 Rearange the backup types on the new backup windows for better flow and added some 
+ *                  spacing between the items so they look like the are lined up. mdail 6/16/2026
+ * Version 6.3.5.78 Added an Export Hyper-V System backup type that exports the selected Hyper-V system
+ *                  and its disks to the target folder without registering a VM in Hyper-V Manager,
+ *                  while keeping the same keep-last-X retention support as other clone/export jobs. mdail 6/16/2026
+ * Version 6.3.5.77 Fixed VM-source Hyper-V clone verification to derive the actual export root from the
+ *                  exported disk path, so verification checks the exported VM folder that contains
+ *                  Virtual Machines and Virtual Hard Disks instead of the higher job root folder. mdail 6/16/2026
  * Version 6.3.5.76 Added automated tests for VM-source Hyper-V clone verification and introduced internal
  *                  test hooks so the managed clone flow can be validated without real PowerShell, Hyper-V,
  *                  or native clone verification execution. mdail 6/15/2026

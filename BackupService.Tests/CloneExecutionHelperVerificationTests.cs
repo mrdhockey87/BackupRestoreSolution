@@ -18,6 +18,53 @@ public sealed class CloneExecutionHelperVerificationTests : IDisposable
 	}
 
 	[Fact]
+	public void ExecuteExportHyperVSystemJob_WhenVmSourceSelected_ExportsWithoutImportOrVerification()
+	{
+		BackupJob job = new()
+		{
+			Name = "ExportJob",
+			DestinationPath = _tempDirectory,
+			Type = BackupType.ExportHyperVSystem
+		};
+		job.HyperVMachines.Add("SourceVm");
+
+		string exportedDiskPath = Path.Combine(_tempDirectory, "ExportJob", "SourceVm", "Virtual Hard Disks", "SourceVm.vhdx");
+		Directory.CreateDirectory(Path.GetDirectoryName(exportedDiskPath)!);
+		File.WriteAllText(exportedDiskPath, string.Empty);
+
+		var progressMessages = new List<string>();
+		int importInvocationCount = 0;
+		int setupClInvocationCount = 0;
+		int macResetInvocationCount = 0;
+		int verifyInvocationCount = 0;
+
+		CloneExecutionHelper.CreateCloneHyperVVirtualDiskFromVmOverride = (_, clonePaths, renameArtifacts, _) =>
+		{
+			Assert.False(renameArtifacts);
+			Assert.Equal(Path.Combine(_tempDirectory, "ExportJob"), clonePaths.RootDirectory);
+			return exportedDiskPath;
+		};
+		CloneExecutionHelper.CreateCloneHyperVVirtualMachineFromExportOverride = (_, _) => importInvocationCount++;
+		CloneExecutionHelper.ScheduleSetupClPendingRequestOverride = _ => setupClInvocationCount++;
+		CloneExecutionHelper.RegenerateHyperVVirtualMachineMacAddressOverride = _ => macResetInvocationCount++;
+		CloneExecutionHelper.VerifyHyperVCloneOverride = parameters =>
+		{
+			verifyInvocationCount++;
+			return (0, CreatePassingReport());
+		};
+
+		string exportPath = CloneExecutionHelper.ExecuteExportHyperVSystemJob(job, (percentage, message) => progressMessages.Add($"{percentage}:{message}"));
+
+		Assert.Equal(Path.Combine(_tempDirectory, "ExportJob"), exportPath);
+		Assert.Equal(0, importInvocationCount);
+		Assert.Equal(0, setupClInvocationCount);
+		Assert.Equal(0, macResetInvocationCount);
+		Assert.Equal(0, verifyInvocationCount);
+		Assert.Contains(progressMessages, message => message.Contains("Starting Hyper-V System export 'ExportJob'", StringComparison.Ordinal));
+		Assert.Contains(progressMessages, message => message.Contains("Hyper-V System export completed", StringComparison.Ordinal));
+	}
+
+	[Fact]
 	public void ExecuteCloneHyperVSystemJob_WhenVmSourceCloneVerificationRuns_PassesExportedDiskPathExportRootAndTargetVmName()
 	{
 		BackupJob job = new()
@@ -29,7 +76,7 @@ public sealed class CloneExecutionHelperVerificationTests : IDisposable
 		};
 		job.HyperVMachines.Add("SourceVm");
 
-		string exportedDiskPath = Path.Combine(_tempDirectory, "RenamedClone", "Virtual Hard Disks", "SourceVm.avhdx");
+		string exportedDiskPath = Path.Combine(_tempDirectory, "RenamedClone", "Win10OEM", "Virtual Hard Disks", "SourceVm.avhdx");
 		Directory.CreateDirectory(Path.GetDirectoryName(exportedDiskPath)!);
 		File.WriteAllText(exportedDiskPath, string.Empty);
 
@@ -71,7 +118,7 @@ public sealed class CloneExecutionHelperVerificationTests : IDisposable
 		Assert.Equal("SourceVm", capturedVerifyParams.Value.SourceVmName);
 		Assert.Equal("RenamedClone", capturedVerifyParams.Value.CloneVmName);
 		Assert.Equal(exportedDiskPath, capturedVerifyParams.Value.CloneVhdxPath);
-		Assert.Equal(Path.Combine(_tempDirectory, "RenamedClone"), capturedVerifyParams.Value.CloneExportPath);
+		Assert.Equal(Path.Combine(_tempDirectory, "RenamedClone", "Win10OEM"), capturedVerifyParams.Value.CloneExportPath);
 		Assert.Contains(progressMessages, message => message.Contains("Verifying cloned Hyper-V VM 'RenamedClone'", StringComparison.Ordinal));
 	}
 
@@ -85,7 +132,7 @@ public sealed class CloneExecutionHelperVerificationTests : IDisposable
 		};
 		job.HyperVMachines.Add("SourceVm");
 
-		string exportedDiskPath = Path.Combine(_tempDirectory, "CloneJob", "Virtual Hard Disks", "SourceVm.vhdx");
+		string exportedDiskPath = Path.Combine(_tempDirectory, "CloneJob", "ExportedVm", "Virtual Hard Disks", "SourceVm.vhdx");
 		Directory.CreateDirectory(Path.GetDirectoryName(exportedDiskPath)!);
 		File.WriteAllText(exportedDiskPath, string.Empty);
 

@@ -8,6 +8,7 @@ namespace SecureServerBackupCommon
         SelectedFilesAndFolders,
         CloneToDisk,
         CloneToVirtualDisk,
-        CloneHyperVSystem
+        CloneHyperVSystem,
+        ExportHyperVSystem
     }
 }

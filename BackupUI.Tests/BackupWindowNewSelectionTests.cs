@@ -190,6 +190,23 @@ public sealed class BackupWindowNewSelectionTests
 		Assert.Equal("VmOne", replayPaths[0]);
 	}
 
+	[Fact]
+	public void GetReplayPathsForJob_WhenExportHyperVSystemWithSavedVmNames_PrefersHyperVMachines()
+	{
+		BackupJob job = new()
+		{
+			Type = BackupType.ExportHyperVSystem,
+			Target = BackupTarget.HyperV,
+			HyperVMachines = new List<string> { "VmOne" },
+			SourcePaths = new List<string> { @"\\.\PHYSICALDRIVE2" }
+		};
+
+		IReadOnlyList<string> replayPaths = BackupWindowNew.GetReplayPathsForJob(job);
+
+		Assert.Single(replayPaths);
+		Assert.Equal("VmOne", replayPaths[0]);
+	}
+
 	[Theory]
 	[InlineData("Hyper-V: Win10OEM (Running)", "Win10OEM")]
 	[InlineData("Win10OEM (Off)", "Win10OEM")]

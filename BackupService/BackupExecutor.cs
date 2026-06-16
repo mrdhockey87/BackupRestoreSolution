@@ -1094,7 +1094,7 @@ namespace SecureServerBackupService
                             return false;
                         }
 
-                        // Clone jobs (CloneToVirtualDisk and CloneHyperVSystem) now execute through shared helpers
+                        // Clone/export jobs now execute through shared helpers
                         if (job.Type == BackupType.CloneToVirtualDisk)
                         {
                             logger?.Invoke($"[CLONE] Executing CloneToVirtualDisk job '{job.Name}'...");
@@ -1128,6 +1128,33 @@ namespace SecureServerBackupService
                             catch (Exception cloneEx)
                             {
                                 logger?.Invoke($"[ERROR] Clone to Virtual Disk failed: {cloneEx.Message}");
+                                return false;
+                            }
+                        }
+
+                        if (job.Type == BackupType.ExportHyperVSystem)
+                        {
+                            logger?.Invoke($"[CLONE] Executing ExportHyperVSystem job '{job.Name}'...");
+                            logger?.Invoke($"[CLONE] Retention policy: keep last {job.CloneRetentionCount} exports.");
+                            logger?.Invoke($"[CLONE] Export destination: {Path.Combine(job.DestinationPath, job.Name)}");
+
+                            try
+                            {
+                                SecureServerBackupCommon.BackupEngineInterop.ProgressCallback commonCallback = (percentage, message) =>
+                                {
+                                    nativeCallback?.Invoke(percentage, message);
+                                    progressCallback?.Invoke(percentage, message);
+                                };
+
+                                string latestExportPath = CloneExecutionHelper.ExecuteExportHyperVSystemJob(job, commonCallback);
+                                logger?.Invoke("[CLONE] Export Hyper-V System completed successfully");
+                                CleanupOldClones(job, latestExportPath, logger);
+                                progressCallback?.Invoke(100, "Export completed successfully!");
+                                return true;
+                            }
+                            catch (Exception exportEx)
+                            {
+                                logger?.Invoke($"[ERROR] Export Hyper-V System failed: {exportEx.Message}");
                                 return false;
                             }
                         }

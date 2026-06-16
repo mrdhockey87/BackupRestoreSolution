@@ -373,6 +373,9 @@ namespace SecureServerBackup.Windows
                 case BackupType.CloneHyperVSystem:
                     rbCloneHyperV.IsChecked = true;
                     break;
+                case BackupType.ExportHyperVSystem:
+                    rbExportHyperV.IsChecked = true;
+                    break;
             }
 
             // Set options
@@ -418,8 +421,10 @@ namespace SecureServerBackup.Windows
 
             if (pnlCloneRetention != null)
             {
-                pnlCloneRetention.Visibility = job.Type == BackupType.CloneToVirtualDisk || job.Type == BackupType.CloneHyperVSystem ? Visibility.Visible : Visibility.Collapsed;
+                pnlCloneRetention.Visibility = job.Type == BackupType.CloneToVirtualDisk || job.Type == BackupType.CloneHyperVSystem || job.Type == BackupType.ExportHyperVSystem ? Visibility.Visible : Visibility.Collapsed;
             }
+
+            UpdateCloneRetentionText();
 
             // Store job data for pre-selection after tree loads
             IReadOnlyList<string> replayPaths = GetReplayPathsForJob(job);
@@ -2877,11 +2882,13 @@ namespace SecureServerBackup.Windows
             }
 
             // Show clone retention panel for clone backup types
-            bool isCloneBackup = rbCloneVirtual?.IsChecked == true || rbCloneHyperV?.IsChecked == true;
+            bool isCloneBackup = rbCloneVirtual?.IsChecked == true || rbCloneHyperV?.IsChecked == true || rbExportHyperV?.IsChecked == true;
             if (pnlCloneRetention != null)
             {
                 pnlCloneRetention.Visibility = isCloneBackup ? Visibility.Visible : Visibility.Collapsed;
             }
+
+            UpdateCloneRetentionText();
 
             // Clone to Disk: Show ONLY Clone to Physical Disk field
             if (rbCloneDisk?.IsChecked == true)
@@ -2902,6 +2909,11 @@ namespace SecureServerBackup.Windows
                 pnlCloneOptions.Visibility = Visibility.Collapsed;
                 pnlBackupDestination.Visibility = Visibility.Visible;
             }
+            else if (rbExportHyperV?.IsChecked == true)
+            {
+                pnlCloneOptions.Visibility = Visibility.Collapsed;
+                pnlBackupDestination.Visibility = Visibility.Visible;
+            }
             // All other backup types: Show ONLY Backup Destination field
             else
             {
@@ -2913,7 +2925,7 @@ namespace SecureServerBackup.Windows
 
             ApplyBackupTypeSelectionRestrictions();
 
-            if (rbCloneHyperV?.IsChecked == true && !_isInitializingJobData && _hasCompletedInitialDriveLoad)
+            if ((rbCloneHyperV?.IsChecked == true || rbExportHyperV?.IsChecked == true) && !_isInitializingJobData && _hasCompletedInitialDriveLoad)
             {
                 _ = ReloadDriveTreeForBackupTypeAsync();
             }
@@ -2941,6 +2953,22 @@ namespace SecureServerBackup.Windows
             {
                 chkRenameHyperVSystem.IsChecked = false;
             }
+        }
+
+        private void UpdateCloneRetentionText()
+        {
+            if (txtCloneRetentionHeader == null || txtCloneRetentionDescription == null || txtCloneRetentionSuffix == null)
+            {
+                return;
+            }
+
+            bool isExportHyperV = rbExportHyperV?.IsChecked == true;
+
+            txtCloneRetentionHeader.Text = isExportHyperV ? "Export Retention:" : "Clone Retention:";
+            txtCloneRetentionDescription.Text = isExportHyperV
+                ? "Keep the last X exports when scheduled or manual exports run. Older exports will be automatically deleted."
+                : "Keep the last X clones when scheduled or manual clones run. Older clones will be automatically deleted.";
+            txtCloneRetentionSuffix.Text = isExportHyperV ? "export(s)" : "clone(s)";
         }
 
         internal static bool IsValidWindowsComputerName(string? computerName)
@@ -2987,7 +3015,7 @@ namespace SecureServerBackup.Windows
 
         private void ApplyBackupTypeSelectionRestrictions()
         {
-            bool hyperVSystemsOnly = rbCloneHyperV?.IsChecked == true;
+            bool hyperVSystemsOnly = rbCloneHyperV?.IsChecked == true || rbExportHyperV?.IsChecked == true;
 
             foreach (DriveTreeItem item in driveItems)
             {
@@ -4704,7 +4732,7 @@ namespace SecureServerBackup.Windows
         {
             ArgumentNullException.ThrowIfNull(job);
 
-            if (job.Type == BackupType.CloneHyperVSystem)
+            if (job.Type == BackupType.CloneHyperVSystem || job.Type == BackupType.ExportHyperVSystem)
             {
                 IReadOnlyList<string> cloneHyperVPaths = job.HyperVMachines.Count > 0
                     ? job.HyperVMachines
@@ -4769,7 +4797,7 @@ namespace SecureServerBackup.Windows
             };
 
             // For Clone Hyper-V System, create subdirectories
-            if (backupType == BackupType.CloneHyperVSystem)
+            if (backupType == BackupType.CloneHyperVSystem || backupType == BackupType.ExportHyperVSystem)
             {
                 job.IsHyperVBackup = true;
                 // The subdirectories HVconfig and HVDisks will be created during backup execution
@@ -5014,6 +5042,7 @@ namespace SecureServerBackup.Windows
             if (rbCloneDisk.IsChecked == true) return BackupType.CloneToDisk;
             if (rbCloneVirtual.IsChecked == true) return BackupType.CloneToVirtualDisk;
             if (rbCloneHyperV.IsChecked == true) return BackupType.CloneHyperVSystem;
+            if (rbExportHyperV.IsChecked == true) return BackupType.ExportHyperVSystem;
             
             return BackupType.Full; // Default
         }
@@ -5244,18 +5273,20 @@ namespace SecureServerBackup.Windows
                 ? GetEffectiveSelectedFilesAndFoldersItems()
                 : new List<DriveTreeItem>();
 
-            if (rbCloneHyperV?.IsChecked == true)
+            if (rbCloneHyperV?.IsChecked == true || rbExportHyperV?.IsChecked == true)
             {
-                // Clone Hyper-V System: Must have at least one Hyper-V system selected, and ONLY Hyper-V systems
+                // Hyper-V clone/export: Must have at least one Hyper-V system selected, and ONLY Hyper-V systems
                 if (selectedHyperV.Count == 0)
                 {
-                    CustomDialogService.ShowWarning("Please select at least one Hyper-V system to clone.", "Validation Error");
+                    string actionName = rbExportHyperV?.IsChecked == true ? "export" : "clone";
+                    CustomDialogService.ShowWarning($"Please select at least one Hyper-V system to {actionName}.", "Validation Error");
                     return false;
                 }
                 
                 if (selectedNonHyperV.Count > 0)
                 {
-                    CustomDialogService.ShowWarning("Clone Hyper-V System can only clone Hyper-V systems.\n\nPlease unselect disks, volumes, and folders.", "Validation Error");
+                    string operationName = rbExportHyperV?.IsChecked == true ? "Export Hyper-V System" : "Clone Hyper-V System";
+                    CustomDialogService.ShowWarning($"{operationName} can only use Hyper-V systems.\n\nPlease unselect disks, volumes, and folders.", "Validation Error");
                     return false;
                 }
 
@@ -5335,12 +5366,12 @@ namespace SecureServerBackup.Windows
                 }
             }
 
-            if (rbCloneVirtual?.IsChecked == true || rbCloneHyperV?.IsChecked == true)
+            if (rbCloneVirtual?.IsChecked == true || rbCloneHyperV?.IsChecked == true || rbExportHyperV?.IsChecked == true)
             {
                 string retentionText = cmbCloneRetentionCount.Text?.Trim() ?? string.Empty;
                 if (!int.TryParse(retentionText, out int retentionCount) || retentionCount < 1 || retentionCount > 30)
                 {
-                    CustomDialogService.ShowWarning("Please enter a Clone retention value between 1 and 30 clones.", "Validation Error");
+                    CustomDialogService.ShowWarning("Please enter a clone/export retention value between 1 and 30 items.", "Validation Error");
                     return false;
                 }
             }
@@ -5407,6 +5438,8 @@ namespace SecureServerBackup.Windows
             if (rbSelectedFilesAndFolders.IsChecked == true) return "Selected Files & Folder";
             if (rbCloneDisk.IsChecked == true) return "Clone to Disk";
             if (rbCloneVirtual.IsChecked == true) return "Clone to Virtual Disk";
+            if (rbCloneHyperV.IsChecked == true) return "Clone Hyper-V System";
+            if (rbExportHyperV.IsChecked == true) return "Export Hyper-V System";
             return "This backup type";
         }
 

@@ -196,10 +196,40 @@ namespace SecureServerBackupCommon
 					sourceVmName,
 					clonePaths.VmName,
 					actualVirtualDiskPath,
-					clonePaths.RootDirectory);
+					GetCloneExportRootFromVirtualDiskPath(actualVirtualDiskPath));
 			}
 
 			progressCallback(100, $"Clone Hyper-V System completed: {clonePaths.VmName}");
+		}
+
+		/// <summary>
+		/// Executes an ExportHyperVSystem job.
+		/// </summary>
+		public static string ExecuteExportHyperVSystemJob(BackupJob job, BackupEngineInterop.ProgressCallback progressCallback)
+		{
+			ArgumentNullException.ThrowIfNull(job);
+			ArgumentNullException.ThrowIfNull(progressCallback);
+
+			if (job.HyperVMachines.Count == 0)
+			{
+				throw new InvalidOperationException("Export Hyper-V System requires a selected Hyper-V VM.");
+			}
+
+			CloneHyperVPaths clonePaths = CreateCloneHyperVPaths(job);
+			string sourceVmName = job.HyperVMachines[0];
+
+			progressCallback(1, $"Starting Hyper-V System export '{job.Name}'...");
+			progressCallback(5, $"Exporting Hyper-V VM '{sourceVmName}'...");
+
+			string exportedDiskPath = (CreateCloneHyperVVirtualDiskFromVmOverride ?? CreateCloneHyperVVirtualDiskFromVm)(
+				sourceVmName,
+				clonePaths,
+				false,
+				progressCallback);
+
+			string exportRootPath = GetCloneExportRootFromVirtualDiskPath(exportedDiskPath);
+			progressCallback(100, $"Hyper-V System export completed: {Path.GetFileName(exportRootPath)}");
+			return clonePaths.RootDirectory;
 		}
 
 		// Helper methods
@@ -405,6 +435,25 @@ namespace SecureServerBackupCommon
 				: report.FirstFailureDetail.Trim();
 
 			throw new InvalidOperationException($"Clone Hyper-V System verification failed: {failureDetail}");
+		}
+
+		private static string GetCloneExportRootFromVirtualDiskPath(string cloneVirtualDiskPath)
+		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(cloneVirtualDiskPath);
+
+			DirectoryInfo? virtualDiskDirectory = Directory.GetParent(cloneVirtualDiskPath);
+			if (virtualDiskDirectory is null)
+			{
+				throw new InvalidOperationException("Failed to resolve the cloned virtual disk directory.");
+			}
+
+			DirectoryInfo? exportRootDirectory = virtualDiskDirectory.Parent;
+			if (exportRootDirectory is null)
+			{
+				throw new InvalidOperationException("Failed to resolve the cloned Hyper-V export root directory.");
+			}
+
+			return exportRootDirectory.FullName;
 		}
 
 		private static (int Result, BackupEngineInterop.HyperVVerifyReport Report) InvokeNativeHyperVCloneVerification(BackupEngineInterop.HyperVVerifyParams verifyParams)

@@ -2529,6 +2529,8 @@ namespace SecureServerBackup
                 BackupType.Differential => "Full then Differential",
                 BackupType.CloneToDisk => "Clone to Physical Disk",
                 BackupType.CloneToVirtualDisk => "Clone to Virtual Disk (Hyper-V)",
+                BackupType.CloneHyperVSystem => "Clone Hyper-V System",
+                BackupType.ExportHyperVSystem => "Export Hyper-V System",
                 _ => job.Type.ToString()
             };
 

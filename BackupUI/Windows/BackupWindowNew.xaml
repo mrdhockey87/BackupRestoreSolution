@@ -222,47 +222,58 @@
 							<StackPanel Margin="0,0,0,5" Orientation="Horizontal">
 								<RadioButton
 									Name="rbFullBackup"
-									Margin="0,0,20,0"
+									Margin="0,0,60,0"
 									Checked="BackupType_Changed"
 									Content="Full Backup"
 									GroupName="BackupType"
 									IsChecked="True" />
 								<RadioButton
 									Name="rbIncremental"
-									Margin="0,0,20,0"
+									Margin="0,0,30,0"
 									Checked="BackupType_Changed"
 									Content="Full then Incremental"
 									GroupName="BackupType" />
 								<RadioButton
 									Name="rbDifferential"
-									Margin="0,0,20,0"
+									Margin="0,0,0,0"
 									Checked="BackupType_Changed"
 									Content="Full then Differential"
 									GroupName="BackupType" />
+							</StackPanel>
+							<!--  Second row  -->
+							<StackPanel Margin="0,0,0,5" Orientation="Horizontal">
 								<RadioButton
 									Name="rbSelectedFilesAndFolders"
+									Margin="0,0,5,0"
 									Checked="BackupType_Changed"
 									Content="Selected Files &amp; Folder"
 									GroupName="BackupType" />
-							</StackPanel>
-							<!--  Second row  -->
-							<StackPanel Orientation="Horizontal">
 								<RadioButton
 									Name="rbCloneDisk"
-									Margin="0,0,20,0"
+									Margin="0,0,67,0"
 									Checked="BackupType_Changed"
 									Content="Clone to Disk"
 									GroupName="BackupType" />
 								<RadioButton
 									Name="rbCloneVirtual"
-									Margin="0,0,20,0"
+									Margin="0,0,0,0"
 									Checked="BackupType_Changed"
 									Content="Clone to Virtual Disk (Hyper-V)"
 									GroupName="BackupType" />
+							</StackPanel>
+							<!--  Third row  -->
+							<StackPanel Margin="0,0,0,5" Orientation="Horizontal">
 								<RadioButton
 									Name="rbCloneHyperV"
+									Margin="0,0,7,0"
 									Checked="BackupType_Changed"
 									Content="Clone Hyper-V System"
+									GroupName="BackupType" />
+								<RadioButton
+									Name="rbExportHyperV"
+									Margin="0,0,0,0"
+									Checked="BackupType_Changed"
+									Content="Export Hyper-V System"
 									GroupName="BackupType" />
 							</StackPanel>
 						</StackPanel>
@@ -438,10 +449,12 @@
 							Margin="0,0,0,15"
 							Visibility="Collapsed">
 							<TextBlock
+								Name="txtCloneRetentionHeader"
 								Margin="0,0,0,5"
 								FontWeight="SemiBold"
 								Text="Clone Retention:" />
 							<TextBlock
+								Name="txtCloneRetentionDescription"
 								Margin="0,0,0,5"
 								FontSize="10"
 								Foreground="{StaticResource SecondaryText}"
@@ -497,6 +510,7 @@
 									<ComboBoxItem Content="30" />
 								</ComboBox>
 								<TextBlock
+									Name="txtCloneRetentionSuffix"
 									Grid.Column="2"
 									Margin="5,0,0,0"
 									VerticalAlignment="Center"

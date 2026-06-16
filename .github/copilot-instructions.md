@@ -14,6 +14,10 @@
 - Include a Verify Password field only for the initial save.
 - Add an Encrypted indicator in the Mount/Verify UI to show whether a password is required.
 
+## Hyper-V Backup and Clone Management
+- Implement a new backup type for Hyper-V that exports the Hyper-V system and its disks to the target directory without registering/importing a clone, while supporting keep-last-X-count retention like other clone/export jobs.
+- In this repo's Hyper-V System Clone flow, SetupCl scheduling and MAC reset should run only when the Rename Hyper-V System option is selected.
+
 ## Linux Restore Support
 - Update the LinuxRestore project in the repo to support restoring encrypted backups by prompting for a password in the Linux recovery environment.
 
@@ -28,6 +32,3 @@
   - Both must warn that the target will be formatted and all data lost.
   - Restore progress should show a progress bar plus the current file/folder name being restored.
 - When reporting a restore-flow fix, verify it actually reaches the expected UI step and execution sequence instead of assuming a metadata-path change solved the issue.
-
-## Hyper-V System Clone Flow
-- In this repo's Hyper-V System Clone flow, SetupCl scheduling and MAC reset should run only when the Rename Hyper-V System option is selected.
