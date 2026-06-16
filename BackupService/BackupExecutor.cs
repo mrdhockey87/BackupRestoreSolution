@@ -157,6 +157,11 @@ namespace SecureServerBackupService
             return GetSelectedFilesHistoryArchivePath(job, timestamp);
         }
 
+        public static string ResolveCloneVerificationVirtualDiskPathForTest(BackupJob job)
+        {
+            return ResolveCloneVerificationVirtualDiskPath(job);
+        }
+
         private static IReadOnlyList<string> GetSelectedFilesHistoryArchives(string destinationPath, string jobName)
         {
             if (string.IsNullOrWhiteSpace(destinationPath) || string.IsNullOrWhiteSpace(jobName) || !Directory.Exists(destinationPath))
@@ -688,6 +693,34 @@ namespace SecureServerBackupService
             }
 
             return Directory.EnumerateFiles(exportPath, "*.vhd*", SearchOption.AllDirectories)
+                .Select(path => new FileInfo(path))
+                .OrderByDescending(file => file.Length)
+                .ThenBy(file => file.FullName, StringComparer.OrdinalIgnoreCase)
+                .Select(file => file.FullName)
+                .FirstOrDefault() ?? string.Empty;
+        }
+
+        private static string ResolveCloneVerificationVirtualDiskPath(BackupJob job)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            string cloneFolderName = job.RenameHyperVSystem && !string.IsNullOrWhiteSpace(job.RenameHyperVSystemName)
+                ? job.RenameHyperVSystemName.Trim()
+                : job.Name;
+            string cloneRootPath = Path.Combine(job.DestinationPath, cloneFolderName);
+
+            if (!Directory.Exists(cloneRootPath))
+            {
+                return string.Empty;
+            }
+
+            if (job.Type == BackupType.CloneToVirtualDisk)
+            {
+                string rootLevelVhdxPath = Path.Combine(cloneRootPath, $"{cloneFolderName}.vhdx");
+                return File.Exists(rootLevelVhdxPath) ? rootLevelVhdxPath : string.Empty;
+            }
+
+            return Directory.EnumerateFiles(cloneRootPath, "*.vhd*", SearchOption.AllDirectories)
                 .Select(path => new FileInfo(path))
                 .OrderByDescending(file => file.Length)
                 .ThenBy(file => file.FullName, StringComparer.OrdinalIgnoreCase)
@@ -1543,7 +1576,7 @@ namespace SecureServerBackupService
                         string backupPath;
 
                         // Hyper-V clone jobs use directory structures instead of .ssb files
-                        if (job.Type == BackupType.CloneHyperVSystem || job.Type == BackupType.CloneToVirtualDisk)
+                        if (job.Type == BackupType.CloneHyperVSystem || job.Type == BackupType.CloneToVirtualDisk || job.Type == BackupType.ExportHyperVSystem)
                         {
                             // For clone jobs, the backup path is the job folder containing the VHDX/VM files
                             string cloneFolderName = job.RenameHyperVSystem && !string.IsNullOrWhiteSpace(job.RenameHyperVSystemName)
@@ -1557,8 +1590,7 @@ namespace SecureServerBackupService
                                 return false;
                             }
 
-                            // Verify the VHDX file exists
-                            string vhdxPath = Path.Combine(backupPath, $"{cloneFolderName}.vhdx");
+                            string vhdxPath = ResolveCloneVerificationVirtualDiskPath(job);
                             if (!File.Exists(vhdxPath))
                             {
                                 logger?.Invoke($"[ERROR] Clone VHDX file not found: {vhdxPath}");

@@ -233,6 +233,68 @@ public sealed class BackupExecutorHyperVTests
     }
 
     [Fact]
+    public void ResolveCloneVerificationVirtualDiskPathForTest_WhenCloneHyperVSystemHasNestedExportedDisk_ReturnsLargestNestedDisk()
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        string cloneRoot = Path.Combine(tempRoot, "Hyper-VWin10OEMSystemClone");
+        string nestedExportRoot = Path.Combine(cloneRoot, "Win10OEM", "Virtual Hard Disks");
+        Directory.CreateDirectory(nestedExportRoot);
+
+        try
+        {
+            string avhdxPath = Path.Combine(nestedExportRoot, "Win10OEM.avhdx");
+            string vhdxPath = Path.Combine(nestedExportRoot, "Win10OEM.vhdx");
+            File.WriteAllBytes(avhdxPath, new byte[32]);
+            File.WriteAllBytes(vhdxPath, new byte[128]);
+
+            var job = new BackupJob
+            {
+                Name = "Hyper-VWin10OEMSystemClone",
+                DestinationPath = tempRoot,
+                Type = BackupType.CloneHyperVSystem
+            };
+
+            string resolvedPath = BackupExecutor.ResolveCloneVerificationVirtualDiskPathForTest(job);
+
+            Assert.Equal(vhdxPath, resolvedPath);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ResolveCloneVerificationVirtualDiskPathForTest_WhenCloneToVirtualDiskJob_ReturnsRootLevelVhdx()
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            var job = new BackupJob
+            {
+                Name = "System Backup Job",
+                DestinationPath = tempRoot,
+                Type = BackupType.CloneToVirtualDisk
+            };
+
+            string cloneRoot = Path.Combine(tempRoot, job.Name);
+            Directory.CreateDirectory(cloneRoot);
+            string rootLevelVhdxPath = Path.Combine(cloneRoot, $"{job.Name}.vhdx");
+            File.WriteAllBytes(rootLevelVhdxPath, new byte[64]);
+
+            string resolvedPath = BackupExecutor.ResolveCloneVerificationVirtualDiskPathForTest(job);
+
+            Assert.Equal(rootLevelVhdxPath, resolvedPath);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ShouldCloneToVirtualDiskAsDisk_WhenTargetIsDisk_ReturnsTrue()
     {
         var job = new BackupJob

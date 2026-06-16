@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.80";
+        private static readonly string version_fallback_number = "6.3.5.81";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -69,6 +69,10 @@ namespace SecureServerBackup
 
 /*
  *  
+ * Version 6.3.5.81 Fixed service-side Hyper-V clone and export post-run verification so the
+ *                  verifier now finds nested exported VHD/VHDX files instead of assuming a
+ *                  root-level JobName.vhdx path. Added regression coverage for both nested
+ *                  Hyper-V system clones and root-level virtual-disk clone layouts. mdail 6/16/2026
  * Version 6.3.5.80 Updated the version metadata to 6.3.5.80 after the New Backup window follow-up
  *                  changes for the Hyper-V export retention wording and backup-type layout updates. mdail 6/16/2026
  * Version 6.3.5.79 Rearange the backup types on the new backup windows for better flow and added some 
