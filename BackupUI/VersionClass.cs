@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.81";
+        private static readonly string version_fallback_number = "6.3.5.84";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,7 +68,15 @@ namespace SecureServerBackup
 
 
 /*
- *  
+ * Version 6.3.5.84 In c++ changed an output message to [SSBMount] as it was left from former 
+ *                  convertion mdail 10/26/2026
+ * Version 6.3.5.83 Updated the tracked version metadata after the Selected Files & Folders replay fix
+ *                  so the app version and release notes stay aligned with the latest save/reload patch.
+ *                  mdail 10/24/2026
+ * Version 6.3.5.82 Fixed the Selected Files & Folders save flow so saved file and folder selections
+ *                  are persisted to the JobName list.json file even when the target type is not yet
+ *                  assigned during job creation, and added regression coverage for the save/replay path.
+ *                  mdail 10/24/2026
  * Version 6.3.5.81 Fixed service-side Hyper-V clone and export post-run verification so the
  *                  verifier now finds nested exported VHD/VHDX files instead of assuming a
  *                  root-level JobName.vhdx path. Added regression coverage for both nested

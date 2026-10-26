@@ -4675,7 +4675,7 @@ namespace SecureServerBackup.Windows
         {
             ArgumentNullException.ThrowIfNull(job);
 
-            bool isFileSelectionJob = job.Target == BackupTarget.FilesAndFolders || job.Type == BackupType.SelectedFilesAndFolders;
+            bool isFileSelectionJob = IsSelectedFilesAndFoldersJob(job);
             if (!isFileSelectionJob)
             {
                 if (!string.IsNullOrWhiteSpace(previousJobName))
@@ -4700,7 +4700,7 @@ namespace SecureServerBackup.Windows
         {
             ArgumentNullException.ThrowIfNull(job);
 
-            if (job.Type != BackupType.SelectedFilesAndFolders || job.Target != BackupTarget.FilesAndFolders)
+            if (!IsSelectedFilesAndFoldersJob(job))
             {
                 return job.SourcePaths;
             }
@@ -4709,23 +4709,77 @@ namespace SecureServerBackup.Windows
             return persistedPaths.Count > 0 ? persistedPaths : job.SourcePaths;
         }
 
+        public static bool IsSelectedFilesAndFoldersJob(BackupJob job)
+        {
+            ArgumentNullException.ThrowIfNull(job);
+
+            return job.Type == BackupType.SelectedFilesAndFolders ||
+                   job.Target == BackupTarget.FilesAndFolders;
+        }
+
         private static IReadOnlyList<string> GetSelectedFilesReplayPaths(BackupJob job)
         {
             ArgumentNullException.ThrowIfNull(job);
 
-            if (job.Type != BackupType.SelectedFilesAndFolders || job.Target != BackupTarget.FilesAndFolders)
+            if (!IsSelectedFilesAndFoldersJob(job))
             {
                 return job.SourcePaths;
             }
 
-            List<string> replayPaths = new();
-            replayPaths.AddRange(job.SelectedFilesSourceRoots.Where(path => !string.IsNullOrWhiteSpace(path)));
-            replayPaths.AddRange(LoadSelectedFileList(job));
+            List<string> replayPaths = SelectedFileListStore.Load(job.Name);
+            if (replayPaths.Count == 0)
+            {
+                replayPaths = LoadSelectedFileList(job).ToList();
+            }
 
-            return replayPaths
+            replayPaths = replayPaths
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(NormalizeSelectionPath)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .ToList();
+
+            List<string> exactPaths = replayPaths
+                .Where(path => !IsSelectedFilesVolumeRoot(path, replayPaths))
+                .ToList();
+
+            if (exactPaths.Count > 0)
+            {
+                return exactPaths;
+            }
+
+            return replayPaths.Count > 0 ? replayPaths : job.SourcePaths
                 .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        private static bool IsSelectedFilesVolumeRoot(string candidatePath, IReadOnlyCollection<string> allPaths)
+        {
+            if (string.IsNullOrWhiteSpace(candidatePath))
+            {
+                return false;
+            }
+
+            string normalizedCandidate = NormalizeSelectionPath(candidatePath);
+            if (string.IsNullOrWhiteSpace(normalizedCandidate))
+            {
+                return false;
+            }
+
+            string rootPath = Path.GetPathRoot(normalizedCandidate) ?? normalizedCandidate;
+            string candidateRoot = rootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string candidateWithoutTrailingSlash = normalizedCandidate.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            bool isVolumeRoot = string.Equals(candidateRoot, candidateWithoutTrailingSlash, StringComparison.OrdinalIgnoreCase);
+            if (!isVolumeRoot)
+            {
+                return false;
+            }
+
+            return allPaths.Any(path =>
+                !string.Equals(path, candidatePath, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(path) &&
+                NormalizeSelectionPath(path).StartsWith(rootPath, StringComparison.OrdinalIgnoreCase));
         }
 
         internal static IReadOnlyList<string> GetReplayPathsForJob(BackupJob job)
@@ -4747,9 +4801,9 @@ namespace SecureServerBackup.Windows
                     .ToList();
             }
 
-            if (job.Target == BackupTarget.Disk || job.Target == BackupTarget.Volume || job.Target == BackupTarget.FilesAndFolders)
+            if (job.Target == BackupTarget.Disk || job.Target == BackupTarget.Volume || job.Target == BackupTarget.FilesAndFolders || IsSelectedFilesAndFoldersJob(job))
             {
-                return job.Type == BackupType.SelectedFilesAndFolders
+                return job.Type == BackupType.SelectedFilesAndFolders || IsSelectedFilesAndFoldersJob(job)
                     ? GetSelectedFilesReplayPaths(job)
                     : job.SourcePaths
                         .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -4795,6 +4849,11 @@ namespace SecureServerBackup.Windows
                 RenameHyperVSystem = renameHyperVSystem,
                 RenameHyperVSystemName = renameHyperVSystemName
             };
+
+            if (backupType == BackupType.SelectedFilesAndFolders)
+            {
+                job.Target = BackupTarget.FilesAndFolders;
+            }
 
             // For Clone Hyper-V System, create subdirectories
             if (backupType == BackupType.CloneHyperVSystem || backupType == BackupType.ExportHyperVSystem)
@@ -5049,10 +5108,14 @@ namespace SecureServerBackup.Windows
 
         private void CollectSelectedItems(BackupJob job)
         {
-            bool selectedFilesAndFoldersOnly = job.Type == BackupType.SelectedFilesAndFolders && job.Target == BackupTarget.FilesAndFolders;
+            bool selectedFilesAndFoldersOnly = (job.Type == BackupType.SelectedFilesAndFolders || job.Target == BackupTarget.FilesAndFolders)
+                && job.Target != BackupTarget.Disk
+                && job.Target != BackupTarget.Volume
+                && job.Target != BackupTarget.HyperV;
 
             if (selectedFilesAndFoldersOnly)
             {
+                job.Target = BackupTarget.FilesAndFolders;
                 List<DriveTreeItem> selectedFilesItems = GetEffectiveSelectedFilesAndFoldersItems();
                 foreach (DriveTreeItem selectedItem in selectedFilesItems)
                 {
@@ -5061,7 +5124,6 @@ namespace SecureServerBackup.Windows
                         continue;
                     }
 
-                    job.Target = BackupTarget.FilesAndFolders;
                     job.SourcePaths.Add(selectedItem.FullPath);
                 }
 
@@ -5159,7 +5221,7 @@ namespace SecureServerBackup.Windows
 
         private void CollectSelectedChildren(DriveTreeItem parent, BackupJob job)
         {
-            bool selectedFilesAndFoldersOnly = job.Type == BackupType.SelectedFilesAndFolders;
+            bool selectedFilesAndFoldersOnly = job.Type == BackupType.SelectedFilesAndFolders || job.Target == BackupTarget.FilesAndFolders;
 
             foreach (var child in parent.Children)
             {
@@ -5167,6 +5229,11 @@ namespace SecureServerBackup.Windows
                 {
                     if (selectedFilesAndFoldersOnly)
                     {
+                        if (!string.IsNullOrWhiteSpace(child.FullPath))
+                        {
+                            job.SourcePaths.Add(child.FullPath);
+                        }
+
                         continue;
                     }
                     else if (child.ItemType == DriveTreeItemType.Volume)

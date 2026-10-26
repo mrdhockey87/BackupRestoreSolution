@@ -180,7 +180,7 @@ namespace BackupEngine {
             WIMGetImageInformation(wimHandle, nullptr, &wimInfoSize);
 
             // Log SSB archive info for diagnostics
-            std::wstring diagMsg = L"[WimMount] SSB archive has " + std::to_wstring(imageCount) + 
+            std::wstring diagMsg = L"[SSBMount] SSB archive has " + std::to_wstring(imageCount) + 
                                    L" image(s), attempting to load image " + std::to_wstring(imageIndex);
             OutputDebugStringW(diagMsg.c_str());
 
@@ -189,28 +189,28 @@ namespace BackupEngine {
             // Without this, WIMLoadImage can fail with error 1632
             wchar_t tempPath[MAX_PATH];
 
-            OutputDebugStringW(L"[WimMount] About to check userTempPath parameter...");
+            OutputDebugStringW(L"[SSBMount] About to check userTempPath parameter...");
             if (userTempPath)
             {
-                OutputDebugStringW((L"[WimMount] userTempPath is NOT NULL, length: " + std::to_wstring(wcslen(userTempPath))).c_str());
+                OutputDebugStringW((L"[SSBMount] userTempPath is NOT NULL, length: " + std::to_wstring(wcslen(userTempPath))).c_str());
             }
             else
             {
-                OutputDebugStringW(L"[WimMount] userTempPath is NULL!");
+                OutputDebugStringW(L"[SSBMount] userTempPath is NULL!");
             }
 
             // Use user-provided temp path if available, otherwise get system temp
             if (userTempPath && wcslen(userTempPath) > 0) {
                 wcscpy_s(tempPath, MAX_PATH, userTempPath);
                 WIMSetTemporaryPath(wimHandle, tempPath);
-                OutputDebugStringW((L"[WimMount] Using user-specified temp path: " + std::wstring(tempPath)).c_str());
+                OutputDebugStringW((L"[SSBMount] Using user-specified temp path: " + std::wstring(tempPath)).c_str());
             }
             else if (GetTempPathW(MAX_PATH, tempPath) > 0) {
                 WIMSetTemporaryPath(wimHandle, tempPath);
-                OutputDebugStringW((L"[WimMount] Using system temp path: " + std::wstring(tempPath)).c_str());
+                OutputDebugStringW((L"[SSBMount] Using system temp path: " + std::wstring(tempPath)).c_str());
             }
             else {
-                OutputDebugStringW(L"[WimMount] Warning: Failed to get temp path, using default");
+                OutputDebugStringW(L"[SSBMount] Warning: Failed to get temp path, using default");
             }
 
             // Register progress callback if provided
@@ -356,14 +356,14 @@ namespace BackupEngine {
             }
 
             // Log mount details for diagnostics
-            OutputDebugStringW((L"[WimMount] Attempting unmount: " + std::wstring(mountPath)).c_str());
-            OutputDebugStringW((L"[WimMount] WIM file: " + info.wimPath).c_str());
+            OutputDebugStringW((L"[SSBMount] Attempting unmount: " + std::wstring(mountPath)).c_str());
+            OutputDebugStringW((L"[SSBMount] WIM file: " + info.wimPath).c_str());
 
             // Check if mount point still exists
             DWORD attributes = GetFileAttributesW(mountPath);
             if (attributes == INVALID_FILE_ATTRIBUTES) {
                 DWORD err = GetLastError();
-                OutputDebugStringW((L"[WimMount] Warning: Mount point doesn't exist or is inaccessible (error " + std::to_wstring(err) + L")").c_str());
+                OutputDebugStringW((L"[SSBMount] Warning: Mount point doesn't exist or is inaccessible (error " + std::to_wstring(err) + L")").c_str());
                 // Continue anyway - WIM API might still need to clean up
             }
 
@@ -383,9 +383,9 @@ namespace BackupEngine {
                     L"• Mount point in use\n\n"
                     L"Try closing Explorer windows and retry.", 
                     err, err);
-                OutputDebugStringW((L"[WimMount] Unmount error: " + std::to_wstring(err) + L" (0x" + std::to_wstring(err) + L")").c_str());
-                OutputDebugStringW((L"[WimMount] Mount path: " + std::wstring(mountPath)).c_str());
-                OutputDebugStringW((L"[WimMount] WIM path: " + info.wimPath).c_str());
+                OutputDebugStringW((L"[SSBMount] Unmount error: " + std::to_wstring(err) + L" (0x" + std::to_wstring(err) + L")").c_str());
+                OutputDebugStringW((L"[SSBMount] Mount path: " + std::wstring(mountPath)).c_str());
+                OutputDebugStringW((L"[SSBMount] WIM path: " + info.wimPath).c_str());
                 LeaveCriticalSection(&cs);
                 return false;
             }
@@ -423,7 +423,7 @@ namespace BackupEngine {
                         }
 
                         // Log file being deleted
-                        OutputDebugStringW((L"[WimMount] Deleting: " + std::wstring(findData.cFileName)).c_str());
+                        OutputDebugStringW((L"[SSBMount] Deleting: " + std::wstring(findData.cFileName)).c_str());
                     }
                 } while (FindNextFileW(hFind, &findData));
 
@@ -509,7 +509,7 @@ namespace BackupEngine {
         wchar_t* errorMsg,
         int errorMsgSize
     ) {
-        OutputDebugStringW(L"[WimMount] Validating SSB archive...");
+        OutputDebugStringW(L"[SSBMount] Validating SSB archive...");
 
         // Check if file exists
         if (GetFileAttributesW(wimPath) == INVALID_FILE_ATTRIBUTES) {
@@ -536,7 +536,7 @@ namespace BackupEngine {
             return false;
         }
 
-        OutputDebugStringW((L"[WimMount] File size: " + std::to_wstring(fileSize.QuadPart) + L" bytes").c_str());
+        OutputDebugStringW((L"[SSBMount] File size: " + std::to_wstring(fileSize.QuadPart) + L" bytes").c_str());
 
         // Try to open WIM file WITHOUT verification flag
         // WIM_FLAG_VERIFY can cause error 1632 even with valid WIM files
@@ -582,7 +582,7 @@ namespace BackupEngine {
             *imageCount = static_cast<int>(count);
         }
 
-        OutputDebugStringW((L"[WimMount] Validation successful - " + std::to_wstring(count) + L" image(s) found").c_str());
+        OutputDebugStringW((L"[SSBMount] Validation successful - " + std::to_wstring(count) + L" image(s) found").c_str());
 
         WIMCloseHandle(wimHandle);
 
@@ -608,14 +608,14 @@ namespace BackupEngine {
             }
 
             mountBase += L"BackupMounts\\";
-            OutputDebugStringW((L"[WimMount] Using user-specified mount base: " + mountBase).c_str());
+            OutputDebugStringW((L"[SSBMount] Using user-specified mount base: " + mountBase).c_str());
         }
         else {
             // System temp - use old logic
             wchar_t tempPath[MAX_PATH];
             GetTempPathW(MAX_PATH, tempPath);
             mountBase = std::wstring(tempPath) + L"BackupMounts\\";
-            OutputDebugStringW((L"[WimMount] Using system temp mount base: " + mountBase).c_str());
+            OutputDebugStringW((L"[SSBMount] Using system temp mount base: " + mountBase).c_str());
         }
 
         // Create BackupMounts subdirectory - CreateDirectoryW returns TRUE if created, FALSE if already exists

@@ -110,7 +110,7 @@ namespace SecureServerBackup.Services
 
         public List<BackupJob> GetScheduledJobs()
         {
-            return jobs.Where(j => j.Schedule != null && j.Schedule.Enabled).ToList();
+            return [.. jobs.Where(j => j.Schedule != null && j.Schedule.Enabled)];
         }
 
         private void LoadJobs()
@@ -128,13 +128,13 @@ namespace SecureServerBackup.Services
                     else
                     {
                         System.Diagnostics.Debug.WriteLine($"Jobs file not found: {JobsFilePath}");
-                        jobs = new List<BackupJob>();
+                        jobs = [];
                     }
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"ERROR loading jobs: {ex.Message}");
-                    jobs = new List<BackupJob>();
+                    jobs = [];
                 }
 
                 return 0;

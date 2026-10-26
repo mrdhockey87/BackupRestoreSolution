@@ -243,6 +243,43 @@ public sealed class BackupWindowNewSelectionTests
 	}
 
 	[Fact]
+	public void IsSelectedFilesAndFoldersJob_WhenSelectedFilesTypeHasNoTargetSet_ReturnsTrue()
+	{
+		BackupJob job = new()
+		{
+			Type = BackupType.SelectedFilesAndFolders,
+			Target = 0,
+			SourcePaths = new List<string> { @"C:\Data\Alpha.txt" }
+		};
+
+		Assert.True(BackupWindowNew.IsSelectedFilesAndFoldersJob(job));
+	}
+
+	[Fact]
+	public void GetReplayPathsForJob_WhenSelectedFilesListContainsVolumeRoot_IgnoresRootAndKeepsExactFiles()
+	{
+		BackupJob job = new()
+		{
+			Name = "SelectedFilesPathReplay",
+			Type = BackupType.SelectedFilesAndFolders,
+			Target = BackupTarget.FilesAndFolders,
+			SourcePaths = new List<string>
+			{
+				@"C:\",
+				@"C:\Data\Alpha.txt",
+				@"C:\Data\Beta\File2.txt"
+			}
+		};
+
+		IReadOnlyList<string> replayPaths = BackupWindowNew.GetReplayPathsForJob(job);
+
+		Assert.Equal(2, replayPaths.Count);
+		Assert.Contains(@"C:\Data\Alpha.txt", replayPaths, StringComparer.OrdinalIgnoreCase);
+		Assert.Contains(@"C:\Data\Beta\File2.txt", replayPaths, StringComparer.OrdinalIgnoreCase);
+		Assert.DoesNotContain(@"C:\", replayPaths, StringComparer.OrdinalIgnoreCase);
+	}
+
+	[Fact]
 	public void BuildMissingSavedSelectionsWarningMessage_WhenCloneHyperVSystem_ExplainsSelectionCleared()
 	{
 		string message = BackupWindowNew.BuildMissingSavedSelectionsWarningMessage(
