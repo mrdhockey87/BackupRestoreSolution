@@ -211,7 +211,9 @@ namespace {
             return false;
         }
 
-        if (!context->captureRootPath.empty() && PathsEqualInsensitive(normalizedPath, context->captureRootPath)) {
+        if (!context->captureRootPath.empty() &&
+            (PathsEqualInsensitive(normalizedPath, context->captureRootPath) ||
+             IsSameOrDescendantPath(normalizedPath, context->captureRootPath))) {
             return true;
         }
 
@@ -220,16 +222,52 @@ namespace {
                 return true;
             }
 
-            if (IsSameOrDescendantPath(selection.normalizedPath, normalizedPath)) {
+            if (selection.includeDescendants &&
+                (IsSameOrDescendantPath(normalizedPath, selection.normalizedPath) ||
+                 IsSameOrDescendantPath(selection.normalizedPath, normalizedPath))) {
                 return true;
             }
 
-            if (selection.includeDescendants && IsSameOrDescendantPath(normalizedPath, selection.normalizedPath)) {
+            if (!selection.includeDescendants &&
+                PathsEqualInsensitive(normalizedPath, selection.normalizedPath)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    bool ShouldIncludeSelectionPathForFolderSelection(const FileBackupContext* context, const std::wstring& path) {
+        if (context == nullptr || context->includeSelections.empty()) {
+            return true;
+        }
+
+        std::wstring normalizedPath = NormalizePathForComparison(path);
+        if (normalizedPath.empty()) {
+            return false;
+        }
+
+        for (const FileBackupSelectionEntry& selection : context->includeSelections) {
+            if (selection.includeDescendants &&
+                (IsSameOrDescendantPath(normalizedPath, selection.normalizedPath) ||
+                 IsSameOrDescendantPath(selection.normalizedPath, normalizedPath))) {
+                return true;
+            }
+
+            if (PathsEqualInsensitive(normalizedPath, selection.normalizedPath)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool ShouldIncludeSelectionPathForCandidate(const FileBackupContext* context, const std::wstring& path) {
+        if (ShouldIncludeSelectionPath(context, path)) {
+            return true;
+        }
+
+        return ShouldIncludeSelectionPathForFolderSelection(context, path);
     }
 
     // WIM callback for file backup with exclusion filtering
@@ -244,7 +282,7 @@ namespace {
                     BOOL* pbInclude = (BOOL*)lParam;
                     std::wstring path(filePath);
 
-                    if (!ShouldIncludeSelectionPath(context, path)) {
+                    if (!ShouldIncludeSelectionPathForCandidate(context, path)) {
                         *pbInclude = FALSE;
                         return WIM_MSG_SUCCESS;
                     }

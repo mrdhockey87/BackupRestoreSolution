@@ -10,7 +10,7 @@ namespace SecureServerBackup
     static class VersionClass
     {
         public static string version_word = "Version:";
-        private static readonly string version_fallback_number = "6.3.5.84";
+        private static readonly string version_fallback_number = "6.3.5.85";
         // Get version from assembly - this will always match the project file version
         public static string version_string = GetAssemblyVersion();
 
@@ -68,6 +68,11 @@ namespace SecureServerBackup
 
 
 /*
+ * 
+ * Version 6.3.5.85 Fixed the Selected Files & Folders restore-item discovery for current-format archives.
+ *                  The native include filter now keeps exact selected paths and descendant selections in the
+ *                  archive so restore selection lists populate instead of showing the empty "No selectable
+ *                  files or folders were found" warning. mdail 10/28/2026
  * Version 6.3.5.84 In c++ changed an output message to [SSBMount] as it was left from former 
  *                  convertion mdail 10/26/2026
  * Version 6.3.5.83 Updated the tracked version metadata after the Selected Files & Folders replay fix
